@@ -8,7 +8,7 @@ const SplashScreen = () => {
   const navigation = useNavigation<any>();
 
   const handleLogin = () => {
-    // navigation.navigate('Authloader');
+    navigation.navigate('Login');
   };
 
 useEffect(() => {
