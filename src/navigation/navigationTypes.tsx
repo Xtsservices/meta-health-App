@@ -40,4 +40,6 @@ EditPatientProfile: undefined;
   DashboardLab:undefined;
   DashboardRadio:undefined;
   EmergencyDashboard:undefined;
+  Timeline:undefined;
+  TimelineRow:undefined;
 };

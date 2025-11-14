@@ -30,6 +30,17 @@ import transferPatient from "../components/patientsList/transferPatient";
 import editPatientProfile from "../components/patientsList/patientEdit/editPatientProfile";
 import medicalHistoryForm from "../components/patientsList/medicalHistory/medicalHistoryForm";
 import addReports from "../components/patientsList/reports/addReports";
+import Management from "../components/Management/Management";
+import SlotsManagement from "../components/Management/SlotsManagement/SlotsManagement";
+import HelpScreen from "../components/helpStaff/HelpScreen";
+import DashboardInfoScreen from "../components/helpStaff/DashboardInfo";
+import TicketsScreen from "../components/helpStaff/TicketsScreen";
+import NewTicketScreen from "../components/helpStaff/NewTicketScreen";
+import MyTasks from "../pages/nurseDashboard/MyTasks";
+import DashboardLab from "../components/Lab/DashboardLab";
+import DashboardPharma from "../components/Pharmacy/DashboardPharma";
+import DashboardReception from "../components/Reception/DashboardReception";
+import EmergencyDashboard from "../components/Emergency/EmergencyDashboard";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
