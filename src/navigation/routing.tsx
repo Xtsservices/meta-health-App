@@ -28,6 +28,8 @@ import transferPatient from "../components/patientsList/transferPatient";
 import editPatientProfile from "../components/patientsList/patientEdit/editPatientProfile";
 import medicalHistoryForm from "../components/patientsList/medicalHistory/medicalHistoryForm";
 import addReports from "../components/patientsList/reports/addReports";
+import appointmentsList from "../components/OPD/appointmentsList";
+import dischargeSummaryDownload from "../components/patientsList/dischargeSummaryDownload";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -64,6 +66,8 @@ const Routing = () => {
         <Stack.Screen name="MedicalHistoryForm" component={medicalHistoryForm} options={{ title: "Edit Medical History Form", headerTitleAlign: "center", headerShown: true }}/>
         <Stack.Screen name="TransferPatient" component={transferPatient} options={{ title: "Transfer Patient", headerTitleAlign: "center", headerShown: true }}/>
         <Stack.Screen name="EditPatientProfile" component={editPatientProfile} options={{ title: "Edit Patient Profile", headerTitleAlign: "center", headerShown: true }}/>
+        <Stack.Screen name="AppointmentsList" component={appointmentsList} options={{ title: "Appointments List", headerTitleAlign: "center", headerShown: true }}/>
+        <Stack.Screen name="DischargeSummaryDownload" component={dischargeSummaryDownload} options={{ title: "Discharge Summary", headerTitleAlign: "center", headerShown: true }}/>
 
       </Stack.Navigator>
     </NavigationContainer>

@@ -18,10 +18,11 @@ import { AuthFetch } from '../../auth/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatDateTime, } from "../../utils/dateTime";
 import { PatientType } from '../../utils/types';
-import { NavigationProp } from '@react-navigation/native';
+import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { showError } from '../../store/toast.slice';
 
-const PatientTable = ({ navigation }: { navigation: NavigationProp<any> }) => {
+const PatientTable = () => {
+  const navigation = useNavigation();
   const [patients, setPatients] = useState<PatientType[]>([]);
   const [loading, setLoading] = useState(true);
   const fetchOnce = useRef(true);
@@ -51,7 +52,7 @@ const user = useSelector((s: RootState) => s.currentUser);
   };
 
   useEffect(() => {
-    if (user?.token && fetchOnce.current) {
+    if (user && fetchOnce?.current) {
       fetchOnce.current = false;
       fetchRecentPatients();
     }
@@ -75,7 +76,7 @@ const user = useSelector((s: RootState) => s.currentUser);
 
   // Handle View All
   const handleViewAll = () => {
-    navigation.navigate('AllPatients');
+    navigation.navigate('AppointmentsList');
   };
 
   // Render Patient Card
@@ -118,13 +119,13 @@ const user = useSelector((s: RootState) => s.currentUser);
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Latest Patient Details</Text>
-        {/* <TouchableOpacity
+        <TouchableOpacity
           style={styles.viewAllButton}
           onPress={handleViewAll}
           activeOpacity={0.7}
         >
           <Text style={styles.viewAllText}>View All</Text>
-        </TouchableOpacity> */}
+        </TouchableOpacity>
       </View>
 
       {/* Patient List */}

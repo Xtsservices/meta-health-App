@@ -1,3 +1,5 @@
+// src/screens/opd/OpdPreviousPatients.tsx
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -10,7 +12,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  useColorScheme,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
@@ -23,12 +25,32 @@ import { AuthFetch } from "../../auth/auth";
 import { patientStatus } from "../../utils/role";
 
 // Icons
-import { User as UserIcon, Search as SearchIcon, Eye, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
+import {
+  User as UserIcon,
+  Search as SearchIcon,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react-native";
 import { PatientType } from "../../utils/types";
 import Footer from "../dashboard/footer";
+import { formatageFromDOB } from "../../utils/age";
 
 const PAGE_SIZE = 10;
+const FOOTER_H = 70;
 
+// --- Colors (static, used everywhere) ---
+const COLORS = {
+  bg: "#f8fafc",
+  card: "#ffffff",
+  text: "#0f172a",
+  sub: "#475569",
+  border: "#e2e8f0",
+  brand: "#14b8a6",
+  placeholder: "#94a3b8",
+};
+
+// --- Small helper ---
 function getAgeLabel(dob?: string): string {
   if (!dob) return "—";
   const d = new Date(dob);
@@ -54,8 +76,6 @@ const OpdPreviousPatients: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
 
   const user = useSelector((s: RootState) => s.currentUser);
 
@@ -67,14 +87,7 @@ const OpdPreviousPatients: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const flatRef = useRef<FlatList<PatientType>>(null);
 
-  const totalPages = Math.ceil(
-    allPatients.filter(p => {
-      if (filterValue === 2) return p.ptype === 21;
-      if (filterValue === 0) return p.ptype === 1;
-      return p.ptype !== 1 && p.ptype !== 21;
-    }).length / PAGE_SIZE
-  );
-
+  // Remove duplicates by id
   const removeDuplicates = useCallback((patients: PatientType[]) => {
     const seen = new Set<string | number>();
     return patients.filter((p) => {
@@ -91,6 +104,8 @@ const OpdPreviousPatients: React.FC = () => {
     const response = await AuthFetch(url, token);
     if (response?.status === "success") {
       setAllPatients(removeDuplicates(response?.data?.patients || []));
+    } else {
+      setAllPatients([]);
     }
   }, [user?.token, user?.hospitalID, user?.id, user?.role, removeDuplicates]);
 
@@ -100,6 +115,8 @@ const OpdPreviousPatients: React.FC = () => {
     const response = await AuthFetch(url, token);
     if (response?.status === "success") {
       setAllPatients(removeDuplicates(response?.data?.patients || []));
+    } else {
+      setAllPatients([]);
     }
   }, [user?.hospitalID, user?.id, user?.role, removeDuplicates]);
 
@@ -119,7 +136,7 @@ const OpdPreviousPatients: React.FC = () => {
     load();
   }, [fetchNurseData, fetchAllPatients]);
 
-  // Filtered + Searched + Paginated
+  // Filter + search
   const filteredAndSearched = useMemo(() => {
     let base: PatientType[] = [];
     if (filterValue === 2) {
@@ -135,11 +152,21 @@ const OpdPreviousPatients: React.FC = () => {
     const term = search.toLowerCase().trim();
     return base.filter((patient) => {
       const name = patient?.pName?.toLowerCase() || "";
-      const mobile = (patient?.phoneNumber ?? patient?.mobile ?? patient?.contact ?? "").toString();
+      const mobile = (
+        patient?.phoneNumber ??
+        patient?.mobile ??
+        patient?.contact ??
+        ""
+      ).toString();
       const patientId = (patient?.patientid ?? "").toString().toLowerCase();
       return name.includes(term) || mobile.includes(term) || patientId.includes(term);
     });
   }, [allPatients, filterValue, search]);
+
+  const totalPages = useMemo(() => {
+    if (filteredAndSearched.length === 0) return 1;
+    return Math.ceil(filteredAndSearched.length / PAGE_SIZE);
+  }, [filteredAndSearched]);
 
   const pagedData = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
@@ -159,14 +186,20 @@ const OpdPreviousPatients: React.FC = () => {
     }
   };
 
+  // ---- header with search + filter ----
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.controlsColumn}>
         {/* Search */}
-        <View style={[styles.searchWrap, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+        <View
+          style={[
+            styles.searchWrap,
+            { backgroundColor: COLORS.card, borderColor: COLORS.border },
+          ]}
+        >
           <SearchIcon size={18} color={COLORS.sub} />
           <TextInput
-            placeholder="Search by name, mobile, ID"
+            placeholder="Search by name, mobile"
             placeholderTextColor={COLORS.placeholder}
             value={search}
             onChangeText={setSearch}
@@ -175,8 +208,12 @@ const OpdPreviousPatients: React.FC = () => {
         </View>
 
         {/* Filter */}
-        <View style={[styles.pickerWrap, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
-          <ChevronDown size={16} color={COLORS.sub} />
+        <View
+          style={[
+            styles.pickerWrap,
+            { backgroundColor: COLORS.card, borderColor: COLORS.border },
+          ]}
+        >
           <Picker
             selectedValue={filterValue}
             onValueChange={(v) => setFilterValue(Number(v))}
@@ -194,8 +231,12 @@ const OpdPreviousPatients: React.FC = () => {
 
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
-      <Text style={[styles.emptyTitle, { color: COLORS.text }]}>No Patients Found</Text>
-      <Text style={[styles.emptySub, { color: COLORS.sub }]}>Try adjusting filters or search terms.</Text>
+      <Text style={[styles.emptyTitle, { color: COLORS.text }]}>
+        No Patients Found
+      </Text>
+      <Text style={[styles.emptySub, { color: COLORS.sub }]}>
+        Try adjusting filters or search terms.
+      </Text>
     </View>
   );
 
@@ -203,37 +244,79 @@ const OpdPreviousPatients: React.FC = () => {
     const paddedId = String(item?.id ?? "").padStart(4, "0");
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
-    const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—").toString();
-    const age = getAgeLabel(item?.dob);
+    const phone = (
+      item?.phoneNumber ??
+      item?.mobile ??
+      item?.contact ??
+      "—"
+    ).toString();
+    
+    const age =
+          formatageFromDOB(item?.dob) !== "-"
+            ? formatageFromDOB(item?.dob)
+            : item?.age;
 
     return (
       <TouchableOpacity
         activeOpacity={0.8}
-        style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}
+        style={[
+          styles.card,
+          { backgroundColor: COLORS.card, borderColor: COLORS.border },
+        ]}
         onPress={() => navigation.navigate("PatientDetails", { patientId: item.id })}
       >
         <View style={styles.cardRow}>
-          <View style={[styles.avatar, { borderColor: COLORS.border, backgroundColor: COLORS.bg }]}>
-            <UserIcon size={24} color={COLORS.sub} />
+          <View
+            style={[
+              styles.avatar,
+              { borderColor: COLORS.border, backgroundColor: COLORS.bg },
+            ]}
+          >
+            {item?.imageURL ? (
+              <Image
+                source={{ uri: item.imageURL }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: 40,
+                }}
+              />
+            ) : (
+              <UserIcon size={28} color={COLORS.sub} />
+            )}
           </View>
 
           <View style={styles.meta}>
-            <Text style={[styles.name, { color: COLORS.text }]} numberOfLines={1}>
+            <Text
+              style={[styles.name, { color: COLORS.text }]}
+              numberOfLines={1}
+            >
               {name}
-            </Text>
-            <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
-              ID: {paddedId}
             </Text>
 
             <View style={styles.infoRow}>
-              <Text style={[styles.badge, { color: COLORS.brand }]}>Age: {age}</Text>
+              <Text
+                style={[styles.sub, { color: COLORS.sub }]}
+                numberOfLines={1}
+              >
+                ID: {paddedId}
+              </Text>
               <Text style={[styles.dot, { color: COLORS.sub }]}>•</Text>
-              <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
-                Dr: {doctor}
+              <Text style={[styles.badge, { color: COLORS.brand }]}>
+                Age: {age}
               </Text>
             </View>
 
-            <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
+            <Text
+              style={[styles.sub, { color: COLORS.sub }]}
+              numberOfLines={1}
+            >
+              Dr: {doctor}
+            </Text>
+            <Text
+              style={[styles.sub, { color: COLORS.sub }]}
+              numberOfLines={1}
+            >
               Phone: {phone}
             </Text>
           </View>
@@ -246,7 +329,11 @@ const OpdPreviousPatients: React.FC = () => {
             }}
           >
             <Eye size={18} color={COLORS.text} />
-            <Text style={[styles.viewBtnText, { color: COLORS.text }]}>View</Text>
+            <Text
+              style={[styles.viewBtnText, { color: COLORS.text }]}
+            >
+              View
+            </Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -254,45 +341,58 @@ const OpdPreviousPatients: React.FC = () => {
   };
 
   const renderPagination = () => {
-    if (totalPages <= 1) return null;
+    // show pagination only when there are more than PAGE_SIZE items
+    if (filteredAndSearched.length <= PAGE_SIZE || totalPages <= 1) return null;
 
     return (
-      <View style={styles.pagination}>
-        <TouchableOpacity
-          onPress={() => goToPage(currentPage - 1)}
-          disabled={currentPage === 1}
-          style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
-        >
-          <ChevronLeft size={18} color={currentPage === 1 ? COLORS.sub : COLORS.text} />
-        </TouchableOpacity>
+      <View style={styles.paginationWrapper}>
+        <View style={styles.paginationBar}>
+          <TouchableOpacity
+            onPress={() => goToPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            style={[
+              styles.pageBtn,
+              currentPage === 1 && styles.pageBtnDisabled,
+            ]}
+          >
+            <ChevronLeft
+              size={16}
+              color={currentPage === 1 ? "#9ca3af" : COLORS.brand}
+            />
+          </TouchableOpacity>
 
-        <Text style={[styles.pageInfo, { color: COLORS.text }]}>
-          Page {currentPage} of {totalPages}
-        </Text>
+          <Text style={styles.pageInfo}>
+            Page {currentPage} of {totalPages}
+          </Text>
 
-        <TouchableOpacity
-          onPress={() => goToPage(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]}
-        >
-          <ChevronRight size={18} color={currentPage === totalPages ? COLORS.sub : COLORS.text} />
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => goToPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            style={[
+              styles.pageBtn,
+              currentPage === totalPages && styles.pageBtnDisabled,
+            ]}
+          >
+            <ChevronRight
+              size={16}
+              color={currentPage === totalPages ? "#9ca3af" : COLORS.brand}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
 
-  const COLORS = useMemo(() => ({
-    bg: isDark ? "#0f172a" : "#f8fafc",
-    card: isDark ? "#1e293b" : "#ffffff",
-    text: isDark ? "#f1f5f9" : "#0f172a",
-    sub: isDark ? "#94a3b8" : "#475569",
-    border: isDark ? "#334155" : "#e2e8f0",
-    brand: "#14b8a6",
-    placeholder: isDark ? "#64748b" : "#94a3b8",
-  }), [isDark]);
+  // bottom padding so last card + pagination stay above footer & system nav
+  const bottomPad = FOOTER_H + insets.bottom + 24;
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: COLORS.bg, paddingBottom: Math.max(insets.bottom, 12) }]}>
+    <SafeAreaView
+      style={[
+        styles.safe,
+        { backgroundColor: COLORS.bg, paddingBottom: Math.max(insets.bottom, 12) },
+      ]}
+    >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -302,29 +402,40 @@ const OpdPreviousPatients: React.FC = () => {
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="small" color={COLORS.brand} />
-            <Text style={[styles.loadingText, { color: COLORS.sub }]}>Loading patients…</Text>
+            <Text
+              style={[styles.loadingText, { color: COLORS.sub }]}
+            >
+              Loading patients…
+            </Text>
           </View>
         ) : (
-          <>
-            <FlatList
-              ref={flatRef}
-              data={pagedData}
-              keyExtractor={(it) => String(it.id)}
-              renderItem={renderItem}
-              ListEmptyComponent={renderEmpty}
-              contentContainerStyle={styles.listContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            />
-            {renderPagination()}
-          </>
+          <FlatList
+            ref={flatRef}
+            data={pagedData}
+            keyExtractor={(it) => String(it.id)}
+            renderItem={renderItem}
+            ListEmptyComponent={renderEmpty}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: bottomPad },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            ListFooterComponent={renderPagination}
+            scrollIndicatorInsets={{ bottom: bottomPad }}
+          />
         )}
       </KeyboardAvoidingView>
+
+      {/* Fixed footer */}
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
       {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+        <View
+          pointerEvents="none"
+          style={[styles.navShield, { height: insets.bottom }]}
+        />
       )}
     </SafeAreaView>
   );
@@ -356,23 +467,27 @@ const styles = StyleSheet.create({
   },
 
   pickerWrap: {
-    height: 48,
+    height: 52,
     borderWidth: 1.5,
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
     flexDirection: "row",
     alignItems: "center",
     overflow: "hidden",
+    justifyContent: "flex-start",
   },
   picker: {
     flex: 1,
-    height: 48,
-    marginLeft: 8,
+    height: 52,
+    marginLeft: 2,
+    marginRight: -16,
+    marginTop: Platform.OS === "android" ? -4 : 0,
   },
 
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingTop: 4,
   },
 
   card: {
@@ -450,37 +565,47 @@ const styles = StyleSheet.create({
   },
   loadingText: { marginTop: 12, fontSize: 15 },
 
-  // Pagination
-  pagination: {
+  // Pagination (same style pattern as previous screen)
+  paginationWrapper: {
+    paddingVertical: 12,
+  },
+  paginationBar: {
     flexDirection: "row",
-    justifyContent: "center",
+    justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    gap: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 3,
   },
   pageBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#f1f5f9",
-    justifyContent: "center",
-    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#ecfeff",
   },
   pageBtnDisabled: {
-    opacity: 0.4,
+    backgroundColor: "#f1f5f9",
   },
   pageInfo: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.text,
   },
+
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
-    height: 70,
+    height: FOOTER_H,
     justifyContent: "center",
-    // Footer itself should render full width
   },
   navShield: {
     position: "absolute",

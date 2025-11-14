@@ -272,6 +272,7 @@ const dispatch = useDispatch()
 
   const sidebarItems: SidebarItem[] = [
     { key: "dash", label: "Dashboard", icon: LayoutDashboard, onPress: () => go("DashboardOPD") },
+    { key: "app", label: "Appointments List", icon: ListIcon, onPress: () => go("AppointmentsList") },
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
     { key: "addp", label: "Add Patient", icon: UserPlus2, onPress: () => go("AddPatient") },
     { key: "mgmt", label: "Management", icon: Settings, onPress: () => go("Management") },

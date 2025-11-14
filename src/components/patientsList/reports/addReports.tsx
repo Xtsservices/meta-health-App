@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-// import { pick, types } from '@react-native-documents/picker';
+import { pick, types } from '@react-native-documents/picker';
 import RNFS from "react-native-fs";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "../../../store/store";
@@ -102,47 +102,47 @@ const ReportUploadScreen: React.FC<Props> = ({ navigation, route }) => {
   // FILE PICKER (PDF, DOC, ZIP)
   // --------------------------
  const pickDocuments = async () => {
-  // try {
-  //   const results = await pick({
-  //     allowMultiSelection: true,
-  //     type: [types.allFiles],
-  //   });
+  try {
+    const results = await pick({
+      allowMultiSelection: true,
+      type: [types.allFiles],
+    });
 
-  //   const mapped = await Promise.all(
-  //     results.map(async file => {
-  //       let uri = file.uri;
+    const mapped = await Promise.all(
+      results.map(async file => {
+        let uri = file.uri;
 
-  //       // No need for old GuardedResultAsyncTask fix — this lib is compatible
+        // No need for old GuardedResultAsyncTask fix — this lib is compatible
 
-  //       // For Android convert content:// → file:// using RNFS if needed
-  //       if (Platform.OS === "android" && uri.startsWith("content://")) {
-  //         const dest = `${RNFS.DocumentDirectoryPath}/${file.name}`;
-  //         await RNFS.copyFile(uri, dest).catch(() => null);
-  //         uri = "file://" + dest;
-  //       }
+        // For Android convert content:// → file:// using RNFS if needed
+        if (Platform.OS === "android" && uri.startsWith("content://")) {
+          const dest = `${RNFS.DocumentDirectoryPath}/${file.name}`;
+          await RNFS.copyFile(uri, dest).catch(() => null);
+          uri = "file://" + dest;
+        }
 
-  //       return {
-  //         uri,
-  //         name: file.name,
-  //         type: file.type || "application/octet-stream",
-  //         size: file.size,
-  //       };
-  //     })
-  //   );
+        return {
+          uri,
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+        };
+      })
+    );
 
-  //   setFiles(prev => [...prev, ...mapped]);
-  // } catch (error) {
-  //   if (!error?.message?.includes("cancelled")) {
-  //     console.log("Document picking error:", error);
-  //   }
-  // }
+    setFiles(prev => [...prev, ...mapped]);
+  } catch (error) {
+    if (!error?.message?.includes("cancelled")) {
+      console.log("Document picking error:", error);
+    }
+  }
 }
 
   // --------------------------
   // SUBMIT UPLOAD
   // --------------------------
   const handleSubmit = async () => {
-    if (!files.length) {
+    if (!files?.length) {
       dispatch(showError("Please select files"));
       return;
     }
@@ -170,7 +170,7 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
         dispatch(showSuccess("Report successfully uploaded"));
 
         setNewReport(
-          res.data?.attachements.map((el: any) => ({
+          res?.data?.attachements.map((el: any) => ({
             ...el,
             addedOn: String(new Date().toISOString()),
           }))
@@ -195,7 +195,9 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
-
+ const handleCancel = () => {
+    navigation.navigate("Reports"); // Navigate to Reports screen
+  };
   return (
     <Modal animationType="slide" transparent={false} visible={visible}>
       <View style={styles.header}>
@@ -243,7 +245,15 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
       </ScrollView>
 
       {/* FOOTER */}
-      <View style={styles.footer}>
+       <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.cancelBtn, loading && { opacity: 0.5 }]}
+          onPress={handleCancel}
+          disabled={loading}
+        >
+          <Text style={styles.cancelText}>Cancel</Text>
+        </TouchableOpacity>
+        
         <TouchableOpacity
           disabled={loading}
           style={[styles.submitBtn, loading && { opacity: 0.5 }]}
@@ -310,14 +320,31 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  footer: {
+ footer: {
     padding: 16,
+    flexDirection: "row",
     backgroundColor: "#ffffff",
     borderTopWidth: 1,
     borderTopColor: "#e5e7eb",
+    gap: 12,
+  },
+
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: "#ef4444",
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+
+  cancelText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
   },
 
   submitBtn: {
+    flex: 1,
     backgroundColor: "#14b8a6",
     borderRadius: 10,
     paddingVertical: 16,

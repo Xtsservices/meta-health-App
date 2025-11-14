@@ -38,6 +38,7 @@ import Tabs from "./tabs";
 import { useDispatch } from "react-redux";
 import { currentPatient as setCurrentPatientAction } from "../../store/store";
 import TransferPatient from "./transferPatient";
+import DischargeSummaryDownload from "./dischargeSummaryDownload";
 // ---- types ----
 type RootState = any;
 type testType = {
@@ -132,26 +133,25 @@ const PatientProfileOPD: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  const isDark = scheme === "dark";
 
   const COLORS = useMemo(
     () => ({
-      bg: isDark ? "#0f172a" : "#f8fafc",
-      card: isDark ? "#0b1220" : "#ffffff",
-      card2: isDark ? "#111827" : "#f1f5f9",
-      text: isDark ? "#e5e7eb" : "#0f172a",
-      sub: isDark ? "#94a3b8" : "#475569",
-      border: isDark ? "#334155" : "#e2e8f0",
+      bg: "#f8fafc",
+      card:  "#ffffff",
+      card2:  "#f1f5f9",
+      text:  "#0f172a",
+      sub:  "#475569",
+      border:  "#e2e8f0",
       brand: "#14b8a6",
       warn: "#f59e0b",
-      button: isDark ? "#0d9488" : "#14b8a6",
+      button:  "#14b8a6",
       buttonText: "#ffffff",
       overlay: "rgba(0,0,0,0.45)",
-      field: isDark ? "#1f2937" : "#f8fafc",
-      fieldText: isDark ? "#e5e7eb" : "#0f172a",
-      pill: isDark ? "#111827" : "#e5e7eb",
+      field:  "#f8fafc",
+      fieldText: "#0f172a",
+      pill:  "#e5e7eb",
     }),
-    [isDark]
+    []
   );
 const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.currentUser);
@@ -166,6 +166,8 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
   const [openRevisit, setOpenRevisit] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printSelectOptions, setPrintSelectOptions] = useState<string[]>([]);
+  const [openDischargeSheet, setOpenDischargeSheet] = useState(false);
+
 
   const [previousMedHistoryList, setPreviousMedHistoryList] = useState<any[]>([]);
   const [selectedTestList, setSelectedTestList] = useState<testType[]>([]);
@@ -224,57 +226,87 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
   };
 
   const loadPrintData = async () => {
-    if (!timeline?.id || !currentPatient?.id) return;
-    setLoading(true);
-    try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const remindersRes = await AuthFetch(`medicine/${timeline.id}/reminders/all`, token);
-      if (remindersRes?.status === "success") {
-        setReminder((remindersRes?.data?.reminders || []).sort(compareDates));
-      }
-      const alertsRes = await AuthFetch(`alerts/hospital/${user?.hospitalID}/vitalAlerts/${currentPatient.id}`, token);
-      if (alertsRes?.status === "success") {
-        setVitalAlert(alertsRes?.data?.alerts || []);
-      }
-      const symptomsRes = await AuthFetch(`symptom/${currentPatient.id}`, token);
-      if (symptomsRes?.status === "success") {
-        setSymptoms(symptomsRes?.data?.symptoms || []);
-      }
-      const prevMedRes = await AuthFetch(`medicine/${timeline.id}/previous/allmedlist`, token);
-      if (prevMedRes?.status === "success") {
-        setPreviousMedHistoryList(prevMedRes?.data?.previousMedList || []);
-      }
-      const testsRes = await AuthFetch(`test/${currentPatient.id}`, token);
-      if (testsRes?.status === "success") {
-        setSelectedTestList(testsRes.data?.tests || []);
-      }
-      const medHistRes = await AuthFetch(`history/${user?.hospitalID}/patient/${currentPatient.id}`, token);
-      if (medHistRes?.status === "success") {
-        setMedicineHistory(medHistRes.data?.medicalHistory || []);
-      }
-      const vitFuncRes = await AuthFetch(`vitals/${user?.hospitalID}/functions/${currentPatient.id}`, token);
-      if (vitFuncRes?.status === "success") {
-        setVitalFunction(vitFuncRes || {});
-      }
-      setTimeout(() => {
-        Alert.alert("PDF", "Discharge Summary prepared (mock). Integrate your RN PDF flow here.");
-        setPrintSelectOptions([]);
-      }, 400);
-    } finally {
-      setLoading(false);
+  if (!timeline?.id || !currentPatient?.id) return;
+  setLoading(true);
+  try {
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+
+    const remindersRes = await AuthFetch(
+      `medicine/${timeline.id}/reminders/all`,
+      token
+    );
+    if (remindersRes?.status === "success") {
+      setReminder((remindersRes?.data?.reminders || []).sort(compareDates));
     }
-  };
+
+    const alertsRes = await AuthFetch(
+      `alerts/hospital/${user?.hospitalID}/vitalAlerts/${currentPatient?.id}`,
+      token
+    );
+    if (alertsRes?.status === "success") {
+      setVitalAlert(alertsRes?.data?.alerts || []);
+    }
+
+    const symptomsRes = await AuthFetch(
+      `symptom/${currentPatient.id}`,
+      token
+    );
+    if (symptomsRes?.status === "success") {
+      setSymptoms(symptomsRes?.data?.symptoms || []);
+    }
+
+    const prevMedRes = await AuthFetch(
+      `medicine/${timeline.id}/previous/allmedlist`,
+      token
+    );
+    if (prevMedRes?.status === "success") {
+      setPreviousMedHistoryList(prevMedRes?.data?.previousMedList || []);
+    }
+
+    const testsRes = await AuthFetch(
+      `test/${currentPatient.id}`,
+      token
+    );
+    if (testsRes?.status === "success") {
+      setSelectedTestList(testsRes.data?.tests || []);
+    }
+
+    const medHistRes = await AuthFetch(
+      `history/${user?.hospitalID}/patient/${currentPatient.id}`,
+      token
+    );
+    if (medHistRes?.status === "success") {
+      setMedicineHistory(medHistRes.data?.medicalHistory || []);
+    }
+
+    const vitFuncRes = await AuthFetch(
+      `vitals/${user?.hospitalID}/functions/${currentPatient.id}`,
+      token
+    );
+    if (vitFuncRes?.status === "success") {
+      setVitalFunction(vitFuncRes?.data || {});
+    }
+
+    // ✅ now open the Discharge Summary options sheet
+    setOpenDischargeSheet(true);
+    setPrintSelectOptions([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handlePrintClick = async () => {
-    if (printSelectOptions.includes("tests")) {
-      setIsPrintingReports(true);
-      await loadReportData();
-      setIsPrintingReports(false);
-      setPrintOpen(true);
-    } else if (printSelectOptions.includes("generalInfo")) {
-      await loadPrintData();
-    }
-  };
+  if (printSelectOptions.includes("tests")) {
+    setIsPrintingReports(true);
+    await loadReportData();
+    setIsPrintingReports(false);
+    setPrintOpen(true);
+  } else if (printSelectOptions.includes("generalInfo")) {
+    await loadPrintData(); // now opens DischargeSummarySheet
+  }
+};
+
 
   const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolean) => {
     setPrintSelectOptions(opts);
@@ -476,7 +508,20 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
         ]}
       />
 
- 
+ <DischargeSummaryDownload
+  visible={openDischargeSheet}
+  onClose={() => setOpenDischargeSheet(false)}
+  colors={COLORS}
+  patient={currentPatient}
+  vitalAlert={vitalAlert}
+  reminder={reminder}
+  medicalHistory={medicalHistory}
+  previousMedHistoryList={previousMedHistoryList}
+  symptoms={symptoms}
+  vitalFunction={vitalFunction}
+  tests={selectedTestList}
+/>
+
       {/* Revisit Sheet */}
       <ActionSheet title="Patient Revisit" visible={openRevisit} onClose={() => setOpenRevisit(false)} colors={COLORS}>
         <Text style={{ color: COLORS.sub, marginBottom: 8 }}>

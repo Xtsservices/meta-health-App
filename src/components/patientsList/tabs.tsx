@@ -72,22 +72,22 @@ const PatientTabsGrid: React.FC<Props> = ({
      const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
   const navigation = useNavigation<any>();
   const scheme = useColorScheme();
-  const isDark = scheme === "dark";
+ 
 
   const COLORS = useMemo(
     () => ({
-      bg: isDark ? "#0f172a" : "#f8fafc",
-      card: isDark ? "#0b1220" : "#ffffff",
-      text: isDark ? "#e5e7eb" : "#0f172a",
-      sub: isDark ? "#94a3b8" : "#475569",
-      border: isDark ? "#334155" : "#e2e8f0",
+      bg:  "#f8fafc",
+      card:  "#ffffff",
+      text: "#0f172a",
+      sub:  "#475569",
+      border: "#e2e8f0",
       brand: brandColor || "#14b8a6",
       brandDark: "#0f766e",
-      hover: isDark ? "#111827" : "#f1f5f9",
-      pill: isDark ? "#0f172a" : "#eef2f7",
+      hover:  "#f1f5f9",
+      pill: "#eef2f7",
       shadow: "#000000",
     }),
-    [isDark, brandColor]
+    [ brandColor]
   );
 
   // Default route names; override via routeMap prop if your navigator uses different names
@@ -168,7 +168,7 @@ const allowedKeys = useMemo<TabKey[]>(() => {
   return (
     <Pressable
       onPress={() => onPressTile(item)}
-      android_ripple={{ color: isDark ? "#0f766e33" : "#0ea5a733", borderless: false }}
+      android_ripple={{ color: "#0ea5a733", borderless: false }}
       style={({ pressed }) => [
         styles.card,
         {

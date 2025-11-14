@@ -15,6 +15,8 @@ const toastConfig: ToastConfig = {
       contentContainerStyle={{ paddingHorizontal: 16 }}
       text1Style={{ fontSize: 15, fontWeight: '600' }}
       text2Style={{ fontSize: 13 }}
+      text1NumberOfLines={0}  // Added: enables wrapping
+      text2NumberOfLines={0}  // Added: enables wrapping
     />
   ),
   error: (props) => (
@@ -23,6 +25,8 @@ const toastConfig: ToastConfig = {
       style={{ borderLeftColor: '#ef4444', borderRadius: 10 }}
       text1Style={{ fontSize: 15, fontWeight: '700' }}
       text2Style={{ fontSize: 13 }}
+      text1NumberOfLines={0}  // Added: enables wrapping
+      text2NumberOfLines={0}  // Added: enables wrapping
     />
   ),
   info: (props) => (
@@ -32,6 +36,8 @@ const toastConfig: ToastConfig = {
       contentContainerStyle={{ paddingHorizontal: 16 }}
       text1Style={{ fontSize: 15, fontWeight: '600' }}
       text2Style={{ fontSize: 13 }}
+      text1NumberOfLines={0}  // Added: enables wrapping
+      text2NumberOfLines={0}  // Added: enables wrapping
     />
   ),
 };
