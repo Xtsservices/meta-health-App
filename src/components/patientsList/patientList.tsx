@@ -25,6 +25,7 @@ import { patientStatus } from "../../utils/role";
 // Icons
 import { User as UserIcon, Search as SearchIcon, Eye, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { PatientType } from "../../utils/types";
+import Footer from "../dashboard/footer";
 
 const PAGE_SIZE = 10;
 
@@ -241,7 +242,7 @@ const OpdPreviousPatients: React.FC = () => {
             style={[styles.viewBtn, { borderColor: COLORS.border }]}
             onPress={(e) => {
               e.stopPropagation();
-              navigation.navigate("PatientDetails", { patientId: item.id });
+              navigation.navigate("PatientProfile", { id: item.id });
             }}
           >
             <Eye size={18} color={COLORS.text} />
@@ -319,6 +320,12 @@ const OpdPreviousPatients: React.FC = () => {
           </>
         )}
       </KeyboardAvoidingView>
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"patients"} brandColor="#14b8a6" />
+      </View>
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
     </SafeAreaView>
   );
 };
@@ -466,6 +473,21 @@ const styles = StyleSheet.create({
   pageInfo: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 70,
+    justifyContent: "center",
+    // Footer itself should render full width
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
   },
 });
 

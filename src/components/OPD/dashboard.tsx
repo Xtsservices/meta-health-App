@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import {
@@ -40,6 +40,7 @@ import WeeklyBarChart from "../dashboard/barGraph";
 import PatientsList from "../dashboard/patientsList";
 import Sidebar, { SidebarItem } from "../Sidebar/sidebarOpd";
 import Footer from "../dashboard/footer";
+import { showError } from "../../store/toast.slice";
 
 
 // ---- Types ----
@@ -125,7 +126,7 @@ const insets = useSafeAreaInsets();
   const [latestRows, setLatestRows] = useState<PatientRow[]>([]);
   const [latestLoading, setLatestLoading] = useState<boolean>(false);
 const FOOTER_HEIGHT = 70;
-
+const dispatch = useDispatch()
   const getTotalCount = useCallback(async () => {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
@@ -143,7 +144,7 @@ const FOOTER_HEIGHT = 70;
         setThisYearCount(c?.patient_count_year ?? 0);
       }
     } catch (e) {
-      console.error("getTotalCount error", e);
+ dispatch(showError(e?.message || e || 'getTotalCount error' ))
     }
   }, [user?.hospitalID, user?.token]);
 
@@ -261,7 +262,7 @@ const FOOTER_HEIGHT = 70;
     try {
       await AsyncStorage.multiRemove(["token", "userID"]); // clear session
     } catch (e) {
-      console.warn("Logout storage cleanup error:", e);
+      dispatch(showError(e?.message || e || 'Logout storage cleanup error' ))
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);

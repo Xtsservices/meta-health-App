@@ -1,0 +1,783 @@
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  TextInput,
+  Alert,
+  Linking,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useSelector } from "react-redux";
+import { useColorScheme } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  MoreVertical,
+  Edit3,
+  User as UserIcon,
+  Download,
+  X,
+  CalendarDays,
+  UserPlus2,
+  FlipHorizontal2,
+} from "lucide-react-native";
+import { AuthFetch } from "../../auth/auth";
+import Footer from "../dashboard/footer";
+import Tabs from "./tabs";
+// If your Footer lives elsewhere, adjust this import:
+
+import { useDispatch } from "react-redux";
+import { currentPatient as setCurrentPatientAction } from "../../store/store";
+import TransferPatient from "./transferPatient";
+// ---- types ----
+type RootState = any;
+type testType = {
+  id?: number | string;
+  name?: string;
+  category?: "radiology" | "pathology" | "1" | "2" | string;
+  fileURL?: string;
+  fileName?: string;
+  mimeType?: string;
+};
+type Reminder = { dosageTime: string };
+type PatientType = {
+  id: number;
+  pUHID?: string;
+  pName?: string;
+  imageURL?: string;
+  gender?: number;
+  dob?: string;
+  doctorName?: string;
+  firstName?: string;
+  lastName?: string;
+  department?: string;
+  followUpStatus?: number;
+  followUpDate?: string;
+  ptype?: number;
+};
+type TimelineType = { id: number; patientID: number; patientEndStatus?: number };
+type RouteParams = { id: string; staffRole?: string; reception?: boolean };
+
+const followUpStatus = { active: 1 };
+
+// ---- zustand shims (replace with your real store if available) ----
+function usePrintInPatientStore() {
+  const [symptoms, setSymptoms] = useState<any[]>([]);
+  const [reminder, setReminder] = useState<Reminder[]>([]);
+  const [vitalAlert, setVitalAlert] = useState<any[]>([]);
+  const [medicalHistory, setMedicineHistory] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [vitalFunction, setVitalFunction] = useState<any>({});
+  return {
+    symptoms,
+    setSymptoms,
+    reminder,
+    setReminder,
+    vitalAlert,
+    setVitalAlert,
+    medicalHistory,
+    setMedicineHistory,
+    reports,
+    setReports,
+    vitalFunction,
+    setVitalFunction,
+  };
+}
+
+// ---- helpers ----
+function getAge(dobStr?: string) {
+  if (!dobStr) return "";
+  const d = new Date(dobStr);
+  if (isNaN(d.getTime())) return "";
+  const now = new Date();
+  let y = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) y--;
+  if (y >= 2) return `${y}y`;
+  let months = y * 12 + (now.getMonth() - d.getMonth());
+  if (now.getDate() < d.getDate()) months--;
+  if (months <= 0) {
+    const days = Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86400000));
+    return `${days}d`;
+  }
+  return `${months}m`;
+}
+function formatDOB(dob?: string) {
+  if (!dob) return "—";
+  const date = new Date(dob);
+  if (isNaN(date.getTime())) return "—";
+  const day = date.getDate();
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const month = monthNames[date.getMonth()];
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+function compareDates(a: Reminder, b: Reminder) {
+  return new Date(a.dosageTime).valueOf() - new Date(b.dosageTime).valueOf();
+}
+
+const FOOTER_HEIGHT = 64; // visual height of Footer area
+
+const PatientProfileOPD: React.FC = () => {
+  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+  const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const scheme = useColorScheme();
+  const isDark = scheme === "dark";
+
+  const COLORS = useMemo(
+    () => ({
+      bg: isDark ? "#0f172a" : "#f8fafc",
+      card: isDark ? "#0b1220" : "#ffffff",
+      card2: isDark ? "#111827" : "#f1f5f9",
+      text: isDark ? "#e5e7eb" : "#0f172a",
+      sub: isDark ? "#94a3b8" : "#475569",
+      border: isDark ? "#334155" : "#e2e8f0",
+      brand: "#14b8a6",
+      warn: "#f59e0b",
+      button: isDark ? "#0d9488" : "#14b8a6",
+      buttonText: "#ffffff",
+      overlay: "rgba(0,0,0,0.45)",
+      field: isDark ? "#1f2937" : "#f8fafc",
+      fieldText: isDark ? "#e5e7eb" : "#0f172a",
+      pill: isDark ? "#111827" : "#e5e7eb",
+    }),
+    [isDark]
+  );
+const dispatch = useDispatch();
+  const user = useSelector((s: RootState) => s.currentUser);
+ const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
+const timelineFromStore: TimelineType | undefined = undefined; // no timeline in store; initialize locally
+  const [currentPatient, setCurrentPatient] = useState<PatientType | undefined>(patientFromStore);
+  const [timeline, setTimeline] = useState<TimelineType | undefined>(timelineFromStore);
+  const [loading, setLoading] = useState(false);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openTransfer, setOpenTransfer] = useState(false);
+  const [openRevisit, setOpenRevisit] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printSelectOptions, setPrintSelectOptions] = useState<string[]>([]);
+
+  const [previousMedHistoryList, setPreviousMedHistoryList] = useState<any[]>([]);
+  const [selectedTestList, setSelectedTestList] = useState<testType[]>([]);
+  const [isPrintingReports, setIsPrintingReports] = useState(false);
+
+  const {
+    setSymptoms,
+    setReminder,
+    setVitalAlert,
+    setMedicineHistory,
+    setVitalFunction,
+    vitalAlert,
+    reminder,
+    medicalHistory,
+    symptoms,
+    reports,
+    setReports,
+    vitalFunction,
+  } = usePrintInPatientStore();
+
+  const id = route.params?.id;
+  const staffRole = route.params?.staffRole ?? "";
+  const isReceptionView = !!route.params?.reception;
+
+  const fetchPatientAndTimeline = async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const resp = await AuthFetch(`patient/${user?.hospitalID}/patients/single/${id}`, token);
+      if (resp?.status === "success" && resp?.data?.patient) {
+         dispatch(setCurrentPatientAction(resp.data.patient));
+        setCurrentPatient(resp?.data?.patient);
+        const timeLine = await AuthFetch(`patientTimeLine/${resp?.data?.patient.id}`, token);
+        if (timeLine?.status === "success" && timeLine?.data?.patientTimeLine) {
+          setTimeline(timeLine?.data?.patientTimeLine);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadReportData = async () => {
+    if (!timeline?.patientID) return;
+    setLoading(true);
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const res = await AuthFetch(`attachment/${user?.hospitalID}/all/${timeline.patientID}`, token);
+      if (res?.status === "success" && res?.data?.attachments) {
+        setReports(res?.data?.attachments);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPrintData = async () => {
+    if (!timeline?.id || !currentPatient?.id) return;
+    setLoading(true);
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const remindersRes = await AuthFetch(`medicine/${timeline.id}/reminders/all`, token);
+      if (remindersRes?.status === "success") {
+        setReminder((remindersRes?.data?.reminders || []).sort(compareDates));
+      }
+      const alertsRes = await AuthFetch(`alerts/hospital/${user?.hospitalID}/vitalAlerts/${currentPatient.id}`, token);
+      if (alertsRes?.status === "success") {
+        setVitalAlert(alertsRes?.data?.alerts || []);
+      }
+      const symptomsRes = await AuthFetch(`symptom/${currentPatient.id}`, token);
+      if (symptomsRes?.status === "success") {
+        setSymptoms(symptomsRes?.data?.symptoms || []);
+      }
+      const prevMedRes = await AuthFetch(`medicine/${timeline.id}/previous/allmedlist`, token);
+      if (prevMedRes?.status === "success") {
+        setPreviousMedHistoryList(prevMedRes?.data?.previousMedList || []);
+      }
+      const testsRes = await AuthFetch(`test/${currentPatient.id}`, token);
+      if (testsRes?.status === "success") {
+        setSelectedTestList(testsRes.data?.tests || []);
+      }
+      const medHistRes = await AuthFetch(`history/${user?.hospitalID}/patient/${currentPatient.id}`, token);
+      if (medHistRes?.status === "success") {
+        setMedicineHistory(medHistRes.data?.medicalHistory || []);
+      }
+      const vitFuncRes = await AuthFetch(`vitals/${user?.hospitalID}/functions/${currentPatient.id}`, token);
+      if (vitFuncRes?.status === "success") {
+        setVitalFunction(vitFuncRes || {});
+      }
+      setTimeout(() => {
+        Alert.alert("PDF", "Discharge Summary prepared (mock). Integrate your RN PDF flow here.");
+        setPrintSelectOptions([]);
+      }, 400);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrintClick = async () => {
+    if (printSelectOptions.includes("tests")) {
+      setIsPrintingReports(true);
+      await loadReportData();
+      setIsPrintingReports(false);
+      setPrintOpen(true);
+    } else if (printSelectOptions.includes("generalInfo")) {
+      await loadPrintData();
+    }
+  };
+
+  const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolean) => {
+    setPrintSelectOptions(opts);
+    if (shouldPrint) {
+      const filtered = (reports || []).filter((r: any) => {
+        if (opts.includes("Radiology") && (r.category === "radiology" || r.category === "1")) return true;
+        if (opts.includes("Pathology") && (r.category === "pathology" || r.category === "2")) return true;
+        return false;
+      });
+      if (filtered.length === 0) {
+        Alert.alert("No reports", "No matching reports found.");
+        setPrintOpen(false);
+        setPrintSelectOptions([]);
+        return;
+      }
+      try {
+         filtered.forEach((item: any) => {
+      if (item.fileURL) {
+        Linking.openURL(item.fileURL).catch((err) => {
+        });
+      }
+    });
+
+        // Alert.alert("Downloads", `Queued ${filtered.length} report(s) for download.`);
+      } finally {
+        setPrintOpen(false);
+        setPrintSelectOptions([]);
+      }
+    }
+  };
+
+  const openReportFromMenu = async (type: "generalInfo" | "tests") => {
+    setPrintSelectOptions([type]);
+    setMenuOpen(false);
+  };
+
+  useEffect(() => {
+    fetchPatientAndTimeline();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  useEffect(() => {
+    if (printSelectOptions.length > 0) handlePrintClick();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printSelectOptions.join(",")]);
+
+  const followUpChip =
+    Number(currentPatient?.followUpStatus || 0) === followUpStatus.active
+      ? new Date(currentPatient?.followUpDate || "").toLocaleDateString("en-GB")
+      : "";
+
+  const genderText = currentPatient?.gender === 1 ? "Male" : "Female";
+  const ageText = currentPatient?.dob ? getAge(currentPatient?.dob) : "";
+  const doctorText = (() => {
+    if (currentPatient?.doctorName) {
+      const d = currentPatient.doctorName;
+      return `Dr. ${d.slice(0, 1).toUpperCase()}${d.slice(1).toLowerCase()}`;
+    }
+    if (currentPatient?.firstName) {
+      const f = currentPatient.firstName;
+      const l = currentPatient?.lastName || "";
+      return `Dr. ${f.slice(0, 1).toUpperCase()}${f.slice(1).toLowerCase()} ${l}`;
+    }
+    return "—";
+  })();
+
+  return (
+    <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="always"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          // add space so nothing is covered by the fixed footer
+          contentContainerStyle={{ paddingBottom: FOOTER_HEIGHT + insets.bottom + 24 }}
+        >
+          {/* Profile Card (icons moved to top-right inside card) */}
+          <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+            {/* top-right actions */}
+            <View style={styles.cardActions}>
+              {!timeline?.patientEndStatus && (
+                <TouchableOpacity
+                  onPress={() => !isReceptionView && navigation.navigate("EditPatientProfile" as never, { id } as never)}
+                  disabled={isReceptionView}
+                  style={[
+                    styles.iconBtnSmall,
+                    { borderColor: COLORS.border, backgroundColor: COLORS.card2, opacity: isReceptionView ? 0.5 : 1 },
+                  ]}
+                >
+                  <Edit3 size={16} color={COLORS.text} />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={() => setMenuOpen(true)}
+                disabled={isReceptionView}
+                style={[
+                  styles.iconBtnSmall,
+                  { borderColor: COLORS.border, backgroundColor: COLORS.card2, opacity: isReceptionView ? 0.5 : 1 },
+                ]}
+              >
+                <MoreVertical size={16} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* left side avatar + name */}
+            <View style={styles.row}>
+              <View style={[styles.avatar, { borderColor: COLORS.border }]}>
+                {currentPatient?.imageURL ? (
+                  <Image source={{ uri: currentPatient.imageURL }} style={{ width: "100%", height: "100%", borderRadius: 40 }} />
+                ) : (
+                  <UserIcon size={28} color={COLORS.sub} />
+                )}
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.name, { color: COLORS.text }]}>
+                  {(currentPatient?.pName || "").toUpperCase()}
+                </Text>
+                <Text style={[styles.sub, { color: COLORS.sub }]}>UHID: {currentPatient?.pUHID || "-"}</Text>
+
+                <View style={styles.badgesRow}>
+                  {!!followUpChip && (
+                    <View style={[styles.badge, { backgroundColor: COLORS.warn + "22", borderColor: COLORS.warn }]}>
+                      <CalendarDays size={14} color={COLORS.warn} />
+                      <Text style={[styles.badgeText, { color: COLORS.warn }]}>Follow Up Due</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* middle demographics */}
+            <View style={[styles.infoGrid]}>
+              <View style={styles.infoItem}>
+                <Text style={[styles.fieldValue, { color: COLORS.text }]}>
+                  {genderText}{ageText ? `, ${ageText}` : ""}
+                </Text>
+                <Text style={[styles.fieldHint, { color: COLORS.sub }]}>DOB: {formatDOB(currentPatient?.dob)}</Text>
+              </View>
+
+              <View style={styles.infoItem}>
+                <Text style={[styles.fieldValue, { color: COLORS.text }]}>{doctorText}</Text>
+                <Text style={[styles.fieldHint, { color: COLORS.sub }]}>{currentPatient?.department || "—"}</Text>
+              </View>
+            </View>
+          </View>
+<Tabs/>
+          
+        </ScrollView>
+
+        {/* Loading overlay */}
+        {loading && (
+          <View style={[styles.loadingOverlay, { backgroundColor: COLORS.overlay }]}>
+            <ActivityIndicator size="large" color={COLORS.brand} />
+          </View>
+        )}
+      </KeyboardAvoidingView>
+
+      {/* Footer (fixed) */}
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"patients"} brandColor="#14b8a6" />
+      </View>
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
+
+      {/* 3-dots Menu (bottom sheet style) */}
+      <BottomSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        colors={COLORS}
+        items={[
+          currentPatient?.ptype !== 21
+            ? {
+                label: "Transfer Patient",
+                onPress: () => {
+                  if (staffRole !== "nurse")
+                    
+                  setMenuOpen(false);
+                 navigation.navigate("TransferPatient", {
+  hospitalID: user?.hospitalID,
+  patientID: currentPatient?.id,
+  timeline,
+})
+                },
+                disabled: staffRole === "nurse",
+              }
+            : {
+                label: "Patient Revisit",
+                onPress: () => {
+                  setOpenRevisit(true);
+                  setMenuOpen(false);
+                },
+              },
+          { divider: true },
+          { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
+          { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
+        ]}
+      />
+
+ 
+      {/* Revisit Sheet */}
+      <ActionSheet title="Patient Revisit" visible={openRevisit} onClose={() => setOpenRevisit(false)} colors={COLORS}>
+        <Text style={{ color: COLORS.sub, marginBottom: 8 }}>
+          (Form placeholder) Provide revisit date/time and remarks.
+        </Text>
+        <TextInput
+          placeholder="Revisit Date (YYYY-MM-DD)"
+          placeholderTextColor={COLORS.sub}
+          style={[styles.input, { backgroundColor: COLORS.field, color: COLORS.fieldText, borderColor: COLORS.border }]}
+        />
+        <TextInput
+          placeholder="Remarks"
+          placeholderTextColor={COLORS.sub}
+          style={[styles.input, { backgroundColor: COLORS.field, color: COLORS.fieldText, borderColor: COLORS.border, height: 90 }]}
+          multiline
+        />
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+          <Pressable onPress={() => setOpenRevisit(false)} style={[styles.sheetBtn, { backgroundColor: COLORS.pill }]}>
+            <Text style={{ color: COLORS.text, fontWeight: "700" }}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              Alert.alert("Revisit", "Revisit scheduled (mock).");
+              setOpenRevisit(false);
+            }}
+            style={[styles.sheetBtn, { backgroundColor: COLORS.button }]}
+          >
+            <Text style={{ color: COLORS.buttonText, fontWeight: "700" }}>Save</Text>
+          </Pressable>
+        </View>
+      </ActionSheet>
+
+      {/* Print chooser (Radiology/Pathology) */}
+      <ActionSheet title="Test Reports" visible={printOpen} onClose={() => setPrintOpen(false)} colors={COLORS}>
+        <Text style={{ color: COLORS.sub, marginBottom: 12 }}>Pick report categories to download/print.</Text>
+        <TogglePill
+          label="Radiology"
+          active={printSelectOptions.includes("Radiology")}
+          onToggle={() =>
+            setPrintSelectOptions((prev) =>
+              prev.includes("Radiology") ? prev.filter((x) => x !== "Radiology") : [...prev, "Radiology"]
+            )
+          }
+          colors={COLORS}
+        />
+        <TogglePill
+          label="Pathology"
+          active={printSelectOptions.includes("Pathology")}
+          onToggle={() =>
+            setPrintSelectOptions((prev) =>
+              prev.includes("Pathology") ? prev.filter((x) => x !== "Pathology") : [...prev, "Pathology"]
+            )
+          }
+          colors={COLORS}
+        />
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+          <Pressable onPress={() => setPrintOpen(false)} style={[styles.sheetBtn, { backgroundColor: COLORS.pill }]}>
+            <Text style={{ color: COLORS.text, fontWeight: "700" }}>Close</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => updateTheSelectedPrintOptions(printSelectOptions, true)}
+            style={[styles.sheetBtn, { backgroundColor: COLORS.button, opacity: printSelectOptions.length ? 1 : 0.5 }]}
+            disabled={!printSelectOptions.length}
+          >
+            <Text style={{ color: COLORS.buttonText, fontWeight: "700" }}>Download</Text>
+          </Pressable>
+        </View>
+      </ActionSheet>
+    </View>
+  );
+};
+
+// ---------- small presentational components ----------
+const BottomSheet: React.FC<{
+  visible: boolean;
+  onClose: () => void;
+  items: ({ label?: string; onPress?: () => void; disabled?: boolean; divider?: boolean })[];
+  colors: any;
+}> = ({ visible, onClose, items, colors }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={sheetStyles.overlay} onPress={onClose} />
+      <View style={[sheetStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {items.map((it, idx) =>
+          it.divider ? (
+            <View key={`div-${idx}`} style={[sheetStyles.divider, { backgroundColor: colors.border }]} />
+          ) : (
+            <Pressable
+              key={idx}
+              onPress={() => {
+                if (!it.disabled && it.onPress) it.onPress();
+              }}
+              style={({ pressed }) => [sheetStyles.item, { opacity: it.disabled ? 0.45 : pressed ? 0.8 : 1 }]}
+            >
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>{it.label}</Text>
+            </Pressable>
+          )
+        )}
+      </View>
+    </Modal>
+  );
+};
+
+const ActionSheet: React.FC<{
+  title: string;
+  visible: boolean;
+  onClose: () => void;
+  colors: any;
+  children: React.ReactNode;
+}> = ({ title, visible, onClose, colors, children }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={sheetStyles.overlay} onPress={onClose} />
+      <View style={[sheetStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[sheetStyles.sheetHeader, { borderBottomColor: colors.border }]}>
+          <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>{title}</Text>
+          <Pressable onPress={onClose} hitSlop={6}>
+            <X size={18} color={colors.sub} />
+          </Pressable>
+        </View>
+        <View style={{ padding: 12 }}>{children}</View>
+      </View>
+    </Modal>
+  );
+};
+
+const TogglePill: React.FC<{ label: string; active: boolean; onToggle: () => void; colors: any }> = ({
+  label,
+  active,
+  onToggle,
+  colors,
+}) => {
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={[
+        styles.pillBtn,
+        {
+          backgroundColor: active ? colors.button : colors.pill,
+          borderColor: colors.border,
+          marginBottom: 8,
+          justifyContent: "center",
+        },
+      ]}
+    >
+      <Text style={{ color: active ? colors.buttonText : colors.text, fontWeight: "700" }}>{label}</Text>
+    </Pressable>
+  );
+};
+
+// ---------- styles ----------
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+
+  card: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    position: "relative",
+  },
+
+  // absolute action area inside card (top-right)
+  cardActions: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    flexDirection: "row",
+    gap: 8,
+    zIndex: 2,
+  },
+  iconBtnSmall: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 1.2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  row: { flexDirection: "row", alignItems: "center" },
+
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 40,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    overflow: "hidden",
+  },
+
+  name: { fontSize: 18, fontWeight: "800" },
+  sub: { fontSize: 13, marginTop: 2 },
+
+  badgesRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+  },
+  badgeText: { fontSize: 12, fontWeight: "800" },
+
+  infoGrid: {
+    flexDirection: "row",
+    gap: 16,
+    marginTop: 16,
+  },
+  infoItem: { flex: 1 },
+  fieldValue: { fontSize: 16, fontWeight: "800" },
+  fieldHint: { fontSize: 12, marginTop: 4 },
+
+  tabHeader: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tabTitle: { fontSize: 15, fontWeight: "800" },
+
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pillBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+
+  input: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    fontSize: 15,
+  },
+
+  sheetBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+
+  // footer
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: FOOTER_HEIGHT,
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
+  },
+});
+
+const sheetStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  sheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    paddingBottom: 8,
+  },
+  sheetHeader: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  item: { paddingHorizontal: 16, paddingVertical: 14 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 4, opacity: 0.7 },
+});
+
+export default PatientProfileOPD;
