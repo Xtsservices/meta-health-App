@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { Eye, EyeOff, Check } from 'lucide-react-native';
 // import { getAge } from '../../utility/global';
 import { patientStatus } from '../../utils/role';
@@ -19,11 +19,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatDateTime, } from "../../utils/dateTime";
 import { PatientType } from '../../utils/types';
 import { NavigationProp } from '@react-navigation/native';
+import { showError } from '../../store/toast.slice';
 
 const PatientTable = ({ navigation }: { navigation: NavigationProp<any> }) => {
   const [patients, setPatients] = useState<PatientType[]>([]);
   const [loading, setLoading] = useState(true);
   const fetchOnce = useRef(true);
+  const dispatch = useDispatch()
 const user = useSelector((s: RootState) => s.currentUser);
   // Fetch Recent Patients
   const fetchRecentPatients = async () => {
@@ -35,7 +37,6 @@ const user = useSelector((s: RootState) => s.currentUser);
           : `patient/${user?.hospitalID}/patients/recent/${patientStatus.outpatient}?userID=${user?.id}&role=${user?.role}`;
 
       const response = await AuthFetch(endpoint, token);
-      console.log(response, "patients list")
       if (response?.status === 'success' && Array.isArray(response?.data?.patients)) {
         const latestFive = response?.data?.patients.slice(0, 5);
         setPatients(latestFive);
@@ -43,7 +44,7 @@ const user = useSelector((s: RootState) => s.currentUser);
         setPatients([]);
       }
     } catch (error) {
-      console.error('Error fetching patients:', error);
+      dispatch(showError(error?.message || error || 'Error fetching patients' ))
     } finally {
       setLoading(false);
     }
@@ -65,10 +66,10 @@ const user = useSelector((s: RootState) => s.currentUser);
         token
       );
       if (response?.status === 'success') {
-        navigation.navigate('PatientDetails', { patientId: id });
+        navigation.navigate('PatientProfile', { id: id });
       }
     } catch (error) {
-      console.error('Error navigating to patient:', error);
+       dispatch(showError(error?.message || error || 'Error navigating to patient' ))
     }
   };
 
@@ -117,13 +118,13 @@ const user = useSelector((s: RootState) => s.currentUser);
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Latest Patient Details</Text>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.viewAllButton}
           onPress={handleViewAll}
           activeOpacity={0.7}
         >
           <Text style={styles.viewAllText}>View All</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Patient List */}

@@ -384,7 +384,6 @@ const Home: React.FC = () => {
       ) {
         status = 3;
       }
-      console.log(status, "patient status")
       // Dispatch the status update to Redux store
       dispatch(updatePatientStatus(status));
     // Make sure the target routes exist in your navigator.

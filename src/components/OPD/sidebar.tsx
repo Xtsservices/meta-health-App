@@ -70,7 +70,6 @@ const Sidebar: React.FC<Props> = ({
   bottomItems,
   width = Math.min(320, W * 0.82),
 }) => {
-    console.log(userName, "username")
   const slide = useRef(new Animated.Value(-width)).current;
 
   useEffect(() => {
