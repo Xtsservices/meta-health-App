@@ -15,20 +15,20 @@ import { useNavigation } from '@react-navigation/native';
 
 // Icons
 import {
-  Stethoscope,
-  Bed,
-  AlertTriangle,
-  ShieldAlert,
-  Clock,
-  CheckCircle,
-  Microscope,
-  Scan,
-  Pill,
-  Users,
-} from 'lucide-react-native';
+  StethoscopeIcon,
+  BedIcon,
+  AlertTriangleIcon,
+  ShieldAlertIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  MicroscopeIcon,
+  ScanIcon,
+  PillIcon,
+  UsersIcon,
+} from '../utils/SvgIcons';
 
 import { Role_NAME, SCOPE_LIST } from '../utils/role';
-import { RootState, updatePatientStatus } from '../store/store';
+import { currentUser, RootState, updatePatientStatus } from '../store/store';
 
 type CardSpec = {
   key: string;
@@ -54,7 +54,7 @@ type CardColor =
   | 'pharmacy'
   | 'reception';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isTablet = SCREEN_WIDTH >= 768;
 
 /* ---------- Card Component ---------- */
@@ -137,16 +137,16 @@ const Home: React.FC = () => {
     try {
       const userScopes = user?.scope?.split('#')?.map((n: string) => Number(n)) ?? [];
       setFlags({
-        hasEmergencyRedZone: userScopes.includes(SCOPE_LIST.emergency_red_zone),
-        hasEmergencyYellowZone: userScopes.includes(SCOPE_LIST.emergency_yellow_zone),
-        hasEmergencyGreenZone: userScopes.includes(SCOPE_LIST.emergency_green_zone),
-        hasInpatient: userScopes.includes(SCOPE_LIST.inpatient),
-        hasOutpatient: userScopes.includes(SCOPE_LIST.outpatient),
-        hasTriage: userScopes.includes(SCOPE_LIST.triage),
-        hasPathology: userScopes.includes(SCOPE_LIST.pathology),
-        hasRadiology: userScopes.includes(SCOPE_LIST.radiology),
-        hasPharmacy: userScopes.includes(SCOPE_LIST.pharmacy),
-        hasReception: userScopes.includes(SCOPE_LIST.reception),
+        hasEmergencyRedZone: userScopes?.includes(SCOPE_LIST.emergency_red_zone),
+        hasEmergencyYellowZone: userScopes?.includes(SCOPE_LIST.emergency_yellow_zone),
+        hasEmergencyGreenZone: userScopes?.includes(SCOPE_LIST.emergency_green_zone),
+        hasInpatient: userScopes?.includes(SCOPE_LIST.inpatient),
+        hasOutpatient: userScopes?.includes(SCOPE_LIST.outpatient),
+        hasTriage: userScopes?.includes(SCOPE_LIST.triage),
+        hasPathology: userScopes?.includes(SCOPE_LIST.pathology),
+        hasRadiology: userScopes?.includes(SCOPE_LIST.radiology),
+        hasPharmacy: userScopes?.includes(SCOPE_LIST.pharmacy),
+        hasReception: userScopes?.includes(SCOPE_LIST.reception),
       });
     } catch {
       // no-op
@@ -161,7 +161,7 @@ const Home: React.FC = () => {
         heading: 'Outpatient Care',
         link: 'opd',
         paragraph: 'Manage patient visits, appointments, and same-day records',
-        icon: Stethoscope,
+        icon: StethoscopeIcon,
         color: 'opd',
       },
       {
@@ -169,7 +169,7 @@ const Home: React.FC = () => {
         heading: 'Inpatient Services',
         link: 'inpatient',
         paragraph: 'Track beds, patient status, and care plans',
-        icon: Bed,
+        icon: BedIcon,
         color: 'ipd',
       },
       {
@@ -177,7 +177,7 @@ const Home: React.FC = () => {
         heading: 'Patient Triage',
         link: 'triage',
         paragraph: 'Assess and prioritize patient needs quickly',
-        icon: AlertTriangle,
+        icon: AlertTriangleIcon,
         color: 'triage',
       },
       {
@@ -185,7 +185,7 @@ const Home: React.FC = () => {
         heading: 'Critical Care',
         link: 'emergency-red',
         paragraph: 'Immediate protocols for high-priority patients',
-        icon: ShieldAlert,
+        icon: ShieldAlertIcon,
         color: 'emergencyRed',
       },
       {
@@ -193,7 +193,7 @@ const Home: React.FC = () => {
         heading: 'Urgent Care',
         link: 'emergency-yellow',
         paragraph: 'Time-sensitive monitoring and response',
-        icon: Clock,
+        icon: ClockIcon,
         color: 'emergencyYellow',
       },
       {
@@ -201,7 +201,7 @@ const Home: React.FC = () => {
         heading: 'Stable Monitoring',
         link: 'emergency-green',
         paragraph: 'Track stable patients and routine updates',
-        icon: CheckCircle,
+        icon: CheckCircleIcon,
         color: 'emergencyGreen',
       },
       {
@@ -209,7 +209,7 @@ const Home: React.FC = () => {
         heading: 'Laboratory Services',
         link: 'pathology',
         paragraph: 'Access test results and diagnostic info',
-        icon: Microscope,
+        icon: MicroscopeIcon,
         color: 'pathology',
       },
       {
@@ -217,7 +217,7 @@ const Home: React.FC = () => {
         heading: 'Medical Imaging',
         link: 'radiology',
         paragraph: 'Review scans and radiology reports',
-        icon: Scan,
+        icon: ScanIcon,
         color: 'radiology',
       },
       {
@@ -225,7 +225,7 @@ const Home: React.FC = () => {
         heading: 'Pharmacy Management',
         link: 'pharmacy',
         paragraph: 'Med orders, inventory, prescriptions',
-        icon: Pill,
+        icon: PillIcon,
         color: 'pharmacy',
       },
       {
@@ -233,12 +233,13 @@ const Home: React.FC = () => {
         heading: 'Patient Services',
         link: 'reception',
         paragraph: 'Check-ins, scheduling, admin tasks',
-        icon: Users,
+        icon: UsersIcon,
         color: 'reception',
       },
     ];
     return [{ title: 'Quick Access', data: all }];
   }, []);
+
   const sectionsData: SectionSpec[] = useMemo(() => {
     const sections: SectionSpec[] = [];
     const anyTrue = Object.values(flags).some(Boolean);
@@ -254,7 +255,7 @@ const Home: React.FC = () => {
         heading: 'Outpatient Care',
         link: 'opd',
         paragraph: 'Manage patient visits, appointments, and treatment records for same-day care',
-        icon: Stethoscope,
+        icon: StethoscopeIcon,
         color: 'opd',
       });
     if (flags.hasInpatient)
@@ -263,7 +264,7 @@ const Home: React.FC = () => {
         heading: 'Inpatient Services',
         link: 'inpatient',
         paragraph: 'Track bed allocation, patient status, and care plans for admitted patients',
-        icon: Bed,
+        icon: BedIcon,
         color: 'ipd',
       });
     if (flags.hasTriage)
@@ -272,7 +273,7 @@ const Home: React.FC = () => {
         heading: 'Patient Triage',
         link: 'triage',
         paragraph: 'Assess and prioritize patient needs for efficient care allocation',
-        icon: AlertTriangle,
+        icon: AlertTriangleIcon,
         color: 'triage',
       });
     if (patientCare.length) sections.push({ title: 'Patient Care', data: patientCare });
@@ -284,7 +285,7 @@ const Home: React.FC = () => {
         heading: 'Critical Care',
         link: 'emergency-red',
         paragraph: 'Immediate alerts and protocols for high-priority patient situations',
-        icon: ShieldAlert,
+        icon: ShieldAlertIcon,
         color: 'emergencyRed',
       });
     if (flags.hasEmergencyYellowZone)
@@ -293,7 +294,7 @@ const Home: React.FC = () => {
         heading: 'Urgent Care',
         link: 'emergency-yellow',
         paragraph: 'Monitor and respond to time-sensitive medical requirements',
-        icon: Clock,
+        icon: ClockIcon,
         color: 'emergencyYellow',
       });
     if (flags.hasEmergencyGreenZone)
@@ -302,7 +303,7 @@ const Home: React.FC = () => {
         heading: 'Stable Monitoring',
         link: 'emergency-green',
         paragraph: 'Track stable patients and routine medical status updates',
-        icon: CheckCircle,
+        icon: CheckCircleIcon,
         color: 'emergencyGreen',
       });
     if (emergency.length) sections.push({ title: 'Emergency Services', data: emergency });
@@ -314,7 +315,7 @@ const Home: React.FC = () => {
         heading: 'Laboratory Services',
         link: 'pathology',
         paragraph: 'Access test results, lab reports, and diagnostic information',
-        icon: Microscope,
+        icon: MicroscopeIcon,
         color: 'pathology',
       });
     if (flags.hasRadiology)
@@ -323,7 +324,7 @@ const Home: React.FC = () => {
         heading: 'Medical Imaging',
         link: 'radiology',
         paragraph: 'Review radiology scans, imaging reports, and diagnostic workflows',
-        icon: Scan,
+        icon: ScanIcon,
         color: 'radiology',
       });
     if (diagnostics.length) sections.push({ title: 'Diagnostic Services', data: diagnostics });
@@ -335,7 +336,7 @@ const Home: React.FC = () => {
         heading: 'Pharmacy Management',
         link: 'pharmacy',
         paragraph: 'Handle medication orders, inventory, and prescription tracking',
-        icon: Pill,
+        icon: PillIcon,
         color: 'pharmacy',
       });
     if (flags.hasReception)
@@ -344,7 +345,7 @@ const Home: React.FC = () => {
         heading: 'Patient Services',
         link: 'reception',
         paragraph: 'Manage patient check-ins, scheduling, and administrative tasks',
-        icon: Users,
+        icon: UsersIcon,
         color: 'reception',
       });
     if (support.length) sections.push({ title: 'Support Services', data: support });
@@ -365,13 +366,13 @@ const Home: React.FC = () => {
       .filter((sec) => sec.data.length > 0);
   }, [sectionsData, query]);
 
- const clickNavigate = useCallback(
-  (heading: string, link: string) => {
+  const clickNavigate = useCallback(
+    (heading: string, link: string) => {
+      let status = 1;
+      let newRoleName = user?.roleName;
 
-     let status = 1; // default OPD
-      
       const headingLower = heading.toLowerCase();
-      
+
       if (headingLower === 'outpatient care') {
         status = 1;
       } else if (headingLower === 'inpatient services') {
@@ -383,65 +384,74 @@ const Home: React.FC = () => {
         headingLower === 'stable monitoring'
       ) {
         status = 3;
+      } else if (headingLower === 'laboratory services') {
+        status = 4;
+        newRoleName = 'pathology';
+      } else if (headingLower === 'medical imaging') {
+        status = 5;
+        newRoleName = 'radiology';
       }
-      console.log(status, "patient status")
-      // Dispatch the status update to Redux store
+
       dispatch(updatePatientStatus(status));
-    // Make sure the target routes exist in your navigator.
-    if (user?.role === Role_NAME.admin) {
-      navigation.navigate(`${link.toLowerCase()}/admin`);
-    } else {
-      
-      switch (heading.toLowerCase()) {
-        case 'Outpatient Care':
-          navigation.navigate('DashboardOpd');
-          break;
-        
-        case 'Inpatient Services':
-          navigation.navigate('DashboardIpd');
-          break;
-        
-        case 'Patient Triage':
-          navigation.navigate('DashboardTriage');
-          break;
-        
-        case 'Critical Care':
-          navigation.navigate('DashboardRed');
-          break;
-        
-        case 'Urgent Care':
-          navigation.navigate('DashboardYellow');
-          break;
-        
-        case 'Stable Monitoring':
-          navigation.navigate('DashboardGreen');
-          break;
 
-        case 'Laboratory Services':
-          navigation.navigate('DashboardLab');
-          break;
+      const updatedUser = {
+        ...user,
+        roleName: newRoleName
+      };
+      dispatch(currentUser(updatedUser));
 
-        case 'Medical Imaging':
-          navigation.navigate('DashboardRadio');
-          break;
+      if (user?.role === Role_NAME.admin) {
+        navigation.navigate(`${link.toLowerCase()}/admin`);
+      } else {
+        switch (headingLower) {
+          case 'outpatient care':
+            navigation.navigate('DashboardOpd');
+            break;
 
-        case 'Pharmacy Management':
-          navigation.navigate('DashboardPharma');
-          break;
-        
-        case 'Patient Services':
-          navigation.navigate('DashboardReception');
-          break;
-        
-        default:
-          // Fallback to DashboardOpd if heading doesn't match
-          navigation.navigate('DashboardOpd');
-          break;
+          case 'inpatient services':
+            navigation.navigate('DashboardIpd');
+            break;
+
+          case 'patient triage':
+            navigation.navigate('DashboardTriage');
+            break;
+
+          case 'critical care':
+            navigation.navigate('EmergencyDashboard', { type: 'red' });
+            break;
+
+          case 'urgent care':
+            navigation.navigate('EmergencyDashboard', { type: 'yellow' });
+            break;
+
+          case 'stable monitoring':
+            navigation.navigate('EmergencyDashboard', { type: 'green' });
+            break;
+
+          case 'laboratory services':
+            navigation.navigate('DashboardLab');
+            break;
+
+          case 'medical imaging':
+            navigation.navigate('DashboardLab');
+            break;
+
+          case 'pharmacy management':
+            navigation.navigate('DashboardPharma');
+            break;
+
+          case 'patient services':
+            navigation.navigate('DashboardReception');
+            break;
+
+          default:
+            navigation.navigate('DashboardOpd');
+            break;
+        }
       }
-    }
-  },
-  [navigation, user?.role],
-);
+    },
+    [navigation, user?.role, dispatch, user],
+  );
 
   const listRef = useRef<SectionList<CardSpec> | null>(null);
 
@@ -506,13 +516,13 @@ const Home: React.FC = () => {
             stickySectionHeadersEnabled={false}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled" // NEW: better typing+scroll handling
+            keyboardShouldPersistTaps="handled"
             scrollEventThrottle={16}
             decelerationRate={Platform.OS === 'ios' ? 'fast' : 0.98}
           />
         ) : (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>No results for “{query}”. Try another term.</Text>
+            <Text style={styles.emptyText}>No results for "{query}". Try another term.</Text>
           </View>
         )}
       </View>
@@ -524,15 +534,12 @@ export default Home;
 
 /* ================== Styles ================== */
 const styles = StyleSheet.create({
-  // NEW: screen split (header + list) to guarantee the list gets space on small phones
   screen: {
     flex: 1,
     backgroundColor: '#fff',
   },
-
-  // Header (stacked on phones; side-by-side only on tablets)
   headerRow: {
-    paddingTop: Platform.select({ ios: 12, android: 8 }) as number,
+    paddingTop: Platform.select({ ios: 12, android: 8 }),
     paddingBottom: 8,
     paddingHorizontal: 12,
     backgroundColor: '#fff',
@@ -542,7 +549,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#009688',
     lineHeight: 19,
-    marginBottom: 8, // NEW: stack on mobile
+    marginBottom: 8,
   },
   search: {
     width: '100%',
@@ -554,18 +561,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     color: '#0f172a',
   },
-
-  // The scrolling area
   listWrap: {
-    flex: 1, // NEW: ensure list occupies remaining height
+    flex: 1,
   },
   listContent: {
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 24,
   },
-
-  // Section header
   sectionHeader: {
     paddingTop: 6,
     paddingBottom: 6,
@@ -575,12 +578,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#009688',
   },
-
-  // Card
   card: {
     position: 'relative',
     width: '100%',
-    minHeight: 92, // NEW: slightly taller for thumbs
+    minHeight: 92,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
@@ -602,13 +603,12 @@ const styles = StyleSheet.create({
     elevation: 4,
     backgroundColor: 'rgba(16,176,151,0.03)',
   },
-
   cardBody: {
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   cardLeft: {
-    width: 36, // NEW: slightly larger target
+    width: 36,
     alignItems: 'center',
     marginRight: 8,
   },
@@ -636,7 +636,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: '#0f172a',
   },
-
   statusPill: {
     position: 'absolute',
     top: 10,
@@ -651,13 +650,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#dfe9ff',
   },
-
   arrowButton: {
     position: 'absolute',
     top: 10,
     right: 10,
   },
-
   emptyWrap: {
     paddingVertical: 24,
     paddingHorizontal: 12,
@@ -666,46 +663,44 @@ const styles = StyleSheet.create({
     color: '#6a7b90',
     fontSize: 14,
   },
-
-  // Color variants
-//   card_emergencyRed: {
-//     backgroundColor: 'rgba(220,38,38,0.10)',
-//     borderColor: 'rgba(220,38,38,0.12)',
-//   },
-//   card_emergencyYellow: {
-//     backgroundColor: 'rgba(245,159,11,0.12)',
-//     borderColor: 'rgba(245,158,11,0.12)',
-//   },
-//   card_emergencyGreen: {
-//     backgroundColor: 'rgba(16,176,152,0.12)',
-//     borderColor: 'rgba(16,176,151,0.12)',
-//   },
-//   card_opd: {
-//     backgroundColor: 'rgba(102,204,29,0.10)',
-//     borderColor: 'rgba(193,124,5,0.12)',
-//   },
-//   card_ipd: {
-//     backgroundColor: 'rgba(102,204,29,0.10)',
-//     borderColor: 'rgba(193,124,5,0.12)',
-//   },
-//   card_triage: {
-//     backgroundColor: 'rgba(111,195,27,0.10)',
-//     borderColor: 'rgba(245,158,11,0.12)',
-//   },
-//   card_pathology: {
-//     backgroundColor: 'rgba(102,204,29,0.10)',
-//     borderColor: 'rgba(193,124,5,0.12)',
-//   },
-//   card_radiology: {
-//     backgroundColor: 'rgba(102,204,29,0.10)',
-//     borderColor: 'rgba(193,124,5,0.12)',
-//   },
-//   card_pharmacy: {
-//     backgroundColor: 'rgba(102,204,29,0.10)',
-//     borderColor: 'rgba(193,124,5,0.12)',
-//   },
-//   card_reception: {
-//     backgroundColor: 'rgba(102,204,29,0.10)',
-//     borderColor: 'rgba(193,124,5,0.12)',
-//   },
+  // card_emergencyRed: {
+  //   backgroundColor: 'rgba(220,38,38,0.10)',
+  //   borderColor: 'rgba(220,38,38,0.12)',
+  // },
+  // card_emergencyYellow: {
+  //   backgroundColor: 'rgba(245,159,11,0.12)',
+  //   borderColor: 'rgba(245,158,11,0.12)',
+  // },
+  // card_emergencyGreen: {
+  //   backgroundColor: 'rgba(16,176,152,0.12)',
+  //   borderColor: 'rgba(16,176,151,0.12)',
+  // },
+  // card_opd: {
+  //   backgroundColor: 'rgba(102,204,29,0.10)',
+  //   borderColor: 'rgba(193,124,5,0.12)',
+  // },
+  // card_ipd: {
+  //   backgroundColor: 'rgba(102,204,29,0.10)',
+  //   borderColor: 'rgba(193,124,5,0.12)',
+  // },
+  // card_triage: {
+  //   backgroundColor: 'rgba(111,195,27,0.10)',
+  //   borderColor: 'rgba(245,158,11,0.12)',
+  // },
+  // card_pathology: {
+  //   backgroundColor: 'rgba(102,204,29,0.10)',
+  //   borderColor: 'rgba(193,124,5,0.12)',
+  // },
+  // card_radiology: {
+  //   backgroundColor: 'rgba(102,204,29,0.10)',
+  //   borderColor: 'rgba(193,124,5,0.12)',
+  // },
+  // card_pharmacy: {
+  //   backgroundColor: 'rgba(102,204,29,0.10)',
+  //   borderColor: 'rgba(193,124,5,0.12)',
+  // },
+  // card_reception: {
+  //   backgroundColor: 'rgba(102,204,29,0.10)',
+  //   borderColor: 'rgba(193,124,5,0.12)',
+  // },
 });

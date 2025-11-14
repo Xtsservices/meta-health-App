@@ -32,7 +32,6 @@ const Footer: React.FC<Props> = ({
   const navigation = useNavigation<any>();
 
   const handleTabPress = (k: TabKey) => {
-    console.log(k, "tapes on footer")
     if (k === "dashboard") {
       navigation.navigate("DashboardOpd");
     } else if (k === "addPatient") {

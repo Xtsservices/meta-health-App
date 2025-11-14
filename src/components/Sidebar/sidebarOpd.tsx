@@ -70,7 +70,6 @@ const Sidebar: React.FC<Props> = ({
   bottomItems,
   width = Math.min(320, W * 0.82),
 }) => {
-    console.log(userName, "username")
   const slide = useRef(new Animated.Value(-width)).current;
 
   useEffect(() => {
@@ -103,7 +102,7 @@ const Sidebar: React.FC<Props> = ({
 
         {/* Items */}
         <View style={styles.drawerBody}>
-          {items.map((it) => {
+          {items?.map((it) => {
             const Icon = it.icon;
             const color =
               it.variant === "danger" ? "#b91c1c" : it.variant === "muted" ? "#475569" : "#0b1220";
@@ -123,7 +122,7 @@ const Sidebar: React.FC<Props> = ({
 
         {/* Bottom */}
         <View style={styles.drawerFooter}>
-          {bottomItems.map((it) => {
+          {bottomItems?.map((it) => {
             const Icon = it.icon;
             const color =
               it.variant === "danger" ? "#b91c1c" : it.variant === "muted" ? "#475569" : "#0b1220";

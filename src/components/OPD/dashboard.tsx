@@ -38,7 +38,7 @@ import { AuthFetch } from "../../auth/auth";
 import LineChartActualScheduled from "../dashboard/lineGraph";
 import WeeklyBarChart from "../dashboard/barGraph";
 import PatientsList from "../dashboard/patientsList";
-import Sidebar, { SidebarItem } from "./sidebar";
+import Sidebar, { SidebarItem } from "../Sidebar/sidebarOpd";
 import Footer from "../dashboard/footer";
 
 
@@ -101,7 +101,6 @@ const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onM
 const Dashboard_Outpatient: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
-  console.log(user, "complete user data")
 const insets = useSafeAreaInsets();
   const userName =
     `${user?.firstName} ${user?.lastName}` || "User";
@@ -275,7 +274,7 @@ const FOOTER_HEIGHT = 70;
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
     { key: "addp", label: "Add Patient", icon: UserPlus2, onPress: () => go("AddPatient") },
     { key: "mgmt", label: "Management", icon: Settings, onPress: () => go("Management") },
-    { key: "help", label: "Help", icon: HelpCircle, onPress: () => go("Help") },
+    { key: "help", label: "Help", icon: HelpCircle, onPress: () => go("HelpScreen") },
   ];
   const bottomItems: SidebarItem[] = [
     { key: "modules", label: "Go to Modules", icon: PanelRightOpen, onPress: () => go("Home") },
@@ -324,7 +323,7 @@ const FOOTER_HEIGHT = 70;
         </View>
 
         {/* Latest table (your existing component) */}
-        <PatientsList navigation={undefined} />
+        <PatientsList navigation={navigation} patientType={patientStatus.outpatient} />
          
       </ScrollView>
 
