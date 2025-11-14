@@ -1,5 +1,7 @@
 // import { priorityDictType, statusDictType, transferTypes } from "../types";
 
+import { transferTypes } from "./types";
+
 export type Role_list_Type = {
   10007: string;
   8888:string;
@@ -92,10 +94,10 @@ export const zoneList = {
   3: "green",
 };
 
-// export const transferType: transferTypes = {
-//   internal: 1,
-//   external: 2,
-// };
+export const transferType: transferTypes = {
+  internal: 1,
+  external: 2,
+};
 
 // export const priorityDict: priorityDictType = {
 //   0: "Low",

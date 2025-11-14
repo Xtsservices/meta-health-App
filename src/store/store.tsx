@@ -22,6 +22,7 @@ interface AppStateOnly {
   currentUserID: ID;
   currentUser: User | null;
   currentDoctor: Doctor | null;
+  currentPatient: any | null;
 }
 
 // Root state = your original keys + toast slice
@@ -35,6 +36,7 @@ const initialData: AppStateOnly = {
   currentUserID: null,
   currentUser: null,
   currentDoctor: null,
+   currentPatient: null,
 };
 
 /** ---- Action types ---- */
@@ -43,6 +45,8 @@ type Action =
   | { type: 'currentUserID'; payload: ID }
   | { type: 'currentDoctor'; payload: Doctor | null }
   | { type: 'updatePatientStatus'; payload: number }
+  | { type: 'currentPatient'; payload: any | null }
+
   | { type: 'resetAll' };
 
 /** ---- Action creators ---- */
@@ -61,6 +65,11 @@ export const currentDoctor = (doctor: Doctor | null): Action => ({
 export const updatePatientStatus = (status: number): Action => ({
   type: 'updatePatientStatus',
   payload: status,
+});
+
+export const currentPatient = (patient: any | null): Action => ({ 
+  type: 'currentPatient',
+  payload: patient,
 });
 export const resetAll = (): Action => ({ type: 'resetAll' });
 
@@ -83,7 +92,8 @@ function appReducer(state: AppStateOnly = initialData, action: Action): AppState
           ? { ...state.currentUser, patientStatus: action.payload }
           : null,
       };
-    
+     case 'currentPatient': // NEW
+      return { ...state, currentPatient: action.payload ?? null };
     case 'resetAll':
       return initialData;
     
@@ -100,6 +110,7 @@ function rootReducer(state: RootState | undefined, action: any): RootState {
     currentUserID: state?.currentUserID ?? initialData.currentUserID,
     currentUser: state?.currentUser ?? initialData.currentUser,
     currentDoctor: state?.currentDoctor ?? initialData.currentDoctor,
+  currentPatient: state?.currentPatient ?? initialData.currentPatient, // NEW
   };
 
   const nextApp = appReducer(appSliceState, action);

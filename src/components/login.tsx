@@ -21,7 +21,7 @@ import { Eye, EyeOff, Check } from 'lucide-react-native';
 import { AuthFetch, UsePost } from '../auth/auth';
 import { currentUser } from '../store/store';
 import { roleRoutes, scopeLinks } from '../utils/roleNames';
-import { showError, showSuccess } from '../store/toast.slice';
+import { showError,  showSuccess } from '../store/toast.slice';
 
 // import { setCurrentUser } from '../../store/store';
 // import { setError, setSuccess } from '../../store/error/error.action';
@@ -77,8 +77,8 @@ useFocusEffect(
         dispatch(currentUser(response?.data?.user));
         
         navigation.reset({ index: 0, routes: [{ name: 'Home' as never }] });
-      } catch (e) {
-        console.log('AuthFetch error:', e);
+      } catch (error) {
+        dispatch(showError(error?.message))
       }
     })();
 
@@ -130,7 +130,6 @@ useFocusEffect(
 
       const response = await UsePost('user/emailLogin', body);
       const data = response?.data;
-
       if (data.message === 'success') {
       
         await AsyncStorage.setItem('token', data?.token);
