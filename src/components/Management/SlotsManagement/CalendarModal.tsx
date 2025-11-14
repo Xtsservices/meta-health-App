@@ -11,6 +11,7 @@ import {
   ChevronRight,
   X
 } from "lucide-react-native";
+import { getDaysInMonth, monthNames } from "../../../utils/dateTime";
 
 interface CalendarModalProps {
   visible: boolean;
@@ -27,35 +28,6 @@ const CalendarModal: React.FC<CalendarModalProps> = ({
 }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate));
 
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const days = [];
-
-    // Add previous month's days
-    const firstDayOfWeek = firstDay.getDay();
-    const prevMonthLastDay = new Date(year, month, 0).getDate();
-    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-      days.push(new Date(year, month - 1, prevMonthLastDay - i));
-    }
-
-    // Add current month's days
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      days.push(new Date(year, month, i));
-    }
-
-    // Add next month's days to complete the grid
-    const totalCells = 42;
-    const nextMonthDays = totalCells - days.length;
-    for (let i = 1; i <= nextMonthDays; i++) {
-      days.push(new Date(year, month + 1, i));
-    }
-
-    return days;
-  };
-
   const isSameDay = (date1: Date, date2: Date) => {
     return (
       date1.getDate() === date2.getDate() &&
@@ -69,11 +41,8 @@ const CalendarModal: React.FC<CalendarModalProps> = ({
     return isSameDay(date, today);
   };
 
+  // Using imported functions from utils
   const days = getDaysInMonth(currentMonth);
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
 
   const goToPreviousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));

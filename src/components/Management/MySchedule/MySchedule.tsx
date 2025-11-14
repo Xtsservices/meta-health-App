@@ -17,7 +17,7 @@ import { AuthFetch } from "../../../auth/auth";
 import { 
   formatDate, 
   formatTime, 
-  convertTo12Hour,
+  convertTo12Hour,getDaysInMonth, monthNames, areDatesEqual 
 } from "../../../utils/dateTime";
 import { 
   ChevronLeftIcon, 
@@ -127,53 +127,14 @@ const CalendarModal: React.FC<{
 }> = ({ visible, selectedDate, onDateSelect, onClose }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate));
 
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const days = [];
 
-    // Add previous month's days
-    const firstDayOfWeek = firstDay.getDay();
-    const prevMonthLastDay = new Date(year, month, 0).getDate();
-    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-      days.push(new Date(year, month - 1, prevMonthLastDay - i));
-    }
-
-    // Add current month's days
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      days.push(new Date(year, month, i));
-    }
-
-    // Add next month's days to complete the grid
-    const totalCells = 42;
-    const nextMonthDays = totalCells - days.length;
-    for (let i = 1; i <= nextMonthDays; i++) {
-      days.push(new Date(year, month + 1, i));
-    }
-
-    return days;
-  };
-
-  const isSameDay = (date1: Date, date2: Date) => {
-    return (
-      date1.getDate() === date2.getDate() &&
-      date1.getMonth() === date2.getMonth() &&
-      date1.getFullYear() === date2.getFullYear()
-    );
-  };
 
   const isToday = (date: Date) => {
     const today = new Date();
-    return isSameDay(date, today);
+    return areDatesEqual(date, today); 
   };
 
   const days = getDaysInMonth(currentMonth);
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
 
   const goToPreviousMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
@@ -225,7 +186,7 @@ const CalendarModal: React.FC<{
             <View style={styles.calendarDays}>
               {days?.map?.((date, index) => {
                 const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-                const isSelected = isSameDay(date, selectedDate);
+                const isSelected = areDatesEqual(date, selectedDate);
                 const isTodayDate = isToday(date);
 
                 return (
