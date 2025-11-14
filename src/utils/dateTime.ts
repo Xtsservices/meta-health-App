@@ -18,7 +18,7 @@ function normalize(input: InputDate): Date | null {
   else if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(s)) {
     s = s.replace(' ', 'T') + 'Z';
   }
-  // If it’s date + T + time but no zone (e.g. 2025-11-10T14:20:00)
+  // If it's date + T + time but no zone (e.g. 2025-11-10T14:20:00)
   else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/.test(s)) {
     s = s + 'Z';
   }
@@ -113,7 +113,6 @@ export function formatTime(input: InputDate, timeZone = 'Asia/Kolkata'): string 
 
 /** 10 Nov 2025 08:20 PM */
 export function formatDateTime(input: InputDate, timeZone = 'Asia/Kolkata'): string {
-  console.log(input, "to be stringify")
   const d = normalize(input);
   if (!d) return '-';
   if (hasFormatToParts()) {
@@ -123,4 +122,96 @@ export function formatDateTime(input: InputDate, timeZone = 'Asia/Kolkata'): str
     const m = manualFormat(d, timeZone);
     return `${m.dateStr} ${m.timeStr}`;
   }
+}
+
+/** Convert 24h time (14:30) to 12h time (02:30 PM) */
+export function convertTo12Hour(time24: string): string {
+  if (!time24) return '';
+  
+  const [hours, minutes] = time24?.split(':') ?? ['00', '00'];
+  const hour = parseInt(hours ?? '0');
+  const minute = minutes ?? '00';
+  
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  
+  return `${hour12.toString().padStart(2, '0')}:${minute} ${period}`;
+}
+
+/** Format date to YYYY-MM-DD for input fields */
+export function formatDateForInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Parse date from YYYY-MM-DD string */
+export function parseDateFromInput(dateString: string): Date | null {
+  return normalize(dateString);
+}
+
+/** Validate time format HH:MM */
+export function isValidTime(time: string): boolean {
+  return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
+}
+
+/** Validate date format YYYY-MM-DD */
+export function isValidDate(date: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date);
+}
+
+/** Get current date in YYYY-MM-DD format */
+export function getCurrentDateFormatted(): string {
+  return formatDateForInput(new Date());
+}
+
+/** Add days to a date */
+export function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+/** Compare two dates (ignoring time) */
+export function areDatesEqual(date1: Date, date2: Date): boolean {
+  return (
+    date1.getDate() === date2.getDate() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getFullYear() === date2.getFullYear()
+  );
+}
+
+export const monthNames = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+export function getDaysInMonth(date: Date): Date[] {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const days = [];
+
+  // Add previous month's days
+  const firstDayOfWeek = firstDay.getDay();
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    days.push(new Date(year, month - 1, prevMonthLastDay - i));
+  }
+
+  // Add current month's days
+  for (let i = 1; i <= lastDay.getDate(); i++) {
+    days.push(new Date(year, month, i));
+  }
+
+  // Add next month's days to complete the grid
+  const totalCells = 42;
+  const nextMonthDays = totalCells - days.length;
+  for (let i = 1; i <= nextMonthDays; i++) {
+    days.push(new Date(year, month + 1, i));
+  }
+
+  return days;
 }

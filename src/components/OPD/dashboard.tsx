@@ -38,7 +38,7 @@ import { AuthFetch } from "../../auth/auth";
 import LineChartActualScheduled from "../dashboard/lineGraph";
 import WeeklyBarChart from "../dashboard/barGraph";
 import PatientsList from "../dashboard/patientsList";
-import Sidebar, { SidebarItem } from "./sidebar";
+import Sidebar, { SidebarItem } from "../Sidebar/sidebarOpd";
 import Footer from "../dashboard/footer";
 import { showError } from "../../store/toast.slice";
 
@@ -276,7 +276,7 @@ const dispatch = useDispatch()
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
     { key: "addp", label: "Add Patient", icon: UserPlus2, onPress: () => go("AddPatient") },
     { key: "mgmt", label: "Management", icon: Settings, onPress: () => go("Management") },
-    { key: "help", label: "Help", icon: HelpCircle, onPress: () => go("Help") },
+    { key: "help", label: "Help", icon: HelpCircle, onPress: () => go("HelpScreen") },
   ];
   const bottomItems: SidebarItem[] = [
     { key: "modules", label: "Go to Modules", icon: PanelRightOpen, onPress: () => go("Home") },
@@ -325,7 +325,7 @@ const dispatch = useDispatch()
         </View>
 
         {/* Latest table (your existing component) */}
-        <PatientsList navigation={undefined} />
+        <PatientsList navigation={navigation} patientType={patientStatus.outpatient} />
          
       </ScrollView>
 
