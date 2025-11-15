@@ -26,7 +26,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 
-import { AuthFetch, AuthPost, UploadFiles } from "../../auth/auth";
+import { AuthFetch, UploadFiles } from "../../auth/auth";
 import Footer from "../dashboard/footer";
 import { RootState } from "../../store/store";
 import { city, state } from "../../utils/stateCity";
@@ -42,6 +42,7 @@ import {
   staffType,
 } from "../../utils/types";
 import { showError, showSuccess } from "../../store/toast.slice";
+import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 
 type Department = { id: number; name: string };
 
@@ -104,20 +105,19 @@ const dispatch = useDispatch()
   const scrollViewRef = useRef<ScrollView>(null);
   const FOOTER_HEIGHT = 70;
 
-  const isDark = scheme === "dark";
 
   const COLORS = useMemo(() => ({
-    bg: isDark ? "#1e293b" : "#f8fafc",        // Lighter dark bg
-    card: isDark ? "#334155" : "#ffffff",      // Card contrast
-    text: isDark ? "#f1f5f9" : "#1e293b",
-    sub: isDark ? "#cbd5e1" : "#64748b",
-    border: isDark ? "#475569" : "#e2e8f0",
+    bg: "#f8fafc",        // Lighter dark bg
+    card:  "#ffffff",      // Card contrast
+    text:  "#1e293b",
+    sub:  "#64748b",
+    border:  "#e2e8f0",
     brand: "#14b8a6",
     danger: "#ef4444",
     inputBg: "transparent",
-    placeholder: isDark ? "#94a3b8" : "#9ca3af",
-    pickerText: isDark ? "#f1f5f9" : "#1e293b",
-  }), [isDark]);
+    placeholder:  "#9ca3af",
+    pickerText:  "#1e293b",
+  }), []);
 
   // ---------- Title list by category ----------
   useEffect(() => {
@@ -313,7 +313,7 @@ const dispatch = useDispatch()
     if (!validateForm()) return;
 
     setLoading(true);
-    const fd = new FormData();
+    const data = new FormData();
     const numHospitalID = Number(user?.hospitalID ?? 0);
   const numCategory   = Number(route.params?.category ?? 1);
   const numAddedBy    = Number(user?.id ?? 0);
@@ -326,30 +326,30 @@ const dispatch = useDispatch()
   const numDepartment  = Number(formData.department.value);
 
 
-  fd.append("hospitalID", numHospitalID as any);
-  fd.append("category",   numCategory as any);
-  fd.append("addedBy",    numAddedBy as any);
-  fd.append("ptype",      numPtype as any);
-  fd.append("pUHID",      numPUHID as any);
-  fd.append("gender",     numGender as any);
-  fd.append("weight",     numWeight as any);
-  fd.append("height",     numHeight as any);
-  fd.append("insurance",  numInsurance as any);
-  fd.append("age",  formData.age.value);
-  fd.append("department", numDepartment)
+  data.append("hospitalID", numHospitalID as any);
+  data.append("category",   numCategory as any);
+  data.append("addedBy",    numAddedBy as any);
+  data.append("ptype",      numPtype as any);
+  data.append("pUHID",      numPUHID as any);
+  data.append("gender",     numGender as any);
+  data.append("weight",     numWeight as any);
+  data.append("height",     numHeight as any);
+  data.append("insurance",  numInsurance as any);
+  data.append("age",  formData.age.value);
+  data.append("department", numDepartment)
 
 
-    fd.append("patientStartStatus", 1);
-    // fd.append("ptype", "1");
+    data.append("patientStartStatus", 1);
+    // data.append("ptype", "1");
 
     if (profileImage) {
-      fd.append("photo", {
+      data.append("photo", {
         uri: profileImage,
         name: "photo.jpg",
         type: "image/jpeg",
       } as any);
     } else {
-      fd.append("photo", "" as any);
+      data.append("photo", "" as any);
     }
   (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach((k) => {
     if (
@@ -360,28 +360,28 @@ const dispatch = useDispatch()
 
     const field = formData[k];
     if (field.valid && field.value !== null && field.value !== "") {
-      fd.append(String(k), String(field.value));
+      data.append(String(k), String(field.value));
     }
   });
 
   // department / doctor (unchanged)
   if (formData.departmentID.valid && formData.departmentID.value != null) {
-    fd.append("departmentID", Number(formData.departmentID.value) as any);
+    data.append("departmentID", Number(formData.departmentID.value) as any);
   }
   if (formData.userID.value) {
-    fd.append("userID", Number(formData.userID.value) as any);
+    data.append("userID", Number(formData.userID.value) as any);
   } else if (user?.id) {
-    fd.append("userID", Number(user.id) as any);
+    data.append("userID", Number(user.id) as any);
   }
 
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const res = await UploadFiles(`patient/${user?.hospitalID}/patients`, fd, token);
+      const res = await UploadFiles(`patient/${user?.hospitalID}/patients`, data, token);
       if (res?.status === "success") {
         dispatch(showSuccess("Patient registered successfully"))
         navigation.navigate("AddPatient");
       } else {
-        dispatch(showError(res?.status ||res?.data?.message || "Patient registration failed"))
+        dispatch(showError(res?.message || res?.status ||res?.data?.message || "Patient registration failed"))
       }
     } catch (err: any) {
          dispatch(showError(err?.message || "Patient registration failed"))
@@ -493,6 +493,11 @@ const dispatch = useDispatch()
     if (category === "3") return ["years"];
     return ["days", "months", "years"];
   }, [category]);
+
+  const debouncedSubmit = useCallback(
+      debounce(handleSubmit, DEBOUNCE_DELAY),
+      [handleSubmit]
+    );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
@@ -753,14 +758,14 @@ const dispatch = useDispatch()
           </View>
 
           {/* Submit */}
-          <TouchableOpacity style={[styles.submitButton, { backgroundColor: COLORS.brand }]} onPress={handleSubmit} disabled={loading}>
+          <TouchableOpacity style={[styles.submitButton, { backgroundColor: COLORS.brand }]} onPress={debouncedSubmit} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Patient</Text>}
   </TouchableOpacity>
         </ScrollView>
 
         {/* Footer */}
         <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
-          <Footer active={"dashboard"} brandColor={COLORS.brand} />
+          <Footer active={"addPatient"} brandColor={COLORS.brand} />
         </View>
         {insets.bottom > 0 && <View style={[styles.navShield, { height: insets.bottom }]} />}
 

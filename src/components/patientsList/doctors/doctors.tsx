@@ -15,6 +15,7 @@ import { Plus } from "lucide-react-native";
 import { AuthFetch } from "../../../auth/auth";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { formatDateTime } from "../../../utils/dateTime";
 
 type RootState = any;
 
@@ -141,7 +142,7 @@ export default function DoctorsScreen() {
         <Text style={[styles.key, { color: COLORS.sub }]}>Assigned: </Text>
         <Text style={[styles.val, { color: COLORS.text }]}>
           {item.assignedDate
-            ? new Date(item.assignedDate).toLocaleString()
+            ? formatDateTime(item.assignedDate).toLocaleString()
             : "—"}
         </Text>
       </View>

@@ -17,7 +17,7 @@ import TimelineRow from "./timelineRow";
 
 type RootState = any;
 
-type TimelineType = {
+export type TimelineType = {
   id: number;
   patientAddedOn: string;
   patientStartStatus: number | null;
@@ -100,7 +100,12 @@ export default function TimelineScreen() {
     if (!currentPatient?.id || !user?.hospitalID) return;
     setLoading(true);
     try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const asyncToken = await AsyncStorage.getItem("token");
+      const token =
+        user?.token && user.token !== "" && user.token !== "null"
+          ? user.token
+          : asyncToken;
+
       const res = await AuthFetch(
         `patientTimeLine/hospital/${user.hospitalID}/patient/${currentPatient.id}`,
         token
@@ -113,7 +118,7 @@ export default function TimelineScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentPatient?.id, user?.hospitalID, user?.token]);
+  }, [currentPatient?.id, user?.hospitalID]);
 
   useFocusEffect(
     useCallback(() => {
@@ -121,20 +126,23 @@ export default function TimelineScreen() {
     }, [load])
   );
 
-  // Sort by start time ascending like your table does (earliest first)
+  // Sort by start time ascending like your table did (earliest first)
   const data = useMemo(() => {
     const arr = [...(timelines || [])];
     arr.sort(
-      (a, b) => new Date(a?.startTime || a?.patientAddedOn || 0).getTime()
-             - new Date(b?.startTime || b?.patientAddedOn || 0).getTime()
+      (a, b) =>
+        new Date(a?.startTime || a?.patientAddedOn || 0).getTime() -
+        new Date(b?.startTime || b?.patientAddedOn || 0).getTime()
     );
     return arr;
   }, [timelines]);
 
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
-      <View style={[styles.headerWrap]}>
-        <Text style={[styles.headerText, { color: COLORS.text }]}>Previous History</Text>
+      <View style={styles.headerWrap}>
+        <Text style={[styles.headerText, { color: COLORS.text }]}>
+          Previous History
+        </Text>
         <Text style={[styles.subHeader, { color: COLORS.sub }]}>
           Patient timeline of transfers, surgeries, follow-ups and discharges
         </Text>
@@ -174,7 +182,10 @@ export default function TimelineScreen() {
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
       {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+        <View
+          pointerEvents="none"
+          style={[styles.navShield, { height: insets.bottom }]}
+        />
       )}
     </View>
   );
@@ -184,7 +195,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  headerWrap: { paddingHorizontal: 16, paddingTop: 12 },
+  headerWrap: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   headerText: { fontSize: 16, fontWeight: "900" },
   subHeader: { fontSize: 12, fontWeight: "700", marginTop: 2 },
 

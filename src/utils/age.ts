@@ -16,6 +16,76 @@ export function parseYMD(s: string): Date | null {
   return isNaN(dt.getTime()) ? null : dt;
 }
 
+
+
+// assume: type AgeUnit = "days" | "months" | "years";
+
+function parseDOBFlexible(dobISO: string): Date | null {
+  if (!dobISO) return null;
+
+  // Try to grab just YYYY-MM-DD from start of string
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dobISO);
+  if (m) {
+    const [, y, mo, d] = m;
+    return new Date(Number(y), Number(mo) - 1, Number(d));
+  }
+
+  // Fallback: let JS parse it
+  const d = new Date(dobISO);
+  if (!isNaN(d.getTime())) return d;
+
+  return null;
+}
+
+export function formatageFromDOB(
+  dobISO: string,
+  today = new Date()
+): string {
+  // try existing parseYMD first
+  let dob = parseYMD ? parseYMD(dobISO) : null;
+  if (!dob) dob = parseDOBFlexible(dobISO);
+
+  if (!dob) return "-";
+
+  // normalize both dates to midnight
+  const start = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
+  const end = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  const ms = end.getTime() - start.getTime();
+  const days = Math.max(0, Math.floor(ms / 86400000));
+
+  // --- CASE 1: 0–31 days ---
+  if (days <= 31) {
+    const unit = days === 1 ? "day" : "days";
+    return `${days} ${unit}`;
+  }
+
+  // --- CASE 2: Months (up to 12) ---
+  let months =
+    (end.getFullYear() - start.getFullYear()) * 12 +
+    (end.getMonth() - start.getMonth());
+
+  if (end.getDate() < start.getDate()) months -= 1;
+  months = Math.max(0, months);
+
+  if (months <= 12) {
+    const m = months === 0 ? 1 : months;
+    const unit = m === 1 ? "month" : "months";
+    return `${m} ${unit}`;
+  }
+
+  // --- CASE 3: Years ---
+  const years = Math.floor(months / 12);
+  const unit = years === 1 ? "year" : "years";
+  return `${years} ${unit}`;
+}
+
+
+
 /** Age from DOB on a given "today" (defaults to now) */
 export function ageFromDOB(dobISO: string, today = new Date()): { n: number; unit: AgeUnit } {
   const dob = parseYMD(dobISO);

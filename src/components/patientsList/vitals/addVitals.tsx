@@ -11,11 +11,14 @@ import {
   FlatList,
   TouchableOpacity,
   Platform,
+  ScrollView,
+  KeyboardAvoidingView,
+  SafeAreaView,
+  Dimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RootState } from "../../../store/store";
 import { showError, showSuccess } from "../../../store/toast.slice";
@@ -24,18 +27,26 @@ import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import { Switch } from "react-native";
 import Footer from "../../dashboard/footer";
 
+const { width, height } = Dimensions.get("window");
+
+// Responsive sizing functions
+const wp = (percentage: number) => (percentage * width) / 100;
+const hp = (percentage: number) => (percentage * height) / 100;
+const fs = (size: number) => Math.min(size, wp(size / 4));
+
 const COLORS = {
   bg: "#f8fafc",
   card: "#ffffff",
   text: "#0f172a",
   sub: "#475569",
   border: "#e2e8f0",
-  field: "#f8fafc",
+  field: "#ffffff",
   brand: "#14b8a6",
   brandDark: "#0ea5a3",
   red: "#ef4444",
   label: "#0f172a",
   chip: "#eef2f7",
+  focus: "#3b82f6",
 };
 
 const fieldBg = {
@@ -48,7 +59,7 @@ const fieldBg = {
   time: "#f8fafc",
 };
 
-const FOOTER_H = 64;
+const FOOTER_H = hp(8.5);
 
 type VitalsForm = {
   temperature?: string;
@@ -94,7 +105,6 @@ function TimePickerField({
   });
 
   useEffect(() => {
-    // sync if parent changes
     if (!value) return;
     const [hhS, mmS] = value.split(":");
     const nh = Math.min(23, Math.max(0, Number(hhS) || 0));
@@ -110,12 +120,12 @@ function TimePickerField({
 
   return (
     <View style={[styles.block, { backgroundColor: bg || "#fff" }]}>
-      <Text style={[styles.label, { marginBottom: 6 }]}>{label}</Text>
+      <Text style={[styles.label, { marginBottom: hp(0.8) }]}>{label}</Text>
       <Pressable
         onPress={() => setOpen(true)}
         style={[styles.input, { borderColor: COLORS.border, backgroundColor: COLORS.field }]}
       >
-        <Text style={{ color: value ? COLORS.text : COLORS.sub, fontSize: 15 }}>
+        <Text style={{ color: value ? COLORS.text : COLORS.sub, fontSize: fs(15) }}>
           {value ? value : "HH:MM"}
         </Text>
       </Pressable>
@@ -123,20 +133,20 @@ function TimePickerField({
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.timeModal, { backgroundColor: "#fff" }]}>
-            <Text style={{ fontWeight: "800", fontSize: 14, color: COLORS.text, marginBottom: 8 }}>
+            <Text style={{ fontWeight: "800", fontSize: fs(14), color: COLORS.text, marginBottom: hp(1) }}>
               Select time
             </Text>
 
-            <View style={{ flexDirection: "row", gap: 12, paddingVertical: 6 }}>
+            <View style={{ flexDirection: "row", gap: wp(3), paddingVertical: hp(0.8) }}>
               {/* Hours */}
               <View style={{ flex: 1 }}>
-                <Text style={{ color: COLORS.sub, marginBottom: 6, fontWeight: "700" }}>Hours</Text>
+                <Text style={{ color: COLORS.sub, marginBottom: hp(0.8), fontWeight: "700" }}>Hours</Text>
                 <FlatList
                   data={hours}
                   keyExtractor={(i) => `h-${i}`}
                   style={styles.wheel}
                   initialScrollIndex={h}
-                  getItemLayout={(_, idx) => ({ length: 36, offset: 36 * idx, index: idx })}
+                  getItemLayout={(_, idx) => ({ length: hp(4.5), offset: hp(4.5) * idx, index: idx })}
                   onScrollToIndexFailed={() => {}}
                   renderItem={({ item }) => {
                     const selected = item === h;
@@ -148,7 +158,7 @@ function TimePickerField({
                           selected && { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
                         ]}
                       >
-                        <Text style={{ color: selected ? "#fff" : COLORS.text, fontWeight: "800" }}>
+                        <Text style={{ color: selected ? "#fff" : COLORS.text, fontWeight: "800", fontSize: fs(14) }}>
                           {format(item)}
                         </Text>
                       </TouchableOpacity>
@@ -159,13 +169,13 @@ function TimePickerField({
 
               {/* Minutes */}
               <View style={{ flex: 1 }}>
-                <Text style={{ color: COLORS.sub, marginBottom: 6, fontWeight: "700" }}>Minutes</Text>
+                <Text style={{ color: COLORS.sub, marginBottom: hp(0.8), fontWeight: "700" }}>Minutes</Text>
                 <FlatList
                   data={minutes}
                   keyExtractor={(i) => `m-${i}`}
                   style={styles.wheel}
                   initialScrollIndex={m}
-                  getItemLayout={(_, idx) => ({ length: 36, offset: 36 * idx, index: idx })}
+                  getItemLayout={(_, idx) => ({ length: hp(4.5), offset: hp(4.5) * idx, index: idx })}
                   onScrollToIndexFailed={() => {}}
                   renderItem={({ item }) => {
                     const selected = item === m;
@@ -177,7 +187,7 @@ function TimePickerField({
                           selected && { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
                         ]}
                       >
-                        <Text style={{ color: selected ? "#fff" : COLORS.text, fontWeight: "800" }}>
+                        <Text style={{ color: selected ? "#fff" : COLORS.text, fontWeight: "800", fontSize: fs(14) }}>
                           {format(item)}
                         </Text>
                       </TouchableOpacity>
@@ -187,12 +197,12 @@ function TimePickerField({
               </View>
             </View>
 
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+            <View style={{ flexDirection: "row", gap: wp(2.5), marginTop: hp(1) }}>
               <Pressable
                 onPress={() => setOpen(false)}
                 style={[styles.sheetBtn, { backgroundColor: COLORS.chip }]}
               >
-                <Text style={{ color: COLORS.text, fontWeight: "800" }}>Cancel</Text>
+                <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: fs(14) }}>Cancel</Text>
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -202,7 +212,7 @@ function TimePickerField({
                 }}
                 style={[styles.sheetBtn, { backgroundColor: COLORS.brand }]}
               >
-                <Text style={{ color: "#fff", fontWeight: "800" }}>Set</Text>
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: fs(14) }}>Set</Text>
               </Pressable>
             </View>
           </View>
@@ -226,6 +236,7 @@ export default function AddVitalsScreen() {
   const [applyAll, setApplyAll] = useState(false);
   const [givenTime, setGivenTime] = useState(""); // HH:MM
   const [saving, setSaving] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   const timeLineID = typeof timeline === "object" ? timeline?.id : timeline;
   const patientID = cp?.currentPatient?.id ?? cp?.id;
@@ -353,238 +364,281 @@ export default function AddVitalsScreen() {
   );
   useEffect(() => () => debouncedSubmit.cancel(), [debouncedSubmit]);
 
-  // bottom padding: respect footer + gesture/nav area
-  const bottomPad = FOOTER_H + Math.max(16, insets.bottom);
+  const handleFocus = (inputName: string) => {
+    setFocusedInput(inputName);
+  };
+
+  const handleBlur = () => {
+    setFocusedInput(null);
+  };
 
   return (
-    <View style={[styles.screen, { backgroundColor: COLORS.bg }]}>
-      <KeyboardAwareScrollView
-        enableOnAndroid
-        enableAutomaticScroll
-        keyboardOpeningTime={0}
-        extraScrollHeight={Platform.select({ ios: 24, android: 80 })}
-        extraHeight={Platform.select({ ios: 0, android: 100 })}
-        contentContainerStyle={[styles.safe, { paddingBottom: bottomPad }]}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={[styles.screen, { backgroundColor: COLORS.bg }]}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"} 
+        style={{ flex: 1 }}
       >
-        <View style={[styles.card, { borderColor: COLORS.border, backgroundColor: COLORS.card }]}>
-          <Text style={[styles.header, { color: COLORS.text }]}>Record Vital Signs</Text>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent, 
+            { paddingBottom: FOOTER_H + insets.bottom + hp(4) }
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.card, { borderColor: COLORS.border, backgroundColor: COLORS.card }]}>
 
-          {/* Apply to all */}
-          <View style={[styles.rowBetween, styles.block]}>
-            <Text style={[styles.label, { color: COLORS.label }]}>Apply time to all</Text>
-            <Switch
-              value={applyAll}
-              onValueChange={setApplyAll}
-              thumbColor={applyAll ? COLORS.brand : "#fff"}
-              trackColor={{ false: "#cbd5e1", true: "#99f6e4" }}
-            />
-          </View>
-
-          {/* Time for all (dropdown) */}
-          {applyAll && (
-            <TimePickerField
-              label="Time (applies to all) *"
-              value={givenTime}
-              onChange={(t) => {
-                setGivenTime(t);
-                // also push to form immediately
-                setForm((p) => ({
-                  ...p,
-                  bpTime: t,
-                  temperatureTime: t,
-                  pulseTime: t,
-                  oxygenTime: t,
-                  respiratoryRateTime: t,
-                  hrvTime: t,
-                }));
-              }}
-              bg={fieldBg.time}
-            />
-          )}
-
-          {/* Temperature */}
-          <FieldTwo
-            left={{
-              title: "Temperature (°C)",
-              value: form.temperature ?? "",
-              onChange: (v) => onChange("temperature", v),
-              placeholder: "e.g., 36.6",
-              bg: fieldBg.temp,
-              keyboardType: "numeric",
-            }}
-            right={
-              !applyAll
-                ? {
-                    title: "Time",
-                    value: form.temperatureTime ?? "",
-                    onChange: (v) => onChange("temperatureTime", v),
-                    asTime: true,
-                  }
-                : undefined
-            }
-          />
-
-          {/* Heart Rate */}
-          <FieldTwo
-            left={{
-              title: "Heart Rate (bpm)",
-              value: form.pulse ?? "",
-              onChange: (v) => onChange("pulse", v),
-              placeholder: "e.g., 78",
-              bg: fieldBg.hr,
-              keyboardType: "numeric",
-            }}
-            right={
-              !applyAll
-                ? {
-                    title: "Time",
-                    value: form.pulseTime ?? "",
-                    onChange: (v) => onChange("pulseTime", v),
-                    asTime: true,
-                  }
-                : undefined
-            }
-          />
-
-          {/* Oxygen */}
-          <FieldTwo
-            left={{
-              title: "O₂ Saturation (%)",
-              value: form.oxygen ?? "",
-              onChange: (v) => onChange("oxygen", v),
-              placeholder: "e.g., 98",
-              bg: fieldBg.spo2,
-              keyboardType: "numeric",
-            }}
-            right={
-              !applyAll
-                ? {
-                    title: "Time",
-                    value: form.oxygenTime ?? "",
-                    onChange: (v) => onChange("oxygenTime", v),
-                    asTime: true,
-                  }
-                : undefined
-            }
-          />
-
-          {/* Respiratory Rate */}
-          <FieldTwo
-            left={{
-              title: "Respiratory Rate (breaths/min)",
-              value: form.respiratoryRate ?? "",
-              onChange: (v) => onChange("respiratoryRate", v),
-              placeholder: "e.g., 16",
-              bg: fieldBg.rr,
-              keyboardType: "numeric",
-            }}
-            right={
-              !applyAll
-                ? {
-                    title: "Time",
-                    value: form.respiratoryRateTime ?? "",
-                    onChange: (v) => onChange("respiratoryRateTime", v),
-                    asTime: true,
-                  }
-                : undefined
-            }
-          />
-
-          {/* Blood Pressure */}
-          <View style={[styles.block, { backgroundColor: fieldBg.bp }]}>
-            <Text style={[styles.label, { color: COLORS.label, marginBottom: 6 }]}>
-              Blood Pressure (mm Hg)
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <TextInput
-                placeholder="High"
-                placeholderTextColor={COLORS.sub}
-                keyboardType="numeric"
-                value={form.bpH ?? ""}
-                onChangeText={(t) => onChange("bpH", t)}
-                style={[styles.input, { flex: 1, borderColor: COLORS.border, backgroundColor: COLORS.field }]}
-              />
-              <TextInput
-                placeholder="Low"
-                placeholderTextColor={COLORS.sub}
-                keyboardType="numeric"
-                value={form.bpL ?? ""}
-                onChangeText={(t) => onChange("bpL", t)}
-                style={[styles.input, { flex: 1, borderColor: COLORS.border, backgroundColor: COLORS.field }]}
+            {/* Apply to all */}
+            <View style={[styles.rowBetween, styles.block]}>
+              <Text style={[styles.label, { color: COLORS.label }]}>Apply time to all</Text>
+              <Switch
+                value={applyAll}
+                onValueChange={setApplyAll}
+                thumbColor={applyAll ? COLORS.brand : "#fff"}
+                trackColor={{ false: "#cbd5e1", true: "#99f6e4" }}
               />
             </View>
-            {form.bpH && form.bpL && Number(form.bpL) > Number(form.bpH) && (
-              <Text style={{ color: COLORS.red, marginTop: 6, fontWeight: "700" }}>
-                Low cannot be greater than High
-              </Text>
-            )}
-            {!applyAll && (
+
+            {/* Time for all (dropdown) */}
+            {applyAll && (
               <TimePickerField
-                label="Time"
-                value={form.bpTime}
-                onChange={(t) => onChange("bpTime", t)}
+                label="Time (applies to all) *"
+                value={givenTime}
+                onChange={(t) => {
+                  setGivenTime(t);
+                  setForm((p) => ({
+                    ...p,
+                    bpTime: t,
+                    temperatureTime: t,
+                    pulseTime: t,
+                    oxygenTime: t,
+                    respiratoryRateTime: t,
+                    hrvTime: t,
+                  }));
+                }}
                 bg={fieldBg.time}
               />
             )}
-          </View>
 
-          {/* HRV */}
-          <FieldTwo
-            left={{
-              title: "Heart Rate Variability (ms)",
-              value: form.hrv ?? "",
-              onChange: (v) => onChange("hrv", v),
-              placeholder: "e.g., 45",
-              bg: fieldBg.hrv,
-              keyboardType: "numeric",
-            }}
-            right={
-              !applyAll
-                ? {
-                    title: "Time",
-                    value: form.hrvTime ?? "",
-                    onChange: (v) => onChange("hrvTime", v),
-                    asTime: true,
-                  }
-                : undefined
-            }
-          />
+            {/* Temperature */}
+            <FieldTwo
+              left={{
+                title: "Temperature (°C)",
+                value: form.temperature ?? "",
+                onChange: (v) => onChange("temperature", v),
+                placeholder: "e.g., 36.6",
+                bg: fieldBg.temp,
+                keyboardType: "numeric",
+                onFocus: () => handleFocus("temperature"),
+                onBlur: handleBlur,
+                isFocused: focusedInput === "temperature",
+              }}
+              right={
+                !applyAll
+                  ? {
+                      title: "Time",
+                      value: form.temperatureTime ?? "",
+                      onChange: (v) => onChange("temperatureTime", v),
+                      asTime: true,
+                    }
+                  : undefined
+              }
+            />
 
-          {/* Actions */}
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-            <Pressable
-              onPress={() => navigation.goBack()}
-              style={[styles.sheetBtn, { backgroundColor: COLORS.chip }]}
-            >
-              <Text style={{ color: COLORS.text, fontWeight: "800" }}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => debouncedSubmit()}
-              disabled={saving}
-              style={[
-                styles.sheetBtn,
-                { backgroundColor: COLORS.brand, opacity: saving ? 0.6 : 1 },
-              ]}
-            >
-              {saving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={{ color: "#fff", fontWeight: "800" }}>Record Vitals</Text>
+            {/* Heart Rate */}
+            <FieldTwo
+              left={{
+                title: "Heart Rate (bpm)",
+                value: form.pulse ?? "",
+                onChange: (v) => onChange("pulse", v),
+                placeholder: "e.g., 78",
+                bg: fieldBg.hr,
+                keyboardType: "numeric",
+                onFocus: () => handleFocus("pulse"),
+                onBlur: handleBlur,
+                isFocused: focusedInput === "pulse",
+              }}
+              right={
+                !applyAll
+                  ? {
+                      title: "Time",
+                      value: form.pulseTime ?? "",
+                      onChange: (v) => onChange("pulseTime", v),
+                      asTime: true,
+                    }
+                  : undefined
+              }
+            />
+
+            {/* Oxygen */}
+            <FieldTwo
+              left={{
+                title: "O₂ Saturation (%)",
+                value: form.oxygen ?? "",
+                onChange: (v) => onChange("oxygen", v),
+                placeholder: "e.g., 98",
+                bg: fieldBg.spo2,
+                keyboardType: "numeric",
+                onFocus: () => handleFocus("oxygen"),
+                onBlur: handleBlur,
+                isFocused: focusedInput === "oxygen",
+              }}
+              right={
+                !applyAll
+                  ? {
+                      title: "Time",
+                      value: form.oxygenTime ?? "",
+                      onChange: (v) => onChange("oxygenTime", v),
+                      asTime: true,
+                    }
+                  : undefined
+              }
+            />
+
+            {/* Respiratory Rate */}
+            <FieldTwo
+              left={{
+                title: "Respiratory Rate (breaths/min)",
+                value: form.respiratoryRate ?? "",
+                onChange: (v) => onChange("respiratoryRate", v),
+                placeholder: "e.g., 16",
+                bg: fieldBg.rr,
+                keyboardType: "numeric",
+                onFocus: () => handleFocus("respiratoryRate"),
+                onBlur: handleBlur,
+                isFocused: focusedInput === "respiratoryRate",
+              }}
+              right={
+                !applyAll
+                  ? {
+                      title: "Time",
+                      value: form.respiratoryRateTime ?? "",
+                      onChange: (v) => onChange("respiratoryRateTime", v),
+                      asTime: true,
+                    }
+                  : undefined
+              }
+            />
+
+            {/* Blood Pressure */}
+            <View style={[styles.block, { backgroundColor: fieldBg.bp }]}>
+              <Text style={[styles.label, { color: COLORS.label, marginBottom: hp(0.8) }]}>
+                Blood Pressure (mm Hg)
+              </Text>
+              <View style={{ flexDirection: "row", gap: wp(2) }}>
+                <TextInput
+                  placeholder="High"
+                  placeholderTextColor={COLORS.sub}
+                  keyboardType="numeric"
+                  value={form.bpH ?? ""}
+                  onChangeText={(t) => onChange("bpH", t)}
+                  style={[
+                    styles.input, 
+                    { 
+                      flex: 1, 
+                      borderColor: focusedInput === "bpH" ? COLORS.focus : COLORS.border, 
+                      backgroundColor: COLORS.field 
+                    }
+                  ]}
+                  onFocus={() => handleFocus("bpH")}
+                  onBlur={handleBlur}
+                />
+                <TextInput
+                  placeholder="Low"
+                  placeholderTextColor={COLORS.sub}
+                  keyboardType="numeric"
+                  value={form.bpL ?? ""}
+                  onChangeText={(t) => onChange("bpL", t)}
+                  style={[
+                    styles.input, 
+                    { 
+                      flex: 1, 
+                      borderColor: focusedInput === "bpL" ? COLORS.focus : COLORS.border, 
+                      backgroundColor: COLORS.field 
+                    }
+                  ]}
+                  onFocus={() => handleFocus("bpL")}
+                  onBlur={handleBlur}
+                />
+              </View>
+              {form.bpH && form.bpL && Number(form.bpL) > Number(form.bpH) && (
+                <Text style={{ color: COLORS.red, marginTop: hp(0.8), fontWeight: "700", fontSize: fs(12) }}>
+                  Low cannot be greater than High
+                </Text>
               )}
-            </Pressable>
-          </View>
-        </View>
-      </KeyboardAwareScrollView>
+              {!applyAll && (
+                <TimePickerField
+                  label="Time"
+                  value={form.bpTime}
+                  onChange={(t) => onChange("bpTime", t)}
+                  bg={fieldBg.time}
+                />
+              )}
+            </View>
 
-      {/* Footer pinned above nav buttons */}
-      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
-        <Footer active={"patients"} brandColor="#14b8a6" />
-      </View>
-      {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
-      )}
-    </View>
+            {/* HRV */}
+            <FieldTwo
+              left={{
+                title: "Heart Rate Variability (ms)",
+                value: form.hrv ?? "",
+                onChange: (v) => onChange("hrv", v),
+                placeholder: "e.g., 45",
+                bg: fieldBg.hrv,
+                keyboardType: "numeric",
+                onFocus: () => handleFocus("hrv"),
+                onBlur: handleBlur,
+                isFocused: focusedInput === "hrv",
+              }}
+              right={
+                !applyAll
+                  ? {
+                      title: "Time",
+                      value: form.hrvTime ?? "",
+                      onChange: (v) => onChange("hrvTime", v),
+                      asTime: true,
+                    }
+                  : undefined
+              }
+            />
+
+            {/* Action Buttons - Inside the form at the end (like AddPatientForm) */}
+            <View style={styles.actionButtons}>
+              <Pressable
+                onPress={() => navigation.goBack()}
+                style={[styles.sheetBtn, { backgroundColor: COLORS.chip }]}
+              >
+                <Text style={{ color: COLORS.text, fontWeight: "800", fontSize: fs(15) }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => debouncedSubmit()}
+                disabled={saving || !hasAnyVital}
+                style={[
+                  styles.sheetBtn,
+                  { 
+                    backgroundColor: hasAnyVital ? COLORS.brand : COLORS.sub,
+                    opacity: (saving || !hasAnyVital) ? 0.6 : 1 
+                  },
+                ]}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: fs(15) }}>Record Vitals</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Footer - Same as AddPatientForm */}
+        <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+          <Footer active={"patients"} brandColor="#14b8a6" />
+        </View>
+        {insets.bottom > 0 && (
+          <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+        )}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -600,27 +654,38 @@ function FieldTwo({
     placeholder?: string;
     keyboardType?: "default" | "numeric";
     bg?: string;
+    onFocus?: () => void;
+    onBlur?: () => void;
+    isFocused?: boolean;
   };
   right?:
     | {
         title: string;
         value: string;
         onChange: (v: string) => void;
-        asTime?: boolean; // if true use TimePickerField
+        asTime?: boolean;
       }
     | undefined;
 }) {
   return (
-    <View style={{ flexDirection: "row", gap: 8 }}>
+    <View style={{ flexDirection: "row", gap: wp(2) }}>
       <View style={[styles.block, { flex: 1, backgroundColor: left.bg || "#fff" }]}>
-        <Text style={[styles.label, { marginBottom: 6 }]}>{left.title}</Text>
+        <Text style={[styles.label, { marginBottom: hp(0.8) }]}>{left.title}</Text>
         <TextInput
           value={left.value}
           onChangeText={left.onChange}
           placeholder={left.placeholder}
           placeholderTextColor={COLORS.sub}
           keyboardType={left.keyboardType || "default"}
-          style={[styles.input, { borderColor: COLORS.border, backgroundColor: COLORS.field }]}
+          style={[
+            styles.input, 
+            { 
+              borderColor: left.isFocused ? COLORS.focus : COLORS.border, 
+              backgroundColor: COLORS.field 
+            }
+          ]}
+          onFocus={left.onFocus}
+          onBlur={left.onBlur}
         />
       </View>
 
@@ -630,7 +695,7 @@ function FieldTwo({
             <TimePickerField label={right.title} value={right.value} onChange={right.onChange} bg={fieldBg.time} />
           ) : (
             <>
-              <Text style={[styles.label, { marginBottom: 6 }]}>{right.title}</Text>
+              <Text style={[styles.label, { marginBottom: hp(0.8) }]}>{right.title}</Text>
               <TextInput
                 value={right.value}
                 onChangeText={right.onChange}
@@ -650,34 +715,65 @@ function FieldTwo({
 
 /** ---------- Styles ---------- */
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  safe: { padding: 16 },
+  screen: { 
+    flex: 1,
+  },
+  scrollContent: { 
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(2),
+  },
   card: {
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: wp(4),
+    padding: wp(4),
+    marginBottom: hp(2),
   },
-  header: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
-  label: { fontSize: 12, fontWeight: "800", color: COLORS.text },
+  header: { 
+    fontSize: fs(18), 
+    fontWeight: "800", 
+    marginBottom: hp(2),
+    textAlign: "center",
+  },
+  label: { 
+    fontSize: fs(13), 
+    fontWeight: "700", 
+    color: COLORS.text,
+    marginBottom: hp(0.8),
+  },
   input: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
+    borderWidth: 2,
+    borderRadius: wp(3),
+    paddingHorizontal: wp(3.5),
+    paddingVertical: hp(1.5),
+    fontSize: fs(16),
+    fontWeight: "500",
+    color: COLORS.text,
   },
   block: {
-    borderRadius: 12,
-    padding: 10,
-    marginTop: 10,
+    borderRadius: wp(3),
+    padding: wp(3),
+    marginTop: hp(1.5),
   },
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  rowBetween: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "space-between" 
+  },
   sheetBtn: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: wp(3),
+    paddingVertical: hp(1.8),
+    paddingHorizontal: wp(2),
+  },
+
+  // Action Buttons Container - Inside the form like AddPatientForm
+  actionButtons: {
+    flexDirection: "row", 
+    gap: wp(3),
+    marginTop: hp(3),
+    paddingHorizontal: wp(1),
   },
 
   // Time modal
@@ -686,36 +782,35 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
+    padding: wp(4),
   },
   timeModal: {
     width: "100%",
-    maxWidth: 420,
-    borderRadius: 16,
-    padding: 14,
+    maxWidth: wp(90),
+    borderRadius: wp(4),
+    padding: wp(4),
   },
   wheel: {
-    height: 180,
+    height: hp(22),
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: wp(3),
   },
   wheelItem: {
-    height: 36,
+    height: hp(4.5),
     alignItems: "center",
     justifyContent: "center",
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
   },
 
-  // Footer & nav-shield
+  // Footer & nav-shield - Same as AddPatientForm
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,
     justifyContent: "center",
-    // Footer itself should render full width
   },
   navShield: {
     position: "absolute",

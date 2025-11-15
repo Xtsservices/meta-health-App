@@ -458,7 +458,7 @@ export async function AuthPatch(url: string, body: any, token?: string | null) {
 export async function UpdateFiles(url: string, body: any, token?: string | null) {
   return apiRequest({
     url,
-    method: 'put',
+    method: 'patch',
     data: body,
     token,
     authStyle: 'raw',

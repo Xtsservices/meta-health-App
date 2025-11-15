@@ -23,11 +23,12 @@ import { useDispatch, useSelector } from "react-redux";
 
 import Footer from "../../dashboard/footer";
 import { RootState } from "../../../store/store";
-import { AuthFetch, AuthPatch } from "../../../auth/auth";
+import { AuthFetch, AuthPatch, UpdateFiles } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 
 import { state as STATE_LIST, city as CITY_LIST } from "../../../utils/stateCity";
 import { AgeUnit } from "../../../utils/age";
+import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 
 const FOOTER_H = 64;
 const COLORS = {
@@ -271,30 +272,30 @@ const EditPatientMobile = () => {
     setSaving(true);
 
     try {
-      const fd = new FormData();
+      const data = new FormData();
 
-      fd.append("pName", pName);
-      fd.append("weight", weight);
-      fd.append("height", height);
-      fd.append("phoneNumber", phoneNumber);
-      fd.append("email", email);
-      fd.append("address", address);
-      fd.append("state", stateName);
-      fd.append("city", cityName);
-      fd.append("pinCode", pinCode);
-      fd.append("referredBy", referredBy);
-      fd.append("insurance", String(insurance));
+      data.append("pName", pName);
+      data.append("weight", weight);
+      data.append("height", height);
+      data.append("phoneNumber", phoneNumber);
+      data.append("email", email);
+      data.append("address", address);
+      data.append("state", stateName);
+      data.append("city", cityName);
+      data.append("pinCode", pinCode);
+      data.append("referredBy", referredBy);
+      data.append("insurance", String(insurance));
       if (insurance === 1) {
-        fd.append("insuranceNumber", insuranceNumber);
-        fd.append("insuranceCompany", insuranceCompany);
+        data.append("insuranceNumber", insuranceNumber);
+        data.append("insuranceCompany", insuranceCompany);
       }
-      if (photoFile) fd.append("photo", photoFile);
+      if (photoFile) data.append("photo", photoFile);
 
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
 
-      const res = await AuthPatch(
+      const res = await UpdateFiles(
         `patient/${user?.hospitalID}/patients/single/${id}`,
-        fd,
+        data,
         token
       );
 
@@ -371,7 +372,10 @@ const EditPatientMobile = () => {
         <ActivityIndicator size="large" color={COLORS.brand} />
       </View>
     );
-
+const debouncedSubmit = useCallback(
+      debounce(onSave, DEBOUNCE_DELAY),
+      [onSave]
+    );
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <KeyboardAvoidingView
@@ -385,7 +389,6 @@ const EditPatientMobile = () => {
           showsVerticalScrollIndicator={false}
           style={{ padding: 16 }}
         >
-          <Text style={styles.title}>Edit Patient Profile</Text>
 
           {/* PHOTO */}
           <View style={styles.card}>
@@ -577,7 +580,7 @@ const EditPatientMobile = () => {
           {/* SAVE BUTTON */}
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: COLORS.brand }]}
-            onPress={onSave}
+            onPress={debouncedSubmit}
             disabled={saving}
           >
             {saving ? (
