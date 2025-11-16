@@ -25,9 +25,11 @@ export type RootStackParamList = {
   AddMedicineTest: undefined;
   MedicalHistory: undefined;
   EditMedicalHistory: undefined;
-  MedicalHistoryForm: undefined;
-  TransferPatient: undefined;
-  EditPatientProfile: undefined;
+MedicalHistoryForm: undefined;
+TransferPatient: undefined;
+EditPatientProfile: undefined;
+AppointmentsList: undefined;
+DischargeSummaryDownload: undefined;
   Management: undefined;
   SlotsManagement: undefined;
   HelpScreen: undefined;

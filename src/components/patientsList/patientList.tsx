@@ -1,3 +1,5 @@
+// src/screens/opd/OpdPreviousPatients.tsx
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -10,7 +12,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  useColorScheme,
+  Image,
   Dimensions,
   ScrollView,
   Modal,
@@ -41,6 +43,7 @@ import {
 import { PatientType, wardType } from "../../utils/types";
 import Footer from "../dashboard/footer";
 import { showError } from "../../store/toast.slice";
+import { formatageFromDOB } from "../../utils/age";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAGE_SIZE = 10;
@@ -71,7 +74,20 @@ interface SurgeryData {
   surgeryType: string;
   rejectReason: string;
 }
+const FOOTER_H = 70;
 
+// --- Colors (static, used everywhere) ---
+const COLORS = {
+  bg: "#f8fafc",
+  card: "#ffffff",
+  text: "#0f172a",
+  sub: "#475569",
+  border: "#e2e8f0",
+  brand: "#14b8a6",
+  placeholder: "#94a3b8",
+};
+
+// --- Small helper ---
 function getAgeLabel(dob?: string): string {
   if (!dob) return "—";
   const d = new Date(dob);
@@ -465,6 +481,7 @@ const getAddButtonText = () => {
     return "";
   };
 
+  // ---- header with search + filter ----
   const renderHeader = () => (
     <View style={styles.header}>      
       <View style={[styles.searchWrap, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
@@ -617,12 +634,31 @@ const getAddButtonText = () => {
     return (
       <TouchableOpacity
         activeOpacity={0.8}
-        style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}
+        style={[
+          styles.card,
+          { backgroundColor: COLORS.card, borderColor: COLORS.border },
+        ]}
         onPress={() => navigation.navigate("PatientDetails", { patientId: item.id })}
       >
         <View style={styles.cardRow}>
-          <View style={[styles.avatar, { borderColor: COLORS.border, backgroundColor: COLORS.bg }]}>
-            <UserIcon size={20} color={COLORS.sub} />
+          <View
+            style={[
+              styles.avatar,
+              { borderColor: COLORS.border, backgroundColor: COLORS.bg },
+            ]}
+          >
+            {item?.imageURL ? (
+              <Image
+                source={{ uri: item.imageURL }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: 40,
+                }}
+              />
+            ) : (
+              <UserIcon size={28} color={COLORS.sub} />
+            )}
           </View>
           
           <View style={styles.meta}>
@@ -674,10 +710,15 @@ const getAddButtonText = () => {
             </Text>
             
             <View style={styles.infoRow}>
-              <Text style={[styles.badge, { color: COLORS.brand }]}>Age: {age}</Text>
+              <Text
+                style={[styles.sub, { color: COLORS.sub }]}
+                numberOfLines={1}
+              >
+                ID: {paddedId}
+              </Text>
               <Text style={[styles.dot, { color: COLORS.sub }]}>•</Text>
-              <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
-                Dr: {doctor}
+              <Text style={[styles.badge, { color: COLORS.brand }]}>
+                Age: {age}
               </Text>
               {item.deviceID && (user?.patientStatus === 2 || user?.patientStatus === 3) && (
                 <>
@@ -686,8 +727,17 @@ const getAddButtonText = () => {
                 </>
               )}
             </View>
-            
-            <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
+
+            <Text
+              style={[styles.sub, { color: COLORS.sub }]}
+              numberOfLines={1}
+            >
+              Dr: {doctor}
+            </Text>
+            <Text
+              style={[styles.sub, { color: COLORS.sub }]}
+              numberOfLines={1}
+            >
               Phone: {phone}
             </Text>
           </View>
@@ -814,22 +864,28 @@ const getAddButtonText = () => {
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="small" color={COLORS.brand} />
-            <Text style={[styles.loadingText, { color: COLORS.sub }]}>Loading patients…</Text>
+            <Text
+              style={[styles.loadingText, { color: COLORS.sub }]}
+            >
+              Loading patients…
+            </Text>
           </View>
         ) : (
-          <>
-            <FlatList
-              ref={flatRef}
-              data={pagedData}
-              keyExtractor={(it) => String(it.id)}
-              renderItem={renderItem}
-              ListEmptyComponent={renderEmpty}
-              contentContainerStyle={styles.listContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            />
-            {renderPagination()}
-          </>
+          <FlatList
+            ref={flatRef}
+            data={pagedData}
+            keyExtractor={(it) => String(it.id)}
+            renderItem={renderItem}
+            ListEmptyComponent={renderEmpty}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: bottomPad },
+            ]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            ListFooterComponent={renderPagination}
+            scrollIndicatorInsets={{ bottom: bottomPad }}
+          />
         )}
       </KeyboardAvoidingView>
       
@@ -838,7 +894,10 @@ const getAddButtonText = () => {
       </View>
       
       {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+        <View
+          pointerEvents="none"
+          style={[styles.navShield, { height: insets.bottom }]}
+        />
       )}
       
       {renderRejectDialog()}
@@ -1181,11 +1240,12 @@ const styles = StyleSheet.create({
   pageBtnDisabled: {
     opacity: 0.4
   },
+
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
-    height: 70,
+    height: FOOTER_H,
     justifyContent: "center",
   },
   navShield: {

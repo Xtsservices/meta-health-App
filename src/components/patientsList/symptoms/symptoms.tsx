@@ -9,13 +9,14 @@ import {
   Alert,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Trash2, Plus } from "lucide-react-native";
-import { authDelete, AuthFetch } from "../../../auth/auth";
+import { AuthDelete,  AuthFetch } from "../../../auth/auth";
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { showError, showSuccess } from "../../../store/toast.slice";
 
 
 type RootState = any;
@@ -50,13 +51,15 @@ const cap = (s: string) => (s ? s.slice(0, 1).toUpperCase() + s.slice(1).toLower
 
 export default function SymptomsScreen() {
   const navigation = useNavigation<any>();
+  const  dispatch = useDispatch() 
     const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
     const currentpatient = useSelector((s: RootState) => s.currentPatient);
     const timeline = currentpatient?.patientTimeLineID; // may be object or id depending on your store
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<SymptomRow[]>([]);
-
+  const footerHeight = 70;
+const fabBottom = footerHeight + insets.bottom + 12;
   const load = useCallback(async () => {
     if (!timeline) return;
     setLoading(true);
@@ -91,7 +94,7 @@ export default function SymptomsScreen() {
   );
 
   const onDelete = async (row: SymptomRow) => {
-    if (!timeline?.id || !row?.id) return;
+    if (!timeline || !row?.id) return;
     Alert.alert("Delete Symptom", "Are you sure you want to delete this symptom?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -99,13 +102,22 @@ export default function SymptomsScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            const token = user?.token ?? (await AsyncStorage.getItem("token"));
-            // const res = await authDelete(`symptom/${timeline.id}/${row.id}`, token);
-            // if (res?.message === "success") {
-            //   setList((prev) => prev.filter((x) => x.id !== row.id));
-            // }
-          } catch {
-            Alert.alert("Error", "Failed to delete symptom.");
+           let token = user?.token;
+if (!token || token === "" || token === "null" || token === "undefined") {
+  token = await AsyncStorage.getItem("token");
+}
+
+            const url = `symptom/${timeline}/${row.id}`
+            const res = await AuthDelete(url, token);
+            if (res?.status === "success") {
+              dispatch(showSuccess(res?.data?.message))
+              setList((prev) => prev.filter((x) => x.id !== row.id));
+            }else{
+              dispatch(showError( res?.message || res?.status || "Failed to delete symptom."))
+            }
+          } catch (error) {
+            dispatch(showError( error?.message || error?.status || "Failed to delete symptom."))
+            
           }
         },
       },
@@ -159,7 +171,11 @@ export default function SymptomsScreen() {
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           />
           <Pressable
-            style={[styles.fab, { backgroundColor: COLORS.button }]}
+            style={[styles.fab, 
+    { 
+      backgroundColor: COLORS.button,
+      bottom: fabBottom 
+    }]}
             onPress={() => navigation.navigate("AddSymptoms" as never)}
           >
             <Plus size={20} color={COLORS.buttonText} />
@@ -233,3 +249,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
 });
+function shoeSuccess(message: any): any {
+  throw new Error("Function not implemented.");
+}
+

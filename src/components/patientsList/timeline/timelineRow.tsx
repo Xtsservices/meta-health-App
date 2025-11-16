@@ -1,17 +1,13 @@
 import React, { useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-} from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
+import { formatDateTime } from "../../../utils/dateTime";
 
-type TimelineType = any; // use the same TimelineType as screen for simplicity
+type TimelineType = any; // keep same as screen
 
 const COLORS = {
   card: "#ffffff",
   text: "#0f172a",
-  sub: "#475569",
+  sub: "#64748b",
   border: "#e2e8f0",
   chip: "#eef2f7",
   green: "#22c55e",
@@ -31,28 +27,25 @@ const colorObj: Record<number, string> = {
 
 function getDepartment(module?: number | null): string {
   switch (module) {
-    case 1: return "OUTPATIENT";
-    case 2: return "INPATIENT";
-    case 3: return "EMERGENCY";
-    default: return "Unknown Department";
-  }
-}
-
-function format(date?: string | null) {
-  if (!date) return "N/A";
-  try {
-    return new Date(date).toLocaleString();
-  } catch {
-    return String(date);
+    case 1:
+      return "OUTPATIENT";
+    case 2:
+      return "INPATIENT";
+    case 3:
+      return "EMERGENCY";
+    default:
+      return "Unknown Department";
   }
 }
 
 // ==== tag resolver for OT ====
 function getTagText(operationData: any): string {
   const { scope, status, approvedTime, rejectedTime } = operationData || {};
-  if (scope == null && approvedTime == null && rejectedTime == null) return "SURGERY REQUESTED";
+  if (scope == null && approvedTime == null && rejectedTime == null)
+    return "SURGERY REQUESTED";
   if (scope === "anesthetic" && status === "rejected") return "SURGERY REJECTED";
-  if (scope === "anesthetic" && (status === "approved" || status === "scheduled")) return "SURGERY APPROVED";
+  if (scope === "anesthetic" && (status === "approved" || status === "scheduled"))
+    return "SURGERY APPROVED";
   if (scope === "surgon" && status === "scheduled") return "SURGERY SCHEDULED";
   return "N/A";
 }
@@ -61,14 +54,22 @@ function getTagText(operationData: any): string {
 function sortKeysByTimestamp(obj: any) {
   const getEarliestTimestamp = (key: string) => {
     switch (key) {
-      case "transferDetails": return obj[key]?.[0]?.transferDate;
-      case "externalTransferDetails": return obj[key]?.[0]?.transferDate;
-      case "handshakeDetails": return obj[key]?.[0]?.assignedDate;
-      case "operationTheatreDetails": return obj[key]?.[0]?.addedOn;
-      case "symptomsDetails": return obj[key]?.[0]?.symptomAddedOn;
-      case "isFollowUp": return obj[key]?.followUpDate;
+      case "transferDetails":
+        return obj[key]?.[0]?.transferDate;
+      case "externalTransferDetails":
+        return obj[key]?.[0]?.transferDate;
+      case "handshakeDetails":
+        return obj[key]?.[0]?.assignedDate;
+      case "operationTheatreDetails":
+        return obj[key]?.[0]?.addedOn;
+      case "symptomsDetails":
+        return obj[key]?.[0]?.symptomAddedOn;
+      case "isFollowUp":
+        return obj[key]?.followUpDate;
       case "diagnosis":
-        return obj.diagnosis !== null ? obj.endTime : obj.symptomsDetails?.[0]?.symptomAddedOn;
+        return obj.diagnosis !== null
+          ? obj.endTime
+          : obj.symptomsDetails?.[0]?.symptomAddedOn;
       case "discharge":
         return obj.patientEndStatus === 21 ? obj.endTime : null;
       case "revisit":
@@ -92,7 +93,8 @@ function sortKeysByTimestamp(obj: any) {
   const validKeys = keysToSort.filter((key) => {
     if (key === "discharge") return obj.patientEndStatus === 21;
     if (key === "revisit") return obj.isRevisit === 1;
-    if (key === "diagnosis") return obj.diagnosis !== null || obj.symptomsDetails !== null;
+    if (key === "diagnosis")
+      return obj.diagnosis !== null || obj.symptomsDetails !== null;
     return obj[key] !== null && obj[key] !== undefined;
   });
 
@@ -118,7 +120,13 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function TimelineRow({ timeline, index }: { timeline: TimelineType; index: number }) {
+export default function TimelineRow({
+  timeline,
+  index,
+}: {
+  timeline: TimelineType;
+  index: number;
+}) {
   const [diagHintVisible, setDiagHintVisible] = useState(false);
 
   const rows = useMemo(() => {
@@ -136,14 +144,18 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
 
     // Initial admission row (index === 0)
     if (index === 0) {
-      const startColor = (timeline?.patientStartStatus && colorObj[timeline?.patientStartStatus]) || "#ccc";
+      const startColor =
+        (timeline?.patientStartStatus &&
+          colorObj[timeline?.patientStartStatus]) || "#ccc";
       const startText = getDepartment(timeline?.patientStartStatus ?? undefined);
       list.push({
         tagText: startText,
         tagColor: startColor,
-        when: format(timeline?.patientAddedOn),
+        when: formatDateTime(timeline?.patientAddedOn),
         infoBlocks: [
-          <Pill key="addedby">Patient added by: {timeline?.addedBy ?? "N/A"}</Pill>,
+          <Pill key="addedby">
+            Patient added by: {timeline?.addedBy ?? "N/A"}
+          </Pill>,
         ],
       });
     }
@@ -154,24 +166,30 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
       switch (key) {
         case "transferDetails":
           timeline?.transferDetails?.forEach((t: any, i: number) => {
-            const sameDept = t?.transferFromDepartment === t?.transferToDepartment;
-            const tagText = sameDept ? "Internal Transfer"
+            const sameDept =
+              t?.transferFromDepartment === t?.transferToDepartment;
+            const tagText = sameDept
+              ? "Internal Transfer"
               : getDepartment(t?.transferToDepartment);
-            const tagColor = sameDept ? "#A7D670" : colorObj[t?.transferToDepartment || 1];
+            const tagColor = sameDept
+              ? "#A7D670"
+              : colorObj[t?.transferToDepartment || 1];
 
             const docName = sameDept
               ? `Dr. ${timeline?.doctorDetails?.doctorName || "N/A"}`
-              : (t?.fromDoc || "N/A");
+              : t?.fromDoc || "N/A";
 
             list.push({
               tagText,
               tagColor,
-              when: format(t?.transferDate),
+              when: formatDateTime(t?.transferDate),
               infoBlocks: [
                 <Pill key={`td-main-${i}`}>
                   {sameDept
                     ? `Patient transferred from ${t?.fromWard} to ${t?.toWard}`
-                    : `Patient transferred from ${getDepartment(t?.transferFromDepartment)} to ${getDepartment(t?.transferToDepartment)}`}
+                    : `Patient transferred from ${getDepartment(
+                        t?.transferFromDepartment
+                      )} to ${getDepartment(t?.transferToDepartment)}`}
                 </Pill>,
                 <Pill key={`td-doc-${i}`}>Transfer by: {docName}</Pill>,
               ],
@@ -186,10 +204,14 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
               list.push({
                 tagText: "Handshake",
                 isHandshake: true,
-                when: format(h?.assignedDate),
+                when: formatDateTime(h?.assignedDate),
                 infoBlocks: [
-                  <Pill key={`hs-main-${i}`}>Patient was Referred to Dr. {h?.toDoc || "N/A"}</Pill>,
-                  <Pill key={`hs-by-${i}`}>Transfer by: Dr. {h?.fromDoc || "N/A"}</Pill>,
+                  <Pill key={`hs-main-${i}`}>
+                    Patient was Referred to Dr. {h?.toDoc || "N/A"}
+                  </Pill>,
+                  <Pill key={`hs-by-${i}`}>
+                    Transfer by: Dr. {h?.fromDoc || "N/A"}
+                  </Pill>,
                 ],
                 actor: `Dr. ${h?.fromDoc || "N/A"}`,
               });
@@ -200,41 +222,91 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
         case "operationTheatreDetails":
           timeline?.operationTheatreDetails?.forEach((ot: any, i: number) => {
             const tagText = getTagText(ot);
-            const when = ot?.scheduleTime || ot?.approvedTime || ot?.rejectedTime || ot?.addedOn;
+            const when =
+              ot?.scheduleTime ||
+              ot?.approvedTime ||
+              ot?.rejectedTime ||
+              ot?.addedOn;
             const blocks: React.ReactNode[] = [
-              <Pill key={`ot-type-${i}`}>Type of Surgery: {ot?.surgeryType || "N/A"}</Pill>,
-              <Pill key={`ot-urg-${i}`}>Surgery Urgency: {ot?.patientType || "N/A"}</Pill>,
+              <Pill key={`ot-type-${i}`}>
+                Type of Surgery: {ot?.surgeryType || "N/A"}
+              </Pill>,
+              <Pill key={`ot-urg-${i}`}>
+                Surgery Urgency: {ot?.patientType || "N/A"}
+              </Pill>,
             ];
 
             if (ot?.scope === "surgon") {
-              blocks.push(<Pill key={`ot-stat-${i}`}>Surgery Status: {ot?.status || "N/A"}</Pill>);
-              blocks.push(<Pill key={`ot-date-${i}`}>Date Of Surgery: {format(ot?.scheduleTime)}</Pill>);
-              blocks.push(<Pill key={`ot-by-${i}`}>Scheduled By: {ot?.approvedBy || "N/A"}</Pill>);
+              blocks.push(
+                <Pill key={`ot-stat-${i}`}>
+                  Surgery Status: {ot?.status || "N/A"}
+                </Pill>
+              );
+              blocks.push(
+                <Pill key={`ot-date-${i}`}>
+                  Date Of Surgery: {formatDateTime(ot?.scheduleTime)}
+                </Pill>
+              );
+              blocks.push(
+                <Pill key={`ot-by-${i}`}>
+                  Scheduled By: {ot?.approvedBy || "N/A"}
+                </Pill>
+              );
             }
 
             if (ot?.status === "pending") {
-              blocks.push(<Pill key={`ot-pend-${i}`}>Surgery Status: Pending</Pill>);
-              blocks.push(<Pill key={`ot-req-${i}`}>Request Date: {format(ot?.addedOn)}</Pill>);
+              blocks.push(
+                <Pill key={`ot-pend-${i}`}>Surgery Status: Pending</Pill>
+              );
+              blocks.push(
+                <Pill key={`ot-req-${i}`}>
+                  Request Date: {formatDateTime(ot?.addedOn)}
+                </Pill>
+              );
             }
 
             if (ot?.scope === "anesthetic") {
               if (ot?.status === "rejected") {
-                blocks.push(<Pill key={`ot-r1-${i}`}>Surgery Status: Rejected</Pill>);
-                blocks.push(<Pill key={`ot-r2-${i}`}>Rejection Reason: {ot?.rejectReason || "N/A"}</Pill>);
-                blocks.push(<Pill key={`ot-r3-${i}`}>Rejected Date: {format(ot?.rejectedTime)}</Pill>);
-                blocks.push(<Pill key={`ot-r4-${i}`}>Rejected By: {ot?.approvedBy || "N/A"}</Pill>);
+                blocks.push(
+                  <Pill key={`ot-r1-${i}`}>Surgery Status: Rejected</Pill>
+                );
+                blocks.push(
+                  <Pill key={`ot-r2-${i}`}>
+                    Rejection Reason: {ot?.rejectReason || "N/A"}
+                  </Pill>
+                );
+                blocks.push(
+                  <Pill key={`ot-r3-${i}`}>
+                    Rejected Date: {formatDateTime(ot?.rejectedTime)}
+                  </Pill>
+                );
+                blocks.push(
+                  <Pill key={`ot-r4-${i}`}>
+                    Rejected By: {ot?.approvedBy || "N/A"}
+                  </Pill>
+                );
               }
               if (ot?.status === "approved" || ot?.status === "scheduled") {
-                blocks.push(<Pill key={`ot-a1-${i}`}>Surgery Status: Approved</Pill>);
-                blocks.push(<Pill key={`ot-a2-${i}`}>Approved Date: {format(ot?.approvedTime)}</Pill>);
-                blocks.push(<Pill key={`ot-a3-${i}`}>Approved By: {ot?.approvedBy || "N/A"}</Pill>);
+                blocks.push(
+                  <Pill key={`ot-a1-${i}`}>Surgery Status: Approved</Pill>
+                );
+                blocks.push(
+                  <Pill key={`ot-a2-${i}`}>
+                    Approved Date: {formatDateTime(ot?.approvedTime)}
+                  </Pill>
+                );
+                blocks.push(
+                  <Pill key={`ot-a3-${i}`}>
+                    Approved By: {ot?.approvedBy || "N/A"}
+                  </Pill>
+                );
               }
             }
 
             list.push({
               tagText,
               tagColor: "#A094D9",
-              when: format(when),
+              when: formatDateTime(when),
               infoBlocks: blocks,
               actor: ot?.approvedBy || "N/A",
             });
@@ -247,10 +319,13 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
               ? getDepartment(timeline?.patientStartStatus)
               : "N/A",
             tagColor: colorObj[timeline?.patientStartStatus || 1],
-            when: format(timeline?.endTime),
+            when: formatDateTime(timeline?.endTime),
             infoBlocks: [
-              <Pressable key="diag-press" onPress={() => setDiagHintVisible((v) => !v)}>
-                <Text style={[styles.link]}>Diagnosis data is available</Text>
+              <Pressable
+                key="diag-press"
+                onPress={() => setDiagHintVisible((v) => !v)}
+              >
+                <Text style={styles.link}>Diagnosis data is available</Text>
               </Pressable>,
               diagHintVisible ? (
                 <Text key="diag-hint" style={styles.diagHint}>
@@ -269,10 +344,14 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
               ? getDepartment(timeline?.patientStartStatus)
               : "Revisit",
             tagColor: colorObj[timeline?.patientStartStatus || 1],
-            when: format(timeline?.startTime),
+            when: formatDateTime(timeline?.startTime),
             infoBlocks: [
-              <Pill key="rv-1">Revisit to: {getDepartment(timeline?.patientStartStatus)}</Pill>,
-              <Pill key="rv-2">Revisited by: {timeline?.addedBy || "N/A"}</Pill>,
+              <Pill key="rv-1">
+                Revisit to: {getDepartment(timeline?.patientStartStatus)}
+              </Pill>,
+              <Pill key="rv-2">
+                Revisited by: {timeline?.addedBy || "N/A"}
+              </Pill>,
             ],
             actor: timeline?.addedBy,
           });
@@ -284,9 +363,11 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
               ? getDepartment(timeline?.isFollowUp?.patientStartStatus)
               : "Follow Up",
             tagColor: colorObj[timeline?.patientStartStatus || 1],
-            when: format(timeline?.isFollowUp?.followUpDate),
+            when: formatDateTime(timeline?.isFollowUp?.followUpDate),
             infoBlocks: [
-              <Pill key="fu-1">Follow Up by: {timeline?.addedBy || "N/A"}</Pill>,
+              <Pill key="fu-1">
+                Follow Up by: {timeline?.addedBy || "N/A"}
+              </Pill>,
             ],
             actor: timeline?.addedBy,
           });
@@ -296,7 +377,7 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
           list.push({
             tagText: "Discharged",
             tagColor: colorObj[21],
-            when: format(timeline?.endTime),
+            when: formatDateTime(timeline?.endTime),
             infoBlocks: [
               <Pill key="dc-1">Patient Discharged</Pill>,
               <Pill key="dc-2">
@@ -313,10 +394,11 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
             list.push({
               tagText: "External Transfer",
               tagColor: "#D792EE",
-              when: format(x?.transferDate),
+              when: formatDateTime(x?.transferDate),
               infoBlocks: [
                 <Pill key="ext-1">
-                  Patient Transferred from {x?.fromhospitalName} to {x?.tohospitalName}
+                  Patient Transferred from {x?.fromhospitalName} to{" "}
+                  {x?.tohospitalName}
                 </Pill>,
                 <Pill key="ext-2">Transfer by: {x?.fromDoc}</Pill>,
               ],
@@ -335,27 +417,17 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
 
   return (
     <View style={[styles.card, { borderColor: COLORS.border }]}>
-      <View style={styles.tableHeader}>
-        <Text style={styles.tableTitle}>Visit #{index + 1}</Text>
-      </View>
+      <Text style={styles.visitTitle}>Visit #{index + 1}</Text>
 
-      <View style={styles.table}>
-        {/* Header */}
-        <View style={styles.thead}>
-          <Text style={[styles.th, { flex: 1.2 }]}>Tag</Text>
-          <Text style={[styles.th, { flex: 2.4 }]}>Details</Text>
-          <Text style={[styles.th, { flex: 1.2 }]}>When</Text>
-          <Text style={[styles.th, { flex: 1.2 }]}>By / To</Text>
-        </View>
-
-        {/* Rows */}
-        {rows.map((row, i) => (
-          <View key={i} style={styles.tr}>
-            {/* Tag */}
-            <View style={[styles.td, { flex: 1.2 }]}>
+      {rows.map((row, i) => (
+        <View key={i} style={styles.eventCard}>
+          {/* header: tag + time */}
+          <View style={styles.eventHeader}>
+            <View style={styles.tagSection}>
+              <Text style={styles.fieldLabel}>Tag</Text>
               <View
                 style={[
-                  styles.tag,
+                  styles.tagBadge,
                   row.isHandshake
                     ? styles.tagHandshake
                     : { backgroundColor: row.tagColor || COLORS.chip },
@@ -364,7 +436,7 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
                 <Text
                   style={[
                     styles.tagText,
-                    row.isHandshake ? { color: COLORS.tagHandshake } : null,
+                    row.isHandshake && styles.tagTextHandshake,
                   ]}
                 >
                   {row.tagText}
@@ -372,23 +444,25 @@ export default function TimelineRow({ timeline, index }: { timeline: TimelineTyp
               </View>
             </View>
 
-            {/* Details */}
-            <View style={[styles.td, { flex: 2.4 }]}>
-              <View style={{ gap: 6 }}>{row.infoBlocks}</View>
-            </View>
-
-            {/* When */}
-            <View style={[styles.td, { flex: 1.2 }]}>
-              <Text style={styles.muted}>{row.when}</Text>
-            </View>
-
-            {/* By / To */}
-            <View style={[styles.td, { flex: 1.2 }]}>
-              <Text style={styles.muted}>{row.actor || "-"}</Text>
+            <View style={styles.whenSection}>
+              <Text style={styles.fieldLabel}>When</Text>
+              <Text style={styles.whenText}>{row?.when}</Text>
             </View>
           </View>
-        ))}
-      </View>
+
+          {/* details */}
+          <View style={styles.section}>
+            <Text style={styles.fieldLabel}>Details</Text>
+            <View style={styles.chipRow}>{row.infoBlocks}</View>
+          </View>
+
+          {/* By / To */}
+          <View style={styles.footerRow}>
+            <Text style={styles.fieldLabel}>By / To</Text>
+            <Text style={styles.actorText}>{row.actor || "-"}</Text>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -399,44 +473,80 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: COLORS.card,
     padding: 12,
+    gap: 10,
   },
 
-  tableHeader: { marginBottom: 8 },
-  tableTitle: { fontSize: 14, fontWeight: "900", color: COLORS.text },
+  visitTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
 
-  table: { borderRadius: 12, overflow: "hidden" },
-  thead: {
+  eventCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+    backgroundColor: "#ffffff",
+    gap: 8,
+  },
+
+  eventHeader: {
     flexDirection: "row",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    backgroundColor: "#f1f5f9",
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    justifyContent: "space-between",
+    gap: 12,
   },
-  th: { fontSize: 12, fontWeight: "900", color: COLORS.text },
-
-  tr: {
-    flexDirection: "row",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.border,
-    backgroundColor: "#fff",
+  tagSection: {
+    flex: 1.1,
   },
-  td: { justifyContent: "center", paddingRight: 8 },
+  whenSection: {
+    flex: 1.3,
+    alignItems: "flex-end",
+  },
 
-  tag: {
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.sub,
+    marginBottom: 4,
+  },
+
+  tagBadge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 999,
     alignSelf: "flex-start",
   },
-  tagText: { fontWeight: "900", fontSize: 12, color: COLORS.text },
+  tagText: {
+    fontWeight: "900",
+    fontSize: 11,
+    color: COLORS.text,
+  },
   tagHandshake: {
     backgroundColor: "transparent",
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderStyle: "dotted",
     borderColor: COLORS.tagHandshake,
+  },
+  tagTextHandshake: {
+    color: COLORS.tagHandshake,
+  },
+
+  whenText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.text,
+    textAlign: "right",
+  },
+
+  section: {
+    marginTop: 4,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
   },
 
   pill: {
@@ -448,10 +558,34 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignSelf: "flex-start",
   },
-  pillText: { color: COLORS.text, fontWeight: "700", fontSize: 12 },
+  pillText: {
+    color: COLORS.text,
+    fontWeight: "700",
+    fontSize: 11,
+  },
 
-  link: { color: COLORS.brand, fontWeight: "900", textDecorationLine: "underline" },
-  diagHint: { marginTop: 4, color: COLORS.sub, fontWeight: "700", fontSize: 12 },
+  footerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  actorText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
 
-  muted: { color: COLORS.sub, fontWeight: "700", fontSize: 12 },
+  link: {
+    color: COLORS.brand,
+    fontWeight: "900",
+    textDecorationLine: "underline",
+    fontSize: 11,
+  },
+  diagHint: {
+    marginTop: 4,
+    color: COLORS.sub,
+    fontWeight: "700",
+    fontSize: 11,
+  },
 });

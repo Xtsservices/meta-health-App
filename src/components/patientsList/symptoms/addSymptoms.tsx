@@ -20,6 +20,8 @@ import { AuthPost } from "../../../auth/auth";
 import { RootState } from "../../../store/store";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import { showError, showSuccess } from "../../../store/toast.slice";
+import Footer from "../../dashboard/footer";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COLORS = {
   bg: "#f8fafc",
@@ -54,7 +56,7 @@ const dispatch = useDispatch()
   const [saving, setSaving] = useState(false);
 // ⬆️ Add this state to remember the picked suggestion
 const [picked, setPicked] = useState<Symptom | null>(null);
-
+   const insets = useSafeAreaInsets();
   // type-ahead state
   const [suggestions, setSuggestions] = useState<Symptom[]>([]);
   const [loadingSugg, setLoadingSugg] = useState(false);
@@ -366,6 +368,12 @@ onChangeText={(t) => {
           </View>
         </View>
       </ScrollView>
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"patients"} brandColor="#14b8a6" />
+      </View>
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -443,5 +451,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
+  },
+   footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 70,
+    justifyContent: "center",
+    // Footer itself should render full width
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
   },
 });
