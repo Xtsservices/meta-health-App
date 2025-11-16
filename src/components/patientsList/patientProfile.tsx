@@ -155,7 +155,7 @@ const PatientProfileOPD: React.FC = () => {
       field:  "#f8fafc",
       fieldText: "#0f172a",
       pill:  "#e5e7eb",
-      dischargeButton: isDark ? "#dc2626" : "#ef4444",
+      dischargeButton: "#ef4444",
       dischargeButtonText: "#ffffff",
     }),
     []

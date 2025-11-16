@@ -16,6 +16,7 @@ import {
   Dimensions,
   ScrollView,
   Modal,
+  useColorScheme,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
