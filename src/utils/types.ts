@@ -942,21 +942,18 @@ export type vitalFunctionType = {
 export type AlertType = {
   id: number;
   patientName: string;
-  doctorName: string;
-  alertType: number;
   alertMessage: string;
   alertValue: string;
-  addedOn: string;
-  seen: 0 | 1;
-  index: number;
-  token: string;
   ward: string;
-  patientID: number;
   datetime: string;
-  hospitalID:number;
-  state?:string;
-  city?:string;
-  nurseName?:string;
+  addedOn: string;
+  seen: number;
+  patientID: number;
+  hospitalID: number;
+  state?: string;
+  city?: string;
+  nurseName?: string;
+  priority: "High" | "Medium" | "Low";
 };
 
 export type statusDictType = {
@@ -1724,3 +1721,101 @@ export interface CityType {
   stateCode: number;
   state: string;
 }
+
+export type TopTabType = 'medication';
+
+export interface MedicineType {
+  id?: number;
+  medicineName: string;
+  medicineType: number;
+  daysCount: number;
+  doseCount: number;
+  medicationTime: string;
+  Frequency?: number;
+  userID?: number;
+}
+
+export interface Reminder {
+  id?: number;
+  medicineType: number;
+  medicineName: string;
+  doseCount: number;
+  medicationTime: string;
+  dosageTime: string;
+  doseStatus: number;
+  givenTime: string | null;
+  firstName?: string;
+  medicineID?: number;
+  userID?: number | null;
+}
+
+export interface GroupedReminderPercentage {
+  dosageTime: string;
+  medicine: Reminder[];
+  percentage: number;
+}
+
+export const medicineCategory = {
+  capsules: 1,
+  syrups: 2,
+  tablets: 3,
+  injections: 4,
+  ivLine: 5,
+  Tubing: 6,
+  Topical: 7,
+  Drops: 8,
+  Spray: 9,
+  Ventilator: 10,
+};
+export interface MedicineType {
+  id?: number;
+  medicineName: string;
+  medicineType: number;
+  daysCount: number;
+  doseCount: number;
+  medicationTime: string;
+  Frequency?: number;
+  userID?: number;
+}
+
+export interface Reminder {
+  id?: number;
+  medicineType: number;
+  medicineName: string;
+  doseCount: number;
+  medicationTime: string;
+  dosageTime: string;
+  doseStatus: number;
+  givenTime: string | null;
+  firstName?: string;
+  medicineID?: number;
+  userID?: number | null;
+}
+
+export interface GroupedReminderPercentage {
+  dosageTime: string;
+  medicine: Reminder[];
+  percentage: number;
+}
+
+// types/DischargeTypes.ts
+export type RouteParams = {
+  patientId: number;
+  patientData: any;
+  timelineData: any;
+  hospitalID: number;
+};
+
+export type FormData = {
+  dischargeType: number;
+  advice: string;
+  followUp: number;
+  followUpDate: string;
+  diagnosis: string;
+  prescription: string;
+};
+
+export type DietItem = {
+  id: string;
+  name: string;
+};

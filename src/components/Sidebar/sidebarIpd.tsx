@@ -45,6 +45,7 @@ type Props = {
   items: SidebarItem[];
   bottomItems: SidebarItem[];
   width?: number;
+  onAlertPress?: () => void; 
 };
 
 /* -------------------------- Sidebar Button Component -------------------------- */
@@ -113,6 +114,7 @@ const Sidebar: React.FC<Props> = ({
   items,
   bottomItems,
   width = Math.min(320, SCREEN_WIDTH * 0.82),
+  onAlertPress,
 }) => {
   const user = useSelector((state: RootState) => state.currentUser);
   const slide = useRef(new Animated.Value(-width)).current;
@@ -121,27 +123,64 @@ const Sidebar: React.FC<Props> = ({
   // Fetch alert count
   const getAlertCount = async () => {
     try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      if (!user?.hospitalID || !token) return;
-
+      const token = await AsyncStorage.getItem("token");
+      if (!user?.hospitalID || !token) {
+        setAlertCount(0);
+        return;
+      }
       const response = await AuthFetch(
         `alerts/hospital/${user.hospitalID}/unseenCount`,
         token
       );
 
-      if (response?.status === "success" && response?.data?.message === "success") {
+      if (response?.status === "success" && response?.data?.count !== undefined) {
         setAlertCount(response.data.count ?? 0);
-      } else if (response?.message === "success") {
-        setAlertCount(response.count ?? 0);
+      } 
+      else {
+        await getAlertCountFromAlerts(token);
       }
     } catch (error) {
-      console.error("Error fetching alert count");
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (token && user?.hospitalID) {
+          await getAlertCountFromAlerts(token);
+        } else {
+          setAlertCount(0);
+        }
+      } catch (fallbackError) {
+        setAlertCount(0);
+      }
+    }
+  };
+
+  const getAlertCountFromAlerts = async (token: string) => {
+    try {
+      const response = await AuthFetch(
+        `alerts/hospital/${user.hospitalID}`,
+        token
+      );
+
+      if (response?.status === "success" && response?.data?.message === "success") {
+        const allAlerts = response.data.alerts || [];
+        const unseenCount = allAlerts.filter((alert: any) => alert.seen === 0).length;
+        setAlertCount(unseenCount);
+      } else if (response?.data?.alerts) {
+        const allAlerts = response.data.alerts;
+        const unseenCount = allAlerts.filter((alert: any) => alert.seen === 0).length;
+        setAlertCount(unseenCount);
+      } else {
+        setAlertCount(0);
+      }
+    } catch (error) {
+      setAlertCount(0);
     }
   };
 
   useEffect(() => {
-    if (user?.hospitalID && user?.token) {
+    if (user?.hospitalID) {
       getAlertCount();
+    } else {
+    setAlertCount(0);
     }
   }, [user?.hospitalID, user?.token]);
 
@@ -178,7 +217,7 @@ const Sidebar: React.FC<Props> = ({
     icon: BellIcon,
     onPress: () => {
       onClose();
-      // Navigate to alerts - implement as needed
+      onAlertPress?.();
     },
     isAlert: true,
     alertCount: alertCount,
