@@ -106,7 +106,7 @@ const MainFormFieldsMobile: React.FC = () => {
   };
 
   const handleNext = () => {
-    navigation.navigate("ExaminationFindinfNotes" as never);
+    navigation.navigate("ExaminationFindingNotes" as never);
   };
 
   const Checkbox: React.FC<{

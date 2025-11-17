@@ -13,7 +13,8 @@ import {
   FlatList,
   Dimensions,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -24,6 +25,8 @@ import { debounce } from "../../../utils/debounce";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { PlusIcon, XIcon } from "../../../utils/SvgIcons";
 import Footer from "../../dashboard/footer";
+import usePreOpForm from "../../../utils/usePreOpForm";
+import usePostOPStore from "../../../utils/usePostopForm";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
@@ -66,6 +69,14 @@ type NewTest = TestType;
 export default function AddTestsScreen() {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
+ 
+ 
+   const route = useRoute<any>();
+  const activeTab = route.params?.currentTab;
+
+  const { tests: preOpTests, setTests: setPreOpTests } = usePreOpForm();
+  const { tests: postOpTests, setTests: setPostOpTests } = usePostOPStore();
+
   const cp = useSelector((s: RootState) => s.currentPatient);
   const timeline = cp?.patientTimeLineID;
   const dispatch = useDispatch();
@@ -80,6 +91,17 @@ export default function AddTestsScreen() {
   // Type-ahead state
   const [suggestions, setSuggestions] = useState<TestType[]>([]);
   const [loadingSugg, setLoadingSugg] = useState(false);
+  const dedupeTestsForStore = (
+    arr: { test: string; ICD_Code: string; testNotes: string }[]
+  ) => {
+    const seen = new Set<string>();
+    return arr.filter((t) => {
+      const key = (t.ICD_Code || t.test || "").toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
 
   // Remove duplicates and filter
   const removeDuplicatesAndFilter = useMemo(
@@ -125,6 +147,7 @@ export default function AddTestsScreen() {
         token
       );
       if (res?.data?.message === "success" && Array.isArray(res?.data?.data)) {
+
         const uniqueTests = removeDuplicatesAndFilter(res?.data?.data, val);
         setTestList(uniqueTests);
         setSuggestions(uniqueTests);
@@ -280,6 +303,22 @@ export default function AddTestsScreen() {
       const res = await AuthPost(`test/${user?.hospitalID}`, body, token);
       
       if (res?.data?.message === "success") {
+            // ---- Push tests into Pre-Op / Post-Op stores (same as web) ----
+    const mappedForStore = tests.map((t) => ({
+      test: String(t.test ?? ""),
+      ICD_Code: String(t.loinc_num_ ?? ""),
+      testNotes: String(t.testNotes ?? ""),
+    }));
+    if (activeTab === "PreOpRecord") {
+      const prev = preOpTests || [];
+      const merged = dedupeTestsForStore([...prev, ...mappedForStore]);
+      setPreOpTests(merged);
+    } else if (activeTab === "PostOpRecord") {
+      const prev = postOpTests || [];
+      const merged = dedupeTestsForStore([...prev, ...mappedForStore]);
+      setPostOpTests(merged);
+    }
+
         dispatch(showSuccess("Tests added successfully!"));
         navigation.goBack();
       } else {

@@ -16,6 +16,8 @@ import { useNavigation } from "@react-navigation/native";
 
 import usePhysicalExaminationForm from "../../../utils/usePhysicalExaminationForm";
 import Footer from "../../dashboard/footer";
+import { RootState } from "../../../store/store";
+import { useSelector } from "react-redux";
 
 
 interface GeneralPhysicalExaminationState {
@@ -47,6 +49,8 @@ const GeneralPhysicalExaminationMobile: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const isDark = scheme === "dark";
+ const user = useSelector((s: RootState) => s.currentUser);
+const isReadOnly = user?.roleName === "surgeon";
 
   const { generalphysicalExamination, setGeneralPhysicalExamination } =
     usePhysicalExaminationForm() as {
@@ -121,6 +125,7 @@ const GeneralPhysicalExaminationMobile: React.FC = () => {
                 return (
                   <Pressable
                     key={item.key}
+                    disabled={isReadOnly}
                     onPress={() => toggleField(item.key)}
                     style={({ pressed }) => [
                       styles.checkboxRow,

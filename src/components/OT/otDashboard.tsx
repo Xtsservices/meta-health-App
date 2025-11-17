@@ -451,7 +451,7 @@ const { setScreenType } = useOTConfig();
 
   const sidebarItems: SidebarItem[] = [
     { key: "dash", label: "Dashboard", icon: LayoutDashboard, onPress: () => go("OtDashboard") },
-    { key: "slist", label: "Surgeries List", icon: ListIcon, onPress: () => go("DashboardAlerts") },
+    { key: "slist", label: "Surgeries List", icon: ListIcon, onPress: () => go("DashboardAlerts", { type: "surgeries" }) },
     { key: "emer", label: "Emergency", icon: UserPlus2,onPress: () => {
       setScreenType(OTScreenType.EMERGENCY); 
       go("PatientList");

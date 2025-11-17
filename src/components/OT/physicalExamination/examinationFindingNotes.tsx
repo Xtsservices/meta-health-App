@@ -18,6 +18,8 @@ import { useNavigation } from "@react-navigation/native";
 
 import usePhysicalExaminationForm from "../../../utils/usePhysicalExaminationForm";
 import Footer from "../../dashboard/footer";
+import { RootState } from "../../../store/store";
+import { useSelector } from "react-redux";
 
 interface ExaminationFindingNotesShape {
   examinationFindingNotes: string;
@@ -52,7 +54,8 @@ const ExaminationFindingNotesMobile: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const isDark = scheme === "dark";
-
+ const user = useSelector((s: RootState) => s.currentUser);
+const isReadOnly = user?.roleName === "surgeon";
   const { examinationFindingNotes, setExaminationFindingNotes } =
     usePhysicalExaminationForm() as {
       examinationFindingNotes: ExaminationFindingNotesShape;
@@ -143,10 +146,12 @@ const ExaminationFindingNotesMobile: React.FC = () => {
                   <TextInput
                     multiline
                     value={value}
+                    disabled={isReadOnly}
                     onChangeText={(text) => handleChange(field.key, text)}
                     onContentSizeChange={(e) =>
                       handleContentSizeChange(field.key, e)
                     }
+                    placeholderTextColor={'#6b6b6bff'}
                     placeholder={`Enter ${field.label.toLowerCase()}`}
                     style={[
                       styles.textArea,

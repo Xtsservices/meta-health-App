@@ -1,428 +1,486 @@
-// import React, { useEffect, useState, useCallback } from "react";
-// import {
-//   View,
-//   Text,
-//   StyleSheet,
-//   ScrollView,
-//   Image,
-//   Pressable,
-//   Modal,
-//   TouchableOpacity,
-//   Linking,
-//   Alert,
-// } from "react-native";
-// import { useSelector } from "react-redux";
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  Modal,
+  Linking,
+  Alert,
+} from "react-native";
+import { useDispatch, useSelector } from "react-redux";
 
-// import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-// import { pick, types } from "@react-native-documents/picker";
-// import { X, Trash2, PlusCircle } from "lucide-react-native";
-// import { RootState } from "../../store/store";
-// import { useReportStore } from "../../store/zustandstore";
-// import { AuthDelete, AuthFetch, AuthPost, UploadFiles } from "../../auth/auth";
+import { launchCamera, launchImageLibrary } from "react-native-image-picker";
+import { pick, types } from "@react-native-documents/picker";
+import { X, Trash2, PlusCircle } from "lucide-react-native";
+import { RootState } from "../../store/store";
+import { useReportStore } from "../../store/zustandstore";
+import { AuthDelete, AuthFetch, UploadFiles } from "../../auth/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { showError, showSuccess } from "../../store/toast.slice";
 
-// const pdfIcon = require("../../../assets/pdf.png"); // adjust
-// const imgIcon = require("../../../assets/image.png"); // adjust
+const BRAND = "#14b8a6";
+const BORDER = "#e2e8f0";
+const COLORS = {
+  bg: "#f8fafc",
+  card: "#ffffff",
+  text: "#0f172a",
+  sub: "#475569",
+  brand: BRAND,
+};
 
-// const BRAND = "#14b8a6";
-// const BORDER = "#e2e8f0";
-// const COLORS = {
-//   bg: "#f8fafc",
-//   card: "#ffffff",
-//   text: "#0f172a",
-//   sub: "#475569",
-//   brand: BRAND,
-// };
+const ReportsTabMobile: React.FC = () => {
+  const user = useSelector((s: RootState) => s.currentUser);
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+const dispatch = useDispatch()
+  const { reports, setReports } = useReportStore();
 
-// const ReportsTabMobile: React.FC = () => {
-//   const user = useSelector((s: RootState) => s.currentUser);
-//   const timeline = useSelector((s: RootState) => s.currentPatient);
+  // ⭐ local files before saving
+  const [localFiles, setLocalFiles] = useState<any[]>([]);
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<any>(null);
 
-//   const { reports, setReports } = useReportStore();
+  // 🔹 NEW: control showing uploader vs just reports
+  const [showUploader, setShowUploader] = useState(false);
 
-//   // ⭐ local files before saving
-//   const [localFiles, setLocalFiles] = useState<any[]>([]);
+  /* ================================================================
+     FETCH ALL REPORTS (AFTER SAVING)
+  ==================================================================*/
+  const getAllReports = useCallback(async () => {
+    try {
+         const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const res = await AuthFetch(
+        `attachment/${user?.hospitalID}/all/${currentPatient?.id}/consentform`,
+        token
+      );
+      if (res?.status === "success") setReports(res?.data?.attachments);
+    } catch(error) {
+      dispatch(showError( error?.status || "Failed to load reports"))
+    }
+  }, [user?.hospitalID, user?.token, currentPatient?.patientID, setReports]);
 
-//   const [deleteModal, setDeleteModal] = useState(false);
-//   const [fileToDelete, setFileToDelete] = useState<any>(null);
+  useEffect(() => {
+    if (!currentPatient?.id ) return;
+    getAllReports();
+  }, [currentPatient?.id,  getAllReports]);
 
-//   /* ================================================================
-//      FETCH ALL REPORTS (AFTER SAVING)
-//   ==================================================================*/
-//   const getAllReports = useCallback(async () => {
-//     try {
-//       const res = await AuthFetch(
-//         `attachment/${user?.hospitalID}/all/${timeline?.patientID}/consentform`,
-//         user?.token
-//       );
+  /* ================================================================
+     PICKERS (CAMERA / GALLERY / PDF)
+  ==================================================================*/
+  const addLocalFile = (file: any) => {
+    setLocalFiles((prev) => [...prev, file]);
+  };
 
-//       if (res?.status === "success") setReports(res?.data?.attachments);
-//     } catch {
-//       console.log("FAILED TO LOAD REPORTS");
-//     }
-//   }, [user, timeline]);
+  const pickCamera = async () => {
+    try {
+      const res: any = await launchCamera({
+        mediaType: "photo",
+        quality: 0.7,
+      });
+      if (!res.assets?.length) return;
+      addLocalFile(res.assets[0]);
+    } catch {}
+  };
 
-//   useEffect(() => {
-//     if (!timeline?.patientID || !user?.token) return;
-//     getAllReports();
-//   }, [timeline, user]);
+  const pickGallery = async () => {
+    try {
+      const res: any = await launchImageLibrary({
+        mediaType: "photo",
+        selectionLimit: 1,
+      });
+      if (!res.assets?.length) return;
+      addLocalFile(res.assets[0]);
+    } catch {}
+  };
 
-//   /* ================================================================
-//      PICKERS (CAMERA / GALLERY / PDF)
-//   ==================================================================*/
-//   const pickCamera = async () => {
-//     try {
-//       const res: any = await launchCamera({
-//         mediaType: "photo",
-//         quality: 0.7,
-//       });
-//       if (!res.assets?.length) return;
+  const pickPdf = async () => {
+    try {
+      const doc: any = await pick({ type: [types.pdf] });
+      addLocalFile({
+        uri: doc[0].uri,
+        fileName: doc[0].name,
+        type: "application/pdf",
+      });
+    } catch {}
+  };
 
-//       addLocalFile(res.assets[0]);
-//     } catch {}
-//   };
+  /* ================================================================
+     DELETE LOCAL FILE (BEFORE SAVING)
+  ==================================================================*/
+  const deleteLocalFile = () => {
+    setLocalFiles((prev) => prev.filter((f) => f !== fileToDelete));
+    setDeleteModal(false);
+  };
 
-//   const pickGallery = async () => {
-//     try {
-//       const res: any = await launchImageLibrary({
-//         mediaType: "photo",
-//         selectionLimit: 1,
-//       });
-//       if (!res.assets?.length) return;
+  /* ================================================================
+     SAVE TO SERVER
+  ==================================================================*/
+ const uploadToServer = async () => {
+  if (!localFiles.length) return;
 
-//       addLocalFile(res.assets[0]);
-//     } catch {}
-//   };
+  try {
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    // if (!token || !user?.hospitalID || !currentPatient?.patientTimeLineID || !currentPatient?.patientID || !user?.id) {
+    //   Alert.alert("Error", "Missing required data to upload consent form");
+    //   return;
+    // }
 
-//   const pickPdf = async () => {
-//     try {
-//       const doc: any = await pick({ type: [types.pdf] });
-//       addLocalFile({
-//         uri: doc[0].uri,
-//         fileName: doc[0].name,
-//         type: "application/pdf",
-//       });
-//     } catch {}
-//   };
+    const form = new FormData();
 
-//   /* ================================================================
-//      ADD TO LOCAL LIST
-//   ==================================================================*/
-//   const addLocalFile = (file: any) => {
-//     setLocalFiles((prev) => [...prev, file]);
-//   };
+    // match web: append each file under key "files"
+    localFiles.forEach((file, index) => {
+      form.append("files", {
+        uri: file.uri,
+        name: file.fileName || `file_${Date.now()}_${index}.jpg`,
+        type: file.type || "image/jpeg",
+      } as any);
+    });
 
-//   /* ================================================================
-//      DELETE LOCAL FILE (BEFORE SAVING)
-//   ==================================================================*/
-//   const deleteLocalFile = () => {
-//     setLocalFiles((prev) => prev.filter((f) => f !== fileToDelete));
-//     setDeleteModal(false);
-//   };
+    // match web: category
+    form.append("category", "consentform");
 
-//   /* ================================================================
-//      SAVE TO SERVER
-//   ==================================================================*/
-//   const uploadToServer = async () => {
-//     if (!localFiles.length) return;
+    const res: any = await UploadFiles(
+      `attachment/${user?.hospitalID}/${currentPatient?.patientTimeLineID}/${currentPatient?.id}/${user?.id}/consentform`,
+      form,
+      token
+    );
+    if (res?.status === "success") {
+      // same behaviour as web
+      dispatch(showSuccess( "Consentform successfully uploaded"))
+      setLocalFiles([]);
+      await getAllReports();
+      setShowUploader(false); // optional: close uploader after save
+    } else {
+         dispatch(showError( res?.message || "Failed to upload consent form"))
+    }
+  } catch (error) {
+    dispatch(showError( error?.status || "Failed to upload consent form"))
+  }
+};
 
-//     for (const file of localFiles) {
-//       try {
-//         const fd = new FormData();
-//         fd.append("consentform", {
-//           uri: file.uri,
-//           name: file.fileName || `file_${Date.now()}.jpg`,
-//           type: file.type || "image/jpeg",
-//         } as any);
 
-//         const res = await UploadFiles(
-//           `attachment/${user?.hospitalID}/${timeline?.patientID}/consentform`,
-//           fd,
-//           user?.token,
-         
-//         );
+  /* ================================================================
+     DELETE REPORT FROM SERVER
+  ==================================================================*/
+  const deleteReport = async () => {
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      await AuthDelete(
+        `attachment/${user?.hospitalID}/${fileToDelete.id}/consentform`,
+        token
+      );
 
-//         if (res?.status === "success") {
-//           console.log("Uploaded:", file.fileName);
-//         }
-//       } catch (e) {
-//         console.log("Upload failed:", e);
-//       }
-//     }
+      setReports(reports.filter((r) => r.id !== fileToDelete.id));
+      setDeleteModal(false);
+    } catch (e) {
+      console.log("Delete failed", e);
+    }
+  };
 
-//     setLocalFiles([]);
-//     getAllReports(); // reload from backend
-//   };
+  /* ================================================================
+     RENDER FILE CARD
+  ==================================================================*/
+  const renderCard = (item: any, isLocal = false) => {
+    const isPdf =
+      item.type === "application/pdf" || item.mimeType === "application/pdf";
 
-//   /* ================================================================
-//      DELETE REPORT FROM SERVER
-//   ==================================================================*/
-//   const deleteReport = async () => {
-//     try {
-//       await AuthDelete(
-//         `attachment/${user.hospitalID}/${fileToDelete.id}/consentform`,
-//         user.token
-//       );
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardRow}>
+          <Text style={styles.fileName}>
+            {item.fileName ? item.fileName.slice(0, 20) : "File"}
+          </Text>
 
-//       setReports(reports.filter((r) => r.id !== fileToDelete.id));
-//       setDeleteModal(false);
-//     } catch (e) {
-//       console.log("Delete failed", e);
-//     }
-//   };
+          <Pressable
+            onPress={() => {
+              setFileToDelete(item);
+              setDeleteModal(true);
+            }}
+          >
+            <Trash2 size={20} color="#b91c1c" />
+          </Pressable>
+        </View>
 
-//   /* ================================================================
-//      RENDER FILE CARD
-//   ==================================================================*/
-//   const renderCard = (item: any, isLocal = false) => {
-//     const isPdf =
-//       item.type === "application/pdf" || item.mimeType === "application/pdf";
+        <Pressable
+          style={styles.viewBtn}
+          onPress={() => {
+            if (isLocal) {
+              Alert.alert("Info", "Preview available after upload");
+              return;
+            }
+            if (item.fileURL) {
+              Linking.openURL(item.fileURL);
+            } else {
+              Alert.alert("Info", "No file URL available");
+            }
+          }}
+        >
+          <Text style={styles.viewText}>View</Text>
+        </Pressable>
+      </View>
+    );
+  };
 
-//     return (
-//       <View style={styles.card}>
-//         <View style={styles.cardRow}>
-//           <Image
-//             source={isPdf ? pdfIcon : imgIcon}
-//             style={{ width: 55, height: 55 }}
-//             resizeMode="contain"
-//           />
+  return (
+    <View style={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* ---------- HEADER ROW: Uploaded Reports + Add button ---------- */}
+        <View style={styles.headerRow}>
+          <Text style={styles.sectionTitle}>Uploaded Reports</Text>
 
-//           {/* TITLE */}
-//           <Text style={styles.fileName}>
-//             {item.fileName
-//               ? item.fileName.slice(0, 20)
-//               : "File"}
-//           </Text>
+          <Pressable
+            style={styles.addBtn}
+            onPress={() => setShowUploader((prev) => !prev)}
+          >
+            <PlusCircle size={18} color="#ffffff" />
+            <Text style={styles.addText}>
+              {showUploader ? "Close" : "Add"}
+            </Text>
+          </Pressable>
+        </View>
 
-//           {/* DELETE BUTTON */}
-//           <Pressable
-//             onPress={() => {
-//               setFileToDelete(item);
-//               setDeleteModal(true);
-//             }}
-//           >
-//             <Trash2 size={20} color="#b91c1c" />
-//           </Pressable>
-//         </View>
+        {/* ---------- Uploader section: only when Add is clicked ---------- */}
+        {showUploader && (
+          <>
+            {/* Upload options */}
+            <View style={styles.uploadRow}>
+              <Pressable style={styles.pickBtn} onPress={pickCamera}>
+                <PlusCircle size={18} color={BRAND} />
+                <Text style={styles.pickText}>Camera</Text>
+              </Pressable>
 
-//         {/* VIEW BUTTON */}
-//         <Pressable
-//           style={styles.viewBtn}
-//           onPress={() => {
-//             if (isLocal) {
-//               Alert.alert("Info", "Preview available after upload");
-//               return;
-//             }
-//             Linking.openURL(item.fileURL);
-//           }}
-//         >
-//           <Text style={styles.viewText}>View</Text>
-//         </Pressable>
-//       </View>
-//     );
-//   };
+              <Pressable style={styles.pickBtn} onPress={pickGallery}>
+                <PlusCircle size={18} color={BRAND} />
+                <Text style={styles.pickText}>Gallery</Text>
+              </Pressable>
 
-//   return (
-//     <View style={styles.container}>
-//       <ScrollView showsVerticalScrollIndicator={false}>
-//         {/* ---------------- UPLOAD BUTTONS ---------------- */}
-//         <View style={styles.uploadRow}>
-//           <Pressable style={styles.pickBtn} onPress={pickCamera}>
-//             <PlusCircle size={18} color={BRAND} />
-//             <Text style={styles.pickText}>Camera</Text>
-//           </Pressable>
+              <Pressable style={styles.pickBtn} onPress={pickPdf}>
+                <PlusCircle size={18} color={BRAND} />
+                <Text style={styles.pickText}>Document</Text>
+              </Pressable>
+            </View>
 
-//           <Pressable style={styles.pickBtn} onPress={pickGallery}>
-//             <PlusCircle size={18} color={BRAND} />
-//             <Text style={styles.pickText}>Gallery</Text>
-//           </Pressable>
+            {/* Local unsaved files */}
+            {localFiles.length > 0 && (
+              <>
+                <Text style={styles.subSectionTitle}>Unsaved Uploads</Text>
+                {localFiles.map((item, i) => (
+                  <View key={i}>{renderCard(item, true)}</View>
+                ))}
 
-//           <Pressable style={styles.pickBtn} onPress={pickPdf}>
-//             <PlusCircle size={18} color={BRAND} />
-//             <Text style={styles.pickText}>PDF</Text>
-//           </Pressable>
-//         </View>
+                <Pressable style={styles.saveBtn} onPress={uploadToServer}>
+                  <Text style={styles.saveText}>Save All</Text>
+                </Pressable>
+              </>
+            )}
+          </>
+        )}
 
-//         {/* ---------------- LOCAL UNSAVED FILES ---------------- */}
-//         {localFiles.length > 0 && (
-//           <>
-//             <Text style={styles.sectionTitle}>Unsaved Uploads</Text>
-//             {localFiles.map((item, i) => (
-//               <View key={i}>{renderCard(item, true)}</View>
-//             ))}
+        {/* ---------- Saved files list (always visible) ---------- */}
+        {reports.length === 0 ? (
+          <Text style={styles.emptyText}>No reports uploaded yet</Text>
+        ) : (
+          reports.map((item, i) => <View key={i}>{renderCard(item, false)}</View>)
+        )}
+      </ScrollView>
 
-//             <Pressable style={styles.saveBtn} onPress={uploadToServer}>
-//               <Text style={styles.saveText}>Save All</Text>
-//             </Pressable>
-//           </>
-//         )}
+      {/* ---------- DELETE MODAL ---------- */}
+      <Modal
+        visible={deleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete File?</Text>
+            <Text style={styles.modalSub}>
+              Are you sure you want to delete this file permanently?
+            </Text>
 
-//         {/* ---------------- SAVED FILES ---------------- */}
-//         <Text style={styles.sectionTitle}>Uploaded Reports</Text>
+            <View style={styles.modalRow}>
+              <Pressable
+                onPress={() => setDeleteModal(false)}
+                style={[styles.modalBtn, { backgroundColor: BORDER }]}
+              >
+                <Text style={styles.modalCancel}>No</Text>
+              </Pressable>
 
-//         {reports.map((item, i) => (
-//           <View key={i}>{renderCard(item, false)}</View>
-//         ))}
-//       </ScrollView>
+              <Pressable
+                onPress={() => {
+                  if (fileToDelete?.id) deleteReport();
+                  else deleteLocalFile();
+                }}
+                style={[styles.modalBtn, { backgroundColor: "#dc2626" }]}
+              >
+                <Text style={{ color: "#fff", fontWeight: "700" }}>Yes</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
 
-//       {/* ---------------- DELETE MODAL ---------------- */}
-//       <Modal
-//         visible={deleteModal}
-//         transparent
-//         animationType="fade"
-//         onRequestClose={() => setDeleteModal(false)}
-//       >
-//         <View style={styles.modalBackdrop}>
-//           <View style={styles.modalCard}>
-//             <Text style={styles.modalTitle}>Delete File?</Text>
-//             <Text style={styles.modalSub}>
-//               Are you sure you want to delete this file permanently?
-//             </Text>
+export default ReportsTabMobile;
 
-//             <View style={styles.modalRow}>
-//               <Pressable
-//                 onPress={() => setDeleteModal(false)}
-//                 style={[styles.modalBtn, { backgroundColor: BORDER }]}
-//               >
-//                 <Text style={styles.modalCancel}>No</Text>
-//               </Pressable>
+/* ================================================================
+   STYLE
+================================================================ */
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+    padding: 12,
+  },
 
-//               <Pressable
-//                 onPress={() => {
-//                   if (fileToDelete?.id) deleteReport();
-//                   else deleteLocalFile();
-//                 }}
-//                 style={[styles.modalBtn, { backgroundColor: "#dc2626" }]}
-//               >
-//                 <Text style={{ color: "#fff", fontWeight: "700" }}>Yes</Text>
-//               </Pressable>
-//             </View>
-//           </View>
-//         </View>
-//       </Modal>
-//     </View>
-//   );
-// };
+  /* header row */
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    marginTop: 4,
+  },
 
-// export default ReportsTabMobile;
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
 
-// /* ================================================================
-//    STYLE
-// ================================================================ */
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     backgroundColor: COLORS.bg,
-//     padding: 12,
-//   },
+  subSectionTitle: {
+    marginTop: 14,
+    marginBottom: 6,
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
 
-//   uploadRow: {
-//     flexDirection: "row",
-//     justifyContent: "space-between",
-//     marginVertical: 8,
-//   },
-//   pickBtn: {
-//     padding: 10,
-//     borderWidth: 1,
-//     borderColor: BRAND,
-//     borderRadius: 12,
-//     flexDirection: "row",
-//     alignItems: "center",
-//     gap: 6,
-//     flex: 1,
-//     marginHorizontal: 4,
-//   },
-//   pickText: {
-//     color: BRAND,
-//     fontWeight: "700",
-//   },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: BRAND,
+    gap: 4,
+  },
+  addText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
 
-//   sectionTitle: {
-//     marginTop: 14,
-//     marginBottom: 6,
-//     fontSize: 15,
-//     fontWeight: "800",
-//     color: COLORS.text,
-//   },
+  uploadRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginVertical: 8,
+  },
+  pickBtn: {
+    padding: 10,
+    borderWidth: 1,
+    borderColor: BRAND,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+    marginHorizontal: 4,
+    backgroundColor: "#ffffff",
+  },
+  pickText: {
+    color: BRAND,
+    fontWeight: "700",
+  },
 
-//   card: {
-//     backgroundColor: COLORS.card,
-//     padding: 12,
-//     borderRadius: 12,
-//     marginBottom: 10,
-//     borderWidth: 1,
-//     borderColor: BORDER,
-//   },
-//   cardRow: {
-//     flexDirection: "row",
-//     alignItems: "center",
-//     gap: 12,
-//   },
-//   fileName: {
-//     flex: 1,
-//     color: COLORS.text,
-//     fontSize: 13,
-//     fontWeight: "700",
-//   },
+  card: {
+    backgroundColor: COLORS.card,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  cardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  fileName: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "700",
+  },
 
-//   viewBtn: {
-//     marginTop: 8,
-//     backgroundColor: BRAND,
-//     paddingVertical: 8,
-//     borderRadius: 12,
-//     alignItems: "center",
-//   },
-//   viewText: {
-//     color: "#fff",
-//     fontWeight: "800",
-//   },
+  viewBtn: {
+    marginTop: 8,
+    backgroundColor: BRAND,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  viewText: {
+    color: "#fff",
+    fontWeight: "800",
+  },
 
-//   saveBtn: {
-//     marginTop: 10,
-//     backgroundColor: BRAND,
-//     padding: 12,
-//     borderRadius: 12,
-//     alignItems: "center",
-//   },
-//   saveText: {
-//     fontSize: 14,
-//     color: "#fff",
-//     fontWeight: "800",
-//   },
+  saveBtn: {
+    marginTop: 10,
+    backgroundColor: BRAND,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  saveText: {
+    fontSize: 14,
+    color: "#fff",
+    fontWeight: "800",
+  },
 
-//   modalBackdrop: {
-//     flex: 1,
-//     backgroundColor: "rgba(0,0,0,0.4)",
-//     alignItems: "center",
-//     justifyContent: "center",
-//   },
-//   modalCard: {
-//     width: "85%",
-//     backgroundColor: "#fff",
-//     padding: 16,
-//     borderRadius: 12,
-//   },
-//   modalTitle: {
-//     fontSize: 16,
-//     fontWeight: "800",
-//     color: COLORS.text,
-//   },
-//   modalSub: {
-//     marginTop: 8,
-//     color: COLORS.sub,
-//     marginBottom: 14,
-//   },
-//   modalRow: {
-//     flexDirection: "row",
-//     justifyContent: "flex-end",
-//     gap: 12,
-//   },
-//   modalBtn: {
-//     paddingVertical: 10,
-//     paddingHorizontal: 18,
-//     borderRadius: 10,
-//   },
-//   modalCancel: {
-//     color: COLORS.text,
-//     fontWeight: "700",
-//   },
-// });
+  emptyText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: COLORS.sub,
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCard: {
+    width: "85%",
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.text,
+  },
+  modalSub: {
+    marginTop: 8,
+    color: COLORS.sub,
+    marginBottom: 14,
+  },
+  modalRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  modalBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+  },
+  modalCancel: {
+    color: COLORS.text,
+    fontWeight: "700",
+  },
+});

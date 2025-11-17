@@ -80,6 +80,8 @@ import AddPhysicalExaminationScreen from "../components/patientsList/PhysicalExa
 import AddMedicineScreen from "../components/patientsList/treatmentplan/AddMedicineScreen";
 import MedicationTimelineScreen from "../components/patientsList/treatmentplan/MedicationTimelineScreen";
 import DischargedPatientsIPD from "../components/IPD/DischargedPatientsIPD";
+import consentForm from "../components/OT/consentForm";
+import postOpNotes from "../components/OT/postOpNotes";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -208,6 +210,9 @@ const Routing = () => {
         <Stack.Screen name="AnesthesiaRecordForm" component={anesthesiaRecord} options={{ title: "Anesthesia Record", headerTitleAlign: "center", headerShown: true }}  />
         <Stack.Screen name="Breathing" component={breathing} options={{ title: "Breathing", headerTitleAlign: "center", headerShown: true }}  />
         <Stack.Screen name="Monitors" component={monitors} options={{ title: "Monitors", headerTitleAlign: "center", headerShown: true }}  />
+       
+        <Stack.Screen name="ConsentForm" component={consentForm} options={{ title: "Consent Form", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="PostOpRecordNotes" component={postOpNotes} options={{ title: "Post-Op Record Notes", headerTitleAlign: "center", headerShown: true }}  />
 
         <Stack.Screen 
           name="DischargedPatientsIPD" 

@@ -9,7 +9,7 @@ import {
   Alert,
   Dimensions,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,6 +17,7 @@ import { AuthDelete, AuthFetch } from "../../../auth/auth";
 import { FileTextIcon, PlusIcon, Trash2Icon } from "../../../utils/SvgIcons";
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
+import usePreOpForm from "../../../utils/usePreOpForm";
 
 type RootState = any;
 const selectUser = (s: RootState) => s.currentUser;
@@ -59,17 +60,37 @@ const cap = (s: string) => (s ? s.slice(0, 1).toUpperCase() + s.slice(1).toLower
 
 export default function TestsScreen() {
   const navigation = useNavigation<any>();
+   const route = useRoute<any>();    
   const insets = useSafeAreaInsets();
   const user = useSelector(selectUser);
   const currentpatient = useSelector(selectCurrentPatient);
   const timeline = currentpatient?.patientTimeLineID;
-  
-  const [loading, setLoading] = useState(false);
   const [list, setList] = useState<TestRow[]>([]);
+  const {
+    tests
+  } = usePreOpForm();
+   const activetab =
+    route.params?.currentTab 
+const shouldShowPreOpTests = activetab === "PreOpRecord";
+    let readOnly = false
+    if ((shouldShowPreOpTests && user?.roleName === "surgeon") || activetab === "PatientFile"){
+
+    readOnly = true;
+  }else if (shouldShowPreOpTests && user?.roleName !== "surgeon"){
+    readOnly = false
+  }
+  const [loading, setLoading] = useState(false);
+
+    
 
   const load = useCallback(async () => {
     if (!currentpatient?.id) return;
     setLoading(true);
+    if (shouldShowPreOpTests) {
+  setList(tests || []);
+  setLoading(false);
+  return;
+}
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       const res = await AuthFetch(`test/${currentpatient.id}`, token);
@@ -200,13 +221,14 @@ export default function TestsScreen() {
       ) : empty ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No tests prescribed yet</Text>
+          {!readOnly &&
           <Pressable
             style={[styles.cta, { backgroundColor: COLORS.button }]}
-            onPress={() => navigation.navigate("AddTests" as never)}
+            onPress={() => navigation.navigate("AddTests" as never, {currentTab: activetab})}
           >
             <PlusIcon size={moderateScale(18)} color={COLORS.buttonText} />
             <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>Add Test</Text>
-          </Pressable>
+          </Pressable>}
         </View>
       ) : (
         <>
@@ -221,15 +243,16 @@ export default function TestsScreen() {
             ItemSeparatorComponent={() => <View style={{ height: moderateScale(12) }} />}
             showsVerticalScrollIndicator={false}
           />
+          {!readOnly && 
           <Pressable
             style={[styles.fab, { 
               backgroundColor: COLORS.button,
               bottom: FOOTER_HEIGHT + moderateScale(16) + insets.bottom 
             }]}
-            onPress={() => navigation.navigate("AddTests" as never)}
+            onPress={() => navigation.navigate("AddTests" as never,  {currentTab: activetab})}
           >
             <PlusIcon size={moderateScale(20)} color={COLORS.buttonText} />
-          </Pressable>
+          </Pressable>}
         </>
       )}
       

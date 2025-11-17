@@ -144,8 +144,8 @@ const { screenType, userType, setPatientStage } = useOTConfig();
     try {
       setLoading(true);
       let url = "";
-
-      if (user?.patientStatus === 1) {
+if (user?.roleName !== "surgeon" && user?.roleName !== "anesthesia"){
+if (user?.patientStatus === 1) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseopdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
         } else {
@@ -170,9 +170,13 @@ const { screenType, userType, setPatientStage } = useOTConfig();
           url = `patient/${user.hospitalID}/patients/opdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
         }
       }
-
+}else{
+  url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
+}
+      
+console.log(url, "oturl")
       const response = await AuthFetch(url, token);
-
+console.log(response, "surgery response")
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response.data.patients

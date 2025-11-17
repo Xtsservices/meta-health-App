@@ -35,13 +35,14 @@ import { showError, showSuccess } from "../../store/toast.slice";
 import Footer from "../dashboard/footer";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 import useAnesthesiaForm from "../../utils/useAnesthesiaRecordForm";
+import usePostOPStore from "../../utils/usePostopForm";
 
 /** ----- Types ----- */
 type SectionKey =
   // Patient File
   | "Symptoms"
   | "Vitals"
-  | "medications"
+  | "TreatmentPlan"
   | "MedicalHistory"
   | "Reports"
   // Physical Examination
@@ -57,16 +58,16 @@ type SectionKey =
   | "Others"
   // Pre-Op
   | "PreopControllers"
-  | "preopTests"
-  | "preopMedications"
+  | "Tests"
+  | "TreatmentPlan"
 //   AnesthesiarecordForm
 |"AnesthesiaRecordForm"
 |"Breathing"
 |"Monitors"
 // Post-op 
-|"PostOprecord"
-|"PostopTests"
-|"PostOpMedications"
+|"PostOpRecordNotes"
+|"Tests"
+|"TreatmentPlan"
 
 
 
@@ -136,7 +137,7 @@ const PatientTabsGrid: React.FC<Props> = ({
         return [
           { key: "Symptoms", label: "Symptoms", Icon: Activity },
           { key: "Vitals", label: "Vitals", Icon: Heart },
-          { key: "medications", label: "Medications", Icon: Pill },
+          { key: "TreatmentPlan", label: "Medications", Icon: Pill },
           {
             key: "MedicalHistory",
             label: "Medical Examination History",
@@ -182,8 +183,8 @@ const PatientTabsGrid: React.FC<Props> = ({
             label: "Pre-Op Controllers",
             Icon: ClipboardList,
           },
-          { key: "preopTests", label: "Tests", Icon: FlaskConical },
-          { key: "preopMedications", label: "Medications", Icon: Pill },
+          { key: "Tests", label: "Tests", Icon: FlaskConical },
+          { key: "TreatmentPlan", label: "Medications", Icon: Pill },
         ];
 case "AnesthesiaRecord":
     return [
@@ -199,12 +200,12 @@ case "AnesthesiaRecord":
     case "PostOpRecord":
         return [
             {
-            key: "PostOprecord",
+            key: "PostOpRecordNotes",
             label: "Post-Op Records",
             Icon: ClipboardList,
           },
-          { key: "PostopTests", label: "Tests", Icon: FlaskConical },
-          { key: "PostopMedications", label: "Medications", Icon: Pill },
+          { key: "Tests", label: "Tests", Icon: FlaskConical },
+          { key: "TreatmentPlan", label: "Medications", Icon: Pill },
         
         ]
       default:
@@ -223,9 +224,9 @@ case "AnesthesiaRecord":
   const onPressTile = (item: GridItem) => {
     const routeName = routeMap?.[item.key];
     if (routeName) {
-      navigation.navigate(routeName as never);
+      navigation.navigate(routeName as never, {currentTab: activeTab});
     } else {
-      navigation.navigate(item.key as never, { ot: true } as never);
+      navigation.navigate(item.key as never, { ot: true, currentTab: activeTab } as never);
     }
   };
 
@@ -251,6 +252,9 @@ case "AnesthesiaRecord":
   // ---- Pre-Op store ----
   const { notes, arrangeBlood, riskConsent, tests, medications } =
     usePreOpForm();
+
+    const { tests: postTests, medications: postMeds, notes: postNotes, selectedType } = usePostOPStore();
+
 
   // ====== PHYSICAL EXAMINATION POST ======
   const postPhysicalExamination = async () => {
@@ -351,6 +355,40 @@ case "AnesthesiaRecord":
     ]
   );
 
+ const postopSubmit = useCallback(
+  async () => {
+
+    const postopRecordData = {
+      notes: postNotes,
+      tests: postTests,
+      medications: postMeds,
+      selectedType,
+    };
+
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const response = await AuthPost(
+        `ot/${user?.hospitalID}/${timelineId}/postopRecord`,
+        { postopRecordData },
+        token
+      );
+
+
+      if (response.status === "success") {
+        dispatch(showSuccess("Post-op record updated successfully"));
+        navigation.navigate("OtTabs" as never);
+      } else {
+        dispatch(showError("Post-op Record Failed"));
+      }
+    } catch (err: any) {
+      dispatch(showError(err?.message || "Post-op Record Failed"));
+    }
+  },
+  [postNotes, postTests, postMeds, selectedType, user?.hospitalID, timelineId]
+);
+
+
+
  const anesthesiaRecordSubmit = useCallback(
   async () => {
     const anesthesiaRecordData = {
@@ -398,7 +436,8 @@ case "AnesthesiaRecord":
       postPhysicalExamination();
     }else if (activeTab === "AnesthesiaRecord"){
         anesthesiaRecordSubmit()
-
+    }else if (activeTab === "PostOpRecord"){
+        postopSubmit()
     }
   };
 

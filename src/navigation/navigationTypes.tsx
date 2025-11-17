@@ -81,6 +81,8 @@ DischargeSummaryDownload: undefined;
   AnesthesiaRecordForm : undefined;
   Breathing:undefined;
   Monitors:undefined;
+  ConsentForm:undefined;
+  PostOpRecordNotes:undefined;
 
 
 };

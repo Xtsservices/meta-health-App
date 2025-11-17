@@ -306,6 +306,8 @@ const PatientTabsGrid: React.FC<Props> = ({
     const routeName = routeMap?.[item.key] ?? defaultRoutes[item.key];
     if (routeName === "Schedule") {
       navigation.navigate("SurgerySchedule");
+    } else if ((routeName === "ConsentForm")){
+ navigation.navigate("ConsentForm");
     } else {
       navigation.navigate("OtInnerTabs", { tabName: routeName });
     }

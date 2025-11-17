@@ -53,7 +53,9 @@ const Hepato: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const isDark = scheme === "dark";
-const user = useSelector((s: RootState) => s.currentUser);
+
+ const user = useSelector((s: RootState) => s.currentUser);
+const isReadOnly = user?.roleName === "surgeon";
 const currentPatient = useSelector((s: RootState) => s.currentPatient);
   const { others, setOthers} =
     usePhysicalExaminationForm() 
@@ -126,6 +128,7 @@ const currentPatient = useSelector((s: RootState) => s.currentPatient);
                 return (
                   <Pressable
                     key={item.key}
+                    disabled={isReadOnly}
                     onPress={() => toggleField(item.key)}
                     style={({ pressed }) => [
                       styles.checkboxRow,

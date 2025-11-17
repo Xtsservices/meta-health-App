@@ -22,14 +22,13 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 
 import Footer from "../../dashboard/footer";
-import { RootState } from "../../../store/store";
+import { currentPatient, RootState } from "../../../store/store";
 import { AuthFetch, AuthPatch, UpdateFiles } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 
 import { state as STATE_LIST, city as CITY_LIST } from "../../../utils/stateCity";
 import { AgeUnit } from "../../../utils/age";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
-
 const FOOTER_H = 64;
 const COLORS = {
   bg: "#f8fafc",
@@ -300,6 +299,7 @@ const EditPatientMobile = () => {
       );
       if (res?.status === "success") {
         dispatch(showSuccess("Updated successfully"));
+        dispatch(currentPatient(res?.data?.patient))
         navigation.goBack();
       } else {
         dispatch(showError(res?.message || "Update failed"));
@@ -371,10 +371,7 @@ const EditPatientMobile = () => {
         <ActivityIndicator size="large" color={COLORS.brand} />
       </View>
     );
-const debouncedSubmit = useCallback(
-      debounce(onSave, DEBOUNCE_DELAY),
-      [onSave]
-    );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
       <KeyboardAvoidingView
@@ -579,7 +576,7 @@ const debouncedSubmit = useCallback(
           {/* SAVE BUTTON */}
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: COLORS.brand }]}
-            onPress={debouncedSubmit}
+            onPress={onSave}
             disabled={saving}
           >
             {saving ? (
