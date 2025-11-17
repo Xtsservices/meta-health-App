@@ -27,6 +27,7 @@ interface AppStateOnly {
 
 // Root state = your original keys + toast slice
 export interface RootState extends AppStateOnly {
+  patientStatus: any;
   updatePatientStatus: any;
   toast: ReturnType<typeof toastReducer>;
 }

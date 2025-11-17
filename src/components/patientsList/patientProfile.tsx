@@ -33,8 +33,6 @@ import {
 import { AuthFetch } from "../../auth/auth";
 import Footer from "../dashboard/footer";
 import Tabs from "./tabs";
-// If your Footer lives elsewhere, adjust this import:
-
 import { useDispatch } from "react-redux";
 import { currentPatient as setCurrentPatientAction } from "../../store/store";
 import TransferPatient from "./transferPatient";
@@ -64,9 +62,16 @@ type PatientType = {
   followUpStatus?: number;
   followUpDate?: string;
   ptype?: number;
+  patientStartStatus?: number;
+  patientEndStatus?: number;
 };
 type TimelineType = { id: number; patientID: number; patientEndStatus?: number };
-type RouteParams = { id: string; staffRole?: string; reception?: boolean };
+type RouteParams = { 
+  id: string; 
+  staffRole?: string; 
+  reception?: boolean;
+  fromDischargeList?: boolean;
+};
 
 const followUpStatus = { active: 1 };
 
@@ -150,13 +155,16 @@ const PatientProfileOPD: React.FC = () => {
       field:  "#f8fafc",
       fieldText: "#0f172a",
       pill:  "#e5e7eb",
+      dischargeButton: "#ef4444",
+      dischargeButtonText: "#ffffff",
     }),
     []
   );
-const dispatch = useDispatch();
+
+  const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.currentUser);
- const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
-const timelineFromStore: TimelineType | undefined = undefined; // no timeline in store; initialize locally
+  const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
+  const timelineFromStore: TimelineType | undefined = undefined; // no timeline in store; initialize locally
   const [currentPatient, setCurrentPatient] = useState<PatientType | undefined>(patientFromStore);
   const [timeline, setTimeline] = useState<TimelineType | undefined>(timelineFromStore);
   const [loading, setLoading] = useState(false);
@@ -191,6 +199,14 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
   const id = route.params?.id;
   const staffRole = route.params?.staffRole ?? "";
   const isReceptionView = !!route.params?.reception;
+  const fromDischargeList = !!route.params?.fromDischargeList;
+
+  // Get patient start status
+  const startStatus = currentPatient?.patientStartStatus ?? 0;
+  const endStatus = currentPatient?.patientEndStatus ?? 0;
+
+  // Check if patient is discharged
+  const isDischargedPatient = fromDischargeList || endStatus === 21;
 
   const fetchPatientAndTimeline = async () => {
     if (!id) return;
@@ -343,6 +359,11 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
     setMenuOpen(false);
   };
 
+  // Handle patient revisit
+  const handlePatientRevisit = () => {
+    setOpenRevisit(true);
+  };
+
   useEffect(() => {
     fetchPatientAndTimeline();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -373,6 +394,110 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
     return "—";
   })();
 
+  // Get menu items based on patient status
+  const getMenuItems = () => {
+    if (isDischargedPatient) {
+      // For discharged patients - only show reports
+      return [
+        { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
+        { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
+      ];
+    }
+
+    const baseItems = [
+      { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
+      { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
+    ];
+
+    // For start status 1: Transfer Patient + Discharge Summary + Test Reports
+    if (startStatus === 1) {
+      return [
+        {
+          label: "Transfer Patient",
+          onPress: () => {
+            if (staffRole !== "nurse") {
+              setMenuOpen(false);
+              navigation.navigate("TransferPatient", {
+                hospitalID: user?.hospitalID,
+                patientID: currentPatient?.id,
+                timeline,
+              });
+            }
+          },
+          disabled: staffRole === "nurse",
+        },
+        ...baseItems,
+      ];
+    }
+
+    if (startStatus !== 1) {
+      return [
+        {
+          label: "Transfer Patient",
+          onPress: () => {
+            if (staffRole !== "nurse") {
+              setMenuOpen(false);
+              navigation.navigate("TransferPatient", {
+                hospitalID: user?.hospitalID,
+                patientID: currentPatient?.id,
+                timeline,
+              });
+            }
+          },
+          disabled: staffRole === "nurse",
+        },
+        {
+          label: "Request Surgery",
+          onPress: () => {
+            setMenuOpen(false);
+            navigation.navigate("RequestSurgeryScreen", {
+              timelineID: timeline?.id,
+            });
+          },
+          disabled: false,
+        },
+        {
+          label: "Handshake Patient",
+          onPress: () => {
+            setMenuOpen(false);
+            navigation.navigate("HandshakePatientScreen", {
+              patientID: currentPatient?.id,
+              timelineID: timeline?.id,
+            });
+          },
+          disabled: false,
+        },
+        ...baseItems,
+      ];
+    }
+
+    return [
+      currentPatient?.ptype !== 21
+        ? {
+            label: "Transfer Patient",
+            onPress: () => {
+              if (staffRole !== "nurse") {
+                setMenuOpen(false);
+                navigation.navigate("TransferPatient", {
+                  hospitalID: user?.hospitalID,
+                  patientID: currentPatient?.id,
+                  timeline,
+                });
+              }
+            },
+            disabled: staffRole === "nurse",
+          }
+        : {
+            label: "Patient Revisit",
+            onPress: () => {
+              setOpenRevisit(true);
+              setMenuOpen(false);
+            },
+          },
+      ...baseItems,
+    ];
+  };
+
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
@@ -387,7 +512,7 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
           <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
             {/* top-right actions */}
             <View style={styles.cardActions}>
-              {!timeline?.patientEndStatus && (
+              {!isDischargedPatient && !timeline?.patientEndStatus && (
                 <TouchableOpacity
                   onPress={() => !isReceptionView && navigation.navigate("EditPatientProfile" as never, { id } as never)}
                   disabled={isReceptionView}
@@ -435,6 +560,24 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
                       <Text style={[styles.badgeText, { color: COLORS.warn }]}>Follow Up Due</Text>
                     </View>
                   )}
+                  
+                  {/* Discharged Status Badge */}
+                  {isDischargedPatient && (
+                    <View style={[styles.badge, { backgroundColor: "#ef444422", borderColor: "#ef4444" }]}>
+                      <Text style={[styles.badgeText, { color: "#ef4444" }]}>
+                        Discharged
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Start Status Badge */}
+                  {!isDischargedPatient && startStatus > 0 && (
+                    <View style={[styles.badge, { backgroundColor: COLORS.brand + "22", borderColor: COLORS.brand }]}>
+                      <Text style={[styles.badgeText, { color: COLORS.brand }]}>
+                        Status: {startStatus}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
             </View>
@@ -453,8 +596,52 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
                 <Text style={[styles.fieldHint, { color: COLORS.sub }]}>{currentPatient?.department || "—"}</Text>
               </View>
             </View>
+
+            {/* Action Buttons for Discharged Patients */}
+            {isDischargedPatient && (
+              <View style={styles.dischargedActionsContainer}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: COLORS.warn }]}
+                  onPress={() => navigation.navigate("PatientRevisitScreen", { 
+                    patientId: currentPatient?.id,
+                    patientData: currentPatient
+                  })}
+                >
+                  <Text style={[styles.actionButtonText, { color: COLORS.buttonText }]}>
+                    Patient Revisit
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Discharge Button - Only for startStatus 2 (active patients) */}
+            {!isDischargedPatient && !timeline?.patientEndStatus && startStatus === 2 && (
+              <View style={styles.dischargeButtonContainer}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("DischargeScreen", { 
+                    patientId: currentPatient?.id,
+                    patientData: currentPatient,
+                    timelineData: timeline,
+                    hospitalID: user?.hospitalID
+                  })}
+                  disabled={isReceptionView}
+                  style={[
+                    styles.dischargeButton,
+                    { 
+                      backgroundColor: isReceptionView ? COLORS.sub : COLORS.dischargeButton,
+                      opacity: isReceptionView ? 0.5 : 1
+                    }
+                  ]}
+                >
+                  <Text style={[styles.dischargeButtonText, { color: COLORS.dischargeButtonText }]}>
+                    Discharge
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-<Tabs/>
+          
+          <Tabs/>
           
         </ScrollView>
 
@@ -479,33 +666,7 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         colors={COLORS}
-        items={[
-          currentPatient?.ptype !== 21
-            ? {
-                label: "Transfer Patient",
-                onPress: () => {
-                  if (staffRole !== "nurse")
-                    
-                  setMenuOpen(false);
-                 navigation.navigate("TransferPatient", {
-  hospitalID: user?.hospitalID,
-  patientID: currentPatient?.id,
-  timeline,
-})
-                },
-                disabled: staffRole === "nurse",
-              }
-            : {
-                label: "Patient Revisit",
-                onPress: () => {
-                  setOpenRevisit(true);
-                  setMenuOpen(false);
-                },
-              },
-          { divider: true },
-          { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
-          { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
-        ]}
+        items={getMenuItems()}
       />
 
  <DischargeSummaryDownload
@@ -598,28 +759,24 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
 const BottomSheet: React.FC<{
   visible: boolean;
   onClose: () => void;
-  items: ({ label?: string; onPress?: () => void; disabled?: boolean; divider?: boolean })[];
+  items: ({ label?: string; onPress?: () => void; disabled?: boolean })[];
   colors: any;
 }> = ({ visible, onClose, items, colors }) => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={sheetStyles.overlay} onPress={onClose} />
       <View style={[sheetStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {items.map((it, idx) =>
-          it.divider ? (
-            <View key={`div-${idx}`} style={[sheetStyles.divider, { backgroundColor: colors.border }]} />
-          ) : (
-            <Pressable
-              key={idx}
-              onPress={() => {
-                if (!it.disabled && it.onPress) it.onPress();
-              }}
-              style={({ pressed }) => [sheetStyles.item, { opacity: it.disabled ? 0.45 : pressed ? 0.8 : 1 }]}
-            >
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>{it.label}</Text>
-            </Pressable>
-          )
-        )}
+        {items.map((it, idx) => (
+          <Pressable
+            key={idx}
+            onPress={() => {
+              if (!it.disabled && it.onPress) it.onPress();
+            }}
+            style={({ pressed }) => [sheetStyles.item, { opacity: it.disabled ? 0.45 : pressed ? 0.8 : 1 }]}
+          >
+            <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>{it.label}</Text>
+          </Pressable>
+        ))}
       </View>
     </Modal>
   );
@@ -787,7 +944,6 @@ const styles = StyleSheet.create({
 
   // footer
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_HEIGHT,
@@ -798,6 +954,45 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "transparent",
+  },
+  // Discharge button styles
+  dischargeButtonContainer: {
+    marginTop: 16,
+    alignItems: 'flex-end',
+  },
+  dischargeButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dischargeButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // Discharged patient action buttons
+  dischargedActionsContainer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    flex: 1,
+    minWidth: '30%',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });
 
@@ -822,7 +1017,6 @@ const sheetStyles = StyleSheet.create({
     alignItems: "center",
   },
   item: { paddingHorizontal: 16, paddingVertical: 14 },
-  divider: { height: StyleSheet.hairlineWidth, marginVertical: 4, opacity: 0.7 },
 });
 
 export default PatientProfileOPD;
