@@ -27,6 +27,7 @@ import { Role_NAME, transferType } from "../../utils/role";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showError, showSuccess } from "../../store/toast.slice";
 import Footer from "../dashboard/footer";
+import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 
 // ---------- Types ----------
 type Ward = { id: number; name: string; availableBeds: number | null };
@@ -59,7 +60,8 @@ const COLORS = {
   pill: "#f1f5f9",
 };
 
-const FOOTER_H = 68;
+const ACTION_FOOTER_H = 68;      // Submit/Cancel bar height
+const APP_FOOTER_H = 70;         // Bottom <Footer> height
 
 const initialForm = {
   transferType: transferType.internal,
@@ -112,13 +114,15 @@ export default function TransferPatientSheet() {
   const fieldYRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
       setKbHeight(e.endCoordinates?.height ?? 0);
     });
-    const hide = Keyboard.addListener("keyboardDidHide", () => setKbHeight(0));
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKbHeight(0);
+    });
     return () => {
-      show.remove();
-      hide.remove();
+      showSub.remove();
+      hideSub.remove();
     };
   }, []);
 
@@ -131,7 +135,7 @@ export default function TransferPatientSheet() {
 
   const scrollInto = (key: string) => {
     const y = fieldYRef.current[key] ?? 0;
-    const target = Math.max(0, y - 56); // keep small offset from top
+    const target = Math.max(0, y - 80); // keep offset from top, so input is clear above keyboard
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ y: target, animated: true });
     });
@@ -166,7 +170,10 @@ export default function TransferPatientSheet() {
   const fetchDoctors = useCallback(async () => {
     if (!hospitalID) return;
     const token = await ensureToken();
-    const dr = await authFetch(`user/${hospitalID}/list/${Role_NAME.doctor}`, token);
+    const dr = await authFetch(
+      `user/${hospitalID}/list/${Role_NAME.doctor}`,
+      token
+    );
     if (dr?.status === "success") setDoctors(dr.data?.users || dr.users || []);
     else setDoctors([]);
   }, [hospitalID, ensureToken]);
@@ -181,7 +188,8 @@ export default function TransferPatientSheet() {
       [...vList].reverse().forEach((v) => {
         if (!latest.oxygen && v.oxygen != null) latest.oxygen = String(v.oxygen);
         if (!latest.pulse && v.pulse != null) latest.pulse = String(v.pulse);
-        if (!latest.temp && v.temperature != null) latest.temp = String(v.temperature);
+        if (!latest.temp && v.temperature != null)
+          latest.temp = String(v.temperature);
         if (!latest.bpH && v.bp) {
           const [H, L] = String(v.bp).split("/");
           latest.bpH = H || "";
@@ -206,7 +214,7 @@ export default function TransferPatientSheet() {
     setErrors((e) => ({ ...e, [name]: "" }));
   };
 
-  const validate = () => {
+  const validate = useCallback(() => {
     const e: Record<string, string> = {};
     if (!form.wardID) e.wardID = "Ward is required.";
     if (!form.userID) e.userID = "Doctor is required.";
@@ -228,13 +236,14 @@ export default function TransferPatientSheet() {
     }
     setErrors(e);
     return Object.keys(e).length === 0;
-  };
+  }, [form]);
 
   const handleCancel = () => {
     navigation.goBack();
   };
 
-  const submit = async () => {
+  // ---- PATCH API with debounce ----
+  const handleSubmit = useCallback(async () => {
     if (!hospitalID || !patientID) {
       dispatch(showError("Missing hospital or patient context."));
       return;
@@ -244,36 +253,45 @@ export default function TransferPatientSheet() {
     const token = await ensureToken();
     setSubmitting(true);
 
-    const req = {
-      wardID: form.wardID,
-      transferType: form.transferType,
-      bp: form.bpH ? `${form.bpH}/${form.bpL || ""}` : null,
-      temp: form.temp ? Number(form.temp) : null,
-      oxygen: form.oxygen ? Number(form.oxygen) : null,
-      pulse: form.pulse ? Number(form.pulse) : null,
-      hospitalName: form.hospitalName || null,
-      reason: form.reason || null,
-      relativeName: form.relativeName || "",
-      departmentID: form.departmentID || 0,
-      userID: form.userID || 0,
-      status: null,
-    };
+    try {
+      const req = {
+        wardID: form.wardID,
+        transferType: form.transferType,
+        bp: form.bpH ? `${form.bpH}/${form.bpL || ""}` : null,
+        temp: form.temp ? Number(form.temp) : null,
+        oxygen: form.oxygen ? Number(form.oxygen) : null,
+        pulse: form.pulse ? Number(form.pulse) : null,
+        hospitalName: form.hospitalName || null,
+        reason: form.reason || null,
+        relativeName: form.relativeName || "",
+        departmentID: form.departmentID || 0,
+        userID: form.userID || 0,
+        status: null,
+      };
 
-    const res = await authPatch(
-      `patient/${hospitalID}/patients/${patientID}/transfer`,
-      req,
-      token
-    );
+      const res = await authPatch(
+        `patient/${hospitalID}/patients/${patientID}/transfer`,
+        req,
+        token
+      );
 
-    setSubmitting(false);
-
-    if (res?.status === "success" || res?.message === "success") {
-      dispatch(showSuccess("Patient successfully transferred"));
-      navigation.goBack();
-    } else {
-      dispatch(showError(res?.message || "Failed to transfer patient"));
+      if (res?.status === "success" || res?.message === "success") {
+        dispatch(showSuccess("Patient successfully transferred"));
+        navigation.goBack();
+      } else {
+        dispatch(showError(res?.message || "Failed to transfer patient"));
+      }
+    } catch (err) {
+      dispatch(showError("Failed to transfer patient"));
+    } finally {
+      setSubmitting(false);
     }
-  };
+  }, [hospitalID, patientID, form, ensureToken, validate, dispatch, navigation]);
+
+  const debouncedSubmit = useCallback(
+    debounce(handleSubmit, DEBOUNCE_DELAY),
+    [handleSubmit]
+  );
 
   const onPickDoctor = (id: number) => {
     const d = doctors.find((x) => x.id === id);
@@ -281,18 +299,23 @@ export default function TransferPatientSheet() {
     setField("departmentID", d?.departmentID || 0);
   };
 
-  // footer offset = above keyboard OR above system nav
-  const footerOffset = kbHeight > 0 ? kbHeight : insets.bottom;
-  const bottomPad = FOOTER_H + 16 + footerOffset;
-  const indicatorBottom = FOOTER_H + footerOffset;
+  // footer offset = above keyboard OR above app footer + nav area
+  const keyboardOpen = kbHeight > 0;
+  const footerOffset = keyboardOpen
+    ? kbHeight
+    : insets.bottom + APP_FOOTER_H;
+
+  const bottomPad =
+    ACTION_FOOTER_H + 16 + (keyboardOpen ? kbHeight : insets.bottom + APP_FOOTER_H);
+  const indicatorBottom =
+    ACTION_FOOTER_H + (keyboardOpen ? kbHeight : insets.bottom + APP_FOOTER_H);
 
   return (
-    <View style={[styles.container, ]}>
-
+    <View style={styles.container}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        keyboardVerticalOffset={0}
       >
         {loading ? (
           <View style={styles.loadingWrap}>
@@ -492,20 +515,25 @@ export default function TransferPatientSheet() {
         )}
       </KeyboardAvoidingView>
 
-      {/* Fixed footer (actions) – always above keyboard/system nav */}
+      {/* Fixed action footer – ALWAYS above app footer / keyboard */}
       <View style={[styles.footer, { bottom: footerOffset }]}>
         <Pressable
           onPress={handleCancel}
           style={[styles.btn, { backgroundColor: COLORS.pill, flex: 1 }]}
+          disabled={submitting}
         >
           <Text style={[styles.btnText, { color: COLORS.text }]}>Cancel</Text>
         </Pressable>
         <Pressable
           disabled={submitting}
-          onPress={submit}
+          onPress={debouncedSubmit}
           style={[
             styles.btn,
-            { backgroundColor: COLORS.brand, flex: 1, opacity: submitting ? 0.6 : 1 },
+            {
+              backgroundColor: COLORS.brand,
+              flex: 1,
+              opacity: submitting ? 0.6 : 1,
+            },
           ]}
         >
           <Text style={[styles.btnText, { color: "#fff" }]}>
@@ -513,14 +541,19 @@ export default function TransferPatientSheet() {
           </Text>
         </Pressable>
       </View>
-    
+
+      {/* Bottom app footer (global navigation) */}
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
-      
+
       {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+        <View
+          pointerEvents="none"
+          style={[styles.navShield, { height: insets.bottom }]}
+        />
       )}
+
       {/* Ward Picker Modal */}
       <PickerSheet
         visible={openWard}
@@ -619,16 +652,6 @@ const styles = StyleSheet.create({
   },
   overlay: { flex: 1, backgroundColor: COLORS.overlay },
 
-  header: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: COLORS.card,
-  },
-  headerTitle: { color: COLORS.text, fontSize: 16, fontWeight: "900" },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
 
   label: { color: COLORS.sub, fontWeight: "800", marginBottom: 6 },
@@ -647,7 +670,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    height: FOOTER_H,
+    height: ACTION_FOOTER_H,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: COLORS.border,
     backgroundColor: "#fff",
@@ -695,11 +718,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 8,
   },
-   footerWrap: {
+
+  footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
-    height: 70,
+    height: APP_FOOTER_H,
     justifyContent: "center",
   },
   navShield: {

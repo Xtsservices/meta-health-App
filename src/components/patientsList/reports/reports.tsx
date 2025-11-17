@@ -12,7 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useNavigation, useFocusEffect, useRoute, RouteProp } from "@react-navigation/native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -29,6 +29,7 @@ import { RootState } from "../../../store/store";
 import { AuthFetch, AuthPost, AuthDelete } from "../../../auth/auth";
 import { useReportStore } from "../../../store/zustandstore";
 import Footer from "../../dashboard/footer";
+import { showError, showSuccess } from "../../../store/toast.slice";
 
 type Attachment = {
   id: number;
@@ -88,7 +89,7 @@ type RouteParams = { ot: boolean };
 export default function ReportsScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-
+const dispatch = useDispatch()
   const user = useSelector((s: RootState) => s.currentUser);
   const cp = useSelector((s: RootState) => s.currentPatient);
   const isCustomerCare = (cp as any)?.isCustomerCare || false;
@@ -184,13 +185,17 @@ export default function ReportsScreen() {
         onPress: async () => {
           try {
             const token = user?.token ?? (await AsyncStorage.getItem("token"));
-            const resp = await AuthDelete(`attachment/${user?.hospitalID}/${id}`, {}, token); // adjust if needed
+            const resp = await AuthDelete(`attachment/${user?.hospitalID}/${id}`, token); // adjust if needed
             if (resp?.status === "success") {
-              setReports((prev: any[]) => (prev || []).filter((r) => r.id !== id));
+ dispatch(showSuccess("Report deleted successfully"));
+            // Already removed from UI, but refetch to ensure sync
+            fetchReports();
             } else {
               setReports((prev: any[]) => (prev || []).filter((r) => r.id !== id));
             }
-          } catch {}
+          } catch (error: any) {
+dispatch(showError(error?.message|| error?.status || "failed to delete report"))
+          }
         },
       },
     ]);

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
@@ -26,12 +25,12 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 
-import { AuthFetch, AuthPost, UploadFiles } from "../../auth/auth";
+import { AuthFetch, UploadFiles } from "../../auth/auth";
 import Footer from "../dashboard/footer";
 import { RootState } from "../../store/store";
 import { city, state } from "../../utils/stateCity";
 import { Category, genderList, getUniqueId } from "../../utils/addPatientFormHelper";
-import { Role_NAME } from "../../utils/role";
+import { Role_NAME, patientStatus } from "../../utils/role";
 import {
   validateAgeAndUnit as validateAgeAndUnitUtil,
   ageFromDOB,
@@ -40,8 +39,10 @@ import {
 import {
   patientOPDbasicDetailType,
   staffType,
+  wardType,
 } from "../../utils/types";
 import { showError, showSuccess } from "../../store/toast.slice";
+import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 
 type Department = { id: number; name: string };
 
@@ -82,10 +83,11 @@ const AddPatientForm: React.FC = () => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const category: Category = (route.params?.category ?? "adult") as Category;
-const dispatch = useDispatch()
- const navigation = useNavigation<any>();
-  const user = useSelector((s: RootState) => s.currentUser);
+  const patientStatusFromRoute = route.params?.patientStatus ?? patientStatus.opd;
 
+  const dispatch = useDispatch()
+  const navigation = useNavigation<any>();
+  const user = useSelector((s: RootState) => s.currentUser);
   const [formData, setFormData] = useState<patientOPDbasicDetailType>(initialFormState);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -93,6 +95,7 @@ const dispatch = useDispatch()
   const [cityList, setCityList] = useState<string[]>([]);
   const [doctorList, setDoctorList] = useState<staffType[]>([]);
   const [departmentList, setDepartmentList] = useState<Department[]>([]);
+  const [wardList, setWardList] = useState<wardType[]>([]); // NEW: Ward list state
   const [filteredDoctors, setFilteredDoctors] = useState<staffType[]>([]);
   const [selectedDepartmentID, setSelectedDepartmentID] = useState<number | null>(null);
   const [ageUnit, setAgeUnit] = useState<AgeUnit>("years");
@@ -104,20 +107,18 @@ const dispatch = useDispatch()
   const scrollViewRef = useRef<ScrollView>(null);
   const FOOTER_HEIGHT = 70;
 
-  const isDark = scheme === "dark";
-
   const COLORS = useMemo(() => ({
-    bg: isDark ? "#1e293b" : "#f8fafc",        // Lighter dark bg
-    card: isDark ? "#334155" : "#ffffff",      // Card contrast
-    text: isDark ? "#f1f5f9" : "#1e293b",
-    sub: isDark ? "#cbd5e1" : "#64748b",
-    border: isDark ? "#475569" : "#e2e8f0",
+    bg: "#f8fafc",
+    card: "#ffffff",
+    text: "#1e293b",
+    sub: "#64748b",
+    border: "#e2e8f0",
     brand: "#14b8a6",
     danger: "#ef4444",
     inputBg: "transparent",
-    placeholder: isDark ? "#94a3b8" : "#9ca3af",
-    pickerText: isDark ? "#f1f5f9" : "#1e293b",
-  }), [isDark]);
+    placeholder: "#9ca3af",
+    pickerText: "#1e293b",
+  }), []);
 
   // ---------- Title list by category ----------
   useEffect(() => {
@@ -142,20 +143,22 @@ const dispatch = useDispatch()
       ...prev,
       hospitalID: { value: user?.hospitalID ?? null, valid: !!user?.hospitalID, showError: !user?.hospitalID, message: "" },
       pID: { valid: true, showError: false, value, message: "" },
-      ptype: { valid: true, showError: false, value: 1, message: "" },
+      ptype: { valid: true, showError: false, value: patientStatusFromRoute, message: "" },
     }));
-  }, [user?.hospitalID]);
+  }, [user?.hospitalID, patientStatusFromRoute]);
 
-  // ---------- Fetch departments & doctors ----------
+  // ---------- Fetch departments, doctors, and wards ----------
   const fetchData = useCallback(async () => {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const [deptRes, docRes] = await Promise.all([
+      const [deptRes, docRes, wardRes] = await Promise.all([
         AuthFetch(`department/${user?.hospitalID}`, token),
         AuthFetch(`user/${user?.hospitalID}/list/${Role_NAME.doctor}`, token),
+        AuthFetch(`ward/${user?.hospitalID}`, token), // NEW: Fetch wards
       ]);
       if (deptRes?.status === "success") setDepartmentList(deptRes?.data?.departments || []);
       if (docRes?.status === "success") setDoctorList(docRes?.data?.users || []);
+      if (wardRes?.status === "success") setWardList(wardRes?.data?.wards || []); // NEW: Set ward list
     } catch {
       Alert.alert("Error", "Failed to load data");
     }
@@ -248,7 +251,6 @@ const dispatch = useDispatch()
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } catch (err) {
         dispatch(showError(err?.message || err?.status))
-       
         return false;
       }
     }
@@ -287,6 +289,7 @@ const dispatch = useDispatch()
   };
 
   // ---------- Form Validation ----------
+  // ---------- Form Validation ----------
   const validateForm = () => {
     let valid = true;
     const updated = { ...formData };
@@ -294,6 +297,23 @@ const dispatch = useDispatch()
     if (!formData.pUHID.value || String(formData.pUHID.value).replace(/-/g, "").length !== 14) {
       updated.pUHID = { ...updated.pUHID, valid: false, showError: true };
       valid = false;
+    }
+
+    if (user?.patientStatus == 2) {
+      // For inpatient: validate ward instead of department
+      if (!formData.wardID.value) {
+        updated.wardID = { ...updated.wardID, valid: false, showError: true };
+        valid = false;
+      }
+    } else {
+      if (!formData.departmentID.value) {
+        updated.departmentID = { ...updated.departmentID, valid: false, showError: true };
+        valid = false;
+      }
+      if (!formData.userID.value) {
+        updated.userID = { ...updated.userID, valid: false, showError: true };
+        valid = false;
+      }
     }
 
     (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach((key) => {
@@ -313,79 +333,86 @@ const dispatch = useDispatch()
     if (!validateForm()) return;
 
     setLoading(true);
-    const fd = new FormData();
+    const data = new FormData();
     const numHospitalID = Number(user?.hospitalID ?? 0);
-  const numCategory   = Number(route.params?.category ?? 1);
-  const numAddedBy    = Number(user?.id ?? 0);
-  const numPtype      = Number(formData.ptype.value ?? 1);
-  const numPUHID      = Number(String(formData.pUHID.value || "").replace(/\D/g, ""));
-  const numGender     = Number(formData.gender.value);
-  const numWeight     = Number(formData.weight.value);
-  const numHeight     = Number(formData.height.value);
-  const numInsurance  = Number(formData.insurance.value);
-  const numDepartment  = Number(formData.department.value);
+    const numCategory = Number(route.params?.category ?? 1);
+    const numAddedBy = Number(user?.id ?? 0);
+    const numPtype = Number(patientStatusFromRoute);
+    const numPUHID = Number(String(formData.pUHID.value || "").replace(/\D/g, ""));
+    const numGender = Number(formData.gender.value);
+    const numWeight = Number(formData.weight.value);
+    const numHeight = Number(formData.height.value);
+    const numInsurance = Number(formData.insurance.value);
 
+    data.append("hospitalID", numHospitalID as any);
+    data.append("category", numCategory as any);
+    data.append("addedBy", numAddedBy as any);
+    data.append("ptype", numPtype as any);
+    data.append("pUHID", numPUHID as any);
+    data.append("gender", numGender as any);
+    data.append("weight", numWeight as any);
+    data.append("height", numHeight as any);
+    data.append("insurance", numInsurance as any);
+    data.append("age", formData.age.value);
 
-  fd.append("hospitalID", numHospitalID as any);
-  fd.append("category",   numCategory as any);
-  fd.append("addedBy",    numAddedBy as any);
-  fd.append("ptype",      numPtype as any);
-  fd.append("pUHID",      numPUHID as any);
-  fd.append("gender",     numGender as any);
-  fd.append("weight",     numWeight as any);
-  fd.append("height",     numHeight as any);
-  fd.append("insurance",  numInsurance as any);
-  fd.append("age",  formData.age.value);
-  fd.append("department", numDepartment)
+    // CHANGE: Use user?.patientStatus instead of patientStatusFromRoute
+    if (user?.patientStatus == 2) {
+      // For inpatient: use ward instead of department
+      data.append("wardID", Number(formData.wardID.value) as any);
+    } else {
+      // For other statuses: use department and doctor
+      data.append("department", Number(formData.department.value));
+      if (formData.departmentID.valid && formData.departmentID.value != null) {
+        data.append("departmentID", Number(formData.departmentID.value) as any);
+      }
+    }
 
+    // Add doctor for all statuses
+    if (formData.userID.value) {
+      data.append("userID", Number(formData.userID.value) as any);
+    } else if (user?.id) {
+      data.append("userID", Number(user.id) as any);
+    }
 
-    fd.append("patientStartStatus", 1);
-    // fd.append("ptype", "1");
 
     if (profileImage) {
-      fd.append("photo", {
+      data.append("photo", {
         uri: profileImage,
         name: "photo.jpg",
         type: "image/jpeg",
       } as any);
     } else {
-      fd.append("photo", "" as any);
+      data.append("photo", "" as any);
     }
-  (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach((k) => {
-    if (
-      k === "hospitalID" || k === "pUHID" || k === "ptype" || k === "gender" ||
-      k === "weight" || k === "height" || k === "insurance" || k === "department" ||
-      k === "departmentID" || k === "userID" || k === "age" // handled separately/elsewhere
-    ) return;
 
-    const field = formData[k];
-    if (field.valid && field.value !== null && field.value !== "") {
-      fd.append(String(k), String(field.value));
-    }
-  });
+    (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach((k) => {
+      if (
+        k === "hospitalID" || k === "pUHID" || k === "ptype" || k === "gender" ||
+        k === "weight" || k === "height" || k === "insurance" || k === "department" ||
+        k === "departmentID" || k === "userID" || k === "age" || k === "wardID"
+      ) return;
 
-  // department / doctor (unchanged)
-  if (formData.departmentID.valid && formData.departmentID.value != null) {
-    fd.append("departmentID", Number(formData.departmentID.value) as any);
-  }
-  if (formData.userID.value) {
-    fd.append("userID", Number(formData.userID.value) as any);
-  } else if (user?.id) {
-    fd.append("userID", Number(user.id) as any);
-  }
+      const field = formData[k];
+      if (field.valid && field.value !== null && field.value !== "") {
+        data.append(String(k), String(field.value));
+      }
+    });
 
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const res = await UploadFiles(`patient/${user?.hospitalID}/patients`, fd, token);
+      const res = await UploadFiles(`patient/${user?.hospitalID}/patients`, data, token);
       if (res?.status === "success") {
         dispatch(showSuccess("Patient registered successfully"))
-        navigation.navigate("AddPatient");
+        if (user?.patientStatus == 2) { 
+          navigation.navigate("DashboardIpd");
+        } else {
+          navigation.navigate("AddPatient");
+        }
       } else {
-        dispatch(showError(res?.status ||res?.data?.message || "Patient registration failed"))
+        dispatch(showError(res?.message || res?.status || res?.data?.message || "Patient registration failed"))
       }
     } catch (err: any) {
-         dispatch(showError(err?.message || "Patient registration failed"))
-       
+      dispatch(showError(err?.message || "Patient registration failed"))
     } finally {
       setLoading(false);
     }
@@ -494,6 +521,16 @@ const dispatch = useDispatch()
     return ["days", "months", "years"];
   }, [category]);
 
+  const debouncedSubmit = useCallback(
+    debounce(handleSubmit, DEBOUNCE_DELAY),
+    [handleSubmit]
+  );
+
+  // NEW: Function to capitalize first letter (like in reference code)
+  const capitalizeFirstLetter = (str: string) => {
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -505,6 +542,7 @@ const dispatch = useDispatch()
         >
           <Text style={[styles.title, { color: COLORS.text }]}>
             {category === "1" ? "Neonate" : category === "2" ? "Child" : "Adult"} Registration
+            {user?.patientStatus == 2 && " (Inpatient)"} {/* CHANGE: Use user?.patientStatus here */}
           </Text>
 
           {/* Photo Card */}
@@ -690,48 +728,105 @@ const dispatch = useDispatch()
             {renderInput("PIN Code", "pinCode", { keyboardType: "numeric", placeholder: "6-digit PIN" })}
           </View>
 
-          {/* Department & Doctor */}
-          <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
-            <Text style={[styles.cardTitle, { color: COLORS.text }]}>Department & Doctor</Text>
-            <View style={styles.row}>
-              <View style={styles.col}>
-                <Text style={[styles.label, { color: COLORS.sub }]}>Department *</Text>
+          {/* Conditional Section based on Patient Status */}
+          {user?.patientStatus == 2 ? ( // CHANGE: Use user?.patientStatus instead of patientStatusFromRoute
+            /* Inpatient (Status 2): Show Ward instead of Department */
+            <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+              <Text style={[styles.cardTitle, { color: COLORS.text }]}>Ward & Doctor</Text>
+
+              {/* Ward Selection */}
+              <View style={styles.inputBlock}>
+                <Text style={[styles.label, { color: COLORS.sub }]}>Ward *</Text>
                 <CustomPicker
-                  selectedValue={selectedDepartmentID}
+                  selectedValue={formData.wardID.value}
                   onValueChange={(id) => {
-                    setSelectedDepartmentID(id);
                     setFormData((prev) => ({
                       ...prev,
-                      department: { value: String(id ?? ""), valid: true, showError: false, message: "" },
-                      departmentID: { value: id, valid: true, showError: false, message: "" },
+                      wardID: { value: id, valid: true, showError: false, message: "" },
                     }));
                   }}
-                  items={departmentList.map(d => ({ label: d.name, value: d.id }))}
-                  placeholder="Select Department"
-                  enabled={user?.role !== 4000}
+                  items={wardList?.map(ward => ({
+                    label: capitalizeFirstLetter(ward.name),
+                    value: ward.id
+                  }))}
+                  placeholder="Select Ward"
                 />
+                {formData.wardID.showError && (
+                  <Text style={[styles.errorText, { color: COLORS.danger }]}>
+                    Please select a ward
+                  </Text>
+                )}
               </View>
-              <View style={styles.col}>
+
+              {/* Doctor Selection */}
+              <View style={styles.inputBlock}>
                 <Text style={[styles.label, { color: COLORS.sub }]}>Doctor *</Text>
                 <CustomPicker
                   selectedValue={formData.userID.value}
                   onValueChange={(id) => {
-                    const doc = filteredDoctors.find((d) => d.id === id);
                     setFormData((prev) => ({
                       ...prev,
                       userID: { value: id, valid: true, showError: false, message: "" },
-                      departmentID: { value: doc?.departmentID || selectedDepartmentID || undefined, valid: true, showError: false, message: "" },
-                      department: { value: String(doc?.departmentID || selectedDepartmentID || ""), valid: true, showError: false, message: "" },
                     }));
                   }}
-                  items={filteredDoctors.map(d => ({ label: `${d.firstName} ${d.lastName || ""}`, value: d.id }))}
+                  items={doctorList.map(d => ({
+                    label: `${d.firstName} ${d.lastName || ""}`,
+                    value: d.id
+                  }))}
                   placeholder="Select Doctor"
-                  enabled={user?.role !== 4000}
                 />
+                {formData.userID.showError && (
+                  <Text style={[styles.errorText, { color: COLORS.danger }]}>
+                    Please select a doctor
+                  </Text>
+                )}
               </View>
+
+              {renderInput("Referred By", "referredBy", { placeholder: "Doctor or hospital name" })}
             </View>
-            {renderInput("Referred By", "referredBy", { placeholder: "Doctor or hospital name" })}
-          </View>
+          ) : (
+            <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+              <Text style={[styles.cardTitle, { color: COLORS.text }]}>Department & Doctor</Text>
+              <View style={styles.row}>
+                <View style={styles.col}>
+                  <Text style={[styles.label, { color: COLORS.sub }]}>Department *</Text>
+                  <CustomPicker
+                    selectedValue={selectedDepartmentID}
+                    onValueChange={(id) => {
+                      setSelectedDepartmentID(id);
+                      setFormData((prev) => ({
+                        ...prev,
+                        department: { value: String(id ?? ""), valid: true, showError: false, message: "" },
+                        departmentID: { value: id, valid: true, showError: false, message: "" },
+                      }));
+                    }}
+                    items={departmentList.map(d => ({ label: d.name, value: d.id }))}
+                    placeholder="Select Department"
+                    enabled={user?.role !== 4000}
+                  />
+                </View>
+                <View style={styles.col}>
+                  <Text style={[styles.label, { color: COLORS.sub }]}>Doctor *</Text>
+                  <CustomPicker
+                    selectedValue={formData.userID.value}
+                    onValueChange={(id) => {
+                      const doc = filteredDoctors.find((d) => d.id === id);
+                      setFormData((prev) => ({
+                        ...prev,
+                        userID: { value: id, valid: true, showError: false, message: "" },
+                        departmentID: { value: doc?.departmentID || selectedDepartmentID || undefined, valid: true, showError: false, message: "" },
+                        department: { value: String(doc?.departmentID || selectedDepartmentID || ""), valid: true, showError: false, message: "" },
+                      }));
+                    }}
+                    items={filteredDoctors.map(d => ({ label: `${d.firstName} ${d.lastName || ""}`, value: d.id }))}
+                    placeholder="Select Doctor"
+                    enabled={user?.role !== 4000}
+                  />
+                </View>
+              </View>
+              {renderInput("Referred By", "referredBy", { placeholder: "Doctor or hospital name" })}
+            </View>
+          )}
 
           {/* Insurance */}
           <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
@@ -753,14 +848,14 @@ const dispatch = useDispatch()
           </View>
 
           {/* Submit */}
-          <TouchableOpacity style={[styles.submitButton, { backgroundColor: COLORS.brand }]} onPress={handleSubmit} disabled={loading}>
+          <TouchableOpacity style={[styles.submitButton, { backgroundColor: COLORS.brand }]} onPress={debouncedSubmit} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Patient</Text>}
-  </TouchableOpacity>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Footer */}
         <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
-          <Footer active={"dashboard"} brandColor={COLORS.brand} />
+          <Footer active={"addPatient"} brandColor={COLORS.brand} />
         </View>
         {insets.bottom > 0 && <View style={[styles.navShield, { height: insets.bottom }]} />}
 

@@ -18,7 +18,7 @@ import {
   Users,
   FlaskConical,
   ClipboardList,
-  BookOpenText,
+  BookOpenText, Stethoscope, Scan
 } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -39,6 +39,9 @@ type TabKey =
   | "insurance"
   | "prescription"
   | "timeline"
+  | "physicalexamination" 
+  | "pocus";     
+
 
 type GridItem = {
   key: TabKey;
@@ -69,25 +72,25 @@ const PatientTabsGrid: React.FC<Props> = ({
   routeMap,
   brandColor,
 }) => {
-     const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
+  const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
   const navigation = useNavigation<any>();
   const scheme = useColorScheme();
-  const isDark = scheme === "dark";
+ 
 
   const COLORS = useMemo(
     () => ({
-      bg: isDark ? "#0f172a" : "#f8fafc",
-      card: isDark ? "#0b1220" : "#ffffff",
-      text: isDark ? "#e5e7eb" : "#0f172a",
-      sub: isDark ? "#94a3b8" : "#475569",
-      border: isDark ? "#334155" : "#e2e8f0",
+      bg:  "#f8fafc",
+      card:  "#ffffff",
+      text: "#0f172a",
+      sub:  "#475569",
+      border: "#e2e8f0",
       brand: brandColor || "#14b8a6",
       brandDark: "#0f766e",
-      hover: isDark ? "#111827" : "#f1f5f9",
-      pill: isDark ? "#0f172a" : "#eef2f7",
+      hover:  "#f1f5f9",
+      pill: "#eef2f7",
       shadow: "#000000",
     }),
-    [isDark, brandColor]
+    [ brandColor]
   );
 
   // Default route names; override via routeMap prop if your navigator uses different names
@@ -103,7 +106,8 @@ const PatientTabsGrid: React.FC<Props> = ({
     previousPrescriptions: "PreviousPrescriptions",
     insurance: "Insurance",
     prescription: "Prescription",
-
+    physicalexamination: "PhysicalExamination", 
+    pocus: "Pocus", 
   };
 
   const tiles: GridItem[] = useMemo(
@@ -118,8 +122,9 @@ const PatientTabsGrid: React.FC<Props> = ({
       { key: "doctors",                label: "Treating Doctors",       Icon: Users },
       { key: "previousPrescriptions",  label: "Previous Prescriptions", Icon: Pill },
       { key: "insurance",              label: "Insurance",              Icon: Pill },
-      { key: "prescription",           label: "Prescription",              Icon: Pill },
-    
+      { key: "prescription",           label: "Prescription",           Icon: Pill },
+      { key: "physicalexamination",    label: "Physical Examination",   Icon: Stethoscope },
+      { key: "pocus",                  label: "POCUS",                  Icon: Scan },
     ],
     []
   );
@@ -128,7 +133,7 @@ const allowedKeys = useMemo<TabKey[]>(() => {
   // default: show everything
   const all: TabKey[] = [
     "symptoms","tests","vitals","treatment","medicalHistory",
-    "reports","timeline","doctors","previousPrescriptions","insurance"
+    "reports","timeline","doctors","previousPrescriptions","insurance", "physicalexamination", "pocus"
   ];
 
   const startStatus = Number(
@@ -143,8 +148,11 @@ const allowedKeys = useMemo<TabKey[]>(() => {
   if (startStatus === 1) { // e.g., New OPD
     return ["symptoms","vitals","prescription","medicalHistory","reports","timeline","doctors"];
   }else if (startStatus === 2) {
-     return ["symptoms","tests","vitals","treatment","reports","previousPrescriptions","doctors","medicalHistory"];
+     return ["symptoms","tests","vitals","treatment","reports","previousPrescriptions","doctors","medicalHistory","timeline"];
   }
+  else if (startStatus === 3) {
+     return ["symptoms","tests","vitals","treatment","reports","medicalHistory","timeline","physicalexamination","pocus",];
+  }else 
   // fallback -> show all
   return all;
 }, [patientFromStore]);
@@ -157,18 +165,22 @@ const allowedKeys = useMemo<TabKey[]>(() => {
   return byProp.filter(t => allowedKeys.includes(t.key));
 }, [tiles, visibleKeys, allowedKeys]);
 
-  const onPressTile = (item: GridItem) => {
+// In PatientTabsGrid.tsx, update the onPressTile function:
+const onPressTile = (item: GridItem) => {
+  if (item.key === 'treatment') {
+    navigation.navigate('TreatmentPlan' as never);
+  } else {
     const routeName = routeMap?.[item.key] ?? defaultRoutes[item.key];
-
     navigation.navigate(routeName as never);
-  };
+  }
+};
 
   const renderItem = ({ item }: ListRenderItemInfo<GridItem>) => {
   const Icon = item.Icon;
   return (
     <Pressable
       onPress={() => onPressTile(item)}
-      android_ripple={{ color: isDark ? "#0f766e33" : "#0ea5a733", borderless: false }}
+      android_ripple={{ color: "#0ea5a733", borderless: false }}
       style={({ pressed }) => [
         styles.card,
         {

@@ -17,6 +17,7 @@ import { Plus } from "lucide-react-native";
 import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
 import { formatDateTime } from "../../../utils/dateTime";
+import Footer from "../../dashboard/footer";
 
 // ---- colors / sizing ----
 const COLORS = {
@@ -36,6 +37,8 @@ const COLORS = {
 };
 const { width } = Dimensions.get("window");
 
+const FOOTER_H = 70;
+
 // ---- types ----
 type VitalRow = {
   id: string; // local key
@@ -54,15 +57,17 @@ export default function VitalsTabScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
-  const cp = useSelector((s: RootState) => s.currentPatient);
-  const timeline = cp?.patientTimeLineID;
+  const currentPatinet = useSelector((s: RootState) => s.currentPatient);
+  const timeline = currentPatinet?.patientTimeLineID;
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<VitalRow[]>([]);
  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
     const isOt = route.params?.ot;
+  const bottomPad = FOOTER_H + Math.max(insets.bottom, 16) + 16;
+
   const fetchVitals = useCallback(async () => {
     const timeLinePatientID =
-      (typeof timeline === "object" ? timeline?.patientID : cp?.currentPatient?.id) ?? cp?.id;
+      (typeof timeline === "object" ? timeline?.patientID : currentPatinet?.currentPatient?.id) ?? currentPatinet?.id;
 
     if (!timeLinePatientID) return;
 
@@ -70,14 +75,14 @@ export default function VitalsTabScreen() {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       const apiUrl =
-        cp?.currentPatient?.role === "homecarepatient"
-          ? `alerts/getIndividualHomeCarePatientsVitails/${cp?.currentPatient?.id}`
+        currentPatinet?.currentPatient?.role === "homecarepatient"
+          ? `alerts/getIndividualHomeCarePatientsVitails/${currentPatinet?.currentPatient?.id}`
           : `vitals/${user?.hospitalID}/${timeLinePatientID}`;
 
       const res = await AuthFetch(apiUrl, token);
       let list: any[] = [];
       if (res?.status === "success" || res?.message === "success") {
-        if (cp?.currentPatient?.role === "homecarepatient") {
+        if (currentPatinet?.currentPatient?.role === "homecarepatient") {
           list = (res?.data.vitals || []).map((item: any, idx: number) => ({
             id: `hc-${idx}`,
             oxygen: Number(item.spo2) || "",
@@ -89,42 +94,42 @@ export default function VitalsTabScreen() {
             recordedDate: item.addedOn || item.givenTime,
           }));
         } else {
-          list = (res?.data?.vitals || []).map((v: any, idx: number) => ({
-            id: String(v?.id ?? idx),
-            temperature: v?.temperature ?? "",
-            pulse: v?.pulse ?? "",
-            bp: v?.bp ?? "",
-            respiratoryRate: v?.respiratoryRate ?? "",
-            oxygen: v?.oxygen ?? "",
-            hrv: v?.hrv ?? "",
+          list = (res?.data?.vitals || []).map((vital: any, idx: number) => ({
+            id: String(vital?.id ?? idx),
+            temperature: vital?.temperature ?? "",
+            pulse: vital?.pulse ?? "",
+            bp: vital?.bp ?? "",
+            respiratoryRate: vital?.respiratoryRate ?? "",
+            oxygen: vital?.oxygen ?? "",
+            hrv: vital?.hrv ?? "",
             recordedDate:
-              v?.addedOn ||
-              v?.temperatureTime ||
-              v?.pulseTime ||
-              v?.oxygenTime ||
-              v?.respiratoryRateTime ||
-              v?.hrvTime,
+              vital?.addedOn ||
+              vital?.temperatureTime ||
+              vital?.pulseTime ||
+              vital?.oxygenTime ||
+              vital?.respiratoryRateTime ||
+              vital?.hrvTime,
           }));
         }
       }
 
       // newest first
       list.reverse();
-      const normalized: VitalRow[] = list.map((v: any, i: number) => ({
-        id: v.id ?? String(i),
-        temperature: v.temperature ?? "",
-        pulse: v.pulse ?? "",
-        bp: v.bp ?? "",
-        respiratoryRate: v.respiratoryRate ?? "",
-        oxygen: v.oxygen ?? "",
-        hrv: v.hrv ?? "",
-        recordedDate: v.recordedDate ? formatDateTime(v.recordedDate) : "-",
+      const normalized: VitalRow[] = list.map((vital: any, i: number) => ({
+        id: vital.id ?? String(i),
+        temperature: vital.temperature ?? "",
+        pulse: vital.pulse ?? "",
+        bp: vital.bp ?? "",
+        respiratoryRate: vital.respiratoryRate ?? "",
+        oxygen: vital.oxygen ?? "",
+        hrv: vital.hrv ?? "",
+        recordedDate: vital?.recordedDate ? formatDateTime(vital?.recordedDate) : "-",
       }));
       setRows(normalized);
     } finally {
       setLoading(false);
     }
-  }, [cp, timeline, user?.token, user?.hospitalID]);
+  }, [currentPatinet, timeline, user?.token, user?.hospitalID]);
 
   // refetch on screen focus
   useFocusEffect(
@@ -173,7 +178,7 @@ export default function VitalsTabScreen() {
   );
 
   return (
-    <View style={[styles.safe, { paddingBottom: insets.bottom, backgroundColor: COLORS.bg }]}>
+    <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
       {loading && rows.length === 0 ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={COLORS.brand} />
@@ -183,7 +188,7 @@ export default function VitalsTabScreen() {
           data={rows}
           keyExtractor={(it) => it.id}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+          contentContainerStyle={[styles.listContent, { paddingBottom: bottomPad }]}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           ListEmptyComponent={<EmptyState />}
           showsVerticalScrollIndicator={false}
@@ -201,7 +206,7 @@ export default function VitalsTabScreen() {
           style={[
             styles.fab,
             {
-              bottom: Math.max(16, insets.bottom + 12),
+              bottom: FOOTER_H + Math.max(insets.bottom, 12) + 12,
               backgroundColor: COLORS.brand,
               shadowColor: "#000",
             },
@@ -209,6 +214,14 @@ export default function VitalsTabScreen() {
         >
           <Plus size={22} color="#fff" />
         </Pressable>
+      )}
+
+      {/* Footer pinned above system nav */}
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"patients"} brandColor="#14b8a6" />
+      </View>
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
       )}
     </View>
   );
@@ -223,16 +236,35 @@ function Chip({ label, bg }: { label: string; bg: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  safe: { 
+    flex: 1,
+  },
+  loadingWrap: { 
+    flex: 1, 
+    alignItems: "center", 
+    justifyContent: "center" 
+  },
+  listContent: {
+    padding: 16,
+  },
   card: {
     borderWidth: 1,
     borderRadius: 14,
     padding: 12,
   },
-  rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 14, fontWeight: "800" },
-  date: { fontSize: 12, fontWeight: "600" },
+  rowBetween: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "space-between" 
+  },
+  title: { 
+    fontSize: 14, 
+    fontWeight: "800" 
+  },
+  date: { 
+    fontSize: 12, 
+    fontWeight: "600" 
+  },
   chipsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -260,7 +292,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
-  primaryBtnText: { color: "#fff", fontWeight: "800" },
+  primaryBtnText: { 
+    color: "#fff", 
+    fontWeight: "800" 
+  },
   fab: {
     position: "absolute",
     right: 16,
@@ -270,5 +305,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: FOOTER_H,
+    justifyContent: "center",
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
   },
 });

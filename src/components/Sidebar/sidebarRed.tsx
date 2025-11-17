@@ -247,11 +247,11 @@ const CriticalCareSidebar: React.FC<Props> = ({
                   }}
                 />
               ))}
-              <SidebarButton
+              {/* <SidebarButton
                 key={alertItem.key}
                 item={alertItem}
                 onPress={alertItem.onPress}
-              />
+              /> */}
             </View>
           )}
 

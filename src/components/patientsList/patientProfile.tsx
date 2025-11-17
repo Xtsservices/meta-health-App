@@ -33,12 +33,11 @@ import {
 import { AuthFetch } from "../../auth/auth";
 import Footer from "../dashboard/footer";
 import Tabs from "./tabs";
-// If your Footer lives elsewhere, adjust this import:
-
 import { useDispatch } from "react-redux";
 import { currentPatient as setCurrentPatientAction } from "../../store/store";
 import TransferPatient from "./transferPatient";
 import OtTabs from "../OT/otTabs";
+import DischargeSummaryDownload from "./dischargeSummaryDownload";
 // ---- types ----
 type RootState = any;
 type testType = {
@@ -64,9 +63,16 @@ type PatientType = {
   followUpStatus?: number;
   followUpDate?: string;
   ptype?: number;
+  patientStartStatus?: number;
+  patientEndStatus?: number;
 };
 type TimelineType = { id: number; patientID: number; patientEndStatus?: number };
-type RouteParams = { id: string; staffRole?: string; reception?: boolean };
+type RouteParams = { 
+  id: string; 
+  staffRole?: string; 
+  reception?: boolean;
+  fromDischargeList?: boolean;
+};
 
 const followUpStatus = { active: 1 };
 
@@ -133,31 +139,33 @@ const PatientProfileOPD: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  const isDark = scheme === "dark";
 
   const COLORS = useMemo(
     () => ({
-      bg: isDark ? "#0f172a" : "#f8fafc",
-      card: isDark ? "#0b1220" : "#ffffff",
-      card2: isDark ? "#111827" : "#f1f5f9",
-      text: isDark ? "#e5e7eb" : "#0f172a",
-      sub: isDark ? "#94a3b8" : "#475569",
-      border: isDark ? "#334155" : "#e2e8f0",
+      bg: "#f8fafc",
+      card:  "#ffffff",
+      card2:  "#f1f5f9",
+      text:  "#0f172a",
+      sub:  "#475569",
+      border:  "#e2e8f0",
       brand: "#14b8a6",
       warn: "#f59e0b",
-      button: isDark ? "#0d9488" : "#14b8a6",
+      button:  "#14b8a6",
       buttonText: "#ffffff",
       overlay: "rgba(0,0,0,0.45)",
-      field: isDark ? "#1f2937" : "#f8fafc",
-      fieldText: isDark ? "#e5e7eb" : "#0f172a",
-      pill: isDark ? "#111827" : "#e5e7eb",
+      field:  "#f8fafc",
+      fieldText: "#0f172a",
+      pill:  "#e5e7eb",
+      dischargeButton: "#ef4444",
+      dischargeButtonText: "#ffffff",
     }),
-    [isDark]
+    []
   );
-const dispatch = useDispatch();
+
+  const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.currentUser);
- const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
-const timelineFromStore: TimelineType | undefined = undefined; // no timeline in store; initialize locally
+  const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
+  const timelineFromStore: TimelineType | undefined = undefined; // no timeline in store; initialize locally
   const [currentPatient, setCurrentPatient] = useState<PatientType | undefined>(patientFromStore);
   const [timeline, setTimeline] = useState<TimelineType | undefined>(timelineFromStore);
   const [loading, setLoading] = useState(false);
@@ -167,6 +175,8 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
   const [openRevisit, setOpenRevisit] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [printSelectOptions, setPrintSelectOptions] = useState<string[]>([]);
+  const [openDischargeSheet, setOpenDischargeSheet] = useState(false);
+
 
   const [previousMedHistoryList, setPreviousMedHistoryList] = useState<any[]>([]);
   const [selectedTestList, setSelectedTestList] = useState<testType[]>([]);
@@ -190,6 +200,14 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
   const id = route.params?.id;
   const staffRole = route.params?.staffRole ?? "";
   const isReceptionView = !!route.params?.reception;
+  const fromDischargeList = !!route.params?.fromDischargeList;
+
+  // Get patient start status
+  const startStatus = currentPatient?.patientStartStatus ?? 0;
+  const endStatus = currentPatient?.patientEndStatus ?? 0;
+
+  // Check if patient is discharged
+  const isDischargedPatient = fromDischargeList || endStatus === 21;
 
   const fetchPatientAndTimeline = async () => {
     if (!id) return;
@@ -225,57 +243,87 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
   };
 
   const loadPrintData = async () => {
-    if (!timeline?.id || !currentPatient?.id) return;
-    setLoading(true);
-    try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const remindersRes = await AuthFetch(`medicine/${timeline.id}/reminders/all`, token);
-      if (remindersRes?.status === "success") {
-        setReminder((remindersRes?.data?.reminders || []).sort(compareDates));
-      }
-      const alertsRes = await AuthFetch(`alerts/hospital/${user?.hospitalID}/vitalAlerts/${currentPatient.id}`, token);
-      if (alertsRes?.status === "success") {
-        setVitalAlert(alertsRes?.data?.alerts || []);
-      }
-      const symptomsRes = await AuthFetch(`symptom/${currentPatient.id}`, token);
-      if (symptomsRes?.status === "success") {
-        setSymptoms(symptomsRes?.data?.symptoms || []);
-      }
-      const prevMedRes = await AuthFetch(`medicine/${timeline.id}/previous/allmedlist`, token);
-      if (prevMedRes?.status === "success") {
-        setPreviousMedHistoryList(prevMedRes?.data?.previousMedList || []);
-      }
-      const testsRes = await AuthFetch(`test/${currentPatient.id}`, token);
-      if (testsRes?.status === "success") {
-        setSelectedTestList(testsRes.data?.tests || []);
-      }
-      const medHistRes = await AuthFetch(`history/${user?.hospitalID}/patient/${currentPatient.id}`, token);
-      if (medHistRes?.status === "success") {
-        setMedicineHistory(medHistRes.data?.medicalHistory || []);
-      }
-      const vitFuncRes = await AuthFetch(`vitals/${user?.hospitalID}/functions/${currentPatient.id}`, token);
-      if (vitFuncRes?.status === "success") {
-        setVitalFunction(vitFuncRes || {});
-      }
-      setTimeout(() => {
-        Alert.alert("PDF", "Discharge Summary prepared (mock). Integrate your RN PDF flow here.");
-        setPrintSelectOptions([]);
-      }, 400);
-    } finally {
-      setLoading(false);
+  if (!timeline?.id || !currentPatient?.id) return;
+  setLoading(true);
+  try {
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+
+    const remindersRes = await AuthFetch(
+      `medicine/${timeline.id}/reminders/all`,
+      token
+    );
+    if (remindersRes?.status === "success") {
+      setReminder((remindersRes?.data?.reminders || []).sort(compareDates));
     }
-  };
+
+    const alertsRes = await AuthFetch(
+      `alerts/hospital/${user?.hospitalID}/vitalAlerts/${currentPatient?.id}`,
+      token
+    );
+    if (alertsRes?.status === "success") {
+      setVitalAlert(alertsRes?.data?.alerts || []);
+    }
+
+    const symptomsRes = await AuthFetch(
+      `symptom/${currentPatient.id}`,
+      token
+    );
+    if (symptomsRes?.status === "success") {
+      setSymptoms(symptomsRes?.data?.symptoms || []);
+    }
+
+    const prevMedRes = await AuthFetch(
+      `medicine/${timeline.id}/previous/allmedlist`,
+      token
+    );
+    if (prevMedRes?.status === "success") {
+      setPreviousMedHistoryList(prevMedRes?.data?.previousMedList || []);
+    }
+
+    const testsRes = await AuthFetch(
+      `test/${currentPatient.id}`,
+      token
+    );
+    if (testsRes?.status === "success") {
+      setSelectedTestList(testsRes.data?.tests || []);
+    }
+
+    const medHistRes = await AuthFetch(
+      `history/${user?.hospitalID}/patient/${currentPatient.id}`,
+      token
+    );
+    if (medHistRes?.status === "success") {
+      setMedicineHistory(medHistRes.data?.medicalHistory || []);
+    }
+
+    const vitFuncRes = await AuthFetch(
+      `vitals/${user?.hospitalID}/functions/${currentPatient.id}`,
+      token
+    );
+    if (vitFuncRes?.status === "success") {
+      setVitalFunction(vitFuncRes?.data || {});
+    }
+
+    // ✅ now open the Discharge Summary options sheet
+    setOpenDischargeSheet(true);
+    setPrintSelectOptions([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handlePrintClick = async () => {
-    if (printSelectOptions.includes("tests")) {
-      setIsPrintingReports(true);
-      await loadReportData();
-      setIsPrintingReports(false);
-      setPrintOpen(true);
-    } else if (printSelectOptions.includes("generalInfo")) {
-      await loadPrintData();
-    }
-  };
+  if (printSelectOptions.includes("tests")) {
+    setIsPrintingReports(true);
+    await loadReportData();
+    setIsPrintingReports(false);
+    setPrintOpen(true);
+  } else if (printSelectOptions.includes("generalInfo")) {
+    await loadPrintData(); // now opens DischargeSummarySheet
+  }
+};
+
 
   const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolean) => {
     setPrintSelectOptions(opts);
@@ -312,6 +360,11 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
     setMenuOpen(false);
   };
 
+  // Handle patient revisit
+  const handlePatientRevisit = () => {
+    setOpenRevisit(true);
+  };
+
   useEffect(() => {
     fetchPatientAndTimeline();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -342,6 +395,110 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
     return "—";
   })();
 
+  // Get menu items based on patient status
+  const getMenuItems = () => {
+    if (isDischargedPatient) {
+      // For discharged patients - only show reports
+      return [
+        { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
+        { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
+      ];
+    }
+
+    const baseItems = [
+      { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
+      { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
+    ];
+
+    // For start status 1: Transfer Patient + Discharge Summary + Test Reports
+    if (startStatus === 1) {
+      return [
+        {
+          label: "Transfer Patient",
+          onPress: () => {
+            if (staffRole !== "nurse") {
+              setMenuOpen(false);
+              navigation.navigate("TransferPatient", {
+                hospitalID: user?.hospitalID,
+                patientID: currentPatient?.id,
+                timeline,
+              });
+            }
+          },
+          disabled: staffRole === "nurse",
+        },
+        ...baseItems,
+      ];
+    }
+
+    if (startStatus !== 1) {
+      return [
+        {
+          label: "Transfer Patient",
+          onPress: () => {
+            if (staffRole !== "nurse") {
+              setMenuOpen(false);
+              navigation.navigate("TransferPatient", {
+                hospitalID: user?.hospitalID,
+                patientID: currentPatient?.id,
+                timeline,
+              });
+            }
+          },
+          disabled: staffRole === "nurse",
+        },
+        {
+          label: "Request Surgery",
+          onPress: () => {
+            setMenuOpen(false);
+            navigation.navigate("RequestSurgeryScreen", {
+              timelineID: timeline?.id,
+            });
+          },
+          disabled: false,
+        },
+        {
+          label: "Handshake Patient",
+          onPress: () => {
+            setMenuOpen(false);
+            navigation.navigate("HandshakePatientScreen", {
+              patientID: currentPatient?.id,
+              timelineID: timeline?.id,
+            });
+          },
+          disabled: false,
+        },
+        ...baseItems,
+      ];
+    }
+
+    return [
+      currentPatient?.ptype !== 21
+        ? {
+            label: "Transfer Patient",
+            onPress: () => {
+              if (staffRole !== "nurse") {
+                setMenuOpen(false);
+                navigation.navigate("TransferPatient", {
+                  hospitalID: user?.hospitalID,
+                  patientID: currentPatient?.id,
+                  timeline,
+                });
+              }
+            },
+            disabled: staffRole === "nurse",
+          }
+        : {
+            label: "Patient Revisit",
+            onPress: () => {
+              setOpenRevisit(true);
+              setMenuOpen(false);
+            },
+          },
+      ...baseItems,
+    ];
+  };
+
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
@@ -356,7 +513,7 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
           <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
             {/* top-right actions */}
             <View style={styles.cardActions}>
-              {!timeline?.patientEndStatus && (
+              {!isDischargedPatient && !timeline?.patientEndStatus && (
                 <TouchableOpacity
                   onPress={() => !isReceptionView && navigation.navigate("EditPatientProfile" as never, { id } as never)}
                   disabled={isReceptionView}
@@ -404,6 +561,24 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
                       <Text style={[styles.badgeText, { color: COLORS.warn }]}>Follow Up Due</Text>
                     </View>
                   )}
+                  
+                  {/* Discharged Status Badge */}
+                  {isDischargedPatient && (
+                    <View style={[styles.badge, { backgroundColor: "#ef444422", borderColor: "#ef4444" }]}>
+                      <Text style={[styles.badgeText, { color: "#ef4444" }]}>
+                        Discharged
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Start Status Badge */}
+                  {!isDischargedPatient && startStatus > 0 && (
+                    <View style={[styles.badge, { backgroundColor: COLORS.brand + "22", borderColor: COLORS.brand }]}>
+                      <Text style={[styles.badgeText, { color: COLORS.brand }]}>
+                        Status: {startStatus}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
             </View>
@@ -422,9 +597,52 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
                 <Text style={[styles.fieldHint, { color: COLORS.sub }]}>{currentPatient?.department || "—"}</Text>
               </View>
             </View>
-          </View>
-          {user?.roleName === "surgeon" || user?.roleName === "anesthetist"  ? <OtTabs/> : <Tabs/>}
 
+            {/* Action Buttons for Discharged Patients */}
+            {isDischargedPatient && (
+              <View style={styles.dischargedActionsContainer}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: COLORS.warn }]}
+                  onPress={() => navigation.navigate("PatientRevisitScreen", { 
+                    patientId: currentPatient?.id,
+                    patientData: currentPatient
+                  })}
+                >
+                  <Text style={[styles.actionButtonText, { color: COLORS.buttonText }]}>
+                    Patient Revisit
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Discharge Button - Only for startStatus 2 (active patients) */}
+            {!isDischargedPatient && !timeline?.patientEndStatus && startStatus === 2 && (
+              <View style={styles.dischargeButtonContainer}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("DischargeScreen", { 
+                    patientId: currentPatient?.id,
+                    patientData: currentPatient,
+                    timelineData: timeline,
+                    hospitalID: user?.hospitalID
+                  })}
+                  disabled={isReceptionView}
+                  style={[
+                    styles.dischargeButton,
+                    { 
+                      backgroundColor: isReceptionView ? COLORS.sub : COLORS.dischargeButton,
+                      opacity: isReceptionView ? 0.5 : 1
+                    }
+                  ]}
+                >
+                  <Text style={[styles.dischargeButtonText, { color: COLORS.dischargeButtonText }]}>
+                    Discharge
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          
+          <Tabs/>
           
         </ScrollView>
 
@@ -449,36 +667,23 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         colors={COLORS}
-        items={[
-          currentPatient?.ptype !== 21
-            ? {
-                label: "Transfer Patient",
-                onPress: () => {
-                  if (staffRole !== "nurse")
-                    
-                  setMenuOpen(false);
-                 navigation.navigate("TransferPatient", {
-  hospitalID: user?.hospitalID,
-  patientID: currentPatient?.id,
-  timeline,
-})
-                },
-                disabled: staffRole === "nurse",
-              }
-            : {
-                label: "Patient Revisit",
-                onPress: () => {
-                  setOpenRevisit(true);
-                  setMenuOpen(false);
-                },
-              },
-          { divider: true },
-          { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
-          { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
-        ]}
+        items={getMenuItems()}
       />
 
- 
+ <DischargeSummaryDownload
+  visible={openDischargeSheet}
+  onClose={() => setOpenDischargeSheet(false)}
+  colors={COLORS}
+  patient={currentPatient}
+  vitalAlert={vitalAlert}
+  reminder={reminder}
+  medicalHistory={medicalHistory}
+  previousMedHistoryList={previousMedHistoryList}
+  symptoms={symptoms}
+  vitalFunction={vitalFunction}
+  tests={selectedTestList}
+/>
+
       {/* Revisit Sheet */}
       <ActionSheet title="Patient Revisit" visible={openRevisit} onClose={() => setOpenRevisit(false)} colors={COLORS}>
         <Text style={{ color: COLORS.sub, marginBottom: 8 }}>
@@ -555,28 +760,24 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
 const BottomSheet: React.FC<{
   visible: boolean;
   onClose: () => void;
-  items: ({ label?: string; onPress?: () => void; disabled?: boolean; divider?: boolean })[];
+  items: ({ label?: string; onPress?: () => void; disabled?: boolean })[];
   colors: any;
 }> = ({ visible, onClose, items, colors }) => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={sheetStyles.overlay} onPress={onClose} />
       <View style={[sheetStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {items.map((it, idx) =>
-          it.divider ? (
-            <View key={`div-${idx}`} style={[sheetStyles.divider, { backgroundColor: colors.border }]} />
-          ) : (
-            <Pressable
-              key={idx}
-              onPress={() => {
-                if (!it.disabled && it.onPress) it.onPress();
-              }}
-              style={({ pressed }) => [sheetStyles.item, { opacity: it.disabled ? 0.45 : pressed ? 0.8 : 1 }]}
-            >
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>{it.label}</Text>
-            </Pressable>
-          )
-        )}
+        {items.map((it, idx) => (
+          <Pressable
+            key={idx}
+            onPress={() => {
+              if (!it.disabled && it.onPress) it.onPress();
+            }}
+            style={({ pressed }) => [sheetStyles.item, { opacity: it.disabled ? 0.45 : pressed ? 0.8 : 1 }]}
+          >
+            <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>{it.label}</Text>
+          </Pressable>
+        ))}
       </View>
     </Modal>
   );
@@ -744,7 +945,6 @@ const styles = StyleSheet.create({
 
   // footer
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_HEIGHT,
@@ -755,6 +955,45 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "transparent",
+  },
+  // Discharge button styles
+  dischargeButtonContainer: {
+    marginTop: 16,
+    alignItems: 'flex-end',
+  },
+  dischargeButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dischargeButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // Discharged patient action buttons
+  dischargedActionsContainer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    flex: 1,
+    minWidth: '30%',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });
 
@@ -779,7 +1018,6 @@ const sheetStyles = StyleSheet.create({
     alignItems: "center",
   },
   item: { paddingHorizontal: 16, paddingVertical: 14 },
-  divider: { height: StyleSheet.hairlineWidth, marginVertical: 4, opacity: 0.7 },
 });
 
 export default PatientProfileOPD;
