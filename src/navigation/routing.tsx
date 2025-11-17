@@ -41,6 +41,26 @@ import DashboardLab from "../components/Lab/DashboardLab";
 import DashboardPharma from "../components/Pharmacy/DashboardPharma";
 import DashboardReception from "../components/Reception/DashboardReception";
 import EmergencyDashboard from "../components/Emergency/EmergencyDashboard";
+import otDashboard from "../components/OT/otDashboard";
+import otInnerTabs from "../components/OT/otInnerTabs";
+import initialDetails from "../components/OT/physicalExamination/initialDetails";
+import GeneralPhysicalExaminationMobile from "../components/OT/physicalExamination/generalPhysicalExamination";
+import generalPhysicalExamination from "../components/OT/physicalExamination/generalPhysicalExamination";
+import respiratory from "../components/OT/physicalExamination/respiratory";
+import hepato from "../components/OT/physicalExamination/hepato";
+import cardioVascular from "../components/OT/physicalExamination/cardioVascular";
+import neuro from "../components/OT/physicalExamination/neuro";
+import others from "../components/OT/physicalExamination/others";
+import renal from "../components/OT/physicalExamination/renal";
+import examinationFindingNotes from "../components/OT/physicalExamination/examinationFindingNotes";
+import mallampati from "../components/OT/physicalExamination/mallampati";
+import preOpControllers from "../components/OT/preOp/preOpControllers";
+import surgerySchedule from "../components/OT/surgerySchedule";
+import schedule from "../components/OT/schedule";
+import dashboardAlerts from "../components/OT/dashboardAlerts";
+import anesthesiaRecord from "../components/OT/anesthesiaRecord/anesthesiaRecord";
+import breathing from "../components/OT/anesthesiaRecord/breathing";
+import monitors from "../components/OT/anesthesiaRecord/monitors";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -141,6 +161,27 @@ const Routing = () => {
           component={EmergencyDashboard}
           options={{ headerShown: false }}
         />
+        <Stack.Screen name="OtDashboard" component={otDashboard} options={{headerShown: false }} />
+        <Stack.Screen name="DashboardAlerts" component={dashboardAlerts} options={{ title: "Surgery Alerts", headerTitleAlign: "center", headerShown: true }} />
+       
+        <Stack.Screen name="OtInnerTabs" component={otInnerTabs} options={{headerShown: true }} />
+        <Stack.Screen name="InitialDetails" component={initialDetails} options={{ title: "Initial Details", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="GeneralPhysicalExamination" component={generalPhysicalExamination} options={{ title: "General Physical Examination", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Respiratory" component={respiratory} options={{ title: "Respiratory", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Hepato" component={hepato} options={{ title: "Hepato", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="CardioVascular" component={cardioVascular} options={{ title: "Cardio Vascular", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Neuro" component={neuro} options={{ title: "Neuro", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Renal" component={renal} options={{ title: "Renal", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Others" component={others} options={{ title: "Others", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="ExaminationFindingNotes" component={examinationFindingNotes} options={{ title: "Examination FindinfNotes", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Mallampati" component={mallampati} options={{ title: "Mallampati Grade", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="PreopControllers" component={preOpControllers} options={{ title: "Pre-op Controllers", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="SurgerySchedule" component={surgerySchedule} options={{ title: "Surgery Schedules", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Schedule" component={schedule} options={{ title: "Schedules", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="AnesthesiaRecordForm" component={anesthesiaRecord} options={{ title: "Anesthesia Record", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Breathing" component={breathing} options={{ title: "Breathing", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="Monitors" component={monitors} options={{ title: "Monitors", headerTitleAlign: "center", headerShown: true }}  />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

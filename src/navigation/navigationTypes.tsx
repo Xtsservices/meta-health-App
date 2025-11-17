@@ -42,4 +42,25 @@ EditPatientProfile: undefined;
   EmergencyDashboard:undefined;
   Timeline:undefined;
   TimelineRow:undefined;
+  OtDashboard:undefined;
+  DashboardAlerts:undefined;
+  OtInnerTabs: undefined;
+  InitialDetails : undefined;
+  GeneralPhysicalExamination : undefined;
+  Respiratory : undefined;
+  Hepato:undefined;
+  CardioVascular:undefined;
+  Neuro:undefined;
+  Renal:undefined;
+  Other:undefined;
+  ExaminationFindingNotes:undefined;
+  Mallampati:undefined;
+  PreopControllers: undefined;
+  SurgerySchedule: undefined;
+  Schedule: undefined;
+  AnesthesiaRecordForm : undefined;
+  Breathing:undefined;
+  Monitors:undefined;
+
+
 };

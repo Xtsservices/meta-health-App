@@ -8,15 +8,16 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Trash2, Plus } from "lucide-react-native";
-import { authDelete, AuthFetch } from "../../../auth/auth";
+import { AuthFetch } from "../../../auth/auth";
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+type RouteParams = { ot: boolean };
 
 type RootState = any;
 const selectUser = (s: RootState) => s.currentUser;
@@ -51,12 +52,14 @@ const cap = (s: string) => (s ? s.slice(0, 1).toUpperCase() + s.slice(1).toLower
 export default function SymptomsScreen() {
   const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
+    const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+    const isOt = route.params?.ot;
   const user = useSelector((s: RootState) => s.currentUser);
     const currentpatient = useSelector((s: RootState) => s.currentPatient);
     const timeline = currentpatient?.patientTimeLineID; // may be object or id depending on your store
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<SymptomRow[]>([]);
-
+ 
   const load = useCallback(async () => {
     if (!timeline) return;
     setLoading(true);
@@ -141,13 +144,14 @@ export default function SymptomsScreen() {
       ) : empty ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No symptoms recorded yet</Text>
+{!isOt && 
           <Pressable
             style={[styles.cta, { backgroundColor: COLORS.button }]}
             onPress={() => navigation.navigate("AddSymptoms" as never)}
           >
             <Plus size={18} color={COLORS.buttonText} />
             <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>Add Symptom</Text>
-          </Pressable>
+          </Pressable>}
         </View>
       ) : (
         <>
@@ -158,12 +162,13 @@ export default function SymptomsScreen() {
             contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           />
+          {!isOt && 
           <Pressable
             style={[styles.fab, { backgroundColor: COLORS.button }]}
             onPress={() => navigation.navigate("AddSymptoms" as never)}
           >
             <Plus size={20} color={COLORS.buttonText} />
-          </Pressable>
+          </Pressable>}
         </>
       )}
        <View style={[styles.footerWrap, { bottom: insets.bottom }]}>

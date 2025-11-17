@@ -38,6 +38,7 @@ import Tabs from "./tabs";
 import { useDispatch } from "react-redux";
 import { currentPatient as setCurrentPatientAction } from "../../store/store";
 import TransferPatient from "./transferPatient";
+import OtTabs from "../OT/otTabs";
 // ---- types ----
 type RootState = any;
 type testType = {
@@ -422,7 +423,8 @@ const timelineFromStore: TimelineType | undefined = undefined; // no timeline in
               </View>
             </View>
           </View>
-<Tabs/>
+          {user?.roleName === "surgeon" || user?.roleName === "anesthetist"  ? <OtTabs/> : <Tabs/>}
+
           
         </ScrollView>
 

@@ -11,7 +11,7 @@ import {
   Platform,
   RefreshControl,
 } from "react-native";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useFocusEffect, useRoute, RouteProp } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -84,7 +84,7 @@ function formatDate(d: string) {
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   return `${day} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
-
+type RouteParams = { ot: boolean };
 export default function ReportsScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -100,6 +100,8 @@ export default function ReportsScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+      const isOt = route.params?.ot;
   const categoryMap = useMemo(() => {
     const fromCp = (cp as any)?.reportCategory;
     if (fromCp && typeof fromCp === "object") {
@@ -315,7 +317,7 @@ export default function ReportsScreen() {
         )}
       </View>
 
-      {!isCustomerCare && !reception && (
+      {!isOt && !isCustomerCare && !reception && (
         <Pressable
           onPress={() =>
             navigation.navigate("AddReports" as never, {

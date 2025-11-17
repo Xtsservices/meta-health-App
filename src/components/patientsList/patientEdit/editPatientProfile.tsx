@@ -271,33 +271,32 @@ const EditPatientMobile = () => {
     setSaving(true);
 
     try {
-      const fd = new FormData();
+      const data = new FormData();
 
-      fd.append("pName", pName);
-      fd.append("weight", weight);
-      fd.append("height", height);
-      fd.append("phoneNumber", phoneNumber);
-      fd.append("email", email);
-      fd.append("address", address);
-      fd.append("state", stateName);
-      fd.append("city", cityName);
-      fd.append("pinCode", pinCode);
-      fd.append("referredBy", referredBy);
-      fd.append("insurance", String(insurance));
+      data.append("pName", pName);
+      data.append("weight", weight);
+      data.append("height", height);
+      data.append("phoneNumber", phoneNumber);
+      data.append("email", email);
+      data.append("address", address);
+      data.append("state", stateName);
+      data.append("city", cityName);
+      data.append("pinCode", pinCode);
+      data.append("referredBy", referredBy);
+      data.append("insurance", String(insurance));
       if (insurance === 1) {
-        fd.append("insuranceNumber", insuranceNumber);
-        fd.append("insuranceCompany", insuranceCompany);
+        data.append("insuranceNumber", insuranceNumber);
+        data.append("insuranceCompany", insuranceCompany);
       }
-      if (photoFile) fd.append("photo", photoFile);
+      if (photoFile) data.append("photo", photoFile);
 
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
 
       const res = await AuthPatch(
         `patient/${user?.hospitalID}/patients/single/${id}`,
-        fd,
+        data,
         token
       );
-
       if (res?.status === "success") {
         dispatch(showSuccess("Updated successfully"));
         navigation.goBack();

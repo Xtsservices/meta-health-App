@@ -12,7 +12,7 @@ import {
   Alert,
   FlatList,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Plus, X } from "lucide-react-native";
@@ -94,9 +94,10 @@ const fetchSymptomsList = useCallback(async (val: string) => {
 }, [ removeDuplicatesAndFilter]);
 
 const latestFetchRef = useRef(fetchSymptomsList);
-useEffect(() => {
+useFocusEffect(
+  useCallback(() => {
   latestFetchRef.current = fetchSymptomsList;
-}, [fetchSymptomsList]);
+}, [fetchSymptomsList]));
 
 
 const debouncedFetchRef = useRef(

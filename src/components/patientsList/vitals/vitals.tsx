@@ -8,7 +8,7 @@ import {
   Pressable,
   Dimensions,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelector } from "react-redux";
 
@@ -47,7 +47,7 @@ type VitalRow = {
   hrv?: number | string;
   recordedDate?: string;
 };
-
+type RouteParams = { ot: boolean };
 
 
 export default function VitalsTabScreen() {
@@ -58,7 +58,8 @@ export default function VitalsTabScreen() {
   const timeline = cp?.patientTimeLineID;
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<VitalRow[]>([]);
-
+ const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+    const isOt = route.params?.ot;
   const fetchVitals = useCallback(async () => {
     const timeLinePatientID =
       (typeof timeline === "object" ? timeline?.patientID : cp?.currentPatient?.id) ?? cp?.id;
@@ -160,13 +161,14 @@ export default function VitalsTabScreen() {
   const EmptyState = () => (
     <View style={styles.emptyWrap}>
       <Text style={{ color: COLORS.sub, marginBottom: 12 }}>No vital records found.</Text>
+      {!isOt && 
       <Pressable
         onPress={() => navigation.navigate("AddVitals" as never)}
         style={[styles.primaryBtn, { backgroundColor: COLORS.brand }]}
       >
         <Plus size={18} color="#fff" />
         <Text style={styles.primaryBtnText}>Record Vitals</Text>
-      </Pressable>
+      </Pressable>}
     </View>
   );
 
@@ -193,7 +195,7 @@ export default function VitalsTabScreen() {
       )}
 
       {/* FAB */}
-      {rows.length > 0 && (
+      {!isOt  && rows.length > 0 && (
         <Pressable
           onPress={() => navigation.navigate("AddVitals" as never)}
           style={[

@@ -26,6 +26,7 @@ import { patientStatus } from "../../utils/role";
 import { User as UserIcon, Search as SearchIcon, Eye, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { PatientType } from "../../utils/types";
 import Footer from "../dashboard/footer";
+import useOTConfig, { OTPatientStages } from "../../utils/otConfig";
 
 const PAGE_SIZE = 10;
 
@@ -56,9 +57,8 @@ const OpdPreviousPatients: React.FC = () => {
   const dispatch = useDispatch();
   const scheme = useColorScheme();
   const isDark = scheme === "dark";
-
   const user = useSelector((s: RootState) => s.currentUser);
-
+const { screenType, userType, setPatientStage } = useOTConfig();
   const [allPatients, setAllPatients] = useState<PatientType[]>([]);
   const [filterValue, setFilterValue] = useState<number>(0); // 0=Active, 1=Follow-up, 2=Previous
   const [search, setSearch] = useState("");
@@ -96,10 +96,19 @@ const OpdPreviousPatients: React.FC = () => {
 
   const fetchAllPatients = useCallback(async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
-    const url = `patient/${user?.hospitalID}/patients/opdprevious/${patientStatus.outpatient}?userID=${user?.id}&role=${user?.role}`;
+    let url 
+  if (user?.roleName === "surgeon" || user?.roleName === "anesthetist"){
+url = `ot/${user?.hospitalID}/${
+              user?.id
+            }/getPatient/${user?.roleName}/${screenType?.toLowerCase()}`
+  }else{
+     url = `patient/${user?.hospitalID}/patients/opdprevious/${patientStatus.outpatient}?userID=${user?.id}&role=${user?.role}`;
+
+  }
     const response = await AuthFetch(url, token);
     if (response?.status === "success") {
-      setAllPatients(removeDuplicates(response?.data?.patients || []));
+      
+      setAllPatients(response?.data?.patients || []);
     }
   }, [user?.hospitalID, user?.id, user?.role, removeDuplicates]);
 
@@ -121,14 +130,16 @@ const OpdPreviousPatients: React.FC = () => {
 
   // Filtered + Searched + Paginated
   const filteredAndSearched = useMemo(() => {
-    let base: PatientType[] = [];
-    if (filterValue === 2) {
-      base = allPatients.filter((p) => p.ptype === 21);
-    } else if (filterValue === 0) {
-      base = allPatients.filter((p) => p.ptype === 1);
-    } else {
-      base = allPatients.filter((p) => p.ptype !== 1 && p.ptype !== 21);
-    }
+    let base: PatientType[] = allPatients;
+    // if (filterValue === 2) {
+    //   base = allPatients.filter((p) => p.ptype === 21);
+    // } else if (filterValue === 0) {
+    //   base = allPatients.filter((p) => p.ptype === 1);
+    // } else if (filterValue === 1) {
+    //   base = allPatients.filter((p) => p.ptype !== 1 && p.ptype !== 21);
+    // }else{
+    //   base = allPatients
+    // }
 
     if (!search.trim()) return base;
 
@@ -158,7 +169,6 @@ const OpdPreviousPatients: React.FC = () => {
       flatRef.current?.scrollToOffset({ offset: 0, animated: true });
     }
   };
-
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.controlsColumn}>
@@ -198,6 +208,14 @@ const OpdPreviousPatients: React.FC = () => {
       <Text style={[styles.emptySub, { color: COLORS.sub }]}>Try adjusting filters or search terms.</Text>
     </View>
   );
+
+  const handleView = (patient :any) => {
+const patientStatusKey =
+            patient.status.toUpperCase() as keyof typeof OTPatientStages;
+          setPatientStage(OTPatientStages[patientStatusKey]);
+        
+ navigation.navigate("PatientProfile", { id: patient.id });
+  }
 
   const renderItem = ({ item }: { item: PatientType }) => {
     const paddedId = String(item?.id ?? "").padStart(4, "0");
@@ -240,10 +258,11 @@ const OpdPreviousPatients: React.FC = () => {
 
           <TouchableOpacity
             style={[styles.viewBtn, { borderColor: COLORS.border }]}
-            onPress={(e) => {
-              e.stopPropagation();
-              navigation.navigate("PatientProfile", { id: item.id });
-            }}
+             onPress={() =>  handleView(item)}
+            // onPress={(e) => {
+            //   e.stopPropagation();
+            //   navigation.navigate("PatientProfile", { id: item.id });
+            // }}
           >
             <Eye size={18} color={COLORS.text} />
             <Text style={[styles.viewBtnText, { color: COLORS.text }]}>View</Text>
