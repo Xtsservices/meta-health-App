@@ -1,4 +1,3 @@
-// components/IPD/DashboardIpd.tsx - FIXED VERSION
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -54,6 +53,32 @@ type XY = { x: number | string; y: number };
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const isTablet = SCREEN_WIDTH >= 768;
 const isSmallDevice = SCREEN_HEIGHT < 700;
+const isExtraSmallDevice = SCREEN_WIDTH < 375;
+
+// Responsive calculations
+const RESPONSIVE = {
+  spacing: {
+    xs: isExtraSmallDevice ? 8 : 12,
+    sm: isExtraSmallDevice ? 12 : 16,
+    md: isExtraSmallDevice ? 16 : 20,
+    lg: isExtraSmallDevice ? 20 : 24,
+  },
+  fontSize: {
+    xs: isExtraSmallDevice ? 10 : 12,
+    sm: isExtraSmallDevice ? 12 : 14,
+    md: isExtraSmallDevice ? 14 : 16,
+    lg: isExtraSmallDevice ? 16 : 18,
+    xl: isExtraSmallDevice ? 18 : 20,
+    xxl: isExtraSmallDevice ? 20 : 24,
+  },
+  icon: {
+    sm: isExtraSmallDevice ? 16 : 20,
+    md: isExtraSmallDevice ? 20 : 25,
+    lg: isExtraSmallDevice ? 24 : 30,
+  }
+};
+
+const FOOTER_HEIGHT = 70;
 
 /* -------------------------- Confirm dialog -------------------------- */
 const ConfirmDialog: React.FC<{
@@ -88,10 +113,19 @@ const ConfirmDialog: React.FC<{
 const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onMenu }) => {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
-        <MenuIcon size={30} color="#ffffffff" />
-      </TouchableOpacity>
+      <View style={styles.headerContent}>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>
+          {title}
+        </Text>
+        <TouchableOpacity 
+          onPress={onMenu} 
+          style={styles.menuBtn} 
+          accessibilityLabel="Open menu"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MenuIcon size={RESPONSIVE.icon.lg} color="#ffffffff" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -103,13 +137,18 @@ const KpiCard: React.FC<{
   icon: React.ReactNode;
   bg: string;
 }> = ({ title, value, icon, bg }) => {
+  const cardWidth = isTablet 
+    ? (SCREEN_WIDTH - RESPONSIVE.spacing.md * 2 - RESPONSIVE.spacing.xs * 3) / 4 
+    : (SCREEN_WIDTH - RESPONSIVE.spacing.md * 2 - RESPONSIVE.spacing.xs) / 2;
+
   return (
     <View
       style={[
         styles.card,
         { 
           backgroundColor: bg, 
-          width: isTablet ? (SCREEN_WIDTH - 16 * 2 - 12 * 3) / 4 : (SCREEN_WIDTH - 16 * 2 - 12) / 2 
+          width: cardWidth,
+          minHeight: isExtraSmallDevice ? 70 : 80,
         },
       ]}
     >
@@ -148,7 +187,6 @@ const DashboardIpd: React.FC = () => {
   const [lineActual, setLineActual] = useState<XY[]>([]);
   const [lineScheduled, setLineScheduled] = useState<XY[]>([]);
   const [selectedWardDataFilter, setSelectedWardDataFilter] = useState<string>("Day");
-  const FOOTER_HEIGHT = 70;
 
   // Fetch inpatient statistics
   const getInpatientStats = useCallback(async () => {
@@ -251,7 +289,10 @@ const DashboardIpd: React.FC = () => {
     }
   }, [user?.hospitalID, getInpatientStats, getPatientsVisit, filterYear, filterMonth]);
 
-  const onAddPatient = () => navigation.navigate("AddPatient" as never);
+  // FIXED: Pass patientStatus as inpatient (2) when navigating to AddPatient
+  const onAddPatient = () => navigation.navigate("AddPatient", { 
+    patientStatus: patientStatus.inpatient 
+  });
 
   /* ----------- Sidebar actions ----------- */
   const go = (route: string) => {
@@ -282,25 +323,25 @@ const DashboardIpd: React.FC = () => {
       key: "dash", 
       label: "Dashboard", 
       icon: LayoutDashboardIcon, 
-      onPress: () => go("DashboardIPD") 
+      onPress: () => go("DashboardIpd") 
     },
     { 
       key: "plist", 
       label: "Patients List", 
       icon: UsersIcon, 
-      onPress: () => go("PatientListIPD") 
+      onPress: () => go("PatientList") 
     },
     { 
       key: "addp", 
       label: "Add Patient", 
       icon: UserPlusIcon, 
-      onPress: () => go("AddPatientIPD") 
+      onPress: () => go("AddPatient") 
     },
     { 
       key: "discharge", 
       label: "Discharged Patients", 
       icon: FileMinusIcon, 
-      onPress: () => go("DischargedPatients") 
+      onPress: () => go("DischargedPatientsIPD") 
     },
     { 
       key: "mgmt", 
@@ -367,25 +408,25 @@ const DashboardIpd: React.FC = () => {
           <KpiCard 
             title="Total Patients" 
             value={totalPatients} 
-            icon={<UsersIcon size={25} color="#2563EB" />} 
+            icon={<UsersIcon size={RESPONSIVE.icon.md} color="#2563EB" />} 
             bg="#ffffffff" 
           />
           <KpiCard 
             title="Current Inpatients" 
             value={inPatientCount} 
-            icon={<ActivityIcon size={25} color="#10B981" />} 
+            icon={<ActivityIcon size={RESPONSIVE.icon.md} color="#10B981" />} 
             bg="#ffffffff" 
           />
           <KpiCard 
             title="Discharged Patients" 
             value={dischargedCount} 
-            icon={<UserMinusIcon size={25} color="#F59E0B" />} 
+            icon={<UserMinusIcon size={RESPONSIVE.icon.md} color="#F59E0B" />} 
             bg="#ffffffff" 
           />
           <KpiCard 
             title="This Month" 
             value={thisMonthCount} 
-            icon={<CalendarIcon size={25} color="#7C3AED" />} 
+            icon={<CalendarIcon size={RESPONSIVE.icon.md} color="#7C3AED" />} 
             bg="#ffffffff" 
           />
         </View>
@@ -393,7 +434,7 @@ const DashboardIpd: React.FC = () => {
         {/* Primary action */}
         <View style={styles.controlPanel}>
           <TouchableOpacity style={styles.primaryBtn} onPress={onAddPatient} activeOpacity={0.85}>
-            <PlusIcon size={18} color="#fff" />
+            <PlusIcon size={RESPONSIVE.icon.sm} color="#fff" />
             <Text style={styles.primaryBtnText}>Admit New Patient</Text>
           </TouchableOpacity>
         </View>
@@ -480,6 +521,10 @@ const DashboardIpd: React.FC = () => {
         }}
         items={sidebarItems}
         bottomItems={bottomItems}
+        onAlertPress={() => {
+          // Navigate to Alerts screen when alerts item is clicked
+          navigation.navigate("AlertsScreen" as never);
+        }}
       />
 
       {/* Logout confirm */}
@@ -504,79 +549,84 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff" 
   },
   header: {
-    height: 100,
-    paddingHorizontal: 16,
+    height: isExtraSmallDevice ? 80 : 100,
+    paddingHorizontal: RESPONSIVE.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#e2e8f0",
+    backgroundColor: "#14b8a6",
+    paddingTop: Platform.OS === 'ios' ? (isExtraSmallDevice ? 30 : 40) : (isExtraSmallDevice ? 15 : 20),
+    justifyContent: 'center',
+  },
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#14b8a6",
-    paddingTop: Platform.OS === 'ios' ? 40 : 20,
+    width: '100%',
   },
   headerTitle: { 
-    fontSize: SCREEN_WIDTH < 375 ? 20 : 24, 
+    fontSize: RESPONSIVE.fontSize.xxl,
     fontWeight: "700", 
     color: "#fdfdfdff",
     flex: 1,
     textAlign: 'center',
-    marginRight: 40
+    marginRight: RESPONSIVE.spacing.md,
   },
   menuBtn: {
-    width: 38,
-    height: 38,
+    width: isExtraSmallDevice ? 34 : 38,
+    height: isExtraSmallDevice ? 34 : 38,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+    position: 'absolute',
+    right: 0,
   },
   container: { 
     flex: 1, 
     backgroundColor: "#fff" 
   },
   containerContent: { 
-    padding: 16, 
-    gap: 16 
+    padding: RESPONSIVE.spacing.sm, 
+    gap: RESPONSIVE.spacing.sm 
   },
   statsGrid: { 
     flexDirection: "row", 
     flexWrap: "wrap", 
-    gap: 12, 
+    gap: RESPONSIVE.spacing.xs, 
     justifyContent: "space-between" 
   },
   card: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 14,
+    padding: RESPONSIVE.spacing.sm,
     borderRadius: 16,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-    minHeight: 80,
   },
   cardContent: {
     flex: 1,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
+    width: isExtraSmallDevice ? 36 : 40,
+    height: isExtraSmallDevice ? 36 : 40,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.05)",
-    marginLeft: 12,
+    marginLeft: RESPONSIVE.spacing.xs,
   },
   cardTitle: { 
     color: "#0f172a", 
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13, 
+    fontSize: RESPONSIVE.fontSize.xs, 
     opacity: 0.75, 
     marginBottom: 4 
   },
   cardValue: { 
     color: "#0b1220", 
-    fontSize: SCREEN_WIDTH < 375 ? 18 : 22, 
+    fontSize: RESPONSIVE.fontSize.lg, 
     fontWeight: "700" 
   },
   controlPanel: { 
@@ -586,27 +636,27 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     backgroundColor: "#1C7C6B",
-    height: 44,
+    height: isExtraSmallDevice ? 40 : 44,
     borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: RESPONSIVE.spacing.sm,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    minWidth: 160,
+    minWidth: isExtraSmallDevice ? 140 : 160,
     justifyContent: 'center',
   },
   primaryBtnText: { 
     color: "#fff", 
     fontWeight: "700", 
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14 
+    fontSize: RESPONSIVE.fontSize.sm 
   },
   chartsRow: { 
-    gap: 12 
+    gap: RESPONSIVE.spacing.sm 
   },
   pieChartContainer: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 16,
+    padding: RESPONSIVE.spacing.sm,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
@@ -617,11 +667,11 @@ const styles = StyleSheet.create({
     flexDirection: SCREEN_WIDTH < 375 ? "column" : "row",
     justifyContent: "space-between",
     alignItems: SCREEN_WIDTH < 375 ? "flex-start" : "center",
-    marginBottom: 16,
-    gap: SCREEN_WIDTH < 375 ? 12 : 0,
+    marginBottom: RESPONSIVE.spacing.sm,
+    gap: SCREEN_WIDTH < 375 ? RESPONSIVE.spacing.xs : 0,
   },
   pieChartTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
+    fontSize: RESPONSIVE.fontSize.md,
     fontWeight: "700",
     color: "#0f172a",
   },
@@ -632,7 +682,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   filterButton: {
-    paddingHorizontal: 12,
+    paddingHorizontal: RESPONSIVE.spacing.xs,
     paddingVertical: 6,
     borderRadius: 6,
   },
@@ -640,7 +690,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#14b8a6",
   },
   filterButtonText: {
-    fontSize: 11,
+    fontSize: RESPONSIVE.fontSize.xs,
     fontWeight: "600",
     color: "#64748b",
   },
@@ -656,7 +706,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
+    fontSize: RESPONSIVE.fontSize.md,
     color: "#14b8a6",
   },
   modalBackdrop: {
@@ -679,12 +729,12 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalTitle: { 
-    fontSize: 17, 
+    fontSize: RESPONSIVE.fontSize.lg, 
     fontWeight: "800", 
     color: "#0b1220" 
   },
   modalMsg: { 
-    fontSize: 14, 
+    fontSize: RESPONSIVE.fontSize.sm, 
     color: "#334155", 
     marginTop: 8,
     lineHeight: 20,
@@ -710,7 +760,7 @@ const styles = StyleSheet.create({
   },
   modalBtnText: {
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: RESPONSIVE.fontSize.sm,
   },
   footerWrap: {
     position: "absolute",

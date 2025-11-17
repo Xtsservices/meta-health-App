@@ -29,6 +29,7 @@ import {
 
 import { Role_NAME, SCOPE_LIST } from '../utils/role';
 import { currentUser, RootState, updatePatientStatus } from '../store/store';
+import { showError } from '../store/toast.slice';
 
 type CardSpec = {
   key: string;
@@ -366,43 +367,56 @@ const Home: React.FC = () => {
       .filter((sec) => sec.data.length > 0);
   }, [sectionsData, query]);
 
-  const clickNavigate = useCallback(
-    (heading: string, link: string) => {
-      let status = 1;
-      let newRoleName = user?.roleName;
+const clickNavigate = useCallback(
+  (heading: string, link: string) => {
+    let patientStatus = 1;
+    let newRoleName = user?.roleName || user?.role?.toString();
 
-      const headingLower = heading.toLowerCase();
+    const headingLower = heading.toLowerCase();
 
-      if (headingLower === 'outpatient care') {
-        status = 1;
-      } else if (headingLower === 'inpatient services') {
-        status = 2;
-      } else if (
-        headingLower === 'patient triage' ||
-        headingLower === 'critical care' ||
-        headingLower === 'urgent care' ||
-        headingLower === 'stable monitoring'
-      ) {
-        status = 3;
-      } else if (headingLower === 'laboratory services') {
-        status = 4;
-        newRoleName = 'pathology';
-      } else if (headingLower === 'medical imaging') {
-        status = 5;
-        newRoleName = 'radiology';
-      }
-
-      dispatch(updatePatientStatus(status));
-
+    if (headingLower === 'outpatient care') {
+      patientStatus = 1;
+      newRoleName = 'opd';
+    } else if (headingLower === 'inpatient services') {
+      patientStatus = 2;
+      newRoleName = 'ipd';
+    } else if (
+      headingLower === 'patient triage' ||
+      headingLower === 'critical care' ||
+      headingLower === 'urgent care' ||
+      headingLower === 'stable monitoring'
+    ) {
+      patientStatus = 3;
+      newRoleName = 'emergency';
+    } else if (headingLower === 'laboratory services') {
+      patientStatus = 4;
+      newRoleName = 'pathology';
+    } else if (headingLower === 'medical imaging') {
+      patientStatus = 5;
+      newRoleName = 'radiology';
+    } else if (headingLower === 'pharmacy management') {
+      patientStatus = 6;
+      newRoleName = 'pharmacy';
+    } else if (headingLower === 'patient services') {
+      patientStatus = 7;
+      newRoleName = 'reception';
+    }
+    try {
       const updatedUser = {
         ...user,
-        roleName: newRoleName
+        roleName: newRoleName,
+        patientStatus: patientStatus,
       };
       dispatch(currentUser(updatedUser));
-
-      if (user?.role === Role_NAME.admin) {
-        navigation.navigate(`${link.toLowerCase()}/admin`);
-      } else {
+      dispatch(updatePatientStatus(patientStatus));
+      
+    } catch (error) {
+      
+      (showError(error?.response?.data?.message || 'Login failed'));
+    }
+    if (user?.role === Role_NAME.admin) {
+      navigation.navigate(`${link.toLowerCase()}/admin`);
+    } else {
         switch (headingLower) {
           case 'outpatient care':
             navigation.navigate('DashboardOpd');

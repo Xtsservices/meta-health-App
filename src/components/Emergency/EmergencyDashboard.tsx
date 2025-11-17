@@ -23,6 +23,9 @@ import { AuthFetch } from "../../auth/auth";
 import LineChartActualScheduled from "../dashboard/lineGraph";
 import PieChart from "../dashboard/pieChart";
 import PatientTable from "../dashboard/patientsList";
+import Footer from "../dashboard/footer";
+
+import { useDispatch } from "react-redux";
 
 // Import custom SVG icons
 import {
@@ -38,6 +41,7 @@ import {
   FileMinusIcon,
   UserPlusIcon,
 } from "../../utils/SvgIcons";
+import { showError } from "../../store/toast.slice";
 
 // ---- Types ----
 type XY = { x: number | string; y: number };
@@ -46,51 +50,52 @@ type DashboardType = "red" | "yellow" | "green";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const isTablet = SCREEN_WIDTH >= 768;
 const isSmallDevice = SCREEN_HEIGHT < 700;
+const FOOTER_HEIGHT = 70;
 
 // Dashboard configuration
 const DASHBOARD_CONFIG = {
   red: {
     title: "Critical Care Dashboard",
     zone: zoneType.red,
-    addPatientRoute: "AddPatientEmergencyRed",
+    addPatientRoute: "AddPatient",
     primaryColor: "#14b8a6",
     sidebarComponent: "CriticalCareSidebar",
     sidebarItems: [
       { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, route: "DashboardEmergencyRed" },
-      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientListEmergencyRed" },
-      { key: "discharge", label: "Discharged Patients", icon: FileMinusIcon, route: "DischargedPatientsEmergencyRed" },
+      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientList" },
+      { key: "discharge", label: "Discharged Patients", icon: FileMinusIcon, route: "DischargedPatients" },
       { key: "mgmt", label: "Management", icon: SettingsIcon, route: "Management" },
       { key: "help", label: "Help", icon: HelpCircleIcon, route: "HelpScreen" },
     ],
     buttonText: "Add Critical Patient",
   },
   yellow: {
-    title: "Urgent Care Dashboard", 
+    title: "Urgent Care Dashboard",
     zone: zoneType.yellow,
-    addPatientRoute: "AddPatientEmergencyYellow",
+    addPatientRoute: "AddPatient",
     primaryColor: "#14b8a6",
     sidebarComponent: "UrgentCareSidebar",
     sidebarItems: [
       { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, route: "DashboardEmergencyYellow" },
-      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientListEmergencyYellow" },
-      { key: "discharge", label: "Discharged Patients", icon: UserPlusIcon, route: "DischargedPatientsEmergencyYellow" },
-      { key: "mgmt", label: "Management", icon: SettingsIcon, route: "ManagementEmergencyYellow" },
-      { key: "help", label: "Help", icon: HelpCircleIcon, route: "HelpScreenEmergencyYellow" },
+      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientList" },
+      { key: "discharge", label: "Discharged Patients", icon: UserPlusIcon, route: "DischargedPatients" },
+      { key: "mgmt", label: "Management", icon: SettingsIcon, route: "Management" },
+      { key: "help", label: "Help", icon: HelpCircleIcon, route: "HelpScreen" },
     ],
     buttonText: "Add Urgent Patient",
   },
   green: {
     title: "Stable Monitoring Dashboard",
     zone: zoneType.green,
-    addPatientRoute: "AddPatientEmergencyGreen", 
+    addPatientRoute: "AddPatient",
     primaryColor: "#14b8a6",
     sidebarComponent: "StableCareSidebar",
     sidebarItems: [
       { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, route: "DashboardEmergencyGreen" },
-      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientListEmergencyGreen" },
-      { key: "discharge", label: "Discharged Patients", icon: UserPlusIcon, route: "DischargedPatientsEmergencyGreen" },
-      { key: "mgmt", label: "Management", icon: SettingsIcon, route: "ManagementEmergencyGreen" },
-      { key: "help", label: "Help", icon: HelpCircleIcon, route: "HelpScreenEmergencyGreen" },
+      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientList" },
+      { key: "discharge", label: "Discharged Patients", icon: UserPlusIcon, route: "DischargedPatients" },
+      { key: "mgmt", label: "Management", icon: SettingsIcon, route: "Management" },
+      { key: "help", label: "Help", icon: HelpCircleIcon, route: "HelpScreen" },
     ],
     buttonText: "Add Stable Patient",
   },
@@ -126,10 +131,10 @@ const ConfirmDialog: React.FC<{
 };
 
 /* -------------------------- Header -------------------------- */
-const HeaderBar: React.FC<{ title: string; onMenu: () => void; primaryColor: string }> = ({ 
-  title, 
-  onMenu, 
-  primaryColor 
+const HeaderBar: React.FC<{ title: string; onMenu: () => void; primaryColor: string }> = ({
+  title,
+  onMenu,
+  primaryColor
 }) => {
   return (
     <View style={[styles.header, { backgroundColor: primaryColor }]}>
@@ -152,9 +157,9 @@ const KpiCard: React.FC<{
     <View
       style={[
         styles.card,
-        { 
-          backgroundColor: bg, 
-          width: isTablet ? (SCREEN_WIDTH - 16 * 2 - 12 * 3) / 4 : (SCREEN_WIDTH - 16 * 2 - 12) / 2 
+        {
+          backgroundColor: bg,
+          width: isTablet ? (SCREEN_WIDTH - 16 * 2 - 12 * 3) / 4 : (SCREEN_WIDTH - 16 * 2 - 12) / 2
         },
       ]}
     >
@@ -173,11 +178,12 @@ const EmergencyDashboard: React.FC = () => {
   const route = useRoute();
   const user = useSelector((s: RootState) => s.currentUser);
   const insets = useSafeAreaInsets();
-  
+  const dispatch = useDispatch();
+
   // Get dashboard type from route params or default to red
   const dashboardType: DashboardType = (route.params as any)?.type || "red";
   const config = DASHBOARD_CONFIG[dashboardType];
-  
+
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
   const userImg = user?.avatarUrl || user?.profileImage;
 
@@ -208,14 +214,14 @@ const EmergencyDashboard: React.FC = () => {
         `patient/${user.hospitalID}/patients/count/visit/combined?ptype=${patientStatus.emergency}&zone=${config.zone}`,
         token
       );
-      
+
       if (res?.status === "success" && res?.data?.message === "success") {
         const c = res?.data?.count?.[0] ?? {};
         setThisMonthCount(c?.patient_count_month ?? 0);
         setThisYearCount(c?.patient_count_year ?? 0);
       }
-    } catch (e) {
-      console.error("Emergency stats fetch error", e);
+    } catch (e: any) {
+      dispatch(showError(e?.response?.data?.message || 'Failed to load emergency statistics'));
     } finally {
       setLoading(false);
     }
@@ -237,7 +243,7 @@ const EmergencyDashboard: React.FC = () => {
           ? response?.data?.counts
           : [];
         if (m === "0") {
-          const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
           setLineActual(
             counts?.map((c: any) => ({
               x: names[Number(c?.filter_value) - 1] || c?.filter_value,
@@ -276,9 +282,9 @@ const EmergencyDashboard: React.FC = () => {
   const onAddPatient = () => navigation.navigate(config.addPatientRoute as never);
 
   /* ----------- Sidebar actions ----------- */
-  const go = (route: string) => {
+  const go = (route: string, params?: any) => {
     setMenuOpen(false);
-    navigation.navigate(route as never);
+    navigation.navigate(route as never, params);
   };
 
   const onLogoutPress = () => setConfirmVisible(true);
@@ -286,7 +292,7 @@ const EmergencyDashboard: React.FC = () => {
     try {
       await AsyncStorage.multiRemove(["token", "userID"]);
     } catch (e) {
-      console.warn("Logout storage cleanup error");
+      dispatch(showError('Failed to clear session data'));
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);
@@ -301,22 +307,33 @@ const EmergencyDashboard: React.FC = () => {
   // Build sidebar items dynamically based on config
   const sidebarItems = config.sidebarItems?.map(item => ({
     ...item,
-    onPress: () => go(item.route)
+    onPress: () => {
+      if (item.route === "PatientList") {
+        setMenuOpen(false);
+        navigation.navigate("PatientList" as never, {
+          zone: config.zone,
+          patientStatus: patientStatus.emergency
+        });
+      } else {
+        setMenuOpen(false);
+        navigation.navigate(item.route as never);
+      }
+    }
   })) ?? [];
 
   const bottomItems = [
-    { 
-      key: "modules", 
-      label: "Go to Modules", 
-      icon: GridIcon, 
-      onPress: () => go("Home") 
+    {
+      key: "modules",
+      label: "Go to Modules",
+      icon: GridIcon,
+      onPress: () => go("Home")
     },
-    { 
-      key: "logout", 
-      label: "Logout", 
-      icon: LogOutIcon, 
-      onPress: onLogoutPress, 
-      variant: "danger" 
+    {
+      key: "logout",
+      label: "Logout",
+      icon: LogOutIcon,
+      onPress: onLogoutPress,
+      variant: "danger"
     },
   ];
 
@@ -360,9 +377,9 @@ const EmergencyDashboard: React.FC = () => {
       <ScrollView
         style={styles.container}
         contentContainerStyle={[
-          styles.containerContent, 
-          { 
-            paddingBottom: insets.bottom > 0 ? insets.bottom + 16 : 16,
+          styles.containerContent,
+          {
+            paddingBottom: FOOTER_HEIGHT + (insets.bottom > 0 ? insets.bottom + 16 : 16),
             minHeight: SCREEN_HEIGHT - (isSmallDevice ? 120 : 160)
           }
         ]}
@@ -371,25 +388,25 @@ const EmergencyDashboard: React.FC = () => {
 
         {/* KPI cards */}
         <View style={styles.statsGrid}>
-          <KpiCard 
-            title="This Month" 
-            value={thisMonthCount} 
-            icon={<TrendingUpIcon size={25} color={config.primaryColor} />} 
-            bg="#ffffff" 
+          <KpiCard
+            title="This Month"
+            value={thisMonthCount}
+            icon={<TrendingUpIcon size={25} color={config.primaryColor} />}
+            bg="#ffffff"
           />
-          <KpiCard 
-            title="This Year" 
-            value={thisYearCount} 
-            icon={<UsersIcon size={25} color={config.primaryColor} />} 
-            bg="#ffffff" 
+          <KpiCard
+            title="This Year"
+            value={thisYearCount}
+            icon={<UsersIcon size={25} color={config.primaryColor} />}
+            bg="#ffffff"
           />
         </View>
 
         {/* Primary action */}
         <View style={styles.controlPanel}>
-          <TouchableOpacity 
-            style={[styles.primaryBtn, { backgroundColor: config.primaryColor }]} 
-            onPress={onAddPatient} 
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: config.primaryColor }]}
+            onPress={onAddPatient}
             activeOpacity={0.85}
           >
             <PlusIcon size={18} color="#fff" />
@@ -413,9 +430,9 @@ const EmergencyDashboard: React.FC = () => {
             <View style={styles.pieChartHeader}>
               <Text style={styles.pieChartTitle}>Patients by Ward</Text>
               <View style={styles.filterContainer}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.filterButton, 
+                    styles.filterButton,
                     selectedWardDataFilter === "Day" && [styles.filterButtonActive, { backgroundColor: config.primaryColor }]
                   ]}
                   onPress={() => handleWardFilterChange("Day")}
@@ -425,9 +442,9 @@ const EmergencyDashboard: React.FC = () => {
                     selectedWardDataFilter === "Day" && styles.filterButtonTextActive
                   ]}>Day</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.filterButton, 
+                    styles.filterButton,
                     selectedWardDataFilter === "Week" && [styles.filterButtonActive, { backgroundColor: config.primaryColor }]
                   ]}
                   onPress={() => handleWardFilterChange("Week")}
@@ -437,9 +454,9 @@ const EmergencyDashboard: React.FC = () => {
                     selectedWardDataFilter === "Week" && styles.filterButtonTextActive
                   ]}>Week</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[
-                    styles.filterButton, 
+                    styles.filterButton,
                     selectedWardDataFilter === "Month" && [styles.filterButtonActive, { backgroundColor: config.primaryColor }]
                   ]}
                   onPress={() => handleWardFilterChange("Month")}
@@ -456,12 +473,20 @@ const EmergencyDashboard: React.FC = () => {
         </View>
 
         {/* Latest emergency records */}
-        <PatientTable 
-          navigation={navigation} 
-          patientType={patientStatus.emergency} 
+        <PatientTable
+          navigation={navigation}
+          patientType={patientStatus.emergency}
           zone={config.zone}
-        />       
+        />
       </ScrollView>
+
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"dashboard"} brandColor={config.primaryColor} />
+      </View>
+
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
 
       {/* Slide-in Sidebar */}
       <SidebarComponent
@@ -494,9 +519,9 @@ export default EmergencyDashboard;
 
 /* -------------------------- Styles -------------------------- */
 const styles = StyleSheet.create({
-  safeArea: { 
-    flex: 1, 
-    backgroundColor: "#fff" 
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#fff"
   },
   header: {
     height: 100,
@@ -508,9 +533,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: Platform.OS === 'ios' ? 40 : 20,
   },
-  headerTitle: { 
-    fontSize: SCREEN_WIDTH < 375 ? 20 : 24, 
-    fontWeight: "700", 
+  headerTitle: {
+    fontSize: SCREEN_WIDTH < 375 ? 20 : 24,
+    fontWeight: "700",
     color: "#fdfdfdff",
     flex: 1,
     textAlign: 'center',
@@ -523,19 +548,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  container: { 
-    flex: 1, 
-    backgroundColor: "#fff" 
+  container: {
+    flex: 1,
+    backgroundColor: "#fff"
   },
-  containerContent: { 
-    padding: 16, 
-    gap: 16 
+  containerContent: {
+    padding: 16,
+    gap: 16
   },
-  statsGrid: { 
-    flexDirection: "row", 
-    flexWrap: "wrap", 
-    gap: 12, 
-    justifyContent: "space-between" 
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    justifyContent: "space-between"
   },
   card: {
     flexDirection: "row",
@@ -562,21 +587,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.05)",
     marginLeft: 12,
   },
-  cardTitle: { 
-    color: "#0f172a", 
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13, 
-    opacity: 0.75, 
-    marginBottom: 4 
+  cardTitle: {
+    color: "#0f172a",
+    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
+    opacity: 0.75,
+    marginBottom: 4
   },
-  cardValue: { 
-    color: "#0b1220", 
-    fontSize: SCREEN_WIDTH < 375 ? 18 : 22, 
-    fontWeight: "700" 
+  cardValue: {
+    color: "#0b1220",
+    fontSize: SCREEN_WIDTH < 375 ? 18 : 22,
+    fontWeight: "700"
   },
-  controlPanel: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    justifyContent: "flex-end" 
+  controlPanel: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end"
   },
   primaryBtn: {
     height: 44,
@@ -588,13 +613,13 @@ const styles = StyleSheet.create({
     minWidth: 160,
     justifyContent: 'center',
   },
-  primaryBtnText: { 
-    color: "#fff", 
-    fontWeight: "700", 
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14 
+  primaryBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: SCREEN_WIDTH < 375 ? 13 : 14
   },
-  chartsRow: { 
-    gap: 12 
+  chartsRow: {
+    gap: 12
   },
   pieChartContainer: {
     backgroundColor: "#fff",
@@ -671,14 +696,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 5,
   },
-  modalTitle: { 
-    fontSize: 17, 
-    fontWeight: "800", 
-    color: "#0b1220" 
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0b1220"
   },
-  modalMsg: { 
-    fontSize: 14, 
-    color: "#334155", 
+  modalMsg: {
+    fontSize: 14,
+    color: "#334155",
     marginTop: 8,
     lineHeight: 20,
   },
@@ -704,5 +729,24 @@ const styles = StyleSheet.create({
   modalBtnText: {
     fontWeight: "700",
     fontSize: 14,
+  },
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#e2e8f0",
+    zIndex: 10,
+    elevation: 6,
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    zIndex: 9,
   },
 });
