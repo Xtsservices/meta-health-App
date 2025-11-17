@@ -37,6 +37,8 @@ import {
   GridIcon,
   XIcon,
   BellIcon,
+  ReceiptIcon,
+  DollarSignIcon
 } from "../../utils/SvgIcons";
 
 import { RootState } from "../../store/store";
@@ -45,7 +47,7 @@ import { AuthFetch } from "../../auth/auth";
 import BarChartActualScheduled from "../dashboard/lineGraph";
 import Footer from "../dashboard/footer";
 import { formatDateTime } from "../../utils/dateTime";
-import Notes from "../dashboard/Notes";
+import MyTasks from "../../pages/nurseDashboard/MyTasks";
 
 // Types
 type XY = { x: number | string; y: number };
@@ -276,11 +278,26 @@ const Sidebar: React.FC<SidebarProps> = ({
     }).start();
   }, [open, slide, width]);
 
-  // Group items by section
-  const overviewItems = items.filter(item => item.key === "dash");
-  const patientManagementItems = items.filter(item => ["patients", "walkin", "billing"].includes(item.key));
-  const operationsItems = items.filter(item => item.key === "management");
-  const supportItems = items.filter(item => item.key === "help");
+
+// Overview Section - Dashboard & Alerts
+const overviewItems = items.filter(item => 
+  item.key === "dash" || item.key === "alerts"
+);
+
+// Patient Management Section
+const patientManagementItems = items.filter(item => 
+  ["patients", "walkin", "billing", "tax"].includes(item.key)
+);
+
+// Operations Section  
+const operationsItems = items.filter(item => 
+  ["management", "pricing"].includes(item.key)
+);
+
+// Support Section
+const supportItems = items.filter(item => 
+  item.key === "help"
+);
 
   // Add alert item to patient management
   const alertItem: SidebarItem = {
@@ -753,54 +770,73 @@ const DashboardLab: React.FC = () => {
     }
   };
 
-  const getSidebarItems = (): SidebarItem[] => {
-    const basePath = departmentType === 'radiology' ? 'Radio' : 'Lab';
+const getSidebarItems = (): SidebarItem[] => {
+  const basePath = departmentType === 'radiology' ? 'Radio' : 'Lab';
+  
+  return [
+    // Overview Section
+    {
+      key: "dash",
+      label: "Dashboard",
+      icon: LayoutDashboardIcon,
+      onPress: () => go("DashboardLab")
+    },
+    {
+      key: "alerts", 
+      label: "Alerts",
+      icon: AlertTriangleIcon,
+      onPress: () => go(`AlertsLab`)
+    },
     
-    return [
-      {
-        key: "dash",
-        label: "Dashboard",
-        icon: LayoutDashboardIcon,
-        onPress: () => go("")
-      },
-      {
-        key: "alerts",
-        label: "Alerts",
-        icon: AlertTriangleIcon,
-        onPress: () => go(`Alerts${basePath}`)
-      },
-      {
-        key: "patients",
-        label: "Patient List",
-        icon: UsersIcon,
-        onPress: () => go(`PatientList${basePath}`)
-      },
-      {
-        key: "walkin",
-        label: "Walk-In",
-        icon: ShoppingBagIcon,
-        onPress: () => go(`WalkIn${basePath}`)
-      },
-      {
-        key: "billing",
-        label: "Billing",
-        icon: FileTextIcon,
-        onPress: () => go(`Billing${basePath}`)
-      },
-      {
-        key: "management",
-        label: "Management",
-        icon: SettingsIcon,
-        onPress: () => go("Management")
-      },
-      {
-        key: "help",
-        label: "Help",
-        icon: HelpCircleIcon,
-        onPress: () => go("HelpScreen")
-      },
-    ];
-  };
+    // Patient Management Section
+    {
+      key: "patients",
+      label: "Patient List",
+      icon: UsersIcon,
+      onPress: () => go(`PatientListLab`)
+    },
+    {
+      key: "walkin",
+      label: "Walk-In",
+      icon: ShoppingBagIcon,
+      onPress: () => go(`WalkIn${basePath}`)
+    },
+    {
+      key: "billing",
+      label: "Billing",
+      icon: FileTextIcon,
+      onPress: () => go(`Billing${basePath}`)
+    },
+    {
+      key: "tax",
+      label: "Tax Invoice",
+      icon: ReceiptIcon, // You'll need to import/create this icon
+      onPress: () => go(`TaxInvoice${basePath}`) // Update route as needed
+    },
+    
+    // Operations Section
+    {
+      key: "management",
+      label: "Management",
+      icon: SettingsIcon,
+      onPress: () => go("Management")
+    },
+    {
+      key: "pricing",
+      label: "Test Price",
+      icon: DollarSignIcon, // You'll need to import/create this icon
+      onPress: () => go(`TestPrice${basePath}`) // Update route as needed
+    },
+    
+    // Support Section
+    {
+      key: "help",
+      label: "Help",
+      icon: HelpCircleIcon,
+      onPress: () => go("HelpScreen")
+    },
+  ];
+};
 
   const bottomItems: SidebarItem[] = [
     {
@@ -915,7 +951,7 @@ const DashboardLab: React.FC = () => {
           </View>
 
           <View style={styles.notesContainer}>
-            <Notes />
+            <MyTasks />
           </View>
         </View>
 

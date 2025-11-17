@@ -44,4 +44,10 @@ DischargeSummaryDownload: undefined;
   EmergencyDashboard:undefined;
   Timeline:undefined;
   TimelineRow:undefined;
+
+  // labs:
+  PatientListLab:undefined;
+  PatientDetailsLab:undefined;
+  UploadTest:undefined;
+  TestCard:undefined;
 };

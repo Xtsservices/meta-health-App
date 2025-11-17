@@ -43,6 +43,10 @@ import DashboardLab from "../components/Lab/DashboardLab";
 import DashboardPharma from "../components/Pharmacy/DashboardPharma";
 import DashboardReception from "../components/Reception/DashboardReception";
 import EmergencyDashboard from "../components/Emergency/EmergencyDashboard";
+import PatientDetailsLab from "../components/Lab/patientList/PatientDetailsLab";
+import PatientListLab from "../components/Lab/patientList/PatientListLab";
+import UploadTest from "../components/Lab/patientList/UploadTest";
+import TestCard from "../components/Lab/patientList/TestCard";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -145,6 +149,28 @@ const Routing = () => {
           component={EmergencyDashboard}
           options={{ headerShown: false }}
         />
+
+      {/* labs */}
+      <Stack.Screen 
+        name="PatientListLab" 
+        component={PatientListLab}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="PatientDetailsLab" 
+        component={PatientDetailsLab}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="UploadTest" 
+        component={UploadTest}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="TestCard" 
+        component={TestCard}
+        options={{ headerShown: false }}
+      />
       </Stack.Navigator>
     </NavigationContainer>
   );
