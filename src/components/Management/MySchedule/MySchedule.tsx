@@ -30,6 +30,7 @@ import {
   CalendarIcon, 
   XIcon 
 } from "../../../utils/SvgIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -433,11 +434,12 @@ const MySchedule: React.FC = () => {
     setError(null);
 
     try {
+
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       const formattedDate = `${year}-${month}-${day}`;
-
+      const token = await AsyncStorage.getItem('token');
       const hospitalID = user?.hospitalID;
       const doctorID = user?.id;
 

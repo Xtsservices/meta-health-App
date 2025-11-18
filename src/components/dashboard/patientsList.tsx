@@ -85,9 +85,18 @@ const user = useSelector((s: RootState) => s.currentUser);
   };
 
   // Handle View All
-  const handleViewAll = () => {
-    navigation.navigate('AppointmentsList');
-  };
+    const handleViewAll = () => {
+      if (user?.patientStatus === 1) {
+        navigation.navigate('AppointmentsList');
+      } else if (user?.patientStatus === 3) {
+        navigation.navigate('PatientList', {
+          zone: zone,
+          patientStatus: patientStatus.emergency
+        });
+      } else {
+        navigation.navigate('PatientList');
+      }
+    };
 
   // Render Patient Card
   const renderPatientCard = ({ item }: { item: PatientType }) => (

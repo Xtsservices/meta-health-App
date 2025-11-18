@@ -40,25 +40,27 @@ type TopTabType = 'medication' | 'procedure';
 type MedicineFilter = {
   label: string;
   value: number;
+  icon: JSX.Element;
 };
 
 // Medicine Icon Component
-const MedicineIcon = ({ type, size = 20, color = "#14b8a6" }: { type: number; size?: number; color?: string }) => {
+const MedicineIcon = ({ type, size = 24, color = "#14b8a6" }: { type: number; size?: number; color?: string }) => {
   const iconProps = { size, color };
   
-  switch (type) {
-    case 1: return <PillIcon {...iconProps} />;
-    case 2: return <SyrupIcon {...iconProps} />;
-    case 3: return <SquareIcon {...iconProps} />;
-    case 4: return <SyringeIcon {...iconProps} />;
-    case 5: return <ActivityIcon {...iconProps} />;
-    case 6: return <TestTubeIcon {...iconProps} />;
-    case 7: return <BandageIcon {...iconProps} />;
-    case 8: return <DropletIcon {...iconProps} />;
-    case 9: return <WindIcon {...iconProps} />;
-    case 10: return <WindIcon {...iconProps} />;
-    default: return <PillIcon {...iconProps} />;
-  }
+  const icons = {
+    1: <PillIcon {...iconProps} />,
+    2: <SyrupIcon {...iconProps} />,
+    3: <SquareIcon {...iconProps} />,
+    4: <SyringeIcon {...iconProps} />,
+    5: <ActivityIcon {...iconProps} />,
+    6: <TestTubeIcon {...iconProps} />,
+    7: <BandageIcon {...iconProps} />,
+    8: <DropletIcon {...iconProps} />,
+    9: <WindIcon {...iconProps} />,
+    10: <WindIcon {...iconProps} />,
+  };
+
+  return icons[type as keyof typeof icons] || <PillIcon {...iconProps} />;
 };
 
 // Medicine Data Table Component
@@ -68,15 +70,20 @@ const MedicineDataTable = ({ medicines, category }: { medicines: MedicineType[];
     : medicines?.filter(med => med?.medicineType === category);
 
   const getDosageUnit = (medicineType: number): string => {
-    if (medicineType === 1 || medicineType === 3) return 'mg';
-    if (medicineType === 6) return 'g';
-    return 'ml';
+    const units: { [key: number]: string } = {
+      1: 'mg', // Capsules
+      3: 'mg', // Tablets
+      6: 'g',  // Tubing
+      7: 'g',  // Topical
+    };
+    return units[medicineType] || 'ml';
   };
 
   if (filteredMedicines?.length === 0) {
     return (
       <View style={styles.noDataContainer}>
-        <Text style={styles.noDataText}>No medicines found for this filter</Text>
+        <Text style={styles.noDataTitle}>No Medicines Found</Text>
+        <Text style={styles.noDataText}>Try selecting a different filter</Text>
       </View>
     );
   }
@@ -86,7 +93,7 @@ const MedicineDataTable = ({ medicines, category }: { medicines: MedicineType[];
       {/* Table Header */}
       <View style={styles.tableHeader}>
         <View style={[styles.tableCell, styles.snoCell]}>
-          <Text style={styles.headerText}>S.No</Text>
+          <Text style={styles.headerText}>#</Text>
         </View>
         <View style={[styles.tableCell, styles.nameCell]}>
           <Text style={styles.headerText}>Medicine Name</Text>
@@ -101,27 +108,32 @@ const MedicineDataTable = ({ medicines, category }: { medicines: MedicineType[];
 
       {/* Table Rows */}
       {filteredMedicines?.map((medicine, index) => (
-        <View key={medicine?.id || index} style={styles.tableRow}>
+        <View key={medicine?.id || index} style={[
+          styles.tableRow,
+          index % 2 === 0 && styles.tableRowEven
+        ]}>
           <View style={[styles.tableCell, styles.snoCell]}>
             <Text style={styles.cellText}>{index + 1}</Text>
           </View>
           <View style={[styles.tableCell, styles.nameCell]}>
             <View style={styles.medicineNameCell}>
-              <MedicineIcon type={medicine?.medicineType || 1} size={SCREEN_WIDTH < 375 ? 14 : 16} />
-              <Text style={[styles.cellText, styles.medicineName]} numberOfLines={2}>
+              <MedicineIcon type={medicine?.medicineType || 1} size={20} />
+              <Text style={[styles.cellText, styles.medicineName]} numberOfLines={1}>
                 {medicine?.medicineName ? 
-                  medicine?.medicineName?.slice(0, 1)?.toUpperCase() + 
-                  medicine?.medicineName?.slice(1)?.toLowerCase() 
+                  medicine.medicineName.charAt(0).toUpperCase() + 
+                  medicine.medicineName.slice(1).toLowerCase() 
                   : 'Unknown'
                 }
               </Text>
             </View>
           </View>
           <View style={[styles.tableCell, styles.daysCell]}>
-            <Text style={styles.cellText}>{medicine?.daysCount || '-'}</Text>
+            <View style={styles.daysBadge}>
+              <Text style={styles.daysText}>{medicine?.daysCount || '-'}</Text>
+            </View>
           </View>
           <View style={[styles.tableCell, styles.dosageCell]}>
-            <Text style={styles.cellText}>
+            <Text style={styles.dosageText}>
               {medicine?.doseCount || '0'} {getDosageUnit(medicine?.medicineType || 1)}
             </Text>
           </View>
@@ -135,13 +147,61 @@ const MedicineDataTable = ({ medicines, category }: { medicines: MedicineType[];
 const EmptyTreatmentPlan = ({ onAddMedicine }: { onAddMedicine: () => void }) => {
   return (
     <View style={styles.emptyContainer}>
+      <View style={styles.emptyIllustration}>
+        <View style={styles.emptyIcon}>
+          <PillIcon size={48} color="#94a3b8" />
+        </View>
+      </View>
       <View style={styles.emptyContent}>
-        <Text style={styles.emptyTitle}>No treatment plan yet!</Text>
-        <TouchableOpacity style={styles.addButton} onPress={onAddMedicine}>
-          <PlusIcon size={SCREEN_WIDTH < 375 ? 18 : 20} color="#fff" />
-          <Text style={styles.addButtonText}>ADD MEDICATION</Text>
+        <Text style={styles.emptyTitle}>No Treatment Plan Yet</Text>
+        <Text style={styles.emptySubtitle}>
+          Start by adding medications to create a treatment plan for your patient
+        </Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={onAddMedicine}>
+          <PlusIcon size={20} color="#fff" />
+          <Text style={styles.primaryButtonText}>Add Medication</Text>
         </TouchableOpacity>
       </View>
+    </View>
+  );
+};
+
+// Filter Bar Component
+const FilterBar = ({ 
+  filters, 
+  activeFilter, 
+  onFilterChange 
+}: { 
+  filters: MedicineFilter[];
+  activeFilter: number;
+  onFilterChange: (value: number) => void;
+}) => {
+  return (
+    <View style={styles.filterContainer}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterScrollContent}
+      >
+        {filters.map((option) => (
+          <TouchableOpacity
+            key={option.value}
+            style={[
+              styles.filterOption,
+              activeFilter === option.value && styles.filterOptionActive
+            ]}
+            onPress={() => onFilterChange(option.value)}
+          >
+            {option.icon}
+            <Text style={[
+              styles.filterOptionText,
+              activeFilter === option.value && styles.filterOptionTextActive
+            ]}>
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 };
@@ -159,21 +219,23 @@ const TreatmentPlanScreen: React.FC = () => {
   const [activeTopTab, setActiveTopTab] = useState<TopTabType>('medication');
   const [medFilter, setMedFilter] = useState<number>(-1);
 
-  const getAllMedicineApi = useRef(true);
-
-  // Medicine filter options
+  // Medicine filter options with icons
   const medFilterOptions: MedicineFilter[] = [
-    { label: "All", value: -1 },
-    { label: "Capsules", value: 1 },
-    { label: "Syrups", value: 2 },
-    { label: "Tablets", value: 3 },
-    { label: "Injections", value: 4 },
-    { label: "IV Line", value: 5 },
-    { label: "Tubing", value: 6 },
-    { label: "Topical", value: 7 },
-    { label: "Drops", value: 8 },
-    { label: "Spray", value: 9 },
-    { label: "Ventilator", value: 10 },
+    { 
+      label: "All", 
+      value: -1, 
+      icon: <View style={styles.allFilterIcon}><Text style={styles.allFilterText}>All</Text></View>
+    },
+    { label: "Capsules", value: 1, icon: <PillIcon size={16} color="#64748b" /> },
+    { label: "Syrups", value: 2, icon: <SyrupIcon size={16} color="#64748b" /> },
+    { label: "Tablets", value: 3, icon: <SquareIcon size={16} color="#64748b" /> },
+    { label: "Injections", value: 4, icon: <SyringeIcon size={16} color="#64748b" /> },
+    { label: "IV Line", value: 5, icon: <ActivityIcon size={16} color="#64748b" /> },
+    { label: "Tubing", value: 6, icon: <TestTubeIcon size={16} color="#64748b" /> },
+    { label: "Topical", value: 7, icon: <BandageIcon size={16} color="#64748b" /> },
+    { label: "Drops", value: 8, icon: <DropletIcon size={16} color="#64748b" /> },
+    { label: "Spray", value: 9, icon: <WindIcon size={16} color="#64748b" /> },
+    { label: "Ventilator", value: 10, icon: <WindIcon size={16} color="#64748b" /> },
   ];
 
   const getAllMedicine = async () => {
@@ -181,14 +243,14 @@ const TreatmentPlanScreen: React.FC = () => {
       setError(null);
       
       if (!currentPatient?.patientTimeLineID) {
-        setError('No patient timeline ID found');
+        setError('No patient timeline available');
         setLoading(false);
         return;
       }
 
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        setError('No authentication token found');
+        setError('Authentication required');
         setLoading(false);
         return;
       }
@@ -198,7 +260,7 @@ const TreatmentPlanScreen: React.FC = () => {
       if (response && response.status === "success") {
         setMedicineList(response?.data?.medicines || []);
       } else {
-        setError(response?.message || 'Failed to fetch medicines');
+        setError(response?.message || 'Failed to load medicines');
         setMedicineList([]);
       }
     } catch (error: any) {
@@ -210,12 +272,11 @@ const TreatmentPlanScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    if (currentPatient?.patientTimeLineID && getAllMedicineApi.current) {
-      getAllMedicineApi.current = false;
+    if (currentPatient?.patientTimeLineID) {
       getAllMedicine();
     } else if (!currentPatient?.patientTimeLineID) {
       setLoading(false);
-      setError('No patient selected or patient has no timeline');
+      setError('No patient selected');
     }
   }, [currentPatient]);
 
@@ -229,10 +290,10 @@ const TreatmentPlanScreen: React.FC = () => {
       return;
     }
     
-    navigation.navigate('MedicationTimelineScreen' as never, {
-      timelineID: currentPatient?.patientTimeLineID,
-      patientName: currentPatient?.pName,
-      patientId: currentPatient?.patientid
+    navigation.navigate('NotificationScreen' as never, {
+      timelineID: currentPatient.patientTimeLineID,
+      patientName: currentPatient.pName,
+      patientId: currentPatient.patientid
     } as never);
   };
 
@@ -241,32 +302,38 @@ const TreatmentPlanScreen: React.FC = () => {
     getAllMedicine();
   };
 
-  // Show loading state
+  // Loading State
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#14b8a6" />
-          <Text style={styles.loadingText}>Loading treatment plan...</Text>
+        <View style={styles.centerContainer}>
+          <View style={styles.loadingContent}>
+            <ActivityIndicator size="large" color="#14b8a6" />
+            <Text style={styles.loadingTitle}>Loading Treatment Plan</Text>
+            <Text style={styles.loadingText}>Please wait while we fetch patient data...</Text>
+          </View>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Show error state
+  // Error State
   if (error) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>Error Loading Treatment Plan</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={retryFetch}>
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </TouchableOpacity>
+        <View style={styles.centerContainer}>
+          <View style={styles.errorContent}>
+            <View style={styles.errorIcon}>
+              <Text style={styles.errorIconText}>⚠️</Text>
+            </View>
+            <Text style={styles.errorTitle}>Unable to Load</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.primaryButton} onPress={retryFetch}>
+              <Text style={styles.primaryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -276,100 +343,78 @@ const TreatmentPlanScreen: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {medicineList?.length === 0 ? (
+      {medicineList.length === 0 ? (
         <EmptyTreatmentPlan onAddMedicine={handleAddMedicine} />
       ) : (
         <View style={styles.container}>
-          {/* Top Tabs */}
-          <View style={styles.topTabs}>
-            <TouchableOpacity
-              style={[
-                styles.tabPill,
-                activeTopTab === 'medication' && styles.tabPillActive
-              ]}
-              onPress={() => setActiveTopTab('medication')}
-            >
-              <Text style={[
-                styles.tabPillText,
-                activeTopTab === 'medication' && styles.tabPillTextActive
-              ]}>
-                Medication
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <Text style={styles.headerTitle}>Treatment Plan</Text>
+              <Text style={styles.headerSubtitle}>
+                {currentPatient?.pName ? `For ${currentPatient.pName}` : 'Patient medications'}
               </Text>
-            </TouchableOpacity>
-
-            <View style={styles.topActions}>
+            </View>
+            
+            <View style={styles.headerActions}>
               <TouchableOpacity 
-                style={styles.addMedicineButton}
+                style={styles.secondaryButton}
+                onPress={handleViewTimeline}
+              >
+                <ClockIcon size={18} color="#14b8a6" />
+                <Text style={styles.secondaryButtonText}>View Timeline</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.primaryButtonSmall}
                 onPress={handleAddMedicine}
               >
-                <PlusIcon size={SCREEN_WIDTH < 375 ? 16 : 18} color="#fff" />
-                <Text style={styles.addMedicineButtonText}>Add Medicine</Text>
+                <PlusIcon size={18} color="#fff" />
+                <Text style={styles.primaryButtonTextSmall}>Add Medicine</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Content */}
+          {/* Main Content */}
           <View style={styles.content}>
-            {activeTopTab === 'medication' && (
-              <View style={styles.medicationPanel}>
-                {/* Filter Bar */}
-                <View style={styles.filterBar}>
-                  <View style={styles.filterContainer}>
-                    <Text style={styles.filterLabel}>Filter:</Text>
-                    <ScrollView 
-                      horizontal 
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.filterScroll}
-                      contentContainerStyle={styles.filterScrollContent}
-                    >
-                      {medFilterOptions?.map((option) => (
-                        <TouchableOpacity
-                          key={option?.value}
-                          style={[
-                            styles.filterOption,
-                            medFilter === option?.value && styles.filterOptionActive
-                          ]}
-                          onPress={() => setMedFilter(option?.value)}
-                        >
-                          <Text style={[
-                            styles.filterOptionText,
-                            medFilter === option?.value && styles.filterOptionTextActive
-                          ]}>
-                            {option?.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </View>
+            {/* Filter Section */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterSectionTitle}>Filter by Type</Text>
+              <FilterBar 
+                filters={medFilterOptions}
+                activeFilter={medFilter}
+                onFilterChange={setMedFilter}
+              />
+            </View>
 
-                {/* Medicine List */}
-                <ScrollView 
-                  style={styles.medicineList}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.medicineListContent}
-                >
-                  <MedicineDataTable medicines={medicineList} category={medFilter} />
-                </ScrollView>
+            {/* Medicine List */}
+            <View style={styles.medicineSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  {medFilter === -1 ? 'All Medications' : 
+                   medFilterOptions.find(f => f.value === medFilter)?.label + ' Medications'}
+                </Text>
+                <Text style={styles.sectionCount}>
+                  {medicineList.filter(med => medFilter === -1 || med.medicineType === medFilter).length} items
+                </Text>
               </View>
-            )}
-
-            {activeTopTab === 'procedure' && (
-              <View style={styles.procedurePanel}>
-                <Text style={styles.comingSoonText}>Procedures coming soon...</Text>
-              </View>
-            )}
+              
+              <ScrollView 
+                style={styles.scrollView}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+              >
+                <MedicineDataTable medicines={medicineList} category={medFilter} />
+              </ScrollView>
+            </View>
           </View>
         </View>
       )}
 
       {/* Footer */}
-      <View style={[styles.footerContainer, { bottom: insets.bottom }]}>
-        <Footer active={"patients"} brandColor="#14b8a6" />
+      <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
+        <Footer active="patients" brandColor="#14b8a6" />
       </View>
-      {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.bottomShield, { height: insets.bottom }]} />
-      )}
     </SafeAreaView>
   );
 };
@@ -379,81 +424,271 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  loadingContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    padding: 24,
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
-    color: '#64748b',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  loadingContent: {
     alignItems: 'center',
     padding: 40,
-    backgroundColor: '#fff',
   },
-  errorTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 16 : 18,
-    fontWeight: '600',
-    color: '#dc2626',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  errorText: {
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
-    fontWeight: '600',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 12 : 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#fff',
-  },
-  headerTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 18 : 20,
+  loadingTitle: {
+    fontSize: 20,
     fontWeight: '700',
     color: '#0f172a',
+    marginTop: 20,
+    marginBottom: 8,
   },
-  timelineButton: {
-    flexDirection: 'row',
+  loadingText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  errorContent: {
     alignItems: 'center',
-    backgroundColor: '#f0fdfa',
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 10 : 12,
-    paddingVertical: SCREEN_WIDTH < 375 ? 6 : 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ccfbf1',
+    padding: 40,
   },
-  timelineButtonText: {
-    marginLeft: 6,
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 14,
-    fontWeight: '600',
-    color: '#14b8a6',
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  errorIconText: {
+    fontSize: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#dc2626',
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
   },
   container: {
     flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    backgroundColor: '#fff',
+  },
+  headerContent: {
+    marginBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  content: {
+    flex: 1,
+  },
+  filterSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+  },
+  filterContainer: {
+    marginHorizontal: -4,
+  },
+  filterScrollContent: {
+    gap: 8,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 8,
+    marginHorizontal: 4,
+  },
+  filterOptionActive: {
+    backgroundColor: '#14b8a6',
+    borderColor: '#14b8a6',
+  },
+  filterOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  filterOptionTextActive: {
+    color: '#fff',
+  },
+  allFilterIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#64748b',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  allFilterText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  medicineSection: {
+    flex: 1,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  sectionCount: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  tableContainer: {
+    padding: 20,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 12,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#f1f5f9',
+    backgroundColor: '#fff',
+    paddingVertical: 8,
+  },
+  tableRowEven: {
+    backgroundColor: '#fafafa',
+  },
+  tableCell: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+  },
+  snoCell: {
+    width: 50,
+    alignItems: 'center',
+  },
+  nameCell: {
+    flex: 2,
+  },
+  daysCell: {
+    width: 70,
+    alignItems: 'center',
+  },
+  dosageCell: {
+    width: 90,
+    alignItems: 'center',
+  },
+  headerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  cellText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  medicineNameCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  medicineName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  daysBadge: {
+    backgroundColor: '#f0fdfa',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
+  },
+  daysText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#14b8a6',
+  },
+  dosageText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  noDataContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noDataTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  noDataText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
   },
   emptyContainer: {
     flex: 1,
@@ -461,224 +696,98 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 40,
   },
+  emptyIllustration: {
+    marginBottom: 32,
+  },
+  emptyIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed',
+  },
   emptyContent: {
     alignItems: 'center',
+    maxWidth: 300,
   },
   emptyTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 16 : 18,
-    fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 24,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 12,
     textAlign: 'center',
   },
-  addButton: {
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#14b8a6',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    shadowColor: '#000',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: '#14b8a6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  primaryButtonSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#14b8a6',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+    shadowColor: '#14b8a6',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
-  addButtonText: {
-    marginLeft: 8,
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
-    fontWeight: '600',
+  primaryButtonTextSmall: {
     color: '#fff',
-  },
-  topTabs: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 12 : 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  tabPill: {
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 16 : 20,
-    paddingVertical: SCREEN_WIDTH < 375 ? 6 : 8,
-    borderRadius: 20,
-    backgroundColor: '#e2e8f0',
-  },
-  tabPillActive: {
-    backgroundColor: '#14b8a6',
-  },
-  tabPillText: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 14,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#64748b',
   },
-  tabPillTextActive: {
-    color: '#fff',
-  },
-  topActions: {
+  secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  addMedicineButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 12 : 16,
-    paddingVertical: SCREEN_WIDTH < 375 ? 6 : 8,
-    borderRadius: 8,
-  },
-  addMedicineButtonText: {
-    marginLeft: 6,
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  content: {
-    flex: 1,
-  },
-  medicationPanel: {
-    flex: 1,
-  },
-  procedurePanel: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  comingSoonText: {
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
-    color: '#64748b',
-  },
-  filterBar: {
-    padding: SCREEN_WIDTH < 375 ? 12 : 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterLabel: {
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginRight: 12,
-  },
-  filterScroll: {
-    flex: 1,
-  },
-  filterScrollContent: {
-    paddingRight: 16,
-  },
-  filterOption: {
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 10 : 12,
-    paddingVertical: SCREEN_WIDTH < 375 ? 5 : 6,
-    borderRadius: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#f0fdfa',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    marginRight: 8,
+    borderColor: '#ccfbf1',
+    gap: 6,
   },
-  filterOptionActive: {
-    backgroundColor: '#14b8a6',
-    borderColor: '#0d9488',
+  secondaryButtonText: {
+    color: '#14b8a6',
+    fontSize: 14,
+    fontWeight: '600',
   },
-  filterOptionText: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 12,
-    fontWeight: '500',
-    color: '#374151',
-  },
-  filterOptionTextActive: {
-    color: '#fff',
-  },
-  medicineList: {
-    flex: 1,
-  },
-  medicineListContent: {
-    flexGrow: 1,
-  },
-  tableContainer: {
-    flex: 1,
-    padding: SCREEN_WIDTH < 375 ? 12 : 16,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#e2e8f0',
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
     backgroundColor: '#fff',
-  },
-  tableCell: {
-    paddingVertical: SCREEN_WIDTH < 375 ? 10 : 12,
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 6 : 8,
-    justifyContent: 'center',
-  },
-  snoCell: {
-    width: SCREEN_WIDTH < 375 ? 50 : 60,
-    alignItems: 'center',
-  },
-  nameCell: {
-    flex: 2,
-  },
-  daysCell: {
-    width: SCREEN_WIDTH < 375 ? 50 : 60,
-    alignItems: 'center',
-  },
-  dosageCell: {
-    width: SCREEN_WIDTH < 375 ? 70 : 80,
-    alignItems: 'center',
-  },
-  headerText: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 12,
-    fontWeight: '700',
-    color: '#374151',
-    textTransform: 'uppercase',
-  },
-  cellText: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
-    color: '#374151',
-  },
-  medicineNameCell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  medicineName: {
-    marginLeft: 6,
-    flex: 1,
-  },
-  noDataContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noDataText: {
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
-    color: '#64748b',
-    textAlign: 'center',
-  },
-  footerContainer: {
-    left: 0,
-    right: 0,
-    height: 70,
-    justifyContent: 'center',
-  },
-  bottomShield: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
   },
 });
 

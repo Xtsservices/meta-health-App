@@ -1,48 +1,30 @@
-// styles/DischargeStyles.ts
-import { StyleSheet, Dimensions, Platform } from 'react-native';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-// Responsive scaling
-const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
-const verticalScale = (size: number) => (SCREEN_HEIGHT / 812) * size;
-const moderateScale = (size: number, factor: number = 0.5) => size + (scale(size) - size) * factor;
+// DischargeStyles.ts
+import { StyleSheet, Platform } from "react-native";
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  ICON_SIZE, 
+  SCREEN_WIDTH, 
+  SCREEN_HEIGHT,
+  isTablet,
+  isSmallDevice,
+  responsiveWidth,
+  responsiveHeight,
+  GRID
+} from "../../utils/responsive";
+import { COLORS } from "../../utils/colour";
 
 export const RESPONSIVE = {
-  screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
-  spacing: {
-    xs: verticalScale(4),
-    sm: verticalScale(8),
-    md: verticalScale(12),
-    lg: verticalScale(16),
-    xl: verticalScale(20),
-    xxl: verticalScale(24),
+  spacing: SPACING,
+  fontSize: FONT_SIZE,
+  icon: ICON_SIZE,
+  screen: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
   },
-  fontSize: {
-    xs: moderateScale(10),
-    sm: moderateScale(12),
-    md: moderateScale(14),
-    lg: moderateScale(16),
-    xl: moderateScale(18),
-    xxl: moderateScale(20),
-  },
-  borderRadius: {
-    sm: moderateScale(4),
-    md: moderateScale(8),
-    lg: moderateScale(12),
-    xl: moderateScale(16),
-  },
-  icon: {
-    sm: moderateScale(16),
-    md: moderateScale(20),
-    lg: moderateScale(24),
-    xl: moderateScale(28),
-  },
-  button: {
-    sm: verticalScale(32),
-    md: verticalScale(40),
-    lg: verticalScale(48),
-  },
+  grid: GRID,
+  isTablet,
+  isSmallDevice,
 };
 
 export const styles = StyleSheet.create({
@@ -57,240 +39,256 @@ export const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: RESPONSIVE.spacing.lg,
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xxl,
   },
   gridContainer: {
-    flexDirection: SCREEN_WIDTH > 768 ? "row" : "column",
+    flexDirection: isTablet ? "row" : "column",
+    gap: GRID.gap,
   },
   formColumn: {
-    flex: 1,
+    flex: isTablet ? 1 : 0,
+    width: isTablet ? "100%" : "100%",
   },
   imageColumn: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    paddingLeft: SCREEN_WIDTH > 768 ? RESPONSIVE.spacing.lg : 0,
-    paddingTop: SCREEN_WIDTH > 768 ? 0 : RESPONSIVE.spacing.lg,
+    justifyContent: "center",
+    padding: SPACING.lg,
   },
   dischargeImage: {
-    width: SCREEN_WIDTH > 768 ? 200 : 150,
-    height: SCREEN_WIDTH > 768 ? 200 : 150,
+    width: responsiveWidth(80),
+    height: responsiveHeight(40),
+    maxWidth: 400,
+    maxHeight: 400,
   },
   formGroup: {
-    marginBottom: RESPONSIVE.spacing.lg,
+    marginBottom: isSmallDevice ? SPACING.sm : SPACING.md,
+  },
+  row: {
+    flexDirection: isTablet ? "row" : "column",
+    gap: isTablet ? SPACING.md : SPACING.sm,
+  },
+  halfWidth: {
+    flex: isTablet ? 1 : 0,
+    width: isTablet ? "auto" : "100%",
   },
   label: {
-    fontSize: RESPONSIVE.fontSize.md,
-    fontWeight: "600",
-    marginBottom: RESPONSIVE.spacing.sm,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "500",
+    marginBottom: SPACING.xs,
   },
   sectionTitle: {
-    fontSize: RESPONSIVE.fontSize.lg,
-    fontWeight: "bold",
-    marginBottom: RESPONSIVE.spacing.md,
+    fontSize: FONT_SIZE.md,
+    fontWeight: "600",
+    marginBottom: SPACING.sm,
   },
-// In your DischargeStyles.ts, REPLACE these styles:
-
-pickerContainer: {
-  borderWidth: 1,
-  borderRadius: RESPONSIVE.borderRadius.md,
-  // REMOVE: overflow: "hidden", // This causes text cutting
-  // REMOVE: fixed height
-  minHeight: RESPONSIVE.button.md, // Use minHeight instead of fixed height
-  justifyContent: 'center', // Center the content vertically
-},
-
-picker: {
-  // REMOVE: height: RESPONSIVE.button.md, // Don't use fixed height
-  paddingVertical: 0, // Remove vertical padding that might cause issues
-  margin: 0, // Remove any margins
-},
-
-// If you're on Android, you might need this additional style:
-pickerItem: {
-  fontSize: RESPONSIVE.fontSize.md, // Ensure proper font size
-  height: RESPONSIVE.button.md, // Set height for individual items
-},
   input: {
     borderWidth: 1,
-    borderRadius: RESPONSIVE.borderRadius.md,
-    padding: RESPONSIVE.spacing.md,
-    fontSize: RESPONSIVE.fontSize.md,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: isSmallDevice ? SPACING.sm : SPACING.md,
+    fontSize: FONT_SIZE.md,
+    minHeight: isSmallDevice ? 44 : 48,
   },
   disabledInput: {
     opacity: 0.7,
   },
   textArea: {
-    minHeight: verticalScale(100),
+    minHeight: isSmallDevice ? 80 : 100,
     textAlignVertical: "top",
+    paddingTop: SPACING.md,
   },
-  // Diet Dropdown Styles
+  pickerContainer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    minHeight: isSmallDevice ? 44 : 48,
+    justifyContent: 'center',
+  },
+  picker: {
+    paddingVertical: 0,
+    margin: 0,
+  },
+  // Diet Styles
   dietDropdownTrigger: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderRadius: RESPONSIVE.borderRadius.md,
-    padding: RESPONSIVE.spacing.md,
-    marginBottom: RESPONSIVE.spacing.sm,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: isSmallDevice ? SPACING.sm : SPACING.md,
+    minHeight: isSmallDevice ? 44 : 48,
   },
   dietDropdownText: {
-    fontSize: RESPONSIVE.fontSize.md,
+    fontSize: FONT_SIZE.md,
+    flex: 1,
+    marginRight: SPACING.sm,
   },
   chipsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: RESPONSIVE.spacing.sm,
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
   },
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: RESPONSIVE.spacing.md,
-    paddingVertical: RESPONSIVE.spacing.xs,
-    borderRadius: RESPONSIVE.borderRadius.lg,
-    marginRight: RESPONSIVE.spacing.sm,
-    marginBottom: RESPONSIVE.spacing.sm,
+    borderRadius: 16,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    maxWidth: responsiveWidth(40),
   },
   chipText: {
-    fontSize: RESPONSIVE.fontSize.sm,
-    marginRight: RESPONSIVE.spacing.xs,
+    fontSize: FONT_SIZE.xs,
+    flex: 1,
+    marginRight: SPACING.xs,
   },
   chipRemove: {
-    padding: RESPONSIVE.spacing.xs,
+    padding: 2,
   },
   // Dropdown Modal Styles
   dropdownOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: COLORS.overlay,
   },
   dropdownContainer: {
-    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: RESPONSIVE.borderRadius.xl,
-    borderTopRightRadius: RESPONSIVE.borderRadius.xl,
-    maxHeight: "80%",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: SPACING.md,
+    maxHeight: responsiveHeight(70),
   },
   dropdownHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: RESPONSIVE.spacing.xl,
-    borderBottomWidth: 1,
+    marginBottom: SPACING.md,
   },
   dropdownTitle: {
-    fontSize: RESPONSIVE.fontSize.xl,
-    fontWeight: "bold",
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "600",
   },
   searchInput: {
     borderWidth: 1,
-    borderRadius: RESPONSIVE.borderRadius.md,
-    padding: RESPONSIVE.spacing.md,
-    margin: RESPONSIVE.spacing.lg,
-    fontSize: RESPONSIVE.fontSize.md,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    marginBottom: SPACING.md,
+    minHeight: 44,
   },
   dietList: {
-    maxHeight: verticalScale(300),
+    maxHeight: responsiveHeight(40),
   },
   dietItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: RESPONSIVE.spacing.lg,
-    borderBottomWidth: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.xs,
+    minHeight: 44,
   },
   dietItemText: {
-    fontSize: RESPONSIVE.fontSize.md,
+    fontSize: FONT_SIZE.md,
     flex: 1,
+    marginRight: SPACING.sm,
   },
   checkbox: {
-    width: RESPONSIVE.icon.md,
-    height: RESPONSIVE.icon.md,
-    borderRadius: RESPONSIVE.borderRadius.sm,
+    width: 20,
+    height: 20,
     borderWidth: 2,
+    borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
   },
   checkmark: {
-    color: "white",
-    fontSize: RESPONSIVE.fontSize.xs,
+    color: "#FFFFFF",
+    fontSize: FONT_SIZE.xs,
     fontWeight: "bold",
   },
   dropdownActions: {
     flexDirection: "row",
-    padding: RESPONSIVE.spacing.lg,
+    justifyContent: "space-between",
+    gap: SPACING.md,
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
     borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
   dropdownButton: {
     flex: 1,
-    paddingVertical: RESPONSIVE.spacing.md,
-    borderRadius: RESPONSIVE.borderRadius.md,
+    borderRadius: 8,
+    paddingVertical: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: RESPONSIVE.spacing.sm,
+    minHeight: 44,
   },
   dropdownButtonText: {
-    color: "white",
+    color: "#FFFFFF",
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
-    fontSize: RESPONSIVE.fontSize.md,
   },
-  row: {
-    flexDirection: SCREEN_WIDTH > 480 ? "row" : "column",
-  },
-  halfWidth: {
-    flex: 1,
-    marginRight: SCREEN_WIDTH > 480 ? RESPONSIVE.spacing.md : 0,
-    marginBottom: SCREEN_WIDTH > 480 ? 0 : RESPONSIVE.spacing.md,
-  },
+  // Actions
   actions: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    padding: RESPONSIVE.spacing.lg,
+    gap: SPACING.md,
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.md,
+    paddingVertical: SPACING.md,
     borderTopWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
   },
   button: {
     flex: 1,
-    paddingVertical: RESPONSIVE.spacing.lg,
-    borderRadius: RESPONSIVE.borderRadius.md,
+    borderRadius: 8,
+    paddingVertical: SPACING.md,
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: RESPONSIVE.spacing.sm,
+    minHeight: 50,
   },
   cancelButtonText: {
-    color: "white",
+    color: COLORS.text,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
-    fontSize: RESPONSIVE.fontSize.md,
   },
   submitButtonText: {
-    color: "white",
+    color: "#FFFFFF",
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
-    fontSize: RESPONSIVE.fontSize.md,
   },
-  // Footer Styles
+  // Footer
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
-    height: 70,
-    justifyContent: "center",
   },
   navShield: {
-    position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "transparent",
+    backgroundColor: COLORS.bg,
   },
-  // Loading Styles
+  // Utility Styles
   center: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    padding: RESPONSIVE.spacing.xl,
+    justifyContent: "center",
+    padding: SPACING.xl,
   },
   loadingText: {
-    marginTop: RESPONSIVE.spacing.md,
-    fontSize: RESPONSIVE.fontSize.md,
+    fontSize: FONT_SIZE.md,
+    textAlign: "center",
   },
 });

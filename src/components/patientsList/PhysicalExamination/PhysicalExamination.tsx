@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Pressable,
   Alert,
-  Dimensions,
   Platform,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -18,8 +17,25 @@ import { AuthDelete, AuthFetch } from "../../../auth/auth";
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { PlusIcon, Trash2Icon } from "../../../utils/SvgIcons";
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  ICON_SIZE, 
+  SCREEN_WIDTH, 
+  SCREEN_HEIGHT,
+  isTablet,
+  isSmallDevice,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const RESPONSIVE = {
+  spacing: SPACING,
+  fontSize: FONT_SIZE,
+  icon: ICON_SIZE,
+  screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
+  isTablet,
+  isSmallDevice,
+};
 
 type RootState = any;
 const selectUser = (s: RootState) => s.currentUser;
@@ -45,18 +61,6 @@ interface PhysicalExaminationData {
   updatedAt?: string;
   addedOn?: string;
 }
-
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  danger: "#ef4444",
-};
 
 const FOOTER_H = 70;
 
@@ -85,7 +89,7 @@ export default function PhysicalExaminationScreen() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<PhysicalExaminationData[]>([]);
 
-  const bottomPad = FOOTER_H + Math.max(insets.bottom, 12) + 12;
+  const bottomPad = FOOTER_H + Math.max(insets.bottom, RESPONSIVE.spacing.md) + RESPONSIVE.spacing.md;
 
   const loadPhysicalExaminationData = useCallback(async () => {
     if (!timeline || !currentPatient?.id) return;
@@ -184,7 +188,7 @@ export default function PhysicalExaminationScreen() {
           onPress={() => onDelete(item)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Trash2Icon size={18} color={COLORS.danger} />
+          <Trash2Icon size={RESPONSIVE.icon.sm} color={COLORS.danger} />
         </Pressable>
       </View>
       
@@ -231,8 +235,11 @@ export default function PhysicalExaminationScreen() {
           data={list}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderPhysicalExaminationItem}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-          contentContainerStyle={{ padding: 16, paddingBottom: bottomPad }}
+          ItemSeparatorComponent={() => <View style={{ height: RESPONSIVE.spacing.sm }} />}
+          contentContainerStyle={{ 
+            padding: RESPONSIVE.spacing.lg, 
+            paddingBottom: bottomPad 
+          }}
           showsVerticalScrollIndicator
           scrollIndicatorInsets={{ bottom: bottomPad }}
           decelerationRate={Platform.OS === "ios" ? "normal" : 0.98}
@@ -241,14 +248,14 @@ export default function PhysicalExaminationScreen() {
           removeClippedSubviews={false}
           ListEmptyComponent={
             <View style={[styles.center, { paddingTop: 40 }]}>
-              <Text style={{ color: COLORS.sub, fontWeight: "600", marginBottom: 16 }}>
+              <Text style={[styles.emptyText, { color: COLORS.sub }]}>
                 No physical examination records found
               </Text>
               <Pressable
                 style={styles.cta}
                 onPress={() => navigation.navigate("AddPhysicalExamination" as never)}
               >
-                <PlusIcon size={18} color={COLORS.buttonText} />
+                <PlusIcon size={RESPONSIVE.icon.sm} color={COLORS.buttonText} />
                 <Text style={styles.ctaText}>Add Physical Examination</Text>
               </Pressable>
             </View>
@@ -260,7 +267,7 @@ export default function PhysicalExaminationScreen() {
         style={styles.fab}
         onPress={() => navigation.navigate("AddPhysicalExamination" as never)}
       >
-        <PlusIcon size={20} color={COLORS.buttonText} />
+        <PlusIcon size={RESPONSIVE.icon.md} color={COLORS.buttonText} />
       </Pressable>
       
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
@@ -283,21 +290,19 @@ const styles = StyleSheet.create({
     alignItems: "center", 
     justifyContent: "center",
   },
-
   headerWrap: { 
-    paddingHorizontal: 16, 
-    paddingTop: 12,
+    paddingHorizontal: RESPONSIVE.spacing.lg, 
+    paddingTop: RESPONSIVE.spacing.md,
   },
   headerText: { 
-    fontSize: 16, 
+    fontSize: RESPONSIVE.fontSize.lg, 
     fontWeight: "900",
   },
   subHeader: { 
-    fontSize: 12, 
+    fontSize: RESPONSIVE.fontSize.sm, 
     fontWeight: "700", 
-    marginTop: 2,
+    marginTop: RESPONSIVE.spacing.xs,
   },
-
   card: {
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -309,62 +314,59 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    padding: RESPONSIVE.spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: RESPONSIVE.fontSize.md,
     fontWeight: "800",
     color: COLORS.text,
     flex: 1,
   },
   cardContent: {
-    padding: 16,
+    padding: RESPONSIVE.spacing.lg,
   },
-
   grid: {
-    flexDirection: "row",
+    flexDirection: RESPONSIVE.isTablet ? "row" : "column",
     flexWrap: "wrap",
-    gap: 12,
+    gap: RESPONSIVE.spacing.md,
   },
   gridItem: {
-    width: SCREEN_WIDTH < 400 ? '100%' : 'calc(50% - 6px)',
-    minWidth: SCREEN_WIDTH < 400 ? '100%' : 160,
-    gap: 4,
+    flex: RESPONSIVE.isTablet ? 1 : 0,
+    width: RESPONSIVE.isTablet ? '48%' : '100%',
+    minWidth: RESPONSIVE.isTablet ? 200 : '100%',
+    gap: RESPONSIVE.spacing.xs,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: RESPONSIVE.fontSize.sm,
     fontWeight: "700",
     color: COLORS.text,
   },
   value: {
-    fontSize: 14,
+    fontSize: RESPONSIVE.fontSize.md,
     fontWeight: "500",
     color: COLORS.text,
     lineHeight: 20,
   },
-
   metaSection: {
-    marginTop: 14,
-    paddingTop: 14,
+    marginTop: RESPONSIVE.spacing.md,
+    paddingTop: RESPONSIVE.spacing.md,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    gap: 4,
+    gap: RESPONSIVE.spacing.xs,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: RESPONSIVE.fontSize.xs,
     fontWeight: "500",
     color: COLORS.sub,
   },
-
   deleteBtn: { 
-    padding: 6,
+    padding: RESPONSIVE.spacing.sm,
   },
-
   fab: {
     position: "absolute",
-    right: 16,
+    right: RESPONSIVE.spacing.lg,
     bottom: 90,
     width: 56,
     height: 56,
@@ -377,12 +379,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-
+  emptyText: {
+    fontWeight: "600", 
+    fontSize: RESPONSIVE.fontSize.md,
+    marginBottom: RESPONSIVE.spacing.lg,
+    textAlign: 'center',
+  },
   cta: {
     flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    gap: RESPONSIVE.spacing.sm,
+    paddingHorizontal: RESPONSIVE.spacing.xl,
+    paddingVertical: RESPONSIVE.spacing.md,
     borderRadius: 24,
     backgroundColor: COLORS.button,
     alignItems: "center",
@@ -393,12 +400,10 @@ const styles = StyleSheet.create({
   },
   ctaText: { 
     fontWeight: "700", 
-    fontSize: 14,
+    fontSize: RESPONSIVE.fontSize.md,
     color: COLORS.buttonText,
   },
-
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,

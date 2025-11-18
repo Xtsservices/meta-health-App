@@ -44,7 +44,6 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter }) => {
   const screenWidth = Dimensions.get('window').width;
   const chartWidth = screenWidth - 96;
   const chartHeight = 220;
-
   const getData = async () => {
     try {
       setIsLoading(true);
@@ -99,14 +98,11 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter }) => {
     }
   };
 
-  useEffect(() => {
-    if (user?.token) {
-      // Reset animations when filter changes
-      fadeAnim.setValue(0);
-      scaleAnim.setValue(0.8);
-      getData();
-    }
-  }, [user?.token, selectedWardDataFilter]);
+useEffect(() => {
+  fadeAnim.setValue(0);
+  scaleAnim.setValue(0.8);
+  getData();
+}, [selectedWardDataFilter]);
 
   // Format ward names for better display
   const formatWardName = (name: string): string => {
