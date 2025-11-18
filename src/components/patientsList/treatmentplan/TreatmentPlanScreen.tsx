@@ -466,7 +466,7 @@ useEffect(() => {
               >
                 <PlusIcon size={18} color="#fff" />
                 <Text style={styles.primaryButtonTextSmall}>Add Medicine</Text>
-              </TouchableOpacity>
+              </TouchableOpacity>}
             </View>}
           </View>
 
