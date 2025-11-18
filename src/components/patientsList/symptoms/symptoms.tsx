@@ -17,6 +17,7 @@ import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showError, showSuccess } from "../../../store/toast.slice";
+import { COLORS } from "../../../utils/colour";
 
 type RouteParams = { ot: boolean };
 
@@ -34,19 +35,8 @@ type SymptomRow = {
   userID?: number | null;
 };
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  field: "#f8fafc",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  danger: "#ef4444",
-  pill: "#eef2f7",
-};
+
+
 
 const cap = (s: string) => (s ? s.slice(0, 1).toUpperCase() + s.slice(1).toLowerCase() : "");
 

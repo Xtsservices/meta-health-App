@@ -15,23 +15,13 @@ import {
   TouchableOpacity,
 } from "react-native";
 import useAnesthesiaForm from "../../../utils/useAnesthesiaRecordForm";
+import { COLORS } from "../../../utils/colour";
 
 type Props = {
   onNext?: () => void;
 };
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#64748b",
-  border: "#e2e8f0",
-  field: "#f8fafc",
-  brand: "#14b8a6",
-  brandDark: "#0f766e",
-  chip: "#e5e7eb",
-  shadow: "#000000",
-};
+
 
 /** ---------- Generic Select Field (modal dropdown) ---------- */
 type SelectFieldProps = {

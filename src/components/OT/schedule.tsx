@@ -39,24 +39,13 @@ import { showError, showSuccess } from "../../store/toast.slice";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 import Footer from "../dashboard/footer";
 import { useFocusEffect } from "@react-navigation/native";
+import { COLORS } from "../../utils/colour";
 
 
 
 dayjs.extend(utc);
 
-/* ---------- Colors / constants ---------- */
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#64748b",
-  border: "#e2e8f0",
-  field: "#f8fafc",
-  brand: "#14b8a6",
-  brandDark: "#0f766e",
-  chip: "#e2e8f0",
-  error: "#b91c1c",
-};
+
 
 const FOOTER_H = 64;
 const SLOT_START = 6 * 60; // 06:00

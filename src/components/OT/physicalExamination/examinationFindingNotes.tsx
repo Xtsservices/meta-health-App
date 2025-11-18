@@ -20,6 +20,7 @@ import usePhysicalExaminationForm from "../../../utils/usePhysicalExaminationFor
 import Footer from "../../dashboard/footer";
 import { RootState } from "../../../store/store";
 import { useSelector } from "react-redux";
+import { COLORS } from "../../../utils/colour";
 
 interface ExaminationFindingNotesShape {
   examinationFindingNotes: string;
@@ -64,19 +65,7 @@ const isReadOnly = user?.roleName === "surgeon";
       ) => void;
     };
 
-  const COLORS = useMemo(
-    () => ({
-      bg: "#f8fafc",
-      card: "#ffffff",
-      text: "#0f172a",
-      sub: "#64748b",
-      border: "#e2e8f0",
-      brand: "#14b8a6",
-      brandSoft: "#0ea5a733",
-      footerBg: "#ffffff",
-    }),
-    [isDark]
-  );
+
 
   // dynamic height for each textarea
   const [inputHeights, setInputHeights] = useState<

@@ -18,23 +18,9 @@ import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
+import { COLORS } from "../../../utils/colour";
 
-// ---- colors / sizing ----
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  pill: "#eef2f7",
-  brand: "#14b8a6",
-  chipTemp: "#fef3c7",       // amber-100
-  chipHR: "#e0f2fe",         // sky-100
-  chipBP: "#fee2e2",         // rose-100
-  chipRR: "#dcfce7",         // green-100
-  chipSpO2: "#ede9fe",       // violet-100
-  chipHRV: "#faf5ff",        // purple-50
-};
+
 const { width } = Dimensions.get("window");
 
 const FOOTER_H = 70;

@@ -24,6 +24,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store/store";
 import { PatientType } from "../../utils/types";
+import { COLORS } from "../../utils/colour";
 
 /** ----- Types ----- */
 type TabKey =
@@ -77,21 +78,7 @@ const PatientTabsGrid: React.FC<Props> = ({
   const scheme = useColorScheme();
  
 
-  const COLORS = useMemo(
-    () => ({
-      bg:  "#f8fafc",
-      card:  "#ffffff",
-      text: "#0f172a",
-      sub:  "#475569",
-      border: "#e2e8f0",
-      brand: brandColor || "#14b8a6",
-      brandDark: "#0f766e",
-      hover:  "#f1f5f9",
-      pill: "#eef2f7",
-      shadow: "#000000",
-    }),
-    [ brandColor]
-  );
+  
 
   // Default route names; override via routeMap prop if your navigator uses different names
   const defaultRoutes: Record<TabKey, string> = {

@@ -47,6 +47,7 @@ import useOTConfig, { OTPatientStages } from "../../utils/otConfig";
 import { showError } from "../../store/toast.slice";
 import { formatageFromDOB } from "../../utils/age";
 import { formatDate } from "../../utils/dateTime";
+import { COLORS } from "../../utils/colour";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAGE_SIZE = 10;
@@ -80,15 +81,7 @@ interface SurgeryData {
 const FOOTER_H = 70;
 
 // --- Colors (static, used everywhere) ---
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  placeholder: "#94a3b8",
-};
+
 
 // --- Small helper ---
 function getAgeLabel(dob?: string): string {
@@ -434,17 +427,7 @@ console.log(pagedData, "complete patients list")
     }
   };
 
-  const COLORS = {
-    bg: "#f8fafc", // Light background
-    card: "#ffffff", // White cards
-    text: "#0f172a", // Dark text
-    sub: "#475569", // Gray subtext
-    border: "#e2e8f0", // Light border
-    brand: "#14b8a6",
-    placeholder: "#94a3b8",
-    danger: "#ef4444",
-    warning: "#f59e0b",
-  };
+ 
 
   const capitalizeFirstLetter = (str: string) => {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();

@@ -30,6 +30,7 @@ import { AuthFetch, AuthPost, AuthDelete } from "../../../auth/auth";
 import { useReportStore } from "../../../store/zustandstore";
 import Footer from "../../dashboard/footer";
 import { showError, showSuccess } from "../../../store/toast.slice";
+import { COLORS } from "../../../utils/colour";
 
 type Attachment = {
   id: number;
@@ -40,20 +41,7 @@ type Attachment = {
   addedOn: string;
 };
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  chip: "#eef2f7",
-  danger: "#ef4444",
-  tabActive: "#0ea5a3",
-  pillBg: "#ecfeff",
-  pillText: "#0369a1",
-  rowShadow: "#000000",
-};
+
 
 const FOOTER_H = 64;
 

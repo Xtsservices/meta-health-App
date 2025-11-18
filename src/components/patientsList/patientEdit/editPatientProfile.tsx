@@ -29,18 +29,9 @@ import { showError, showSuccess } from "../../../store/toast.slice";
 import { state as STATE_LIST, city as CITY_LIST } from "../../../utils/stateCity";
 import { AgeUnit } from "../../../utils/age";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
+import { COLORS } from "../../../utils/colour";
 const FOOTER_H = 64;
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#64748b",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  brandDark: "#0f766e",
-  danger: "#ef4444",
-  placeholder: "#94a3b8",
-};
+
 
 const EditPatientMobile = () => {
   const navigation = useNavigation<any>();

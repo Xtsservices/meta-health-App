@@ -19,6 +19,7 @@ import usePreOpForm from "../../../utils/usePreOpForm"; // ⬅️ adjust path if
 import useOTConfig from "../../../utils/otConfig"; // to get preOpReadOnly if available
 import { RootState } from "../../../store/store";
 import { useSelector } from "react-redux";
+import { COLORS } from "../../../utils/colour";
 
 const PreopControllersMobile: React.FC = () => {
   const scheme = useColorScheme();
@@ -38,22 +39,7 @@ const isReadOnly = user?.roleName === "surgeon";
 
   const { preOpReadOnly } = useOTConfig();
 
-  const COLORS = useMemo(
-    () => ({
-      bg: "#f8fafc",
-      card: "#ffffff",
-      text: "#0f172a",
-      sub: "#64748b",
-      border: "#e2e8f0",
-      brand: "#14b8a6",
-      brandSoft: "#0ea5a733",
-      checkboxBg: "#ffffff",
-      checkboxBorder: "#cbd5e1",
-      footerBg: "#ffffff",
-      disabled: "#cbd5e1",
-    }),
-    [isDark]
-  );
+ 
 
   const toggleArrangeBlood = () => {
     if (preOpReadOnly) return;

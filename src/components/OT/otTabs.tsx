@@ -33,6 +33,7 @@ import { showError } from "../../store/toast.slice";
 import usePhysicalExaminationForm from "../../utils/usePhysicalExaminationForm";
 import usePreOpStore from "../../utils/usePreOpForm";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { COLORS } from "../../utils/colour";
 
 // 🔹 OT form stores (same as web BasicTabs, adjust paths if needed)
 
@@ -113,21 +114,7 @@ const PatientTabsGrid: React.FC<Props> = ({
     resetAll: resetPreOpStore,
   } = usePreOpStore();
 
-  const COLORS = useMemo(
-    () => ({
-      bg: "#f8fafc",
-      card: "#ffffff",
-      text: "#0f172a",
-      sub: "#475569",
-      border: "#e2e8f0",
-      brand: brandColor || "#14b8a6",
-      brandDark: "#0f766e",
-      hover: "#f1f5f9",
-      pill: "#eef2f7",
-      shadow: "#000000",
-    }),
-    [ brandColor]
-  );
+ 
 
   const defaultRoutes: Record<TabKey, string> = {
     patientFile: "PatientFile",

@@ -16,6 +16,7 @@ import { useNavigation } from "@react-navigation/native";
 
 import Footer from "../../dashboard/footer";
 import useAnesthesiaForm from "../../../utils/useAnesthesiaRecordForm";
+import { COLORS } from "../../../utils/colour";
 
 interface MonitorsState {
   spo2: boolean;
@@ -62,21 +63,7 @@ const MonitorsMobile: React.FC = () => {
     setMonitors: (patch: Partial<MonitorsState>) => void;
   };
 
-  const COLORS = useMemo(
-    () => ({
-      bg: "#f8fafc",
-      card: "#ffffff",
-      text: "#0f172a",
-      sub: "#64748b",
-      border: "#e2e8f0",
-      brand: "#14b8a6",
-      brandSoft: "#0ea5a733",
-      checkboxBg: "#ffffff",
-      checkboxBorder: "#cbd5e1",
-      footerBg: "#ffffff",
-    }),
-    [isDark]
-  );
+  
 
   const toggleMonitor = (key: keyof MonitorsState) => {
     const current = Boolean(monitors?.[key]);

@@ -36,6 +36,7 @@ import Footer from "../dashboard/footer";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 import useAnesthesiaForm from "../../utils/useAnesthesiaRecordForm";
 import usePostOPStore from "../../utils/usePostopForm";
+import { COLORS } from "../../utils/colour";
 
 /** ----- Types ----- */
 type SectionKey =
@@ -114,21 +115,7 @@ const PatientTabsGrid: React.FC<Props> = ({
   const activeTab = route.params?.tabName;
   const user = useSelector((s: RootState) => s.currentUser);
 
-  const COLORS = useMemo(
-    () => ({
-      bg: "#f8fafc",
-      card: "#ffffff",
-      text: "#0f172a",
-      sub: "#475569",
-      border: "#e2e8f0",
-      brand: brandColor || "#14b8a6",
-      brandDark: "#0f766e",
-      hover: "#f1f5f9",
-      pill: "#eef2f7",
-      shadow: "#000000",
-    }),
-    [brandColor]
-  );
+ 
 
   /** Build tiles depending on tabName coming from route */
   const tiles: GridItem[] = useMemo(() => {

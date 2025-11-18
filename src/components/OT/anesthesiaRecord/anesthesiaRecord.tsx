@@ -9,6 +9,7 @@ import {
   FlatList,
   TouchableOpacity,
   Platform,
+  Dimensions,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,19 +17,17 @@ import { useNavigation } from "@react-navigation/native";
 
 import useAnesthesiaRecordForm from "../../../utils/useAnesthesiaRecordForm";
 import Footer from "../../dashboard/footer";
+import { COLORS } from "../../../utils/colour";
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#64748b",
-  border: "#e2e8f0",
-  field: "#f8fafc",
-  brand: "#14b8a6",
-  brandDark: "#0f766e",
-  chip: "#e5e7eb",
-  shadow: "#000000",
-};
+// Get screen dimensions
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// Dynamic scaling functions
+const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
+const verticalScale = (size: number) => (SCREEN_HEIGHT / 812) * size;
+const moderateScale = (size: number, factor = 0.5) =>
+  size + (scale(size) - size) * factor;
+
 
 type Props = {
   onNext?: () => void;
@@ -75,7 +74,7 @@ const SelectField: React.FC<SelectFieldProps> = ({
         <Text
           style={{
             color: value ? COLORS.text : COLORS.sub,
-            fontSize: 15,
+            fontSize: moderateScale(15),
             fontWeight: value ? "600" : "400",
           }}
         >
@@ -117,6 +116,7 @@ const SelectField: React.FC<SelectFieldProps> = ({
                       style={{
                         color: selected ? "#fff" : COLORS.text,
                         fontWeight: selected ? "800" : "500",
+                        fontSize: moderateScale(15),
                       }}
                     >
                       {item}
@@ -131,7 +131,13 @@ const SelectField: React.FC<SelectFieldProps> = ({
                 onPress={() => setOpen(false)}
                 style={[styles.modalBtn, { backgroundColor: COLORS.chip }]}
               >
-                <Text style={{ color: COLORS.text, fontWeight: "700" }}>
+                <Text
+                  style={{
+                    color: COLORS.text,
+                    fontWeight: "700",
+                    fontSize: moderateScale(14),
+                  }}
+                >
                   Cancel
                 </Text>
               </Pressable>
@@ -173,12 +179,18 @@ const AnesthesiaRecordFormScreen: React.FC<Props> = ({
           enableOnAndroid
           enableAutomaticScroll
           keyboardOpeningTime={0}
-          extraScrollHeight={Platform.select({ ios: 24, android: 80 })}
-          extraHeight={Platform.select({ ios: 0, android: 100 })}
+          extraScrollHeight={Platform.select({
+            ios: verticalScale(24),
+            android: verticalScale(80),
+          })}
+          extraHeight={Platform.select({
+            ios: 0,
+            android: verticalScale(100),
+          })}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[
             styles.scrollInner,
-            { paddingBottom: 120 }, // extra so Next button is not hidden behind footer
+            { paddingBottom: verticalScale(120) },
           ]}
         >
           <View
@@ -282,13 +294,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollInner: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: scale(16),
+    paddingTop: verticalScale(16),
   },
   card: {
-    borderRadius: 16,
+    borderRadius: moderateScale(16),
     borderWidth: 1,
-    padding: 14,
+    padding: moderateScale(14),
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -296,31 +308,33 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   header: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: "800",
     color: COLORS.text,
-    marginBottom: 4,
+    marginBottom: verticalScale(4),
   },
   subHeader: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: COLORS.sub,
-    marginBottom: 10,
+    marginBottom: verticalScale(10),
+    lineHeight: moderateScale(18),
   },
   block: {
-    marginTop: 10,
+    marginTop: verticalScale(10),
   },
   label: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: "800",
     color: COLORS.text,
-    marginBottom: 6,
+    marginBottom: verticalScale(6),
   },
   selectInput: {
     borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(10),
     justifyContent: "center",
+    minHeight: verticalScale(44),
   },
 
   // Modal
@@ -329,62 +343,66 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
+    padding: scale(16),
   },
   modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 16,
-    padding: 14,
+    width: SCREEN_WIDTH * 0.9,
+    maxWidth: scale(420),
+    borderRadius: moderateScale(16),
+    padding: moderateScale(14),
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   modalTitle: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: "800",
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   modalList: {
-    maxHeight: 260,
+    maxHeight: verticalScale(260),
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: moderateScale(12),
   },
   optionRow: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(12),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
+    minHeight: verticalScale(44),
+    justifyContent: "center",
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 10,
-    gap: 10,
+    marginTop: verticalScale(10),
+    gap: scale(10),
   },
   modalBtn: {
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(10),
     alignItems: "center",
     justifyContent: "center",
+    minHeight: verticalScale(40),
   },
 
   // Next inside form
   formNavRow: {
-    marginTop: 24,
+    marginTop: verticalScale(24),
   },
   nextBtn: {
-    borderRadius: 999,
-    paddingVertical: 14,
+    borderRadius: moderateScale(999),
+    paddingVertical: verticalScale(14),
     alignItems: "center",
     justifyContent: "center",
+    minHeight: verticalScale(48),
   },
   nextText: {
     color: "#fff",
-    fontSize: 15,
+    fontSize: moderateScale(15),
     fontWeight: "800",
   },
 

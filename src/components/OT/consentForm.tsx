@@ -19,16 +19,10 @@ import { useReportStore } from "../../store/zustandstore";
 import { AuthDelete, AuthFetch, UploadFiles } from "../../auth/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showError, showSuccess } from "../../store/toast.slice";
+import { COLORS } from "../../utils/colour";
 
 const BRAND = "#14b8a6";
 const BORDER = "#e2e8f0";
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  brand: BRAND,
-};
 
 const ReportsTabMobile: React.FC = () => {
   const user = useSelector((s: RootState) => s.currentUser);

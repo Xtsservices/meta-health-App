@@ -38,6 +38,7 @@ import { currentPatient as setCurrentPatientAction } from "../../store/store";
 import TransferPatient from "./transferPatient";
 import OtTabs from "../OT/otTabs";
 import DischargeSummaryDownload from "./dischargeSummaryDownload";
+import { COLORS } from "../../utils/colour";
 // ---- types ----
 type RootState = any;
 type testType = {
@@ -140,27 +141,7 @@ const PatientProfileOPD: React.FC = () => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
 
-  const COLORS = useMemo(
-    () => ({
-      bg: "#f8fafc",
-      card:  "#ffffff",
-      card2:  "#f1f5f9",
-      text:  "#0f172a",
-      sub:  "#475569",
-      border:  "#e2e8f0",
-      brand: "#14b8a6",
-      warn: "#f59e0b",
-      button:  "#14b8a6",
-      buttonText: "#ffffff",
-      overlay: "rgba(0,0,0,0.45)",
-      field:  "#f8fafc",
-      fieldText: "#0f172a",
-      pill:  "#e5e7eb",
-      dischargeButton: "#ef4444",
-      dischargeButtonText: "#ffffff",
-    }),
-    []
-  );
+ 
 
   const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.currentUser);

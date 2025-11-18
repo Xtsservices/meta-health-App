@@ -43,6 +43,7 @@ import {
 } from "../../utils/types";
 import { showError, showSuccess } from "../../store/toast.slice";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
+import { COLORS } from "../../utils/colour";
 
 type Department = { id: number; name: string };
 
@@ -107,18 +108,7 @@ const AddPatientForm: React.FC = () => {
   const scrollViewRef = useRef<ScrollView>(null);
   const FOOTER_HEIGHT = 70;
 
-  const COLORS = useMemo(() => ({
-    bg: "#f8fafc",
-    card: "#ffffff",
-    text: "#1e293b",
-    sub: "#64748b",
-    border: "#e2e8f0",
-    brand: "#14b8a6",
-    danger: "#ef4444",
-    inputBg: "transparent",
-    placeholder: "#9ca3af",
-    pickerText: "#1e293b",
-  }), []);
+
 
   // ---------- Title list by category ----------
   useEffect(() => {

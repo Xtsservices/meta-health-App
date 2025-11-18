@@ -14,20 +14,13 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import usePostOPStore from "../../utils/usePostopForm";
 import Footer from "../dashboard/footer";
+import { COLORS } from "../../utils/colour";
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const scale = (s: number) => (SCREEN_WIDTH / 375) * s;
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  border: "#e2e8f0",
-  placeholder: "#94a3b8",
-  brand: "#14b8a6",
-  pill: "#eef2f7",
-};
+
 
 export default function PostOpNotesScreen() {
   const navigation = useNavigation<any>();
