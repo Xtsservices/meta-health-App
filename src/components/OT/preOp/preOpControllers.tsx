@@ -17,13 +17,16 @@ import { useNavigation } from "@react-navigation/native";
 import Footer from "../../dashboard/footer";
 import usePreOpForm from "../../../utils/usePreOpForm"; // ⬅️ adjust path if needed
 import useOTConfig from "../../../utils/otConfig"; // to get preOpReadOnly if available
+import { RootState } from "../../../store/store";
+import { useSelector } from "react-redux";
 
 const PreopControllersMobile: React.FC = () => {
   const scheme = useColorScheme();
   const isDark = scheme === "dark";
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-
+  const user = useSelector((s: RootState) => s.currentUser);
+const isReadOnly = user?.roleName === "surgeon";
   const {
     notes,
     arrangeBlood,
@@ -99,26 +102,22 @@ const PreopControllersMobile: React.FC = () => {
               Pre-Op Controls
             </Text>
 
-            <View style={styles.headerRow}>
-              <Text style={[styles.lastSeenLabel, { color: COLORS.sub }]}>
-                Last Seen:
-              </Text>
-            </View>
+           
 
             {/* Checkboxes */}
             <View style={styles.checkboxGroup}>
               {/* Arrange Blood */}
               <Pressable
                 onPress={toggleArrangeBlood}
-                disabled={preOpReadOnly}
+                disabled={isReadOnly}
                 style={({ pressed }) => [
                   styles.checkboxRow,
                   {
                     backgroundColor:
-                      pressed && !preOpReadOnly
+                      pressed && !isReadOnly
                         ? COLORS.brandSoft
                         : "transparent",
-                    opacity: preOpReadOnly ? 0.6 : 1,
+                    opacity: isReadOnly ? 0.6 : 1,
                   },
                 ]}
               >
@@ -147,15 +146,15 @@ const PreopControllersMobile: React.FC = () => {
               {/* Written Informed Consent / High Risk Consent */}
               <Pressable
                 onPress={toggleRiskConsent}
-                disabled={preOpReadOnly}
+                disabled={isReadOnly}
                 style={({ pressed }) => [
                   styles.checkboxRow,
                   {
                     backgroundColor:
-                      pressed && !preOpReadOnly
+                      pressed && !isReadOnly
                         ? COLORS.brandSoft
                         : "transparent",
-                    opacity: preOpReadOnly ? 0.6 : 1,
+                    opacity: isReadOnly ? 0.6 : 1,
                   },
                 ]}
               >
@@ -200,7 +199,7 @@ const PreopControllersMobile: React.FC = () => {
                 placeholderTextColor="#94a3b8"
                 multiline
                 textAlignVertical="top"
-                editable={!preOpReadOnly}
+                editable={!isReadOnly}
                 value={notes}
                 onChangeText={setNotes}
               />

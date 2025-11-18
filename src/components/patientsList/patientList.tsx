@@ -46,6 +46,7 @@ import Footer from "../dashboard/footer";
 import useOTConfig, { OTPatientStages } from "../../utils/otConfig";
 import { showError } from "../../store/toast.slice";
 import { formatageFromDOB } from "../../utils/age";
+import { formatDate } from "../../utils/dateTime";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAGE_SIZE = 10;
@@ -136,7 +137,7 @@ const { screenType, userType, setPatientStage } = useOTConfig();
   const [selectedPatientName, setSelectedPatientName] = useState("");
 
   const bottomPad = FOOTER_H + insets.bottom + 24;
-
+const isOt = user?.roleName === "surgeon" || user?.roleName === "anesthesist"
   const fetchPatients = useCallback(async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     if (!user?.hospitalID || !token) return;
@@ -291,7 +292,7 @@ console.log(response, "surgery response")
 
         setSurgeryData(prev => ({
           ...prev,
-          [patient.id]: formattedData
+          [patient?.id]: formattedData
         }));
       }
     } catch (error) {
@@ -382,7 +383,7 @@ console.log(response, "surgery response")
     const start = (currentPage - 1) * PAGE_SIZE;
     return filteredAndSearched.slice(start, start + PAGE_SIZE);
   }, [filteredAndSearched, currentPage]);
-
+console.log(pagedData, "complete patients list")
   useEffect(() => {
     setCurrentPage(1);
   }, [filterValue, wardFilter, search]);
@@ -630,6 +631,7 @@ const patientStatusKey =
   }
 
   const renderItem = ({ item }: { item: PatientType }) => {
+    console.log(item, "patient details ", item?.approvedTime)
     const paddedId = String(item?.id ?? "").padStart(4, "0");
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
@@ -637,7 +639,7 @@ const patientStatusKey =
     const age = getAgeLabel(item?.dob);
     const hasNotification = item.notificationCount && item.notificationCount > 0;
     const wardName = (user?.patientStatus === 2 || user?.patientStatus === 3) ? wardList.find(w => w.id === item.wardID)?.name || "—" : "—";
-
+const approvedDate = formatDate(item?.approvedTime)
     const patientSurgeries = surgeryData[item.id] || [];
     const hasRejectedSurgery = patientSurgeries.some(surgery =>
       surgery.status?.toLowerCase() === "rejected"
@@ -680,6 +682,8 @@ const patientStatusKey =
               </Text>
 
               <View style={styles.rightIconsContainer}>
+
+               
                 {hasRejectedSurgery && (
                   <TouchableOpacity
                     style={styles.warningButton}
@@ -718,7 +722,11 @@ const patientStatusKey =
             </View>
 
             <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
+              {isOt && 
+   `Approved Date: ${approvedDate}`
+}
               {(user?.patientStatus === 2 || user?.patientStatus === 3) && `• Ward: ${capitalizeFirstLetter(wardName)}`}
+              
             </Text>
 
             <View style={styles.infoRow}>
@@ -866,7 +874,7 @@ const patientStatusKey =
       </View>
     </Modal>
   );
-
+console.log(pagedData, "complet epatiens list")
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: COLORS.bg, paddingBottom: Math.max(insets.bottom, 12) }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>

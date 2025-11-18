@@ -496,7 +496,7 @@ case "AnesthesiaRecord":
 
   const renderFooter = () => {
     // ---- Pre-Op tab: show Approve + Reject ----
-    if (activeTab === "PreOpRecord") {
+    if (activeTab === "PreOpRecord" && user?.roleName !== "surgeon") {
       return (
         <View style={styles.saveContainer}>
           <View style={styles.preopBtnRow}>
@@ -539,6 +539,7 @@ case "AnesthesiaRecord":
 
     // ---- Other tabs: show Save ----
     return (
+        
       <View style={styles.saveContainer}>
         <Pressable
           onPress={debouncedSubmit}

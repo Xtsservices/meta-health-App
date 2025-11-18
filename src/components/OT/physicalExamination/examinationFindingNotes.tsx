@@ -146,7 +146,7 @@ const isReadOnly = user?.roleName === "surgeon";
                   <TextInput
                     multiline
                     value={value}
-                    disabled={isReadOnly}
+                   editable={!isReadOnly}
                     onChangeText={(text) => handleChange(field.key, text)}
                     onContentSizeChange={(e) =>
                       handleContentSizeChange(field.key, e)
