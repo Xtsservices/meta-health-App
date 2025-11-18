@@ -10,7 +10,6 @@ import {
   Modal,
   Pressable,
   Image,
-  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -22,9 +21,21 @@ import { useDispatch } from "react-redux";
 import { showError, showSuccess } from "../../store/toast.slice";
 import Footer from "../dashboard/footer";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const isTablet = SCREEN_WIDTH >= 768;
-const isSmallDevice = SCREEN_HEIGHT < 700;
+// Import responsive utilities
+import { 
+  SCREEN_WIDTH, 
+  SCREEN_HEIGHT, 
+  isTablet, 
+  isSmallDevice, 
+  isExtraSmallDevice,
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  FOOTER_HEIGHT
+} from "../../utils/responsive";
+import { COLORS } from "../../utils/colour";
+
+// Import colors
 
 // Import your surgery image - make sure the path is correct
 const requestSurgeryImage = require("../../assets/requestSurgery.png");
@@ -40,18 +51,6 @@ const surgeryTypesData = [
   "Arthoscopy",
   "Others",
 ];
-
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  danger: "#ef4444",
-  overlay: "rgba(0,0,0,0.45)",
-  pill: "#f1f5f9",
-};
 
 type RequestSurgeryRouteParams = {
   timelineID?: string | number;
@@ -136,7 +135,7 @@ export default function RequestSurgeryScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: 120 + insets.bottom }
+          { paddingBottom: FOOTER_HEIGHT + SPACING.lg + insets.bottom }
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -229,7 +228,7 @@ export default function RequestSurgeryScreen() {
                 <TextInput
                   style={[
                     styles.textInput,
-                    { marginTop: 12, borderColor: COLORS.border },
+                    { marginTop: SPACING.sm, borderColor: COLORS.border },
                   ]}
                   placeholder="Enter surgery type"
                   placeholderTextColor={COLORS.sub}
@@ -271,7 +270,7 @@ export default function RequestSurgeryScreen() {
 
       {/* Footer */}
       <View style={[styles.footerContainer, { bottom: insets.bottom }]}>
-        <Footer active={"patients"} brandColor="#14b8a6" />
+        <Footer active={"patients"} brandColor={COLORS.brand} />
       </View>
 
       {/* Surgery Type Modal */}
@@ -321,12 +320,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: isTablet ? 32 : 16,
-    paddingTop: isSmallDevice ? 16 : 24,
+    padding: isTablet ? SPACING.xl : SPACING.md,
+    paddingTop: isSmallDevice ? SPACING.md : SPACING.lg,
   },
   mainCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 16,
+    borderRadius: SPACING.md,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -339,82 +338,82 @@ const styles = StyleSheet.create({
   },
   imageSection: {
     alignItems: "center",
-    paddingVertical: isTablet ? 40 : 32,
-    paddingHorizontal: isTablet ? 40 : 24,
-    backgroundColor: `${COLORS.brand}08`,
+    paddingVertical: isTablet ? SPACING.xl : SPACING.lg,
+    paddingHorizontal: isTablet ? SPACING.xl : SPACING.lg,
+    backgroundColor: COLORS.brandLight,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   surgeryImage: {
     width: isTablet ? 200 : 160,
     height: isTablet ? 150 : 120,
-    borderRadius: 12,
+    borderRadius: SPACING.sm,
   },
   formSection: {
-    padding: isTablet ? 40 : 24,
+    padding: isTablet ? SPACING.xl : SPACING.lg,
   },
   formTitle: {
-    fontSize: isTablet ? 32 : 24,
+    fontSize: isTablet ? FONT_SIZE.xxl + 8 : FONT_SIZE.xxl,
     fontWeight: "800",
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: SPACING.xs,
     textAlign: "center",
   },
   formSubtitle: {
-    fontSize: isTablet ? 18 : 16,
+    fontSize: isTablet ? FONT_SIZE.lg : FONT_SIZE.md,
     color: COLORS.sub,
     textAlign: "center",
-    marginBottom: isTablet ? 40 : 32,
-    lineHeight: 24,
+    marginBottom: isTablet ? SPACING.xl : SPACING.lg,
+    lineHeight: FONT_SIZE.lg + 4,
   },
   inputGroup: {
-    marginBottom: isTablet ? 32 : 24,
+    marginBottom: isTablet ? SPACING.lg : SPACING.md,
   },
   inputLabel: {
-    fontSize: isTablet ? 18 : 16,
+    fontSize: isTablet ? FONT_SIZE.lg : FONT_SIZE.md,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: isTablet ? 16 : 12,
+    marginBottom: isTablet ? SPACING.md : SPACING.sm,
   },
   radioGroup: {
     flexDirection: isTablet ? "row" : "column",
-    gap: isTablet ? 20 : 12,
+    gap: isTablet ? SPACING.md : SPACING.sm,
   },
   radioOption: {
     flexDirection: "row",
     alignItems: "center",
-    padding: isTablet ? 20 : 16,
+    padding: isTablet ? SPACING.md : SPACING.sm,
     borderWidth: 2,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: SPACING.sm,
     backgroundColor: COLORS.card,
     flex: isTablet ? 1 : undefined,
   },
   radioOptionSelected: {
     borderColor: COLORS.brand,
-    backgroundColor: `${COLORS.brand}08`,
+    backgroundColor: COLORS.brandLight,
   },
   radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: ICON_SIZE.sm,
+    height: ICON_SIZE.sm,
+    borderRadius: ICON_SIZE.sm / 2,
     borderWidth: 2,
     borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: SPACING.sm,
   },
   radioCircleSelected: {
     borderColor: COLORS.brand,
   },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: ICON_SIZE.sm - 10,
+    height: ICON_SIZE.sm - 10,
+    borderRadius: (ICON_SIZE.sm - 10) / 2,
     backgroundColor: COLORS.brand,
   },
   radioLabel: {
-    fontSize: isTablet ? 16 : 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
   },
@@ -423,32 +422,32 @@ const styles = StyleSheet.create({
   },
   selectInput: {
     borderWidth: 2,
-    borderRadius: 12,
-    padding: isTablet ? 20 : 16,
+    borderRadius: SPACING.sm,
+    padding: isTablet ? SPACING.md : SPACING.sm,
     backgroundColor: COLORS.card,
   },
   selectText: {
-    fontSize: isTablet ? 16 : 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "600",
   },
   textInput: {
     borderWidth: 2,
-    borderRadius: 12,
-    padding: isTablet ? 20 : 16,
-    fontSize: isTablet ? 16 : 15,
+    borderRadius: SPACING.sm,
+    padding: isTablet ? SPACING.md : SPACING.sm,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     backgroundColor: COLORS.card,
     color: COLORS.text,
   },
   formActions: {
     flexDirection: "row",
-    gap: 16,
-    marginTop: isTablet ? 40 : 32,
+    gap: SPACING.md,
+    marginTop: isTablet ? SPACING.xl : SPACING.lg,
     justifyContent: "center",
   },
   actionButton: {
-    paddingHorizontal: isTablet ? 32 : 24,
-    paddingVertical: isTablet ? 16 : 14,
-    borderRadius: 12,
+    paddingHorizontal: isTablet ? SPACING.lg : SPACING.md,
+    paddingVertical: isTablet ? SPACING.md : SPACING.sm,
+    borderRadius: SPACING.sm,
     minWidth: isTablet ? 140 : 120,
     alignItems: "center",
     justifyContent: "center",
@@ -466,19 +465,20 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   cancelButtonText: {
-    fontSize: isTablet ? 16 : 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "700",
     color: COLORS.text,
   },
   submitButtonText: {
-    fontSize: isTablet ? 16 : 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "700",
     color: "#fff",
   },
   footerContainer: {
+    position: "absolute",
     left: 0,
     right: 0,
-    height: 70,
+    height: FOOTER_HEIGHT,
     backgroundColor: COLORS.card,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
@@ -493,28 +493,28 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: COLORS.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: SPACING.md,
+    borderTopRightRadius: SPACING.md,
     maxHeight: "80%",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
+    padding: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700",
     color: COLORS.text,
   },
   closeButton: {
-    padding: 8,
+    padding: SPACING.xs,
   },
   closeButtonText: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.xl,
     color: COLORS.text,
     fontWeight: "300",
   },
@@ -522,12 +522,12 @@ const styles = StyleSheet.create({
     maxHeight: 400,
   },
   modalItem: {
-    padding: 20,
+    padding: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   modalItemText: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     color: COLORS.text,
   },

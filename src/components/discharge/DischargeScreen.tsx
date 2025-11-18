@@ -24,8 +24,9 @@ import { AuthPost } from "../../auth/auth";
 import { formatDateTime } from "../../utils/dateTime";
 import { ChevronDownIcon, XIcon } from "../../utils/SvgIcons";
 import Footer from "../dashboard/footer";
-import { RouteParams, FormData, DietItem } from "../../utils/types";
+import { FormData, DietItem } from "../../utils/types";
 import { RESPONSIVE, styles } from "./DischargeStyles";
+import { COLORS } from "../../utils/colour";
 
 const dietList: DietItem[] = [
   { id: "1", name: "Pineapple" },
@@ -55,19 +56,6 @@ const DietDropdown: React.FC<{
 }) => {
     const scheme = useColorScheme();
     const isDark = scheme === "dark";
-
-    const COLORS = {
-      bg: isDark ? "#0f172a" : "#f8fafc",
-      card: isDark ? "#0b1220" : "#ffffff",
-      text: isDark ? "#e5e7eb" : "#0f172a",
-      sub: isDark ? "#94a3b8" : "#475569",
-      border: isDark ? "#334155" : "#e2e8f0",
-      button: isDark ? "#0d9488" : "#14b8a6",
-      buttonText: "#ffffff",
-      cancelButton: isDark ? "#374151" : "#6b7280",
-      inputBg: isDark ? "#1f2937" : "#ffffff",
-      dropdownBg: isDark ? "#1f2937" : "#ffffff",
-    };
 
     return (
       <Modal
@@ -161,7 +149,7 @@ const DietDropdown: React.FC<{
   };
 
 const DischargeScreen: React.FC = () => {
-  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+  const route = useRoute<any>();
   const navigation = useNavigation();
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
@@ -169,19 +157,6 @@ const DischargeScreen: React.FC = () => {
 
   const user = useSelector((state: any) => state.currentUser);
   const { patientId, patientData, timelineData, hospitalID } = route.params ?? {};
-
-  const COLORS = {
-    bg: isDark ? "#0f172a" : "#f8fafc",
-    card: isDark ? "#0b1220" : "#ffffff",
-    text: isDark ? "#e5e7eb" : "#0f172a",
-    sub: isDark ? "#94a3b8" : "#475569",
-    border: isDark ? "#334155" : "#e2e8f0",
-    button: isDark ? "#0d9488" : "#14b8a6",
-    buttonText: "#ffffff",
-    cancelButton: isDark ? "#374151" : "#6b7280",
-    inputBg: isDark ? "#1f2937" : "#ffffff",
-    dropdownBg: isDark ? "#1f2937" : "#ffffff",
-  };
 
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);

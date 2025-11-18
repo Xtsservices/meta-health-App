@@ -129,7 +129,7 @@ const Routing = () => {
         <Stack.Screen
           name="MedicationTimelineScreen"
           component={MedicationTimelineScreen}
-          options={{ title: 'Medication Timeline' }}
+          options={{ title: "Medication Timeline", headerTitleAlign: "center", headerShown: true }} 
         />
         <Stack.Screen
           name="SlotsManagement"
@@ -219,7 +219,7 @@ const Routing = () => {
           component={DischargedPatientsIPD}
           options={{ title: "Discharged Patients", headerTitleAlign: "center", headerShown: true }}
         />
-        <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
+        <Stack.Screen name="NotificationScreen" component={NotificationScreen} options={{ title: "Notification", headerTitleAlign: "center", headerShown: true }}/>
         <Stack.Screen name="Tests" component={TestsScreen} options={{ title: "Tests", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen name="AddTests" component={AddTestsScreen} options={{ title: "Add Tests", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen

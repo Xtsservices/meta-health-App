@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,9 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
+  FlatList,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootState } from '../../../store/store';
 import { MedicineType, PatientType } from '../../../utils/types';
 import { AuthPost } from '../../../auth/auth';
+import { debounce } from '../../../utils/debounce';
 import { 
   ArrowLeftIcon, 
   PillIcon, 
@@ -31,14 +32,24 @@ import {
   WindIcon, 
   SquareIcon, 
   BeakerIcon,
-  PlusIcon ,
+  PlusIcon,
   SyrupIcon
 } from '../../../utils/SvgIcons';
 import Footer from '../../dashboard/footer';
 import usePreOpForm from '../../../utils/usePreOpForm';
 import usePostOPStore from '../../../utils/usePostopForm';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Import responsive utilities
+import {
+  isTablet,
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  FOOTER_HEIGHT
+} from '../../../utils/responsive';
+
+// Import colors
+import { COLORS } from '../../../utils/colour';
 
 // Medicine Category Options
 const medicineCategories = [
@@ -121,6 +132,51 @@ const { medications: postOpMeds, setPostMedications } = usePostOPStore();
 
   const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // NEW: State for medicine autocomplete
+  const [medicineSuggestions, setMedicineSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isMedicineSelected, setIsMedicineSelected] = useState(false);
+
+  // NEW: Medicine autocomplete function
+  const fetchMedicineSuggestions = async (text: string) => {
+    try {
+      if (text.length < 3) {
+        setMedicineSuggestions([]);
+        setShowSuggestions(false);
+        return;
+      }
+
+      const token = user?.token || (await AsyncStorage.getItem('token'));
+      
+      const response = await AuthPost(
+        `medicine/${user?.hospitalID}/getMedicines`,
+        { text },
+        token
+      );
+
+      // Handle different response structures
+      if (response?.data?.message === 'success') {
+        const names = response?.data?.medicines?.map((m: any) => m.Medicine_Name).filter(Boolean) || [];
+        setMedicineSuggestions(names);
+        setShowSuggestions(names.length > 0);
+      } else {
+        setMedicineSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      setMedicineSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // NEW: Debounced version of the function
+  const debouncedFetchSuggestions = useCallback(
+    debounce((text: string) => {
+      fetchMedicineSuggestions(text);
+    }, 300),
+    [user]
+  );
 
   const handleTimeSelect = (time: string) => {
     if (selectedTimes.includes(time)) {
@@ -215,6 +271,14 @@ if (activeTab === "PostOpRecord") {
     return true;
   };
 
+  // NEW: Function to handle medicine selection from suggestions
+  const handleMedicineSelect = (medicineName: string) => {
+    setMedicineData({ ...medicineData, medicineName });
+    setIsMedicineSelected(true);
+    setShowSuggestions(false);
+    setMedicineSuggestions([]);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -243,7 +307,9 @@ if (activeTab === "PostOpRecord") {
       >
         <ScrollView 
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, {
+            paddingBottom: FOOTER_HEIGHT + SPACING.md + insets.bottom
+          }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -273,8 +339,8 @@ if (activeTab === "PostOpRecord") {
                       isSelected && styles.categoryIconSelected,
                     ]}>
                       <Icon 
-                        size={SCREEN_WIDTH < 375 ? 18 : 20} 
-                        color={isSelected ? '#14b8a6' : '#9ca3af'} 
+                        size={ICON_SIZE.md} 
+                        color={isSelected ? COLORS.brand : COLORS.sub} 
                       />
                     </View>
                     <Text style={[
@@ -289,16 +355,63 @@ if (activeTab === "PostOpRecord") {
             </ScrollView>
           </View>
 
-          {/* Medicine Name */}
+          {/* Medicine Name with Autocomplete */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Medicine Name</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter medicine name"
-              value={medicineData.medicineName}
-              onChangeText={(text) => setMedicineData({ ...medicineData, medicineName: text })}
-              placeholderTextColor="#9ca3af"
-            />
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter medicine name"
+                value={medicineData.medicineName}
+                onChangeText={(text) => {
+                  setMedicineData({ ...medicineData, medicineName: text });
+                  setIsMedicineSelected(false);
+                  setShowSuggestions(false);
+                  
+                  // Trigger autocomplete after a short delay
+                  if (text.length >= 3) {
+                    debouncedFetchSuggestions(text);
+                  } else {
+                    setMedicineSuggestions([]);
+                    setShowSuggestions(false);
+                  }
+                }}
+                onFocus={() => {
+                  if (medicineData.medicineName.length >= 3 && medicineSuggestions.length > 0) {
+                    setShowSuggestions(true);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay hiding suggestions to allow for selection
+                  setTimeout(() => setShowSuggestions(false), 200);
+                }}
+                placeholderTextColor={COLORS.placeholder}
+              />
+              
+              {/* Suggestions Dropdown */}
+              {showSuggestions && medicineSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  <ScrollView 
+                    style={styles.suggestionsList}
+                    nestedScrollEnabled={true}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {medicineSuggestions.map((suggestion, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.suggestionItem}
+                        onPress={() => handleMedicineSelect(suggestion)}
+                      >
+                        <Text style={styles.suggestionText}>{suggestion}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+            {medicineData.medicineName.length > 0 && medicineData.medicineName.length < 3 && (
+              <Text style={styles.hintText}>Type 3 or more letters to see suggestions</Text>
+            )}
           </View>
 
           {/* Dosage and Frequency */}
@@ -319,7 +432,7 @@ if (activeTab === "PostOpRecord") {
                     }
                   }}
                   keyboardType="numeric"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={COLORS.placeholder}
                 />
                 <Text style={styles.unitText}>
                   {medicineData.medicineType ? getDosageUnit() : '--'}
@@ -329,18 +442,48 @@ if (activeTab === "PostOpRecord") {
 
             <View style={[styles.section, styles.flex1]}>
               <Text style={styles.sectionTitle}>Frequency</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="1"
-                value={medicineData.Frequency?.toString() || '1'}
-                onChangeText={(text) => {
-                  const value = text === '' ? 1 : Math.min(Math.max(Number(text), 1), 6);
-                  setMedicineData({ ...medicineData, Frequency: value });
-                }}
-                keyboardType="numeric"
-                placeholderTextColor="#9ca3af"
-                editable={!selectedTimes?.includes('As Per Need')}
-              />
+              <View style={styles.frequencyContainer}>
+                <TextInput
+                  style={[styles.textInput, styles.frequencyInput]}
+                  placeholder="1"
+                  value={medicineData.Frequency?.toString() || '1'}
+                  onChangeText={(text) => {
+                    const value = text === '' ? 1 : Math.min(Math.max(Number(text), 1), 6);
+                    setMedicineData({ ...medicineData, Frequency: value });
+                  }}
+                  keyboardType="numeric"
+                  placeholderTextColor={COLORS.placeholder}
+                  editable={!selectedTimes?.includes('As Per Need')}
+                />
+                <View style={styles.frequencyButtons}>
+                  <TouchableOpacity
+                    style={[styles.frequencyButton, styles.frequencyButtonUp]}
+                    onPress={() => {
+                      const newValue = Math.min((medicineData.Frequency || 1) + 1, 6);
+                      setMedicineData({ ...medicineData, Frequency: newValue });
+                    }}
+                    disabled={medicineData.Frequency >= 6 || selectedTimes?.includes('As Per Need')}
+                  >
+                    <Text style={[
+                      styles.frequencyButtonText,
+                      (medicineData.Frequency >= 6 || selectedTimes?.includes('As Per Need')) && styles.frequencyButtonDisabled
+                    ]}>↑</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.frequencyButton, styles.frequencyButtonDown]}
+                    onPress={() => {
+                      const newValue = Math.max((medicineData.Frequency || 1) - 1, 1);
+                      setMedicineData({ ...medicineData, Frequency: newValue });
+                    }}
+                    disabled={medicineData.Frequency <= 1 || selectedTimes?.includes('As Per Need')}
+                  >
+                    <Text style={[
+                      styles.frequencyButtonText,
+                      (medicineData.Frequency <= 1 || selectedTimes?.includes('As Per Need')) && styles.frequencyButtonDisabled
+                    ]}>↓</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -360,7 +503,7 @@ if (activeTab === "PostOpRecord") {
                 }
               }}
               keyboardType="numeric"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={COLORS.placeholder}
               editable={!selectedTimes?.includes('As Per Need')}
             />
           </View>
@@ -407,7 +550,7 @@ if (activeTab === "PostOpRecord") {
               multiline
               numberOfLines={3}
               textAlignVertical="top"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={COLORS.placeholder}
             />
           </View>
         </ScrollView>
@@ -415,7 +558,7 @@ if (activeTab === "PostOpRecord") {
 
       {/* Footer */}
       <View style={[styles.footerContainer, { bottom: insets.bottom }]}>
-        <Footer active={"patients"} brandColor="#14b8a6" />
+        <Footer active={"patients"} brandColor={COLORS.brand} />
       </View>
       {insets.bottom > 0 && (
         <View pointerEvents="none" style={[styles.bottomShield, { height: insets.bottom }]} />
@@ -427,38 +570,33 @@ if (activeTab === "PostOpRecord") {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.card,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 12 : 16,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#fff',
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
   backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 16 : 18,
-    fontWeight: '600',
-    color: '#374151',
+    padding: SPACING.xs,
   },
   submitButton: {
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 12 : 16,
-    paddingVertical: 8,
+    backgroundColor: COLORS.brand,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
     borderRadius: 6,
   },
   submitButtonDisabled: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: COLORS.sub,
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14,
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.sm,
     fontWeight: '600',
   },
   container: {
@@ -468,69 +606,109 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SCREEN_WIDTH < 375 ? 12 : 16,
-    paddingBottom: 100,
+    padding: SPACING.md,
   },
   section: {
-    marginBottom: SCREEN_WIDTH < 375 ? 20 : 24,
+    marginBottom: isTablet ? SPACING.lg : SPACING.md,
   },
   sectionTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 15 : 16,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
   },
   categoryScrollContent: {
-    paddingRight: 16,
+    paddingRight: SPACING.md,
   },
   categoryButton: {
     alignItems: 'center',
-    marginRight: SCREEN_WIDTH < 375 ? 10 : 12,
-    padding: SCREEN_WIDTH < 375 ? 10 : 12,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
+    marginRight: isTablet ? SPACING.sm : SPACING.xs,
+    padding: isTablet ? SPACING.sm : SPACING.xs,
+    borderRadius: SPACING.sm,
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    minWidth: SCREEN_WIDTH < 375 ? 70 : 80,
+    borderColor: COLORS.border,
+    minWidth: isTablet ? 90 : 80,
   },
   categoryButtonSelected: {
-    backgroundColor: '#f0fdfa',
-    borderColor: '#14b8a6',
+    backgroundColor: COLORS.brandLight,
+    borderColor: COLORS.brand,
   },
   categoryIcon: {
-    width: SCREEN_WIDTH < 375 ? 36 : 40,
-    height: SCREEN_WIDTH < 375 ? 36 : 40,
-    borderRadius: SCREEN_WIDTH < 375 ? 18 : 20,
-    backgroundColor: '#fff',
+    width: isTablet ? 44 : 40,
+    height: isTablet ? 44 : 40,
+    borderRadius: isTablet ? 22 : 20,
+    backgroundColor: COLORS.card,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: SPACING.xs,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: COLORS.border,
   },
   categoryIconSelected: {
-    borderColor: '#14b8a6',
-    backgroundColor: '#f0fdfa',
+    borderColor: COLORS.brand,
+    backgroundColor: COLORS.brandLight,
   },
   categoryLabel: {
-    fontSize: SCREEN_WIDTH < 375 ? 11 : 12,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: '500',
-    color: '#6b7280',
+    color: COLORS.sub,
     textAlign: 'center',
   },
   categoryLabelSelected: {
-    color: '#14b8a6',
+    color: COLORS.brand,
     fontWeight: '600',
+  },
+  inputContainer: {
+    position: 'relative',
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: SCREEN_WIDTH < 375 ? 10 : 12,
-    fontSize: SCREEN_WIDTH < 375 ? 15 : 16,
-    color: '#374151',
-    backgroundColor: '#fff',
+    borderColor: COLORS.border,
+    borderRadius: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: isTablet ? SPACING.sm : SPACING.xs,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    color: COLORS.text,
+    backgroundColor: COLORS.card,
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: SPACING.xs,
+    borderBottomRightRadius: SPACING.xs,
+    maxHeight: 150,
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  suggestionsList: {
+    maxHeight: 150,
+  },
+  suggestionItem: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: isTablet ? SPACING.sm : SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.bg,
+  },
+  suggestionText: {
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
+    color: COLORS.text,
+  },
+  hintText: {
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs - 1,
+    color: COLORS.sub,
+    marginTop: SPACING.xs,
+    fontStyle: 'italic',
   },
   dosageContainer: {
     flexDirection: 'row',
@@ -542,22 +720,22 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 0,
   },
   unitText: {
-    paddingHorizontal: 12,
-    paddingVertical: SCREEN_WIDTH < 375 ? 10 : 12,
-    backgroundColor: '#f3f4f6',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: isTablet ? SPACING.sm : SPACING.xs,
+    backgroundColor: COLORS.pill,
     borderWidth: 1,
     borderLeftWidth: 0,
-    borderColor: '#d1d5db',
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
-    fontSize: SCREEN_WIDTH < 375 ? 15 : 16,
-    color: '#374151',
-    minWidth: SCREEN_WIDTH < 375 ? 50 : 60,
+    borderColor: COLORS.border,
+    borderTopRightRadius: SPACING.xs,
+    borderBottomRightRadius: SPACING.xs,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    color: COLORS.text,
+    minWidth: isTablet ? 60 : 50,
     textAlign: 'center',
   },
   row: {
     flexDirection: 'row',
-    gap: SCREEN_WIDTH < 375 ? 10 : 12,
+    gap: isTablet ? SPACING.sm : SPACING.xs,
   },
   flex1: {
     flex: 1,
@@ -565,43 +743,44 @@ const styles = StyleSheet.create({
   timeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SCREEN_WIDTH < 375 ? 6 : 8,
+    gap: isTablet ? SPACING.xs : 6,
   },
   timeButton: {
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 14 : 16,
-    paddingVertical: SCREEN_WIDTH < 375 ? 8 : 10,
+    paddingHorizontal: isTablet ? SPACING.md : SPACING.sm,
+    paddingVertical: isTablet ? SPACING.sm : SPACING.xs,
     borderRadius: 20,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: COLORS.border,
   },
   timeButtonSelected: {
-    backgroundColor: '#14b8a6',
-    borderColor: '#0d9488',
+    backgroundColor: COLORS.brand,
+    borderColor: COLORS.brandDark,
   },
   timeButtonText: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 14,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: '500',
-    color: '#6b7280',
+    color: COLORS.sub,
   },
   timeButtonTextSelected: {
-    color: '#fff',
+    color: COLORS.buttonText,
     fontWeight: '600',
   },
   selectedTimesText: {
-    marginTop: 8,
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14,
-    color: '#14b8a6',
+    marginTop: SPACING.xs,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
+    color: COLORS.brand,
     fontWeight: '500',
   },
   notesInput: {
-    minHeight: SCREEN_WIDTH < 375 ? 70 : 80,
+    minHeight: isTablet ? 90 : 80,
     textAlignVertical: 'top',
   },
   footerContainer: {
+    position: 'absolute',
     left: 0,
     right: 0,
-    height: 70,
+    height: FOOTER_HEIGHT,
     justifyContent: 'center',
   },
   bottomShield: {
@@ -610,6 +789,45 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'transparent',
+  },
+  frequencyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  frequencyInput: {
+    flex: 1,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  frequencyButtons: {
+    flexDirection: 'column',
+    height: '100%',
+  },
+  frequencyButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.pill,
+    borderWidth: 1,
+    borderLeftWidth: 0,
+    borderColor: COLORS.border,
+    minWidth: isTablet ? 35 : 30,
+  },
+  frequencyButtonUp: {
+    borderTopRightRadius: SPACING.xs,
+    borderBottomWidth: 0.5,
+  },
+  frequencyButtonDown: {
+    borderBottomRightRadius: SPACING.xs,
+    borderTopWidth: 0.5,
+  },
+  frequencyButtonText: {
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  frequencyButtonDisabled: {
+    color: COLORS.sub,
   },
 });
 

@@ -15,6 +15,7 @@ import { RootState } from "../../store/store";
 import { AuthFetch, AuthPost } from "../../auth/auth";
 import { formatDateTime } from "../../utils/dateTime";
 import { Edit2Icon, Trash2Icon, PlusIcon, XIcon } from "../../utils/SvgIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface Task {
   id: number;
@@ -24,7 +25,7 @@ interface Task {
   updatedAt?: string;
 }
 
-const MyTasks: React.FC = () => {
+const MyTasks: React.FC = async () => {
   const user = useSelector((state: RootState) => state.currentUser);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
@@ -33,7 +34,7 @@ const MyTasks: React.FC = () => {
   const [newTaskContent, setNewTaskContent] = useState<string>("");
   const [status, setStatus] = useState<string>("pending");
   const [loading, setLoading] = useState<boolean>(false);
-  const token = user?.token || "";
+  const token = user?.token || ( await AsyncStorage.getItem('token'));
 
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -41,6 +42,7 @@ const MyTasks: React.FC = () => {
     const fetchTasks = async () => {
       setLoading(true);
       try {
+        const token = await AsyncStorage.getItem('token');
         const response = await AuthFetch("admintasks/getadminalltasks", token);
 
         if (response?.status === "success") {

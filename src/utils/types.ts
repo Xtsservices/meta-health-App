@@ -1724,3 +1724,16 @@ export interface CityType {
   stateCode: number;
   state: string;
 }
+export interface FormData {
+  dischargeType: number;
+  advice: string;
+  followUp: number;
+  followUpDate: string;
+  diagnosis: string;
+  prescription: string;
+}
+
+export interface DietItem {
+  id: string;
+  name: string;
+}

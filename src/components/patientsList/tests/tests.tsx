@@ -18,6 +18,7 @@ import { FileTextIcon, PlusIcon, Trash2Icon } from "../../../utils/SvgIcons";
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import usePreOpForm from "../../../utils/usePreOpForm";
+import { COLORS } from "../../../utils/colour";
 
 type RootState = any;
 const selectUser = (s: RootState) => s.currentUser;
@@ -39,20 +40,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
 const moderateScale = (size: number, factor: number = 0.5) => size + (scale(size) - size) * factor;
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  field: "#f8fafc",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  danger: "#ef4444",
-  pill: "#eef2f7",
-  placeholder: "#94a3b8",
-};
+
 
 const FOOTER_HEIGHT = moderateScale(70);
 

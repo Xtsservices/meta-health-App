@@ -8,7 +8,8 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
-  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -16,8 +17,25 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthPost } from "../../../auth/auth";
 import Footer from "../../dashboard/footer";
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  ICON_SIZE, 
+  SCREEN_WIDTH, 
+  SCREEN_HEIGHT,
+  isTablet,
+  isSmallDevice,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const RESPONSIVE = {
+  spacing: SPACING,
+  fontSize: FONT_SIZE,
+  icon: ICON_SIZE,
+  screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
+  isTablet,
+  isSmallDevice,
+};
 
 type RootState = any;
 const selectUser = (s: RootState) => s.currentUser;
@@ -38,22 +56,6 @@ interface FormValues {
   skin: string;
 }
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  field: "#f8fafc",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  danger: "#ef4444",
-  pill: "#eef2f7",
-  success: "#22c55e",
-  placeholder: "#94a3b8",
-};
-
 const INITIAL_STATE: FormValues = {
   general: "",
   head: "",
@@ -68,6 +70,8 @@ const INITIAL_STATE: FormValues = {
   musculoskeletal: "",
   skin: "",
 };
+
+const FOOTER_H = 70;
 
 export default function AddPhysicalExaminationScreen() {
   const navigation = useNavigation<any>();
@@ -165,76 +169,86 @@ export default function AddPhysicalExaminationScreen() {
     </View>
   );
 
-  const footerHeight = 70;
-  const bottomInset = Math.max(insets.bottom, 12);
+  const bottomPad = FOOTER_H + Math.max(insets.bottom, RESPONSIVE.spacing.md) + RESPONSIVE.spacing.md;
 
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: footerHeight + bottomInset + 24 }
-        ]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? RESPONSIVE.spacing.xl : 20}
       >
-        <Text style={[styles.subtitle, { color: COLORS.sub }]}>
-          Fill in the relevant examination findings
-        </Text>
-
-        <View style={styles.form}>
-          <View style={styles.fieldsRow}>
-            {renderTextField("general", "General", "General appearance, vital signs, etc...")}
-            {renderTextField("head", "Head", "Head examination findings...")}
-          </View>
-
-          <View style={styles.fieldsRow}>
-            {renderTextField("ent", "ENT", "Ear, Nose, Throat findings...")}
-            {renderTextField("neuroPsych", "Neuro/Psych", "Neurological/Psychiatric findings...")}
-          </View>
-
-          <View style={styles.fieldsRow}>
-            {renderTextField("neckSpine", "Neck/Spine", "Neck and spine examination...")}
-            {renderTextField("respiratory", "Respiratory", "Respiratory system findings...")}
-          </View>
-
-          <View style={styles.fieldsRow}>
-            {renderTextField("cardiac", "Cardiac", "Cardiovascular examination...")}
-            {renderTextField("abdominal", "Abdominal", "Abdominal examination...")}
-          </View>
-
-          <View style={styles.fieldsRow}>
-            {renderTextField("pelvis", "Pelvis", "Pelvic examination...")}
-            {renderTextField("guRectal", "GU/Rectal", "Genitourinary/Rectal findings...")}
-          </View>
-
-          <View style={styles.fieldsRow}>
-            {renderTextField("musculoskeletal", "Musculoskeletal", "Musculoskeletal survey...")}
-            {renderTextField("skin", "Skin", "Skin examination...")}
-          </View>
-        </View>
-
-        <Pressable
-          style={[
-            styles.submitButton, 
-            { 
-              backgroundColor: isSubmitEnabled ? COLORS.button : COLORS.sub,
-              opacity: isSubmitEnabled ? 1 : 0.6
-            }
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: bottomPad }
           ]}
-          onPress={handleSubmit}
-          disabled={loading || !isSubmitEnabled}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {loading ? (
-            <ActivityIndicator size="small" color={COLORS.buttonText} />
-          ) : (
-            <Text style={[styles.submitButtonText, { color: COLORS.buttonText }]}>
-              Save Physical Examination
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: COLORS.text }]}>
+              Physical Examination
             </Text>
-          )}
-        </Pressable>
-      </ScrollView>
+            <Text style={[styles.subtitle, { color: COLORS.sub }]}>
+              Fill in the relevant examination findings
+            </Text>
+          </View>
+
+          <View style={styles.form}>
+            <View style={styles.fieldsRow}>
+              {renderTextField("general", "General", "General appearance, vital signs, etc...")}
+              {renderTextField("head", "Head", "Head examination findings...")}
+            </View>
+
+            <View style={styles.fieldsRow}>
+              {renderTextField("ent", "ENT", "Ear, Nose, Throat findings...")}
+              {renderTextField("neuroPsych", "Neuro/Psych", "Neurological/Psychiatric findings...")}
+            </View>
+
+            <View style={styles.fieldsRow}>
+              {renderTextField("neckSpine", "Neck/Spine", "Neck and spine examination...")}
+              {renderTextField("respiratory", "Respiratory", "Respiratory system findings...")}
+            </View>
+
+            <View style={styles.fieldsRow}>
+              {renderTextField("cardiac", "Cardiac", "Cardiovascular examination...")}
+              {renderTextField("abdominal", "Abdominal", "Abdominal examination...")}
+            </View>
+
+            <View style={styles.fieldsRow}>
+              {renderTextField("pelvis", "Pelvis", "Pelvic examination...")}
+              {renderTextField("guRectal", "GU/Rectal", "Genitourinary/Rectal findings...")}
+            </View>
+
+            <View style={styles.fieldsRow}>
+              {renderTextField("musculoskeletal", "Musculoskeletal", "Musculoskeletal survey...")}
+              {renderTextField("skin", "Skin", "Skin examination...")}
+            </View>
+          </View>
+
+          <Pressable
+            style={[
+              styles.submitButton, 
+              { 
+                backgroundColor: isSubmitEnabled ? COLORS.button : COLORS.sub,
+                opacity: isSubmitEnabled ? 1 : 0.6
+              }
+            ]}
+            onPress={handleSubmit}
+            disabled={loading || !isSubmitEnabled}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={COLORS.buttonText} />
+            ) : (
+              <Text style={[styles.submitButtonText, { color: COLORS.buttonText }]}>
+                Save Physical Examination
+              </Text>
+            )}
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
@@ -251,78 +265,73 @@ const styles = StyleSheet.create({
   safe: { 
     flex: 1,
   },
+  container: {
+    flex: 1,
+  },
   scrollView: { 
     flex: 1,
   },
   scrollContent: { 
-    padding: SCREEN_WIDTH * 0.04,
-    minHeight: SCREEN_HEIGHT,
+    padding: RESPONSIVE.spacing.lg,
   },
-  
+  header: {
+    marginBottom: RESPONSIVE.spacing.xl,
+    alignItems: 'center',
+  },
   title: {
-    fontSize: SCREEN_WIDTH < 375 ? 22 : 24,
+    fontSize: RESPONSIVE.fontSize.xl,
     fontWeight: "800",
-    marginBottom: SCREEN_HEIGHT * 0.01,
+    marginBottom: RESPONSIVE.spacing.sm,
     textAlign: "center",
   },
-
   subtitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
+    fontSize: RESPONSIVE.fontSize.md,
     fontWeight: "500",
-    marginBottom: SCREEN_HEIGHT * 0.03,
     textAlign: "center",
   },
-
   form: {
-    gap: SCREEN_HEIGHT * 0.02,
+    gap: RESPONSIVE.spacing.lg,
   },
-
   fieldsRow: {
-    flexDirection: SCREEN_WIDTH < 375 ? "column" : "row",
-    gap: SCREEN_WIDTH * 0.03,
+    flexDirection: RESPONSIVE.isTablet ? "row" : "column",
+    gap: RESPONSIVE.spacing.md,
   },
-
   field: {
     flex: 1,
-    gap: SCREEN_HEIGHT * 0.005,
-    marginBottom: SCREEN_WIDTH < 375 ? SCREEN_HEIGHT * 0.015 : 0,
+    gap: RESPONSIVE.spacing.sm,
   },
-
   fieldLabel: {
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14,
+    fontSize: RESPONSIVE.fontSize.sm,
     fontWeight: "600",
   },
-
   textInput: {
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: SCREEN_WIDTH * 0.03,
-    paddingVertical: SCREEN_HEIGHT * 0.012,
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14,
+    paddingHorizontal: RESPONSIVE.spacing.md,
+    paddingVertical: RESPONSIVE.spacing.sm,
+    fontSize: RESPONSIVE.fontSize.md,
     fontWeight: "500",
-    minHeight: SCREEN_HEIGHT * 0.1,
+    minHeight: RESPONSIVE.isSmallDevice ? 80 : 100,
     textAlignVertical: "top",
   },
-
   submitButton: {
-    paddingVertical: SCREEN_HEIGHT * 0.02,
-    paddingHorizontal: SCREEN_WIDTH * 0.06,
+    paddingVertical: RESPONSIVE.spacing.lg,
+    paddingHorizontal: RESPONSIVE.spacing.xl,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: SCREEN_HEIGHT * 0.03,
-    marginBottom: SCREEN_HEIGHT * 0.02,
+    marginTop: RESPONSIVE.spacing.xl,
+    marginBottom: RESPONSIVE.spacing.xl,
+    minHeight: 50,
   },
-
   submitButtonText: {
-    fontSize: SCREEN_WIDTH < 375 ? 15 : 16,
+    fontSize: RESPONSIVE.fontSize.md,
     fontWeight: "700",
   },
-
   footerWrap: {
     left: 0,
     right: 0,
-    height: 70,
+    height: FOOTER_H,
     justifyContent: "center",
   },
   navShield: {
