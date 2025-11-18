@@ -86,15 +86,6 @@ const TicketsScreen: React.FC = () => {
   useEffect(() => {
     getAllData();
   }, [user]);
-
-  const handleRowClick = (ticketId: number) => {
-    Alert.alert(
-      "Ticket Details", 
-      `Ticket ID: ${ticketId}\n\nDetailed view feature coming soon!`,
-      [{ text: "OK" }]
-    );
-  };
-
   const handleCreateNewTicket = () => {
     navigation.navigate("NewTicketScreen" as never);
   };
@@ -135,7 +126,6 @@ const TicketsScreen: React.FC = () => {
                   styles.ticketCard,
                   index % 2 === 0 ? styles.ticketCardEven : styles.ticketCardOdd,
                 ]}
-                onPress={() => handleRowClick(ticket.id)}
               >
                 <View style={styles.ticketRow}>
                   <View style={styles.ticketCell}>

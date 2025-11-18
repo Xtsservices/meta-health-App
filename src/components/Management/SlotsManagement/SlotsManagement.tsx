@@ -24,6 +24,7 @@ import {
 import { PlusIcon, ChevronLeftIcon, ChevronRightIcon, CalendarIcon, ClockIcon, UsersIcon } from "../../../utils/SvgIcons";
 import CalendarModal from "./CalendarModal";
 import SlotModal from "./SlotModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -71,7 +72,7 @@ const SlotsManagement: React.FC = () => {
     try {
       const hospitalID = user?.hospitalID;
       const doctorID = user?.id;
-
+      const token = await AsyncStorage.getItem('token');
       if (!hospitalID || !doctorID) {
         throw new Error("Hospital ID or Doctor ID not found");
       }

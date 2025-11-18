@@ -1,5 +1,5 @@
 // components/Emergency/Dashboard.tsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -7,14 +7,13 @@ import {
   ScrollView,
   StatusBar,
   TouchableOpacity,
-  Dimensions,
   Platform,
   ActivityIndicator,
   Modal,
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 
 import { patientStatus, zoneType } from "../../utils/role";
 import { RootState } from "../../store/store";
@@ -25,7 +24,19 @@ import PieChart from "../dashboard/pieChart";
 import PatientTable from "../dashboard/patientsList";
 import Footer from "../dashboard/footer";
 
-import { useDispatch } from "react-redux";
+// Import responsive utilities
+import {
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
+  isTablet,
+  isSmallDevice,
+  isExtraSmallDevice,
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  FOOTER_HEIGHT
+} from "../../utils/responsive";
+import { COLORS } from "../../utils/colour";
 
 // Import custom SVG icons
 import {
@@ -39,18 +50,15 @@ import {
   LogOutIcon,
   GridIcon,
   FileMinusIcon,
-  UserPlusIcon,
 } from "../../utils/SvgIcons";
 import { showError } from "../../store/toast.slice";
 
 // ---- Types ----
 type XY = { x: number | string; y: number };
 type DashboardType = "red" | "yellow" | "green";
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const isTablet = SCREEN_WIDTH >= 768;
-const isSmallDevice = SCREEN_HEIGHT < 700;
-const FOOTER_HEIGHT = 70;
+type RouteParams = {
+  type?: DashboardType;
+};
 
 // Dashboard configuration
 const DASHBOARD_CONFIG = {
@@ -58,46 +66,25 @@ const DASHBOARD_CONFIG = {
     title: "Critical Care Dashboard",
     zone: zoneType.red,
     addPatientRoute: "AddPatient",
-    primaryColor: "#14b8a6",
+    primaryColor: COLORS.brand,
     sidebarComponent: "CriticalCareSidebar",
-    sidebarItems: [
-      { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, route: "DashboardEmergencyRed" },
-      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientList" },
-      { key: "discharge", label: "Discharged Patients", icon: FileMinusIcon, route: "DischargedPatients" },
-      { key: "mgmt", label: "Management", icon: SettingsIcon, route: "Management" },
-      { key: "help", label: "Help", icon: HelpCircleIcon, route: "HelpScreen" },
-    ],
-    buttonText: "Add Critical Patient",
+    buttonText: "Add Patient",
   },
   yellow: {
     title: "Urgent Care Dashboard",
     zone: zoneType.yellow,
     addPatientRoute: "AddPatient",
-    primaryColor: "#14b8a6",
+    primaryColor: COLORS.brand,
     sidebarComponent: "UrgentCareSidebar",
-    sidebarItems: [
-      { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, route: "DashboardEmergencyYellow" },
-      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientList" },
-      { key: "discharge", label: "Discharged Patients", icon: UserPlusIcon, route: "DischargedPatients" },
-      { key: "mgmt", label: "Management", icon: SettingsIcon, route: "Management" },
-      { key: "help", label: "Help", icon: HelpCircleIcon, route: "HelpScreen" },
-    ],
-    buttonText: "Add Urgent Patient",
+    buttonText: "Add Patient",
   },
   green: {
     title: "Stable Monitoring Dashboard",
     zone: zoneType.green,
     addPatientRoute: "AddPatient",
-    primaryColor: "#14b8a6",
+    primaryColor: COLORS.brand,
     sidebarComponent: "StableCareSidebar",
-    sidebarItems: [
-      { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, route: "DashboardEmergencyGreen" },
-      { key: "plist", label: "Active Patients", icon: UsersIcon, route: "PatientList" },
-      { key: "discharge", label: "Discharged Patients", icon: UserPlusIcon, route: "DischargedPatients" },
-      { key: "mgmt", label: "Management", icon: SettingsIcon, route: "Management" },
-      { key: "help", label: "Help", icon: HelpCircleIcon, route: "HelpScreen" },
-    ],
-    buttonText: "Add Stable Patient",
+    buttonText: "Add Patient",
   },
 };
 
@@ -118,7 +105,7 @@ const ConfirmDialog: React.FC<{
           <Text style={styles.modalMsg}>{message}</Text>
           <View style={styles.modalActions}>
             <TouchableOpacity onPress={onCancel} style={[styles.modalBtn, styles.modalBtnGhost]}>
-              <Text style={[styles.modalBtnText, { color: "#14b8a6" }]}>Cancel</Text>
+              <Text style={[styles.modalBtnText, { color: COLORS.brand }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onConfirm} style={[styles.modalBtn, styles.modalBtnDanger]}>
               <Text style={[styles.modalBtnText, { color: "#fff" }]}>{confirmText}</Text>
@@ -138,10 +125,24 @@ const HeaderBar: React.FC<{ title: string; onMenu: () => void; primaryColor: str
 }) => {
   return (
     <View style={[styles.header, { backgroundColor: primaryColor }]}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
-        <MenuIcon size={30} color="#ffffffff" />
-      </TouchableOpacity>
+      <View style={styles.headerContent}>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>
+          {title}
+        </Text>
+        <TouchableOpacity
+          onPress={onMenu}
+          style={styles.menuBtn}
+          accessibilityLabel="Open menu"
+          hitSlop={{
+            top: SPACING.xs,
+            bottom: SPACING.xs,
+            left: SPACING.xs,
+            right: SPACING.xs
+          }}
+        >
+          <MenuIcon size={ICON_SIZE.lg} color="#ffffffff" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -153,13 +154,18 @@ const KpiCard: React.FC<{
   icon: React.ReactNode;
   bg: string;
 }> = ({ title, value, icon, bg }) => {
+  const cardWidth = isTablet
+    ? (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2
+    : SCREEN_WIDTH - SPACING.md * 2;
+
   return (
     <View
       style={[
         styles.card,
         {
           backgroundColor: bg,
-          width: isTablet ? (SCREEN_WIDTH - 16 * 2 - 12 * 3) / 4 : (SCREEN_WIDTH - 16 * 2 - 12) / 2
+          width: cardWidth,
+          minHeight: isExtraSmallDevice ? 70 : 80,
         },
       ]}
     >
@@ -181,7 +187,7 @@ const EmergencyDashboard: React.FC = () => {
   const dispatch = useDispatch();
 
   // Get dashboard type from route params or default to red
-  const dashboardType: DashboardType = (route.params as any)?.type || "red";
+  const dashboardType: DashboardType = (route.params as RouteParams)?.type || "red";
   const config = DASHBOARD_CONFIG[dashboardType];
 
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
@@ -202,6 +208,8 @@ const EmergencyDashboard: React.FC = () => {
   const [lineActual, setLineActual] = useState<XY[]>([]);
   const [lineScheduled, setLineScheduled] = useState<XY[]>([]);
   const [selectedWardDataFilter, setSelectedWardDataFilter] = useState<string>("Day");
+
+  const fetchOnce = useRef(true);
 
   // Fetch emergency statistics
   const getEmergencyStats = useCallback(async () => {
@@ -272,14 +280,23 @@ const EmergencyDashboard: React.FC = () => {
     [user?.hospitalID, user?.token, config.zone]
   );
 
-  useEffect(() => {
-    if (user?.hospitalID) {
-      getEmergencyStats();
-      getPatientsVisit(filterYear, filterMonth);
-    }
-  }, [user?.hospitalID, getEmergencyStats, getPatientsVisit, filterYear, filterMonth]);
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.hospitalID && fetchOnce.current) {
+        fetchOnce.current = false;
+        getEmergencyStats();
+        getPatientsVisit(filterYear, filterMonth);
+      }
+      return () => {
+        fetchOnce.current = true;
+      };
+    }, [user?.hospitalID, getEmergencyStats, getPatientsVisit, filterYear, filterMonth])
+  );
 
-  const onAddPatient = () => navigation.navigate(config.addPatientRoute as never);
+  const onAddPatient = () => navigation.navigate(config.addPatientRoute as never, {
+    patientStatus: patientStatus.emergency,
+    zone: config.zone
+  });
 
   /* ----------- Sidebar actions ----------- */
   const go = (route: string, params?: any) => {
@@ -305,21 +322,41 @@ const EmergencyDashboard: React.FC = () => {
   };
 
   // Build sidebar items dynamically based on config
-  const sidebarItems = config.sidebarItems?.map(item => ({
-    ...item,
-    onPress: () => {
-      if (item.route === "PatientList") {
-        setMenuOpen(false);
-        navigation.navigate("PatientList" as never, {
-          zone: config.zone,
-          patientStatus: patientStatus.emergency
-        });
-      } else {
-        setMenuOpen(false);
-        navigation.navigate(item.route as never);
-      }
-    }
-  })) ?? [];
+  const sidebarItems = [
+    {
+      key: "dash",
+      label: "Dashboard",
+      icon: LayoutDashboardIcon,
+      onPress: () => go(`EmergencyDashboard`)
+    },
+    {
+      key: "plist",
+      label: "Active Patients",
+      icon: UsersIcon,
+      onPress: () => go("PatientList", {
+        zone: config.zone,
+        patientStatus: patientStatus.emergency
+      })
+    },
+    {
+      key: "discharge",
+      label: "Discharged Patients",
+      icon: FileMinusIcon,
+      onPress: () => go("DischargedPatientsIPD")
+    },
+    {
+      key: "mgmt",
+      label: "Management",
+      icon: SettingsIcon,
+      onPress: () => go("Management")
+    },
+    {
+      key: "help",
+      label: "Help",
+      icon: HelpCircleIcon,
+      onPress: () => go("HelpScreen")
+    },
+  ];
 
   const bottomItems = [
     {
@@ -379,7 +416,7 @@ const EmergencyDashboard: React.FC = () => {
         contentContainerStyle={[
           styles.containerContent,
           {
-            paddingBottom: FOOTER_HEIGHT + (insets.bottom > 0 ? insets.bottom + 16 : 16),
+            paddingBottom: FOOTER_HEIGHT + (insets.bottom > 0 ? insets.bottom + SPACING.md : SPACING.md),
             minHeight: SCREEN_HEIGHT - (isSmallDevice ? 120 : 160)
           }
         ]}
@@ -391,29 +428,16 @@ const EmergencyDashboard: React.FC = () => {
           <KpiCard
             title="This Month"
             value={thisMonthCount}
-            icon={<TrendingUpIcon size={25} color={config.primaryColor} />}
-            bg="#ffffff"
+            icon={<TrendingUpIcon size={ICON_SIZE.md} color={config.primaryColor} />}
+            bg={COLORS.card}
           />
           <KpiCard
             title="This Year"
             value={thisYearCount}
-            icon={<UsersIcon size={25} color={config.primaryColor} />}
-            bg="#ffffff"
+            icon={<UsersIcon size={ICON_SIZE.md} color={config.primaryColor} />}
+            bg={COLORS.card}
           />
         </View>
-
-        {/* Primary action */}
-        <View style={styles.controlPanel}>
-          <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: config.primaryColor }]}
-            onPress={onAddPatient}
-            activeOpacity={0.85}
-          >
-            <PlusIcon size={18} color="#fff" />
-            <Text style={styles.primaryBtnText}>{config.buttonText}</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Charts */}
         <View style={styles.chartsRow}>
           <LineChartActualScheduled
@@ -521,81 +545,92 @@ export default EmergencyDashboard;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#fff"
+    backgroundColor: COLORS.bg
   },
   header: {
-    height: 100,
-    paddingHorizontal: 16,
+    height: Platform.OS === 'ios'
+      ? (isExtraSmallDevice ? 90 : isSmallDevice ? 100 : 110)
+      : (isExtraSmallDevice ? 70 : isSmallDevice ? 80 : 90),
+    paddingHorizontal: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: COLORS.border,
+    paddingTop: Platform.OS === 'ios'
+      ? (isExtraSmallDevice ? 30 : 40)
+      : (isExtraSmallDevice ? 15 : 20),
+    justifyContent: 'center',
+  },
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: Platform.OS === 'ios' ? 40 : 20,
+    width: '100%',
   },
   headerTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 20 : 24,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: "700",
     color: "#fdfdfdff",
     flex: 1,
     textAlign: 'center',
-    marginRight: 40
+    marginRight: SPACING.md,
   },
   menuBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.xs,
     alignItems: "center",
     justifyContent: "center",
+    position: 'absolute',
+    right: 0,
   },
   container: {
     flex: 1,
-    backgroundColor: "#fff"
+    backgroundColor: COLORS.bg
   },
   containerContent: {
-    padding: 16,
-    gap: 16
+    padding: SPACING.sm,
+    gap: SPACING.sm
   },
   statsGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    justifyContent: "space-between"
+    gap: SPACING.sm,
+    justifyContent: "space-between",
+    alignItems: "stretch",
   },
   card: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 14,
-    borderRadius: 16,
+    padding: SPACING.sm,
+    borderRadius: SPACING.md,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-    minHeight: 80,
+    minHeight: isExtraSmallDevice ? 70 : 80,
   },
   cardContent: {
     flex: 1,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.05)",
-    marginLeft: 12,
+    marginLeft: SPACING.xs,
   },
   cardTitle: {
-    color: "#0f172a",
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
+    color: COLORS.text,
+    fontSize: FONT_SIZE.xs,
     opacity: 0.75,
     marginBottom: 4
   },
   cardValue: {
-    color: "#0b1220",
-    fontSize: SCREEN_WIDTH < 375 ? 18 : 22,
+    color: COLORS.text,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700"
   },
   controlPanel: {
@@ -604,27 +639,28 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end"
   },
   primaryBtn: {
-    height: 44,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    height: isExtraSmallDevice ? 40 : 44,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    minWidth: 160,
+    gap: SPACING.xs,
+    minWidth: SCREEN_WIDTH * 0.4,
+    maxWidth: SCREEN_WIDTH * 0.6,
     justifyContent: 'center',
   },
   primaryBtnText: {
     color: "#fff",
     fontWeight: "700",
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14
+    fontSize: FONT_SIZE.sm
   },
   chartsRow: {
-    gap: 12
+    gap: SPACING.sm
   },
   pieChartContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: COLORS.card,
+    borderRadius: SPACING.md,
+    padding: SPACING.sm,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
@@ -635,22 +671,22 @@ const styles = StyleSheet.create({
     flexDirection: SCREEN_WIDTH < 375 ? "column" : "row",
     justifyContent: "space-between",
     alignItems: SCREEN_WIDTH < 375 ? "flex-start" : "center",
-    marginBottom: 16,
-    gap: SCREEN_WIDTH < 375 ? 12 : 0,
+    marginBottom: SPACING.sm,
+    gap: SCREEN_WIDTH < 375 ? SPACING.xs : 0,
   },
   pieChartTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   filterContainer: {
     flexDirection: "row",
-    backgroundColor: "#f1f5f9",
-    borderRadius: 8,
+    backgroundColor: COLORS.pill,
+    borderRadius: SPACING.xs,
     padding: 4,
   },
   filterButton: {
-    paddingHorizontal: 12,
+    paddingHorizontal: SPACING.xs,
     paddingVertical: 6,
     borderRadius: 6,
   },
@@ -658,9 +694,9 @@ const styles = StyleSheet.create({
     // backgroundColor is set dynamically
   },
   filterButtonText: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "600",
-    color: "#64748b",
+    color: COLORS.sub,
   },
   filterButtonTextActive: {
     color: "#fff",
@@ -669,27 +705,27 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
-    paddingBottom: 100,
+    backgroundColor: COLORS.bg,
+    paddingBottom: SCREEN_HEIGHT * 0.1,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#14b8a6",
+    marginTop: SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.brand,
   },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: SPACING.lg,
   },
   modalCard: {
-    width: "100%",
+    width: SCREEN_WIDTH * 0.85,
     maxWidth: 380,
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: COLORS.card,
+    borderRadius: SPACING.md,
+    padding: SPACING.sm,
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -697,47 +733,47 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "800",
-    color: "#0b1220"
+    color: COLORS.text
   },
   modalMsg: {
-    fontSize: 14,
-    color: "#334155",
-    marginTop: 8,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    marginTop: SPACING.xs,
     lineHeight: 20,
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 16,
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   modalBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    minWidth: 80,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: SPACING.xs,
+    minWidth: SCREEN_WIDTH * 0.2,
     alignItems: 'center',
   },
   modalBtnGhost: {
-    backgroundColor: "#fef2f2",
+    backgroundColor: COLORS.brandLight,
   },
   modalBtnDanger: {
-    backgroundColor: "#14b8a6",
+    backgroundColor: COLORS.danger,
   },
   modalBtnText: {
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
   },
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e2e8f0",
+    borderTopColor: COLORS.border,
     zIndex: 10,
     elevation: 6,
   },
@@ -746,7 +782,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     zIndex: 9,
   },
 });

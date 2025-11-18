@@ -29,6 +29,7 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { RootState } from "../../../store/store";
 import { Role_NAME } from "../../../utils/role";
 import Footer from "../../dashboard/footer";
+import { COLORS } from "../../../utils/colour";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -67,20 +68,7 @@ const PatientRevisitScreen: React.FC = () => {
   const user = useSelector((s: RootState) => s.currentUser);
   const { patientId, patientData } = route.params;
 
-  const COLORS = {
-    bg: isDark ? "#0f172a" : "#f8fafc",
-    card: isDark ? "#1e293b" : "#ffffff",
-    text: isDark ? "#f1f5f9" : "#0f172a",
-    sub: isDark ? "#94a3b8" : "#475569",
-    border: isDark ? "#334155" : "#e2e8f0",
-    button: isDark ? "#0d9488" : "#14b8a6",
-    buttonText: "#ffffff",
-    cancelButton: isDark ? "#374151" : "#6b7280",
-    inputBg: isDark ? "#1f2937" : "#ffffff",
-    radioSelected: isDark ? "#14b8a6" : "#14b8a6",
-    radioUnselected: isDark ? "#374151" : "#d1d5db",
-    placeholder: "#9ca3af",
-  };
+
 
   const [wardList, setWardList] = useState<WardType[]>([]);
   const [doctorList, setDoctorList] = useState<StaffType[]>([]);
@@ -591,7 +579,7 @@ const styles = StyleSheet.create({
   cancelButton: {},
   submitButton: {},
   cancelButtonText: {
-    color: "white",
+    color: "Black",
     fontSize: screenWidth * 0.04,
     fontWeight: "600",
   },

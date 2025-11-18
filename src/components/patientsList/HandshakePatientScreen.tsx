@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -23,7 +22,18 @@ import { XIcon, UserIcon, ChevronRightIcon } from "../../utils/SvgIcons";
 import { HandshakeIcon } from "lucide-react-native";
 import { Role_NAME } from "../../utils/role";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Import responsive utilities
+import { 
+  SCREEN_HEIGHT, 
+  isTablet, 
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  FOOTER_HEIGHT
+} from "../../utils/responsive";
+
+// Import colors
+import { COLORS } from "../../utils/colour";
 
 const reasons = [
   "Patient Request",
@@ -43,22 +53,7 @@ const reasons = [
   "Off-Duty",
 ];
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  brandLight: "#ccfbf1",
-  danger: "#ef4444",
-  overlay: "rgba(0,0,0,0.5)",
-  pill: "#f1f5f9",
-  placeholder: "#94a3b8",
-};
-
-const FOOTER_H = 70;
-const ACTION_BAR_H = 80;
+const ACTION_BAR_H = Math.max(80, SCREEN_HEIGHT * 0.1);
 
 type HandshakeRouteParams = {
   patientID?: string | number;
@@ -175,13 +170,13 @@ export default function HandshakePatientScreen() {
     return `${doctor?.firstName || ''} ${doctor?.lastName || ''}`.trim();
   };
 
-  const bottomPadding = ACTION_BAR_H + FOOTER_H + Math.max(insets.bottom, 12) + 16;
+  const bottomPadding = ACTION_BAR_H + FOOTER_HEIGHT + Math.max(insets.bottom, SPACING.sm) + SPACING.md;
 
   return (
     <View style={[styles.container, { backgroundColor: COLORS.bg }]}>
       <ScrollView
         contentContainerStyle={{
-          padding: 16,
+          padding: SPACING.md,
           paddingBottom: bottomPadding,
         }}
         showsVerticalScrollIndicator={false}
@@ -189,7 +184,7 @@ export default function HandshakePatientScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerIcon}>
-            <HandshakeIcon size={28} color={COLORS.brand} strokeWidth={2} />
+            <HandshakeIcon size={ICON_SIZE.lg} color={COLORS.brand} strokeWidth={2} />
           </View>
           <Text style={styles.headerTitle}>Handshake Patient</Text>
           <Text style={styles.headerSubtitle}>
@@ -204,7 +199,7 @@ export default function HandshakePatientScreen() {
             <Text style={styles.label}>From</Text>
             <View style={styles.infoBox}>
               <View style={styles.iconCircle}>
-                <UserIcon size={18} color={COLORS.brand} />
+                <UserIcon size={ICON_SIZE.sm} color={COLORS.brand} />
               </View>
               <Text style={styles.infoText}>
                 {user?.firstName} {user?.lastName}
@@ -227,7 +222,7 @@ export default function HandshakePatientScreen() {
             >
               <View style={styles.selectContent}>
                 <View style={styles.iconCircle}>
-                  <UserIcon size={18} color={selectedDoctor ? COLORS.brand : COLORS.placeholder} />
+                  <UserIcon size={ICON_SIZE.sm} color={selectedDoctor ? COLORS.brand : COLORS.placeholder} />
                 </View>
                 <Text style={[
                   styles.selectText,
@@ -236,7 +231,7 @@ export default function HandshakePatientScreen() {
                   {getSelectedDoctorName()}
                 </Text>
               </View>
-              <ChevronRightIcon size={20} color={COLORS.sub} />
+              <ChevronRightIcon size={ICON_SIZE.md} color={COLORS.sub} />
             </TouchableOpacity>
           </View>
 
@@ -260,7 +255,7 @@ export default function HandshakePatientScreen() {
                   {reason || "Select Reason"}
                 </Text>
               </View>
-              <ChevronRightIcon size={20} color={COLORS.sub} />
+              <ChevronRightIcon size={ICON_SIZE.md} color={COLORS.sub} />
             </TouchableOpacity>
           </View>
         </View>
@@ -269,7 +264,7 @@ export default function HandshakePatientScreen() {
       {/* Action Bar */}
       <View style={[styles.actionBar, { 
         height: ACTION_BAR_H,
-        bottom: FOOTER_H + insets.bottom,
+        bottom: FOOTER_HEIGHT + insets.bottom,
       }]}>
         <TouchableOpacity
           style={styles.cancelBtn}
@@ -298,9 +293,9 @@ export default function HandshakePatientScreen() {
       {/* Footer */}
       <View style={[styles.footerWrap, { 
         bottom: insets.bottom,
-        height: FOOTER_H,
+        height: FOOTER_HEIGHT,
       }]}>
-        <Footer active={"patients"} brandColor="#14b8a6" />
+        <Footer active={"patients"} brandColor={COLORS.brand} />
       </View>
 
       {/* Safe area bottom spacer */}
@@ -326,7 +321,7 @@ export default function HandshakePatientScreen() {
               onPress={() => setShowDoctorModal(false)}
               style={styles.modalClose}
             >
-              <XIcon size={24} color={COLORS.sub} />
+              <XIcon size={ICON_SIZE.lg} color={COLORS.sub} />
             </Pressable>
           </View>
           <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
@@ -348,7 +343,7 @@ export default function HandshakePatientScreen() {
                   selectedDoctor === doctor?.id && styles.modalIconCircleSelected,
                 ]}>
                   <UserIcon 
-                    size={18} 
+                    size={ICON_SIZE.sm} 
                     color={selectedDoctor === doctor?.id ? COLORS.brand : COLORS.sub} 
                   />
                 </View>
@@ -382,7 +377,7 @@ export default function HandshakePatientScreen() {
               onPress={() => setShowReasonModal(false)}
               style={styles.modalClose}
             >
-              <XIcon size={24} color={COLORS.sub} />
+              <XIcon size={ICON_SIZE.lg} color={COLORS.sub} />
             </Pressable>
           </View>
           <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
@@ -420,47 +415,47 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    paddingVertical: 32,
-    paddingBottom: 24,
+    paddingVertical: isTablet ? SPACING.xl * 2 : SPACING.lg,
+    paddingBottom: isTablet ? SPACING.xl : SPACING.md,
   },
   headerIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: isTablet ? 90 : 72,
+    height: isTablet ? 90 : 72,
+    borderRadius: isTablet ? 45 : 36,
     backgroundColor: COLORS.brandLight,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: SPACING.md,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: isTablet ? FONT_SIZE.xxl + 4 : FONT_SIZE.xxl,
     fontWeight: "800",
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: SPACING.xs,
     textAlign: "center",
   },
   headerSubtitle: {
-    fontSize: 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     color: COLORS.sub,
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: FONT_SIZE.md + 6,
     fontWeight: "500",
   },
   formCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: SPACING.md,
+    padding: isTablet ? SPACING.xl : SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: isTablet ? SPACING.lg : SPACING.md,
   },
   label: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: 10,
+    marginBottom: SPACING.sm,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -470,23 +465,23 @@ const styles = StyleSheet.create({
   infoBox: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    padding: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: SPACING.sm,
     backgroundColor: COLORS.pill,
-    gap: 12,
+    gap: SPACING.sm,
   },
   iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: isTablet ? 44 : 36,
+    height: isTablet ? 44 : 36,
+    borderRadius: isTablet ? 22 : 18,
     backgroundColor: COLORS.card,
     alignItems: "center",
     justifyContent: "center",
   },
   infoText: {
-    fontSize: 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
     flex: 1,
@@ -497,10 +492,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderWidth: 2,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: SPACING.sm,
+    padding: SPACING.md,
     backgroundColor: COLORS.card,
-    minHeight: 60,
+    minHeight: isTablet ? 70 : 60,
   },
   selectInputActive: {
     borderColor: COLORS.brand,
@@ -509,11 +504,11 @@ const styles = StyleSheet.create({
   selectContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: SPACING.sm,
     flex: 1,
   },
   selectText: {
-    fontSize: 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.placeholder,
     flex: 1,
@@ -529,10 +524,10 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.card,
     flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 16,
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     alignItems: "center",
-    paddingVertical: 16,
+    paddingVertical: SPACING.md,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
@@ -541,8 +536,8 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    height: 52,
-    borderRadius: 12,
+    height: isTablet ? 60 : 52,
+    borderRadius: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.pill,
@@ -551,8 +546,8 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     flex: 1,
-    height: 52,
-    borderRadius: 12,
+    height: isTablet ? 60 : 52,
+    borderRadius: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.brand,
@@ -561,16 +556,17 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   cancelBtnText: {
-    fontSize: 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "700",
     color: COLORS.text,
   },
   submitBtnText: {
-    fontSize: 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "700",
     color: "#fff",
   },
   footerWrap: {
+    position: "absolute",
     left: 0,
     right: 0,
     justifyContent: "center",
@@ -592,8 +588,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: COLORS.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: SPACING.lg,
+    borderTopRightRadius: SPACING.lg,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
@@ -604,17 +600,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
+    padding: isTablet ? SPACING.lg : SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg,
     fontWeight: "800",
     color: COLORS.text,
   },
   modalClose: {
-    padding: 4,
+    padding: SPACING.xs,
   },
   modalList: {
     maxHeight: 400,
@@ -622,11 +618,11 @@ const styles = StyleSheet.create({
   modalItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 18,
+    padding: isTablet ? SPACING.lg : SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    gap: 12,
-    minHeight: 64,
+    gap: SPACING.sm,
+    minHeight: isTablet ? 70 : 64,
   },
   modalItemPressed: {
     backgroundColor: COLORS.pill,
@@ -635,9 +631,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.brandLight,
   },
   modalIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: isTablet ? 48 : 40,
+    height: isTablet ? 48 : 40,
+    borderRadius: isTablet ? 24 : 20,
     backgroundColor: COLORS.pill,
     alignItems: "center",
     justifyContent: "center",
@@ -646,7 +642,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   modalItemText: {
-    fontSize: 15,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
     flex: 1,

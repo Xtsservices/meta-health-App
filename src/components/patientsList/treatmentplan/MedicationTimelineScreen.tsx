@@ -8,7 +8,6 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
-  Dimensions,
   ActivityIndicator,
 } from 'react-native';
 import { useSelector } from 'react-redux';
@@ -32,13 +31,24 @@ import {
   XIcon,
   ClockIcon as Clock4Icon,
 } from '../../../utils/SvgIcons';
-import { medicineCategory, Reminder } from '../../../utils/types';
 import { RootState } from '../../../store/store';
 import { AuthFetch, AuthPatch } from '../../../auth/auth';
 import { formatTime, formatDate } from '../../../utils/dateTime';
 import Footer from '../../dashboard/footer';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Import responsive utilities
+import { 
+  isTablet,
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  FOOTER_HEIGHT
+} from '../../../utils/responsive';
+import { COLORS } from '../../../utils/colour';
+import { medicineCategory } from '../../../utils/medicines';
+import { Reminder } from '../../../store/zustandstore';
+
+// Import colors
 
 type RouteParams = {
   timelineID: number;
@@ -200,11 +210,11 @@ const MedicationTimelineScreen: React.FC = () => {
   const getStatusIcon = (status: number) => {
     switch (status) {
       case 1:
-        return <CheckCircleIcon size={SCREEN_WIDTH < 375 ? 14 : 16} color="#10b981" />;
+        return <CheckCircleIcon size={ICON_SIZE.sm} color={COLORS.success} />;
       case 2:
-        return <XIcon size={SCREEN_WIDTH < 375 ? 14 : 16} color="#ef4444" />;
+        return <XIcon size={ICON_SIZE.sm} color={COLORS.danger} />;
       default:
-        return <Clock4Icon size={SCREEN_WIDTH < 375 ? 14 : 16} color="#f59e0b" />;
+        return <Clock4Icon size={ICON_SIZE.sm} color={COLORS.warning} />;
     }
   };
 
@@ -222,18 +232,18 @@ const MedicationTimelineScreen: React.FC = () => {
   const getStatusColor = (status: number) => {
     switch (status) {
       case 1:
-        return '#10b981';
+        return COLORS.success;
       case 2:
-        return '#ef4444';
+        return COLORS.danger;
       default:
-        return '#f59e0b';
+        return COLORS.warning;
     }
   };
 
   const getMedicineIcon = (medicineType: number) => {
     const iconProps = { 
-      size: SCREEN_WIDTH < 375 ? 14 : 16, 
-      color: '#64748b' 
+      size: ICON_SIZE.sm, 
+      color: COLORS.sub 
     };
     
     switch (medicineType) {
@@ -271,9 +281,9 @@ const MedicationTimelineScreen: React.FC = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.card} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#14b8a6" />
+          <ActivityIndicator size="large" color={COLORS.brand} />
           <Text style={styles.loadingText}>Loading timeline...</Text>
         </View>
       </SafeAreaView>
@@ -282,24 +292,7 @@ const MedicationTimelineScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <ArrowLeftIcon size={SCREEN_WIDTH < 375 ? 20 : 24} color="#374151" />
-        </TouchableOpacity>
-        
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Medication Timeline</Text>
-          <Text style={styles.patientName}>{patientName}</Text>
-        </View>
-        
-        <View style={styles.placeholder} />
-      </View>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.card} />
 
       {/* Main Content Area */}
       <View style={styles.contentWrapper}>
@@ -307,13 +300,13 @@ const MedicationTimelineScreen: React.FC = () => {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + 80 } // Extra padding for footer
+            { paddingBottom: FOOTER_HEIGHT + SPACING.md + insets.bottom }
           ]}
           showsVerticalScrollIndicator={false}
         >
           {groupedReminders?.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <CalendarIcon size={SCREEN_WIDTH < 375 ? 40 : 48} color="#94a3b8" />
+              <CalendarIcon size={isTablet ? 48 : 40} color={COLORS.sub} />
               <Text style={styles.emptyText}>No medication timeline found</Text>
               <Text style={styles.emptySubtext}>
                 No medication schedule available for this patient.
@@ -325,7 +318,7 @@ const MedicationTimelineScreen: React.FC = () => {
                 {/* Group Header */}
                 <View style={styles.groupHeader}>
                   <View style={styles.groupTime}>
-                    <ClockIcon size={SCREEN_WIDTH < 375 ? 16 : 18} color="#14b8a6" />
+                    <ClockIcon size={ICON_SIZE.md} color={COLORS.brand} />
                     <Text style={styles.groupTimeText}>
                       {formatTime(group?.dosageTime)}
                     </Text>
@@ -425,7 +418,7 @@ const MedicationTimelineScreen: React.FC = () => {
                             disabled={updating === medicine?.id}
                           >
                             {updating === medicine?.id ? (
-                              <ActivityIndicator size="small" color="#14b8a6" />
+                              <ActivityIndicator size="small" color={COLORS.brand} />
                             ) : (
                               <Text style={styles.updateButtonText}>
                                 Pending
@@ -445,7 +438,7 @@ const MedicationTimelineScreen: React.FC = () => {
 
       {/* Footer - Fixed at bottom */}
       <View style={[styles.footerContainer, { bottom: insets.bottom }]}>
-        <Footer active={"patients"} brandColor="#14b8a6" />
+        <Footer active={"patients"} brandColor={COLORS.brand} />
       </View>
     </SafeAreaView>
   );
@@ -454,48 +447,48 @@ const MedicationTimelineScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.card,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.card,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
-    color: '#64748b',
+    marginTop: SPACING.md,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    color: COLORS.sub,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 12 : 16,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#fff',
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
   backButton: {
-    padding: 4,
+    padding: SPACING.xs,
   },
   headerContent: {
     flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: SCREEN_WIDTH < 375 ? 16 : 18,
+    fontSize: isTablet ? FONT_SIZE.lg : FONT_SIZE.md,
     fontWeight: '600',
-    color: '#374151',
+    color: COLORS.text,
   },
   patientName: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 14,
-    color: '#64748b',
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
+    color: COLORS.sub,
     marginTop: 2,
   },
   placeholder: {
-    width: SCREEN_WIDTH < 375 ? 20 : 24,
+    width: ICON_SIZE.lg,
   },
   contentWrapper: {
     flex: 1,
@@ -504,82 +497,82 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: SCREEN_WIDTH < 375 ? 12 : 16,
+    padding: SPACING.md,
   },
   emptyContainer: {
     flex: 1,
-    padding: 40,
+    padding: SPACING.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyText: {
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
-    color: '#64748b',
-    marginTop: 12,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    color: COLORS.sub,
+    marginTop: SPACING.sm,
     fontWeight: '600',
   },
   emptySubtext: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 14,
-    color: '#94a3b8',
-    marginTop: 4,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
+    color: COLORS.placeholder,
+    marginTop: SPACING.xs,
     textAlign: 'center',
   },
   timeGroup: {
-    marginBottom: SCREEN_WIDTH < 375 ? 20 : 24,
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: SCREEN_WIDTH < 375 ? 12 : 16,
+    marginBottom: isTablet ? SPACING.lg : SPACING.md,
+    backgroundColor: COLORS.bg,
+    borderRadius: SPACING.sm,
+    padding: isTablet ? SPACING.md : SPACING.sm,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: COLORS.border,
   },
   groupHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SCREEN_WIDTH < 375 ? 12 : 16,
+    marginBottom: isTablet ? SPACING.md : SPACING.sm,
   },
   groupTime: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SCREEN_WIDTH < 375 ? 6 : 8,
+    gap: isTablet ? SPACING.xs : 6,
   },
   groupTimeText: {
-    fontSize: SCREEN_WIDTH < 375 ? 14 : 16,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: '600',
-    color: '#0f172a',
+    color: COLORS.text,
   },
   completionContainer: {
     alignItems: 'flex-end',
   },
   completionText: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 12,
-    color: '#14b8a6',
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs - 1,
+    color: COLORS.brand,
     fontWeight: '600',
     marginBottom: 4,
   },
   progressBar: {
-    width: SCREEN_WIDTH < 375 ? 80 : 100,
+    width: isTablet ? 100 : 80,
     height: 6,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: COLORS.border,
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#14b8a6',
+    backgroundColor: COLORS.brand,
     borderRadius: 3,
   },
   medicinesList: {
-    gap: SCREEN_WIDTH < 375 ? 10 : 12,
+    gap: isTablet ? SPACING.sm : SPACING.xs,
   },
   medicineCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: SCREEN_WIDTH < 375 ? 10 : 12,
+    backgroundColor: COLORS.card,
+    borderRadius: SPACING.xs,
+    padding: isTablet ? SPACING.sm : SPACING.xs,
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: COLORS.pill,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -588,43 +581,43 @@ const styles = StyleSheet.create({
   },
   medicineInfo: {
     flex: 1,
-    marginRight: SCREEN_WIDTH < 375 ? 10 : 12,
+    marginRight: isTablet ? SPACING.sm : SPACING.xs,
   },
   medicineHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SCREEN_WIDTH < 375 ? 6 : 8,
-    gap: SCREEN_WIDTH < 375 ? 6 : 8,
+    marginBottom: isTablet ? SPACING.xs : 6,
+    gap: isTablet ? SPACING.xs : 6,
   },
   medicineType: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: SPACING.xs,
   },
   medicineTypeText: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 12,
-    color: '#64748b',
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs - 1,
+    color: COLORS.sub,
     fontWeight: '500',
   },
   medicineName: {
     flex: 1,
-    fontSize: SCREEN_WIDTH < 375 ? 13 : 14,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: '600',
-    color: '#0f172a',
+    color: COLORS.text,
   },
   medicineDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SCREEN_WIDTH < 375 ? 6 : 8,
+    marginBottom: isTablet ? SPACING.xs : 6,
   },
   dosageText: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
-    color: '#374151',
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs - 1,
+    color: COLORS.text,
     fontWeight: '500',
   },
   medicationTime: {
-    fontSize: SCREEN_WIDTH < 375 ? 11 : 12,
-    color: '#64748b',
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs - 1,
+    color: COLORS.sub,
     flex: 1,
     textAlign: 'right',
   },
@@ -634,59 +627,59 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   timestampLabel: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 11,
-    color: '#94a3b8',
+    fontSize: isTablet ? FONT_SIZE.xs - 1 : FONT_SIZE.xs - 2,
+    color: COLORS.placeholder,
     marginRight: 4,
   },
   timestampValue: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 11,
-    color: '#64748b',
+    fontSize: isTablet ? FONT_SIZE.xs - 1 : FONT_SIZE.xs - 2,
+    color: COLORS.sub,
     fontWeight: '500',
   },
   givenByContainer: {
     marginTop: 4,
   },
   givenByText: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 11,
-    color: '#14b8a6',
+    fontSize: isTablet ? FONT_SIZE.xs - 1 : FONT_SIZE.xs - 2,
+    color: COLORS.brand,
     fontWeight: '500',
   },
   statusSection: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    minWidth: SCREEN_WIDTH < 375 ? 70 : 80,
+    minWidth: isTablet ? 80 : 70,
   },
   currentStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: SCREEN_WIDTH < 375 ? 6 : 8,
+    gap: SPACING.xs,
+    marginBottom: isTablet ? SPACING.xs : 6,
   },
   statusText: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 12,
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs - 1,
     fontWeight: '600',
   },
   updateButton: {
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 10 : 12,
-    paddingVertical: SCREEN_WIDTH < 375 ? 5 : 6,
+    backgroundColor: COLORS.brand,
+    paddingHorizontal: isTablet ? SPACING.sm : SPACING.xs,
+    paddingVertical: isTablet ? SPACING.xs : 5,
     borderRadius: 6,
-    minWidth: SCREEN_WIDTH < 375 ? 60 : 70,
+    minWidth: isTablet ? 70 : 60,
   },
   updateButtonText: {
-    color: '#fff',
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 12,
+    color: COLORS.buttonText,
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs - 1,
     fontWeight: '600',
     textAlign: 'center',
   },
   footerContainer: {
     left: 0,
     right: 0,
-    height: 70,
+    height: FOOTER_HEIGHT,
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.card,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: COLORS.border,
   },
 });
 
