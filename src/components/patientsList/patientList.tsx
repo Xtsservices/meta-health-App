@@ -607,7 +607,7 @@ console.log(pagedData, "complete patients list")
 
   const handleView = (patient :any) => {
 const patientStatusKey =
-            patient.status.toUpperCase() as keyof typeof OTPatientStages;
+            patient?.status?.toUpperCase() as keyof typeof OTPatientStages;
           setPatientStage(OTPatientStages[patientStatusKey]);
         
  navigation.navigate("PatientProfile", { id: patient.id });

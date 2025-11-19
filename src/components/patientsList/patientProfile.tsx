@@ -650,9 +650,13 @@ const PatientProfileOPD: React.FC = () => {
               </View>
             )}
           </View>
-          {user?.roleName === "triage" ?   <AddTriageIssue />  :<Tabs/> }
-         
-          {user?.roleName === "surgeon" || user?.roleName === "anesthetist"  && <OtTabs/>  }
+         {user?.roleName === "triage" ? (
+  <AddTriageIssue />
+) : (
+  <>
+    {(user?.roleName === "surgeon" || user?.roleName === "anesthetist") ? <OtTabs /> : <Tabs />}
+  </>
+)}
           
         </ScrollView>
 
