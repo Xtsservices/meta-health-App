@@ -310,7 +310,7 @@ export default function AddVitalsScreen() {
     return () => {
       mounted = false;
     };
-  }, [wardID, user?.hospitalID, user?.token]);
+  }, [wardID, user?.hospitalID]);
 
   const submit = async () => {
     if (!hasAnyVital) return dispatch(showError("Please enter at least one vital measurement"));

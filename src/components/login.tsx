@@ -59,32 +59,7 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
   const isFormValid =
     formData.email.value.trim() !== '' && formData.password.value.trim() !== '';
 
-useFocusEffect(
-  React.useCallback(() => {
-    let isActive = true;
-//  navigation.navigate('Home' as never);
-    (async () => {
-      const token = await AsyncStorage.getItem('token');
-      const userIdStr = await AsyncStorage.getItem('userID'); // string | null
-      if (!isActive || !token) return;
-      const userIdNum = userIdStr !== null ? Number(userIdStr) : NaN;
-      if (Number.isNaN(userIdNum)) {       
-        return;
-      }
 
-      try {
-        const response = await AuthFetch(`user/${userIdNum}`, token);
-        dispatch(currentUser(response?.data?.user));
-        
-        navigation.reset({ index: 0, routes: [{ name: 'Home' as never }] });
-      } catch (error) {
-        dispatch(showError(error?.message))
-      }
-    })();
-
-    return () => { isActive = false; };
-  }, [navigation])
-);
 
   useEffect(() => {
   const showSub = Keyboard.addListener(
@@ -138,7 +113,7 @@ useFocusEffect(
 }
         
         dispatch(showSuccess('Successfully Logged In'));
-        dispatch(currentUser(data));
+       
         if (data?.role === 2002 || data?.role === 2003) {
           navigation.navigate('Nurse' as never);
         } else if (roleRoutes[data.role]) {
@@ -149,9 +124,18 @@ useFocusEffect(
             const scope = parseInt(userScopes[0], 10);
             const link = scopeLinks[scope];
             if (link) {
-              // navigation.navigate(`HospitalDashboard/${link}` as never);
+               if (data?.scope === "5008" || data?.scope === "5007") {
+                        const newRoleName = data?.scope === "5007" ? "surgeon" : "anesthetist"
+                        const updatedUser = {
+                      ...data,
+                      roleName: newRoleName
+                    };
+                     dispatch(currentUser(updatedUser))
+              navigation.navigate(`OtDashboard` as never);}
+
             }
           } else {
+             dispatch(currentUser(data));
             navigation.navigate('Home' as never);
           }
         }

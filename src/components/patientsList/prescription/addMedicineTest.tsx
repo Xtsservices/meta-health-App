@@ -26,6 +26,7 @@ import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import { timeOfMedication } from "../../../utils/list";
 import { medicineCategory, medicineCategoryType } from "../../../utils/medicines";
 import { showError } from "../../../store/toast.slice";
+import { COLORS } from "../../../utils/colour";
 
 /* ------------------------------------------------------------------ */
 /* Types (mirrors the web version)                                    */
@@ -801,20 +802,7 @@ export default function AddMedicineScreen() {
   );
 }
 
-/*=====================================================================
-  Styles
-=====================================================================*/
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#fff",
-  primary: "#14b8a6",
-  primaryDark: "#0e8375",
-  border: "#e2e8f0",
-  text: "#0f172a",
-  sub: "#64748b",
-  danger: "#ef4444",
-  chip: "#f1f5f9",
-};
+
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },

@@ -26,18 +26,9 @@ import { patientStatus } from "../../utils/role";
 import Footer from "../dashboard/footer";
 import { formatageFromDOB } from "../../utils/age";
 import { formatDate } from "../../utils/dateTime";
+import { COLORS } from "../../utils/colour";
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#64748b",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  chipBg: "#e0f7f4",
-  chipActiveBg: "#14b8a6",
-  chipActiveText: "#ffffff",
-};
+
 
 const FOOTER_H = 70;
 const PAGE_SIZE = 10;

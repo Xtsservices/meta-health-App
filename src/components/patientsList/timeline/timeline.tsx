@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Footer from "../../dashboard/footer";
 import { AuthFetch } from "../../../auth/auth";
 import TimelineRow from "./timelineRow";
+import { COLORS } from "../../../utils/colour";
 
 type RootState = any;
 
@@ -75,14 +76,7 @@ export type TimelineType = {
   symptomsDetails?: Array<{ symptomAddedOn: string }>;
 };
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-};
+
 
 const FOOTER_H = 70;
 
