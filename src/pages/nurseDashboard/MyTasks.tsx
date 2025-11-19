@@ -233,8 +233,8 @@ const MyTasks: React.FC = () => {
     return formatDateTime(dateString || new Date());
   };
   
-  const containerPadding = 32;
-  const gap = 16;
+  const containerPadding = Math.max(16, screenWidth * 0.04); 
+  const gap = Math.max(12, screenWidth * 0.03);
   const cardWidth = (screenWidth - containerPadding - gap) / 2;
 
   if (loading) {
