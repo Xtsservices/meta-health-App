@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSelector } from 'react-redux';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
@@ -32,6 +32,8 @@ import { MedicineType } from '../../../utils/types';
 import { RootState } from '../../../store/store';
 import { AuthFetch } from '../../../auth/auth';
 import Footer from '../../dashboard/footer';
+import usePreOpForm from '../../../utils/usePreOpForm';
+import usePostOPStore from '../../../utils/usePostopForm';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -63,11 +65,56 @@ const MedicineIcon = ({ type, size = 24, color = "#14b8a6" }: { type: number; si
   return icons[type as keyof typeof icons] || <PillIcon {...iconProps} />;
 };
 
+// Helper function to convert pre-op medications object to flat array
+const convertPreOpMedicationsToArray = (medications: any): MedicineType[] => {
+  if (!medications) return [];
+  
+  const flatArray: MedicineType[] = [];
+  
+  // Map each category to the flat array
+  Object.entries(medications).forEach(([category, meds]) => {
+    if (Array.isArray(meds)) {
+      meds.forEach((med: any) => {
+        // Convert category name to medicineType number
+        let medicineType = 1; // default to capsules
+        
+        switch (category) {
+          case 'capsules': medicineType = 1; break;
+          case 'syrups': medicineType = 2; break;
+          case 'tablets': medicineType = 3; break;
+          case 'injections': medicineType = 4; break;
+          case 'ivLine': medicineType = 5; break;
+          case 'tubing': medicineType = 6; break;
+          case 'topical': medicineType = 7; break;
+          case 'drop': medicineType = 8; break;
+          case 'spray': medicineType = 9; break;
+          default: medicineType = 1;
+        }
+        
+        flatArray.push({
+          ...med,
+          medicineType,
+          id: med.id || Math.random(), // Ensure each item has an id
+          medicineName: med.medicineName || med.name || 'Unknown',
+          daysCount: med.daysCount || med.days || 0,
+          doseCount: med.doseCount || med.dose || 0,
+        });
+      });
+    }
+  });
+  
+  return flatArray;
+};
+
 // Medicine Data Table Component
 const MedicineDataTable = ({ medicines, category }: { medicines: MedicineType[]; category: number }) => {
+  // Ensure medicines is always an array
+  const safeMedicines = Array.isArray(medicines) ? medicines : [];
+  
   const filteredMedicines = category === -1 
-    ? medicines 
-    : medicines?.filter(med => med?.medicineType === category);
+    ? safeMedicines 
+    : safeMedicines?.filter(med => med?.medicineType === category);
+  
 
   const getDosageUnit = (medicineType: number): string => {
     const units: { [key: number]: string } = {
@@ -144,7 +191,13 @@ const MedicineDataTable = ({ medicines, category }: { medicines: MedicineType[];
 };
 
 // Empty State Component
-const EmptyTreatmentPlan = ({ onAddMedicine }: { onAddMedicine: () => void }) => {
+const EmptyTreatmentPlan = ({
+  onAddMedicine,
+  readOnly,
+}: {
+  onAddMedicine: () => void;
+  readOnly: boolean;
+}) => {
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>
@@ -157,13 +210,18 @@ const EmptyTreatmentPlan = ({ onAddMedicine }: { onAddMedicine: () => void }) =>
         <Text style={styles.emptySubtitle}>
           Start by adding medications to create a treatment plan for your patient
         </Text>
+        {!readOnly && 
         <TouchableOpacity style={styles.primaryButton} onPress={onAddMedicine}>
           <PlusIcon size={20} color="#fff" />
           <Text style={styles.primaryButtonText}>Add Medication</Text>
-        </TouchableOpacity>
+        </TouchableOpacity>}
       </View>
     </View>
   );
+};
+
+type TreatmentPlanProps = {
+  currentTab?: TopTabType;
 };
 
 // Filter Bar Component
@@ -207,12 +265,25 @@ const FilterBar = ({
 };
 
 // Main Component
-const TreatmentPlanScreen: React.FC = () => {
+const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const route = useRoute<any>();        
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  const { medications: preOpMedications } = usePreOpForm();
+const { medications: postOpMedications } = usePostOPStore();
+
   
+  
+  const activetab = route.params?.currentTab;
+  const shouldShowPreOpTests = activetab === "PreOpRecord";
+const shouldShowPostOpTests = activetab === "PostOpRecord";
+
+const readOnly =
+  (shouldShowPreOpTests && user?.roleName?.toLowerCase() === "surgeon") ||
+  activetab === "PatientFile";
+
   const [medicineList, setMedicineList] = useState<MedicineType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -241,6 +312,17 @@ const TreatmentPlanScreen: React.FC = () => {
   const getAllMedicine = async () => {
     try {
       setError(null);
+      
+      // If showing pre-op tests, convert the medications object to flat array
+      // If showing pre-op or post-op meds, convert the medications object to flat array
+if (shouldShowPreOpTests || shouldShowPostOpTests) {
+  const sourceMeds = shouldShowPreOpTests ? preOpMedications : postOpMedications;
+  const mapped = convertPreOpMedicationsToArray(sourceMeds);
+  setMedicineList(mapped || []);
+  setLoading(false);
+  return;
+}
+
       
       if (!currentPatient?.patientTimeLineID) {
         setError('No patient timeline available');
@@ -280,8 +362,21 @@ const TreatmentPlanScreen: React.FC = () => {
     }
   }, [currentPatient]);
 
+  // Also update when medications from pre-op form change
+// Also update when pre-op / post-op medications change
+useEffect(() => {
+  if (shouldShowPreOpTests && preOpMedications) {
+    const mapped = convertPreOpMedicationsToArray(preOpMedications);
+    setMedicineList(mapped || []);
+  } else if (shouldShowPostOpTests && postOpMedications) {
+    const mapped = convertPreOpMedicationsToArray(postOpMedications);
+    setMedicineList(mapped || []);
+  }
+}, [preOpMedications, postOpMedications, shouldShowPreOpTests, shouldShowPostOpTests]);
+
+
   const handleAddMedicine = () => {
-    navigation.navigate('AddMedicineScreen' as never);
+    navigation.navigate('AddMedicineScreen' as never, {currentTab: activetab});
   };
 
   const handleViewTimeline = () => {
@@ -344,7 +439,7 @@ const TreatmentPlanScreen: React.FC = () => {
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
       {medicineList.length === 0 ? (
-        <EmptyTreatmentPlan onAddMedicine={handleAddMedicine} />
+        <EmptyTreatmentPlan onAddMedicine={handleAddMedicine} readOnly={readOnly} />
       ) : (
         <View style={styles.container}>
           {/* Header */}
@@ -364,15 +459,15 @@ const TreatmentPlanScreen: React.FC = () => {
                 <ClockIcon size={18} color="#14b8a6" />
                 <Text style={styles.secondaryButtonText}>View Timeline</Text>
               </TouchableOpacity>
-              
+                          {!readOnly &&
               <TouchableOpacity 
                 style={styles.primaryButtonSmall}
                 onPress={handleAddMedicine}
               >
                 <PlusIcon size={18} color="#fff" />
                 <Text style={styles.primaryButtonTextSmall}>Add Medicine</Text>
-              </TouchableOpacity>
-            </View>
+              </TouchableOpacity>}
+            </View>}
           </View>
 
           {/* Main Content */}
@@ -419,6 +514,7 @@ const TreatmentPlanScreen: React.FC = () => {
   );
 };
 
+// ... styles remain exactly the same ...
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,

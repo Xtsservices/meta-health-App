@@ -27,6 +27,7 @@ import {
 import { formatDate } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS } from "../../../utils/colour";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -45,21 +46,7 @@ interface PrescriptionDataType {
   medicineNotes?: string;
 }
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  danger: "#ef4444",
-  success: "#10b981",
-  warning: "#f59e0b",
-  gray: "#6b7280",
-  placeholder: "#9ca3af",
-};
+
 
 export default function PreviousPrescriptions() {
   const getAllMedicineApi = useRef(true);

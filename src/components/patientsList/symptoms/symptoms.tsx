@@ -8,7 +8,7 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Trash2, Plus } from "lucide-react-native";
@@ -17,7 +17,9 @@ import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showError, showSuccess } from "../../../store/toast.slice";
+import { COLORS } from "../../../utils/colour";
 
+type RouteParams = { ot: boolean };
 
 type RootState = any;
 const selectUser = (s: RootState) => s.currentUser;
@@ -33,19 +35,8 @@ type SymptomRow = {
   userID?: number | null;
 };
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  field: "#f8fafc",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  danger: "#ef4444",
-  pill: "#eef2f7",
-};
+
+
 
 const cap = (s: string) => (s ? s.slice(0, 1).toUpperCase() + s.slice(1).toLowerCase() : "");
 
@@ -53,6 +44,8 @@ export default function SymptomsScreen() {
   const navigation = useNavigation<any>();
   const  dispatch = useDispatch() 
     const insets = useSafeAreaInsets();
+    const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+    const isOt = route.params?.ot;
   const user = useSelector((s: RootState) => s.currentUser);
     const currentpatient = useSelector((s: RootState) => s.currentPatient);
     const timeline = currentpatient?.patientTimeLineID; // may be object or id depending on your store
@@ -154,13 +147,14 @@ if (!token || token === "" || token === "null" || token === "undefined") {
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No symptoms recorded yet</Text>
           {currentpatient.ptype != 21 && (
+{!isOt && 
           <Pressable
             style={[styles.cta, { backgroundColor: COLORS.button }]}
             onPress={() => navigation.navigate("AddSymptoms" as never)}
           >
             <Plus size={18} color={COLORS.buttonText} />
             <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>Add Symptom</Text>
-          </Pressable>
+          </Pressable>}
           )}
         </View>
       ) : (
@@ -173,6 +167,7 @@ if (!token || token === "" || token === "null" || token === "undefined") {
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           />
           {currentpatient.ptype != 21 && (
+          {!isOt && 
           <Pressable
             style={[styles.fab, 
     { 
@@ -182,7 +177,7 @@ if (!token || token === "" || token === "null" || token === "undefined") {
             onPress={() => navigation.navigate("AddSymptoms" as never)}
           >
             <Plus size={20} color={COLORS.buttonText} />
-          </Pressable>
+          </Pressable>}
           )}
         </>
       )}

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import Footer from "../../dashboard/footer";
 import { Role_NAME } from "../../../utils/role";
+import { COLORS } from "../../../utils/colour";
 
 type RootState = any;
 
@@ -28,18 +29,7 @@ type Staff = {
   department?: string | null;
 };
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  label: "#0f172a",
-  sub: "#475569",
-  field: "#f8fafc",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  brandDark: "#0ea5a3",
-  text: "#0f172a",
-  chip: "#eef2f7",
-};
+
 
 const FOOTER_H = 70;
 

@@ -37,12 +37,18 @@ const Footer: React.FC<Props> = ({
   const handleTabPress = (k: TabKey) => {
     if (k === "dashboard") {
       if (user?.patientStatus === 1) {
+if (user?.roleName === "surgeon" || user?.roleName === "anesthetist")
+{
+   navigation.navigate("OtDashboard");
+}else{
       navigation.navigate("DashboardOpd");
       } else if (user?.patientStatus === 2) {
         navigation.navigate("DashboardIpd");
       } else {
         navigation.navigate("EmergencyDashboard");
       }
+
+}
     } else if (k === "addPatient") {
       navigation.navigate("AddPatient");
     } else if (k === "patients") {
