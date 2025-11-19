@@ -320,7 +320,7 @@ dispatch(showError(error?.message|| error?.status || "failed to delete report"))
         )}
       </View>
 
-      {!isCustomerCare && !reception && (
+      {!isCustomerCare && !reception && cp.ptype != 21 && (
         <Pressable
           onPress={() =>
             navigation.navigate("AddReports" as never, {

@@ -163,6 +163,7 @@ export default function VitalsTabScreen() {
   const EmptyState = () => (
     <View style={styles.emptyWrap}>
       <Text style={{ color: COLORS.sub, marginBottom: 12 }}>No vital records found.</Text>
+      {currentPatinet.ptype != 21 && (
       <Pressable
         onPress={() => navigation.navigate("AddVitals" as never)}
         style={[styles.primaryBtn, { backgroundColor: COLORS.brand }]}
@@ -170,6 +171,7 @@ export default function VitalsTabScreen() {
         <Plus size={18} color="#fff" />
         <Text style={styles.primaryBtnText}>Record Vitals</Text>
       </Pressable>
+      )}
     </View>
   );
 
@@ -197,6 +199,7 @@ export default function VitalsTabScreen() {
 
       {/* FAB */}
       {rows.length > 0 && (
+        currentPatinet.ptype != 21 && (
         <Pressable
           onPress={() => navigation.navigate("AddVitals" as never)}
           style={[
@@ -210,6 +213,7 @@ export default function VitalsTabScreen() {
         >
           <Plus size={22} color="#fff" />
         </Pressable>
+      )
       )}
 
       {/* Footer pinned above system nav */}

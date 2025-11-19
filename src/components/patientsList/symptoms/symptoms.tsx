@@ -153,6 +153,7 @@ if (!token || token === "" || token === "null" || token === "undefined") {
       ) : empty ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No symptoms recorded yet</Text>
+          {currentpatient.ptype != 21 && (
           <Pressable
             style={[styles.cta, { backgroundColor: COLORS.button }]}
             onPress={() => navigation.navigate("AddSymptoms" as never)}
@@ -160,6 +161,7 @@ if (!token || token === "" || token === "null" || token === "undefined") {
             <Plus size={18} color={COLORS.buttonText} />
             <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>Add Symptom</Text>
           </Pressable>
+          )}
         </View>
       ) : (
         <>
@@ -170,6 +172,7 @@ if (!token || token === "" || token === "null" || token === "undefined") {
             contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           />
+          {currentpatient.ptype != 21 && (
           <Pressable
             style={[styles.fab, 
     { 
@@ -180,6 +183,7 @@ if (!token || token === "" || token === "null" || token === "undefined") {
           >
             <Plus size={20} color={COLORS.buttonText} />
           </Pressable>
+          )}
         </>
       )}
        <View style={[styles.footerWrap, { bottom: insets.bottom }]}>

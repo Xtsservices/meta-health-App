@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { AuthFetch, AuthPost } from "../../auth/auth";
 import { formatDateTime } from "../../utils/dateTime";
 import { Edit2Icon, Trash2Icon, PlusIcon, XIcon } from "../../utils/SvgIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 
 interface Task {
   id: number;
@@ -25,7 +26,7 @@ interface Task {
   updatedAt?: string;
 }
 
-const MyTasks: React.FC = async () => {
+const MyTasks: React.FC = () => {
   const user = useSelector((state: RootState) => state.currentUser);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
@@ -34,15 +35,19 @@ const MyTasks: React.FC = async () => {
   const [newTaskContent, setNewTaskContent] = useState<string>("");
   const [status, setStatus] = useState<string>("pending");
   const [loading, setLoading] = useState<boolean>(false);
-  const token = user?.token || ( await AsyncStorage.getItem('token'));
 
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-  useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchTasks = useCallback(async () => {
       setLoading(true);
       try {
         const token = await AsyncStorage.getItem('token');
+        if (!token) {
+          Alert.alert("Error", "Authentication token not found");
+          setTasks([]);
+          return;
+        }
+
         const response = await AuthFetch("admintasks/getadminalltasks", token);
 
         if (response?.status === "success") {
@@ -58,12 +63,13 @@ const MyTasks: React.FC = async () => {
       } finally {
         setLoading(false);
       }
-    };
+    }, []);
 
-    if (token) {
+    useFocusEffect(
+      useCallback(() => {
       fetchTasks();
-    }
-  }, [token]);
+      }, [fetchTasks])
+    );
 
   const openEditModal = (task: Task): void => {
     setCurrentTask(task);
@@ -92,6 +98,12 @@ const MyTasks: React.FC = async () => {
 
   const addTaskToDB = async (content: string, status: string): Promise<void> => {
     try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert("Error", "Authentication token not found");
+        return;
+      }
+
       const body = {
         userID: user?.id,
         task: content,
@@ -119,13 +131,19 @@ const MyTasks: React.FC = async () => {
 
   const editTaskInDB = async (taskId: number, content: string, status: string): Promise<void> => {
     try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert("Error", "Authentication token not found");
+        return;
+      }
+
       const body = { task: content, status };
 
       const response = await AuthPost(`admintasks/editAdmintask/${taskId}`, body, token);
 
       if (response?.status === "success") {
         setTasks(prevTasks =>
-          prevTasks?.map?.((task) =>
+          prevTasks?.map((task) =>
             task.id === taskId ? { ...task, task: content, status, updatedAt: new Date().toISOString() } : task
           ) || []
         );
@@ -140,10 +158,16 @@ const MyTasks: React.FC = async () => {
 
   const deleteTaskFromDB = async (taskId: number): Promise<void> => {
     try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert("Error", "Authentication token not found");
+        return;
+      }
+
       const response = await AuthPost(`admintasks/deleteAdmintask/${taskId}`, {}, token);
 
       if (response?.status === "success") {
-        setTasks(prevTasks => prevTasks?.filter?.((task) => task.id !== taskId) || []);
+        setTasks(prevTasks => prevTasks.filter((task) => task.id !== taskId));
         Alert.alert("Success", "Note deleted successfully!");
       } else {
         Alert.alert("Error", response?.message || "Failed to delete note");
@@ -208,7 +232,7 @@ const MyTasks: React.FC = async () => {
     const dateString = task?.updatedAt || task?.createdAt;
     return formatDateTime(dateString || new Date());
   };
-
+  
   const containerPadding = 32;
   const gap = 16;
   const cardWidth = (screenWidth - containerPadding - gap) / 2;

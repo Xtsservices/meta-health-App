@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   modulesButton: {
-    backgroundColor: "#fffbeb",
+    backgroundColor: "#f0fdf4",
   },
   logoutButton: {
     backgroundColor: "#fef2f2",

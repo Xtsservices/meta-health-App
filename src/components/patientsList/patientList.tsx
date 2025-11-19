@@ -174,7 +174,7 @@ const OpdPreviousPatients: React.FC = () => {
 
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
-          ? response.data.patients
+          ? response?.data?.patients
           : [];
 
         const normalizedPatients = patients.map((pat: any) => ({

@@ -233,6 +233,7 @@ export default function PrescriptionScreen() {
 
       {/* FAB when we have any prescriptions */}
       {list.length > 0 && (
+      cp.ptype != 21 && (
         <Pressable
           onPress={() => navigation.navigate("AddMedicineTest" as never, {} as never)}
           style={[
@@ -246,6 +247,7 @@ export default function PrescriptionScreen() {
         >
           <Text style={styles.fabText}>＋</Text>
         </Pressable>
+      )
       )}
 
       {/* Footer pinned above system nav */}
