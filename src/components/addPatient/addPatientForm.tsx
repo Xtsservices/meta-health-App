@@ -83,11 +83,13 @@ const AddPatientForm: React.FC = () => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const category: Category = (route.params?.category ?? "adult") as Category;
-  const patientStatusFromRoute = route.params?.patientStatus ?? patientStatus.opd;
+ 
+
 
   const dispatch = useDispatch()
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
+   const patientStatusFromRoute = user?.patientStatus
   const [formData, setFormData] = useState<patientOPDbasicDetailType>(initialFormState);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);

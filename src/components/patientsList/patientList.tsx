@@ -159,8 +159,10 @@ const OpdPreviousPatients: React.FC = () => {
       } else if (user?.patientStatus === 3) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseActive/${patientStatus.emergency}?role=${user?.role}&userID=${user?.id}&zone=${zone}`;
-        } else {
+        } else if (zone) {
           url = `patient/${user.hospitalID}/patients/${patientStatus.emergency}?zone=${zone}&userID=${user?.id}`;
+        }else{
+          url = `patient/${user.hospitalID}/patients/triage/${patientStatus.emergency}`;
         }
       } else {
         if (user?.role === 2003) {
@@ -169,9 +171,7 @@ const OpdPreviousPatients: React.FC = () => {
           url = `patient/${user.hospitalID}/patients/opdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
         }
       }
-
       const response = await AuthFetch(url, token);
-
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response.data.patients
@@ -404,7 +404,7 @@ const OpdPreviousPatients: React.FC = () => {
   };
 
   const getAddButtonText = () => {
-    if (user?.patientStatus === 2) return "Admit Patient";
+    if (user?.patientStatus === 2 || user?.roleName === "triage") return "Admit Patient";
     // For other statuses, return empty string so no button shows
     return "";
   };
@@ -416,7 +416,7 @@ const OpdPreviousPatients: React.FC = () => {
   };
 
   const handleSurgeryWarningClick = (patient: PatientType) => {
-    const patientSurgeries = surgeryData[patient.id] || [];
+    const patientSurgeries = surgeryData[patient?.id] || [];
     const rejectedSurgeries = patientSurgeries.filter(item =>
       item.status?.toLowerCase() === "rejected"
     );
@@ -703,10 +703,10 @@ const OpdPreviousPatients: React.FC = () => {
                 )}
               </View>
             </View>
-
+{(user?.patientStatus === 2 || user?.patientStatus === 3) && (user?.roleName !== "triage") && 
             <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
-              {(user?.patientStatus === 2 || user?.patientStatus === 3) && `• Ward: ${capitalizeFirstLetter(wardName)}`}
-            </Text>
+              • Ward: capitalizeFirstLetter(wardName)
+            </Text>}
 
             <View style={styles.infoRow}>
               <Text

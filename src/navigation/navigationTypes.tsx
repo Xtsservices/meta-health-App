@@ -62,4 +62,17 @@ DischargeSummaryDownload: undefined;
   AddPhysicalExamination:undefined;
   AddMedicineScreen:undefined;
   MedicationTimelineScreen:undefined;
+  DashboardTriage: undefined
+  AddTriageIssue: undefined;
+  TriageDialog: undefined;
+  TriageFormContext : undefined;
+ 
+  TriageABCD:undefined;
+  TriageGCSForm: undefined;
+  TriageType:undefined;
+  TriageTrauma:undefined;
+  TriageNonTrauma:undefined;
+  TriageZoneForm: undefined;
+
+  
 };
