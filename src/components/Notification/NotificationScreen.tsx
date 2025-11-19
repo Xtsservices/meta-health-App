@@ -10,7 +10,7 @@ import {
   StatusBar,
 } from "react-native";
 import { useSelector } from "react-redux";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { RootState } from "../../store/store";
 import { AuthFetch } from "../../auth/auth";
 import { MedicineReminderType } from "../../utils/types";
@@ -19,6 +19,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatDate, formatTime, isToday } from "../../utils/dateTime";
 import { NotificationStyles as styles } from "./NotificationStyles";
 import { ArrowLeftIcon , ClockIcon, CalendarIcon } from "../../utils/SvgIcons";
+import { useSafeAreaInsets } from "react-native-safe-area-context"; // ADD THIS
+import Footer from "../dashboard/footer";
 
 type RouteParams = {
   timelineID: number;
@@ -47,7 +49,8 @@ const NotificationScreen: React.FC = () => {
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [reminderGroup, setReminderGroup] = useState<ReminderGroup[][]>([]);
-
+  const insets = useSafeAreaInsets();
+  const FOOTER_H = 70; 
   const getNotificationData = async () => {
     if (!timelineID) return;
 
@@ -73,15 +76,11 @@ const NotificationScreen: React.FC = () => {
     }
   };
 
-  useEffect(() => {
+useFocusEffect(
+  React.useCallback(() => {
     getNotificationData();
-    
-    const interval = setInterval(() => {
-      getNotificationData();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [timelineID]);
+  }, [timelineID])
+);
 
   useEffect(() => {
     if (reminders) {
@@ -155,26 +154,6 @@ const NotificationScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#14b8a6" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation?.goBack()}
-        >
-          <ArrowLeftIcon size={24} color="#fff" />
-        </TouchableOpacity>
-        
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Treatment Notifications</Text>
-          <Text style={styles.patientName}>{patientName}</Text>
-        </View>
-        
-        <View style={styles.currentTimeContainer}>
-          <ClockIcon size={16} color="#fff" />
-          <Text style={styles.currentTime}>{getCurrentTime()}</Text>
-        </View>
-      </View>
 
       {/* Content */}
       <View style={styles.content}>
@@ -323,7 +302,17 @@ const NotificationScreen: React.FC = () => {
           </View>
         )}
       </View>
+
+          {/* ADD FOOTER HERE */}
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"notifications"} brandColor="#14b8a6" />
+      </View>
+      
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
     </SafeAreaView>
+
   );
 };
 

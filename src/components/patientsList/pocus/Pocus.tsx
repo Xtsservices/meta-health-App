@@ -11,7 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { useSelector,useDispatch } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Plus, Trash2 } from "lucide-react-native";
 import { AuthDelete, AuthFetch } from "../../../auth/auth";
@@ -19,12 +19,30 @@ import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showError } from "../../../store/toast.slice";
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  ICON_SIZE, 
+  SCREEN_WIDTH, 
+  SCREEN_HEIGHT,
+  isTablet,
+  isSmallDevice,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const RESPONSIVE = {
+  spacing: SPACING,
+  fontSize: FONT_SIZE,
+  icon: ICON_SIZE,
+  screen: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
+  isTablet,
+  isSmallDevice,
+};
 
 type RootState = any;
 const selectUser = (s: RootState) => s.currentUser;
 const selectCurrentPatient = (s: RootState) => s.currentPatient;
+
 interface PocusData {
   id: number;
   abdomen?: string;
@@ -43,18 +61,6 @@ interface PocusData {
   updatedAt?: string;
 }
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  danger: "#ef4444",
-};
-
 const FOOTER_H = 70;
 
 export default function PocusScreen() {
@@ -67,7 +73,7 @@ export default function PocusScreen() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<PocusData[]>([]);
 
-  const bottomPad = FOOTER_H + Math.max(insets.bottom, 12) + 12;
+  const bottomPad = FOOTER_H + Math.max(insets.bottom, RESPONSIVE.spacing.md) + RESPONSIVE.spacing.md;
 
   const loadPocusData = useCallback(async () => {
     if (!timeline || !currentPatient?.id) return;
@@ -146,7 +152,7 @@ export default function PocusScreen() {
           onPress={() => onDelete(item)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Trash2 size={18} color={COLORS.danger} />
+          <Trash2 size={RESPONSIVE.icon.sm} color={COLORS.danger} />
         </Pressable>
       </View>
       
@@ -262,8 +268,11 @@ export default function PocusScreen() {
           data={list}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderPocusItem}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-          contentContainerStyle={{ padding: 16, paddingBottom: bottomPad }}
+          ItemSeparatorComponent={() => <View style={{ height: RESPONSIVE.spacing.sm }} />}
+          contentContainerStyle={{ 
+            padding: RESPONSIVE.spacing.lg, 
+            paddingBottom: bottomPad 
+          }}
           showsVerticalScrollIndicator
           scrollIndicatorInsets={{ bottom: bottomPad }}
           decelerationRate={Platform.OS === "ios" ? "normal" : 0.98}
@@ -272,14 +281,14 @@ export default function PocusScreen() {
           removeClippedSubviews={false}
           ListEmptyComponent={
             <View style={[styles.center, { paddingTop: 40 }]}>
-              <Text style={{ color: COLORS.sub, fontWeight: "600", marginBottom: 16 }}>
+              <Text style={[styles.emptyText, { color: COLORS.sub }]}>
                 No POCUS records found
               </Text>
               <Pressable
                 style={styles.cta}
                 onPress={() => navigation.navigate("AddPocus" as never)}
               >
-                <Plus size={18} color={COLORS.buttonText} />
+                <Plus size={RESPONSIVE.icon.sm} color={COLORS.buttonText} />
                 <Text style={styles.ctaText}>Add POCUS Record</Text>
               </Pressable>
             </View>
@@ -291,7 +300,7 @@ export default function PocusScreen() {
         style={styles.fab}
         onPress={() => navigation.navigate("AddPocus" as never)}
       >
-        <Plus size={20} color={COLORS.buttonText} />
+        <Plus size={RESPONSIVE.icon.md} color={COLORS.buttonText} />
       </Pressable>
       
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
@@ -305,27 +314,27 @@ export default function PocusScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
+  safe: { 
+    flex: 1 
+  },
   center: { 
     flex: 1, 
     alignItems: "center", 
     justifyContent: "center",
   },
-
   headerWrap: { 
-    paddingHorizontal: 16, 
-    paddingTop: 12,
+    paddingHorizontal: RESPONSIVE.spacing.lg, 
+    paddingTop: RESPONSIVE.spacing.md,
   },
   headerText: { 
-    fontSize: 16, 
+    fontSize: RESPONSIVE.fontSize.lg, 
     fontWeight: "900",
   },
   subHeader: { 
-    fontSize: 12, 
+    fontSize: RESPONSIVE.fontSize.sm, 
     fontWeight: "700", 
-    marginTop: 2,
+    marginTop: RESPONSIVE.spacing.xs,
   },
-
   card: {
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -337,77 +346,73 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    padding: RESPONSIVE.spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: RESPONSIVE.fontSize.md,
     fontWeight: "800",
     color: COLORS.text,
     flex: 1,
   },
   cardContent: {
-    padding: 16,
+    padding: RESPONSIVE.spacing.lg,
   },
-
   grid: {
-    flexDirection: "row",
+    flexDirection: RESPONSIVE.isTablet ? "row" : "column",
     flexWrap: "wrap",
-    gap: 12,
+    gap: RESPONSIVE.spacing.md,
   },
   gridItem: {
-    width: SCREEN_WIDTH < 400 ? '100%' : 'calc(50% - 6px)',
-    minWidth: SCREEN_WIDTH < 400 ? '100%' : 160,
-    gap: 6,
+    flex: RESPONSIVE.isTablet ? 1 : 0,
+    width: RESPONSIVE.isTablet ? '48%' : '100%',
+    minWidth: RESPONSIVE.isTablet ? 200 : '100%',
+    gap: RESPONSIVE.spacing.sm,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: RESPONSIVE.fontSize.sm,
     fontWeight: "700",
     color: COLORS.text,
   },
   value: {
-    fontSize: 14,
+    fontSize: RESPONSIVE.fontSize.md,
     fontWeight: "500",
     color: COLORS.text,
     lineHeight: 20,
   },
-
   subGrid: {
-    gap: 4,
+    gap: RESPONSIVE.spacing.xs,
   },
   subItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: RESPONSIVE.spacing.sm,
   },
   label: {
-    fontSize: 13,
+    fontSize: RESPONSIVE.fontSize.sm,
     fontWeight: "600",
     color: COLORS.sub,
     minWidth: 45,
   },
-
   metaSection: {
-    marginTop: 14,
-    paddingTop: 14,
+    marginTop: RESPONSIVE.spacing.md,
+    paddingTop: RESPONSIVE.spacing.md,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    gap: 4,
+    gap: RESPONSIVE.spacing.xs,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: RESPONSIVE.fontSize.xs,
     fontWeight: "500",
     color: COLORS.sub,
   },
-
   deleteBtn: { 
-    padding: 6,
+    padding: RESPONSIVE.spacing.sm,
   },
-
   fab: {
     position: "absolute",
-    right: 16,
+    right: RESPONSIVE.spacing.lg,
     bottom: 90,
     width: 56,
     height: 56,
@@ -420,12 +425,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-
+  emptyText: {
+    fontWeight: "600", 
+    fontSize: RESPONSIVE.fontSize.md,
+    marginBottom: RESPONSIVE.spacing.lg,
+    textAlign: 'center',
+  },
   cta: {
     flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    gap: RESPONSIVE.spacing.sm,
+    paddingHorizontal: RESPONSIVE.spacing.xl,
+    paddingVertical: RESPONSIVE.spacing.md,
     borderRadius: 24,
     backgroundColor: COLORS.button,
     alignItems: "center",
@@ -436,12 +446,10 @@ const styles = StyleSheet.create({
   },
   ctaText: { 
     fontWeight: "700", 
-    fontSize: 14,
+    fontSize: RESPONSIVE.fontSize.md,
     color: COLORS.buttonText,
   },
-
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,

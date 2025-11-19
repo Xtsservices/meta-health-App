@@ -198,37 +198,44 @@ const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats Cards - 2x2 Grid */}
-        <View style={styles.statsGrid}>
-          <StatsCard
-            title="Total Alerts"
-            value={totalAlerts}
-            color="#3b82f6"
-            backgroundColor="#ffffff"
-            icon={<BellIcon size={RESPONSIVE.icon.md} color="#3b82f6" />}
-          />
-          <StatsCard
-            title="Immediate Attention"
-            value={criticalAlerts}
-            color="#dc2626"
-            backgroundColor="#ffffff"
-            icon={<BellIcon size={RESPONSIVE.icon.md} color="#dc2626" />}
-          />
-          <StatsCard
-            title="Monitor Closely"
-            value={activeAlerts}
-            color="#ca8a04"
-            backgroundColor="#ffffff"
-            icon={<BellIcon size={RESPONSIVE.icon.md} color="#ca8a04" />}
-          />
-          <StatsCard
-            title="Routine Alerts"
-            value={routineAlerts}
-            color="#16a34a"
-            backgroundColor="#ffffff"
-            icon={<BellIcon size={RESPONSIVE.icon.md} color="#16a34a" />}
-          />
-        </View>
+{/* Stats Cards - 2x2 Grid */}
+<View style={styles.statsGrid}>
+  {/* Top Row - Two cards side by side */}
+  <View style={styles.statsRow}>
+    <StatsCard
+      title="Total Alerts"
+      value={totalAlerts}
+      color="#3b82f6"
+      backgroundColor="#ffffff"
+      icon={<BellIcon size={RESPONSIVE.icon.md} color="#3b82f6" />}
+    />
+    <StatsCard
+      title="Immediate Attention"
+      value={criticalAlerts}
+      color="#dc2626"
+      backgroundColor="#ffffff"
+      icon={<BellIcon size={RESPONSIVE.icon.md} color="#dc2626" />}
+    />
+  </View>
+  
+  {/* Bottom Row - Two cards side by side */}
+  <View style={styles.statsRow}>
+    <StatsCard
+      title="Monitor Closely"
+      value={activeAlerts}
+      color="#ca8a04"
+      backgroundColor="#ffffff"
+      icon={<BellIcon size={RESPONSIVE.icon.md} color="#ca8a04" />}
+    />
+    <StatsCard
+      title="Routine Alerts"
+      value={routineAlerts}
+      color="#16a34a"
+      backgroundColor="#ffffff"
+      icon={<BellIcon size={RESPONSIVE.icon.md} color="#16a34a" />}
+    />
+  </View>
+</View>
 
         <View style={styles.tabsContainer}>
           <TabButton

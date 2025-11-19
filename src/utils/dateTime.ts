@@ -215,3 +215,18 @@ export function getDaysInMonth(date: Date): Date[] {
 
   return days;
 }
+export const getTodayDateString = (): string => {
+  return new Date().toISOString().split('T')[0];
+};
+
+export const isToday = (dateString: string): boolean => {
+  return dateString === getTodayDateString();
+};
+
+export const getCurrentTime = (): string => {
+  return new Date().toLocaleString("en-US", {
+    hour: "numeric",
+    minute: "numeric",
+    hour12: true,
+  });
+};

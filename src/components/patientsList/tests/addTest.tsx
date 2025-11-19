@@ -11,12 +11,11 @@ import {
   ScrollView,
   Alert,
   FlatList,
-  Dimensions,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RootState } from "../../../store/store";
 import { AuthPost } from "../../../auth/auth";
@@ -24,27 +23,20 @@ import { debounce } from "../../../utils/debounce";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { PlusIcon, XIcon } from "../../../utils/SvgIcons";
 import Footer from "../../dashboard/footer";
+import usePreOpForm from "../../../utils/usePreOpForm";
+import usePostOPStore from "../../../utils/usePostopForm";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
-const moderateScale = (size: number, factor: number = 0.5) => size + (scale(size) - size) * factor;
+// Import responsive utilities
+import { 
+  isTablet, 
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  FOOTER_HEIGHT
+} from "../../../utils/responsive";
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  field: "#f8fafc",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  danger: "#ef4444",
-  pill: "#eef2f7",
-  placeholder: "#94a3b8",
-};
-
-const FOOTER_HEIGHT = moderateScale(70);
+// Import colors
+import { COLORS } from "../../../utils/colour";
 
 type TestType = {
   testID: string;
@@ -66,6 +58,14 @@ type NewTest = TestType;
 export default function AddTestsScreen() {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
+ 
+ 
+   const route = useRoute<any>();
+  const activeTab = route.params?.currentTab;
+
+  const { tests: preOpTests, setTests: setPreOpTests } = usePreOpForm();
+  const { tests: postOpTests, setTests: setPostOpTests } = usePostOPStore();
+
   const cp = useSelector((s: RootState) => s.currentPatient);
   const timeline = cp?.patientTimeLineID;
   const dispatch = useDispatch();
@@ -80,6 +80,17 @@ export default function AddTestsScreen() {
   // Type-ahead state
   const [suggestions, setSuggestions] = useState<TestType[]>([]);
   const [loadingSugg, setLoadingSugg] = useState(false);
+  const dedupeTestsForStore = (
+    arr: { test: string; ICD_Code: string; testNotes: string }[]
+  ) => {
+    const seen = new Set<string>();
+    return arr.filter((t) => {
+      const key = (t.ICD_Code || t.test || "").toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
 
   // Remove duplicates and filter
   const removeDuplicatesAndFilter = useMemo(
@@ -125,6 +136,7 @@ export default function AddTestsScreen() {
         token
       );
       if (res?.data?.message === "success" && Array.isArray(res?.data?.data)) {
+
         const uniqueTests = removeDuplicatesAndFilter(res?.data?.data, val);
         setTestList(uniqueTests);
         setSuggestions(uniqueTests);
@@ -280,6 +292,22 @@ export default function AddTestsScreen() {
       const res = await AuthPost(`test/${user?.hospitalID}`, body, token);
       
       if (res?.data?.message === "success") {
+            // ---- Push tests into Pre-Op / Post-Op stores (same as web) ----
+    const mappedForStore = tests.map((t) => ({
+      test: String(t.test ?? ""),
+      ICD_Code: String(t.loinc_num_ ?? ""),
+      testNotes: String(t.testNotes ?? ""),
+    }));
+    if (activeTab === "PreOpRecord") {
+      const prev = preOpTests || [];
+      const merged = dedupeTestsForStore([...prev, ...mappedForStore]);
+      setPreOpTests(merged);
+    } else if (activeTab === "PostOpRecord") {
+      const prev = postOpTests || [];
+      const merged = dedupeTestsForStore([...prev, ...mappedForStore]);
+      setPostOpTests(merged);
+    }
+
         dispatch(showSuccess("Tests added successfully!"));
         navigation.goBack();
       } else {
@@ -297,14 +325,14 @@ export default function AddTestsScreen() {
       style={styles.suggRow} 
       onPress={() => selectSuggestion(item)}
     >
-      <Text style={{ color: COLORS.text, fontWeight: "600", fontSize: moderateScale(14) }}>
+      <Text style={{ color: COLORS.text, fontWeight: "600", fontSize: FONT_SIZE.sm }}>
         {item?.name}
       </Text>
       <View style={styles.suggDetails}>
-        <Text style={{ color: COLORS.sub, fontSize: moderateScale(11) }}>
+        <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
           LOINC: {item?.loinc_num_}
         </Text>
-        <Text style={{ color: COLORS.sub, fontSize: moderateScale(11) }}>
+        <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
           Dept: {item?.department}
         </Text>
       </View>
@@ -317,10 +345,10 @@ export default function AddTestsScreen() {
         <Text style={[styles.chipText, { color: COLORS.text }]}>{item?.name}</Text>
         <Pressable 
           onPress={() => removeFromList(item?.loinc_num_)}
-          hitSlop={8}
+          hitSlop={SPACING.xs}
           style={styles.chipDelete}
         >
-          <XIcon size={moderateScale(16)} color={COLORS.danger} />
+          <XIcon size={ICON_SIZE.sm} color={COLORS.danger} />
         </Pressable>
       </View>
       <TextInput
@@ -350,7 +378,7 @@ export default function AddTestsScreen() {
       >
         <ScrollView 
           contentContainerStyle={[styles.scrollContent, { 
-            paddingBottom: FOOTER_HEIGHT + moderateScale(16) + insets.bottom 
+            paddingBottom: FOOTER_HEIGHT + SPACING.md + insets.bottom 
           }]}
           showsVerticalScrollIndicator={false}
         >
@@ -372,7 +400,7 @@ export default function AddTestsScreen() {
                         borderColor: COLORS.border, 
                         color: COLORS.text, 
                         backgroundColor: COLORS.field,
-                        height: moderateScale(44),
+                        height: isTablet ? 50 : 44,
                       }
                     ]}
                     value={selectedItem?.name || ""}
@@ -400,13 +428,13 @@ export default function AddTestsScreen() {
                           renderItem={renderSuggestionItem}
                           ListEmptyComponent={
                             <View style={styles.suggRowCenter}>
-                              <Text style={{ color: COLORS.sub, fontSize: moderateScale(12) }}>
+                              <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
                                 No matching tests found
                               </Text>
                             </View>
                           }
                           nestedScrollEnabled
-                          style={{ maxHeight: moderateScale(150) }}
+                          style={{ maxHeight: 150 }}
                         />
                       )}
                     </View>
@@ -425,13 +453,13 @@ export default function AddTestsScreen() {
                     styles.addButton, 
                     { 
                       backgroundColor: COLORS.button,
-                      height: moderateScale(44),
+                      height: isTablet ? 50 : 44,
                       opacity: !selectedItem?.name ? 0.6 : 1
                     }
                   ]}
                   disabled={!selectedItem?.name}
                 >
-                  <PlusIcon size={moderateScale(18)} color={COLORS.buttonText} />
+                  <PlusIcon size={ICON_SIZE.sm} color={COLORS.buttonText} />
                   <Text style={[styles.addButtonText, { color: COLORS.buttonText }]}>
                     Add
                   </Text>
@@ -520,7 +548,7 @@ export default function AddTestsScreen() {
         bottom: insets.bottom,
         height: FOOTER_HEIGHT,
       }]}>
-        <Footer active={"patients"} brandColor="#14b8a6" />
+        <Footer active={"patients"} brandColor={COLORS.brand} />
       </View>
       {insets.bottom > 0 && (
         <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
@@ -535,29 +563,29 @@ const styles = StyleSheet.create({
   },
   scrollContent: { 
     flexGrow: 1, 
-    padding: moderateScale(16) 
+    padding: SPACING.md 
   },
   card: {
     borderWidth: 1,
-    borderRadius: moderateScale(16),
-    padding: moderateScale(16),
-    marginBottom: moderateScale(16),
+    borderRadius: SPACING.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
   },
   title: { 
-    fontSize: moderateScale(18), 
+    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg, 
     fontWeight: "800", 
-    marginBottom: moderateScale(16) 
+    marginBottom: SPACING.md 
   },
   label: { 
-    fontSize: moderateScale(14), 
+    fontSize: FONT_SIZE.sm, 
     fontWeight: "700",
-    marginBottom: moderateScale(6),
+    marginBottom: 6,
   },
   // Search row layout (75% input + 25% button)
   searchRow: {
     flexDirection: "row",
-    gap: moderateScale(12),
-    marginTop: moderateScale(8),
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
   },
   searchInputContainer: {
     flex: 0.75, // 75% width
@@ -568,97 +596,97 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1.5,
-    borderRadius: moderateScale(12),
-    paddingHorizontal: moderateScale(12),
-    fontSize: moderateScale(15),
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    fontSize: FONT_SIZE.sm,
   },
   addButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: moderateScale(6),
-    borderRadius: moderateScale(12),
-    paddingHorizontal: moderateScale(8),
+    gap: SPACING.xs,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
   },
   addButtonText: {
     fontWeight: "700",
-    fontSize: moderateScale(14),
+    fontSize: FONT_SIZE.sm,
   },
   // Note container
   noteContainer: {
-    marginTop: moderateScale(12),
+    marginTop: SPACING.sm,
   },
   noteInput: {
     borderWidth: 1.5,
-    borderRadius: moderateScale(12),
-    paddingHorizontal: moderateScale(12),
-    paddingVertical: moderateScale(10),
-    fontSize: moderateScale(14),
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZE.sm,
     textAlignVertical: "top",
-    minHeight: moderateScale(80),
+    minHeight: 80,
   },
   noteInputSmall: {
     borderWidth: 1.5,
-    borderRadius: moderateScale(8),
-    paddingHorizontal: moderateScale(8),
-    paddingVertical: moderateScale(6),
-    fontSize: moderateScale(12),
+    borderRadius: SPACING.xs,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: SPACING.xs,
+    fontSize: FONT_SIZE.xs,
     textAlignVertical: "top",
-    minHeight: moderateScale(60),
+    minHeight: 60,
     flex: 1,
-    marginLeft: moderateScale(8),
+    marginLeft: SPACING.xs,
   },
   // Selected tests list
   selectedListContainer: {
-    marginTop: moderateScale(20),
+    marginTop: SPACING.md,
   },
   selectedListTitle: {
-    fontSize: moderateScale(16),
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
-    marginBottom: moderateScale(12),
+    marginBottom: SPACING.sm,
   },
   selectedList: {
-    gap: moderateScale(12),
+    gap: SPACING.sm,
   },
   selectedItemRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: moderateScale(8),
+    gap: SPACING.xs,
   },
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: moderateScale(6),
-    paddingHorizontal: moderateScale(12),
-    paddingVertical: moderateScale(8),
-    borderRadius: moderateScale(20),
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: 20,
     borderWidth: 1,
-    minWidth: moderateScale(100),
+    minWidth: 100,
   },
   chipText: {
     fontWeight: "700",
-    fontSize: moderateScale(12),
+    fontSize: FONT_SIZE.xs,
     flex: 1,
   },
   chipDelete: {
-    padding: moderateScale(2),
+    padding: 2,
   },
   // Action buttons
   actionButtons: {
     flexDirection: "row",
-    gap: moderateScale(12),
-    marginTop: moderateScale(20),
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
   },
   actionButton: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: moderateScale(12),
-    paddingVertical: moderateScale(14),
+    borderRadius: SPACING.sm,
+    paddingVertical: SPACING.sm,
   },
   actionButtonText: {
     fontWeight: "700",
-    fontSize: moderateScale(14),
+    fontSize: FONT_SIZE.sm,
   },
   // Suggestions
   suggBox: {
@@ -666,10 +694,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: "100%",
-    marginTop: moderateScale(4),
+    marginTop: SPACING.xs,
     borderWidth: 1,
-    borderRadius: moderateScale(12),
-    maxHeight: moderateScale(200),
+    borderRadius: SPACING.sm,
+    maxHeight: 200,
     overflow: "hidden",
     zIndex: 10,
     elevation: 4,
@@ -679,19 +707,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   suggRow: {
-    paddingHorizontal: moderateScale(12),
-    paddingVertical: moderateScale(10),
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.border,
   },
   suggDetails: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: moderateScale(2),
+    marginTop: 2,
   },
   suggRowCenter: {
-    paddingHorizontal: moderateScale(12),
-    paddingVertical: moderateScale(12),
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
   },

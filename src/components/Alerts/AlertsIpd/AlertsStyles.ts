@@ -83,14 +83,18 @@ export const styles = StyleSheet.create({
 
   // Stats Grid Styles
   statsGrid: {
+    gap: RESPONSIVE.spacing.md,
+  },
+  statsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: RESPONSIVE.spacing.md,
     justifyContent: "space-between",
+    alignItems: "stretch",
   },
+  
+  // Update the existing statsCard style:
   statsCard: {
     flex: 1,
-    minWidth: RESPONSIVE.cardMinWidth,
     padding: RESPONSIVE.spacing.lg,
     borderRadius: RESPONSIVE.borderRadius.lg,
     shadowColor: "#000",
@@ -98,7 +102,11 @@ export const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+    backgroundColor: "#ffffff",
+    minHeight: 80, // Add minimum height for consistency
   },
+
+  // Keep your existing statsContent, statsTitle, statsValue, statsIcon styles as they are
   statsContent: {
     flexDirection: "row",
     justifyContent: "space-between",

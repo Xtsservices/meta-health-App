@@ -364,4 +364,22 @@ export const NotificationStyles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
+   footerWrap: {
+    left: 0,
+    right: 0,
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#e2e8f0",
+    zIndex: 10,
+    elevation: 6,
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    zIndex: 9,
+  },
 });

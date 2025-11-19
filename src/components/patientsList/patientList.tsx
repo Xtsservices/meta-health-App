@@ -43,8 +43,11 @@ import {
 } from "lucide-react-native";
 import { PatientType, wardType } from "../../utils/types";
 import Footer from "../dashboard/footer";
+import useOTConfig, { OTPatientStages } from "../../utils/otConfig";
 import { showError } from "../../store/toast.slice";
 import { formatageFromDOB } from "../../utils/age";
+import { formatDate } from "../../utils/dateTime";
+import { COLORS } from "../../utils/colour";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAGE_SIZE = 10;
@@ -78,15 +81,7 @@ interface SurgeryData {
 const FOOTER_H = 70;
 
 // --- Colors (static, used everywhere) ---
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  placeholder: "#94a3b8",
-};
+
 
 // --- Small helper ---
 function getAgeLabel(dob?: string): string {
@@ -118,7 +113,7 @@ const OpdPreviousPatients: React.FC = () => {
   const scheme = useColorScheme();
   const isDark = scheme === "dark";
   const user = useSelector((s: RootState) => s.currentUser);
-
+const { screenType, userType, setPatientStage } = useOTConfig();
   const zone = (route.params as any)?.zone;
   const [allPatients, setAllPatients] = useState<PatientType[]>([]);
   const [wardList, setWardList] = useState<wardType[]>([]);
@@ -135,7 +130,7 @@ const OpdPreviousPatients: React.FC = () => {
   const [selectedPatientName, setSelectedPatientName] = useState("");
 
   const bottomPad = FOOTER_H + insets.bottom + 24;
-
+const isOt = user?.roleName === "surgeon" || user?.roleName === "anesthesist"
   const fetchPatients = useCallback(async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     if (!user?.hospitalID || !token) return;
@@ -143,8 +138,8 @@ const OpdPreviousPatients: React.FC = () => {
     try {
       setLoading(true);
       let url = "";
-
-      if (user?.patientStatus === 1) {
+if (user?.roleName !== "surgeon" && user?.roleName !== "anesthesia"){
+if (user?.patientStatus === 1) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseopdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
         } else {
@@ -169,12 +164,16 @@ const OpdPreviousPatients: React.FC = () => {
           url = `patient/${user.hospitalID}/patients/opdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
         }
       }
-
+}else{
+  url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
+}
+      
+console.log(url, "oturl")
       const response = await AuthFetch(url, token);
-
+console.log(response, "surgery response")
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
-          ? response.data.patients
+          ? response?.data?.patients
           : [];
 
         const normalizedPatients = patients.map((pat: any) => ({
@@ -286,7 +285,7 @@ const OpdPreviousPatients: React.FC = () => {
 
         setSurgeryData(prev => ({
           ...prev,
-          [patient.id]: formattedData
+          [patient?.id]: formattedData
         }));
       }
     } catch (error) {
@@ -377,7 +376,7 @@ const OpdPreviousPatients: React.FC = () => {
     const start = (currentPage - 1) * PAGE_SIZE;
     return filteredAndSearched.slice(start, start + PAGE_SIZE);
   }, [filteredAndSearched, currentPage]);
-
+console.log(pagedData, "complete patients list")
   useEffect(() => {
     setCurrentPage(1);
   }, [filterValue, wardFilter, search]);
@@ -428,17 +427,7 @@ const OpdPreviousPatients: React.FC = () => {
     }
   };
 
-  const COLORS = {
-    bg: "#f8fafc", // Light background
-    card: "#ffffff", // White cards
-    text: "#0f172a", // Dark text
-    sub: "#475569", // Gray subtext
-    border: "#e2e8f0", // Light border
-    brand: "#14b8a6",
-    placeholder: "#94a3b8",
-    danger: "#ef4444",
-    warning: "#f59e0b",
-  };
+ 
 
   const capitalizeFirstLetter = (str: string) => {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
@@ -616,7 +605,16 @@ const OpdPreviousPatients: React.FC = () => {
     </View>
   );
 
+  const handleView = (patient :any) => {
+const patientStatusKey =
+            patient.status.toUpperCase() as keyof typeof OTPatientStages;
+          setPatientStage(OTPatientStages[patientStatusKey]);
+        
+ navigation.navigate("PatientProfile", { id: patient.id });
+  }
+
   const renderItem = ({ item }: { item: PatientType }) => {
+    console.log(item, "patient details ", item?.approvedTime)
     const paddedId = String(item?.id ?? "").padStart(4, "0");
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
@@ -624,7 +622,7 @@ const OpdPreviousPatients: React.FC = () => {
     const age = getAgeLabel(item?.dob);
     const hasNotification = item.notificationCount && item.notificationCount > 0;
     const wardName = (user?.patientStatus === 2 || user?.patientStatus === 3) ? wardList.find(w => w.id === item.wardID)?.name || "—" : "—";
-
+const approvedDate = formatDate(item?.approvedTime)
     const patientSurgeries = surgeryData[item.id] || [];
     const hasRejectedSurgery = patientSurgeries.some(surgery =>
       surgery.status?.toLowerCase() === "rejected"
@@ -667,6 +665,8 @@ const OpdPreviousPatients: React.FC = () => {
               </Text>
 
               <View style={styles.rightIconsContainer}>
+
+               
                 {hasRejectedSurgery && (
                   <TouchableOpacity
                     style={styles.warningButton}
@@ -705,7 +705,11 @@ const OpdPreviousPatients: React.FC = () => {
             </View>
 
             <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
+              {isOt && 
+   `Approved Date: ${approvedDate}`
+}
               {(user?.patientStatus === 2 || user?.patientStatus === 3) && `• Ward: ${capitalizeFirstLetter(wardName)}`}
+              
             </Text>
 
             <View style={styles.infoRow}>
@@ -743,10 +747,11 @@ const OpdPreviousPatients: React.FC = () => {
 
           <TouchableOpacity
             style={[styles.viewBtn, { borderColor: COLORS.border }]}
-            onPress={(e) => {
-              e.stopPropagation();
-              navigation.navigate("PatientProfile", { id: item.id });
-            }}
+             onPress={() =>  handleView(item)}
+            // onPress={(e) => {
+            //   e.stopPropagation();
+            //   navigation.navigate("PatientProfile", { id: item.id });
+            // }}
           >
             <Eye size={16} color={COLORS.text} />
             <Text style={[styles.viewBtnText, { color: COLORS.text }]}>View</Text>
@@ -852,7 +857,7 @@ const OpdPreviousPatients: React.FC = () => {
       </View>
     </Modal>
   );
-
+console.log(pagedData, "complet epatiens list")
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: COLORS.bg, paddingBottom: Math.max(insets.bottom, 12) }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>

@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { formatDate } from "../../../utils/dateTime";
-import { useNavigation } from "@react-navigation/native";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { medicalHistoryFormType } from "../../../utils/types";
 import { AuthFetch } from "../../../auth/auth";
 import { RootState } from "../../../store/store";
@@ -107,9 +107,11 @@ function parseFamilyDiseases(
   });
   return familyData;
 }
-
+type RouteParams = { ot: boolean };
 // Main Component
 const MedicalHistory: React.FC = () => {
+  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+        const isOt = route.params?.ot;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const patient = useSelector((s: RootState) => s.currentPatient);
@@ -304,7 +306,7 @@ const dispatch = useDispatch()
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Medical History</Text>
-          {patient.ptype !== 21 && (
+          {!isOt && patient.ptype !== 21 && (
             <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
               <EditIcon />
               <Text style={styles.editButtonText}>Edit</Text>

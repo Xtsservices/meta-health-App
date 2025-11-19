@@ -25,6 +25,7 @@ import { AuthFetch } from "../../auth/auth";
 import { patientStatus } from "../../utils/role";
 import { PatientType, WardType } from "../../utils/types";
 import { formatDate } from "../../utils/dateTime";
+import { formatageFromDOB } from "../../utils/age";
 import { 
   UserIcon, 
   SearchIcon, 
@@ -38,6 +39,7 @@ import {
   ArrowLeftIcon 
 } from "../../utils/SvgIcons";
 import Footer from "../dashboard/footer";
+import { COLORS } from "../../utils/colour";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -47,29 +49,7 @@ const verticalScale = (size: number) => (SCREEN_HEIGHT / 812) * size;
 const moderateScale = (size: number, factor: number = 0.5) => size + (scale(size) - size) * factor;
 
 const PAGE_SIZE = 10;
-
-// Age calculation utility
-function getAgeLabel(dob?: string): string {
-  if (!dob) return "—";
-  const d = new Date(dob);
-  if (isNaN(d.getTime())) return "—";
-  const now = new Date();
-  let years = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) years--;
-  if (years >= 2) return `${years}y`;
-  let months = years * 12 + (now.getMonth() - d.getMonth());
-  if (now.getDate() < d.getDate()) months--;
-  if (months <= 0) {
-    const days = Math.max(
-      0,
-      Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
-    );
-    return `${days}d`;
-  }
-  return `${months}m`;
-}
-
+const FOOTER_H = 70;
 // Compare dates for sorting (newest discharge first)
 function compareDates(a: PatientType, b: PatientType) {
   return new Date(b?.endTime ?? 0).valueOf() - new Date(a?.endTime ?? 0).valueOf();
@@ -92,21 +72,6 @@ const DischargedPatientsIPD: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const flatRef = useRef<FlatList<PatientType>>(null);
-
-  const COLORS = useMemo(
-    () => ({
-      bg: isDark ? "#0f172a" : "#f8fafc",
-      card: isDark ? "#1e293b" : "#ffffff",
-      text: isDark ? "#f1f5f9" : "#0f172a",
-      sub: isDark ? "#94a3b8" : "#475569",
-      border: isDark ? "#334155" : "#e2e8f0",
-      brand: "#14b8a6",
-      placeholder: isDark ? "#64748b" : "#94a3b8",
-      danger: "#ef4444",
-      success: "#10b981",
-    }),
-    [isDark]
-  );
 
   // Fetch discharged patients data
   const fetchDischargedPatients = useCallback(async () => {
@@ -247,7 +212,7 @@ const DischargedPatientsIPD: React.FC = () => {
       <View style={[styles.searchWrap, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
         <SearchIcon size={moderateScale(18)} color={COLORS.sub} />
         <TextInput
-          placeholder="Search by name or mobile, ID"
+          placeholder="Search by name , mobile or ID"
           placeholderTextColor={COLORS.placeholder}
           value={search}
           onChangeText={setSearch}
@@ -325,7 +290,7 @@ const DischargedPatientsIPD: React.FC = () => {
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
     const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—")?.toString();
-    const age = getAgeLabel(item?.dob);
+    const age = formatageFromDOB(item?.dob || "");
     const hasNotification = item?.notificationCount && item?.notificationCount > 0;
     const wardName = wardList?.find(w => w?.id === item?.wardID)?.name || "—";
     const dischargeDate = item?.endTime ? formatDate(item?.endTime) : "—";
@@ -426,17 +391,17 @@ const DischargedPatientsIPD: React.FC = () => {
         <Text style={[styles.resultsText, { color: COLORS.text }]}>
           Results: {filteredAndSearched?.length} patients
         </Text>
-        
+
         <View style={styles.pageControls}>
           <Text style={[styles.pageInfo, { color: COLORS.text }]}>
             Page {currentPage} of {totalPages}
           </Text>
-          
+
           <View style={styles.pageButtons}>
             <TouchableOpacity
               onPress={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
-              style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
+              style={[styles.pageBtn, { backgroundColor: COLORS.card }, currentPage === 1 && styles.pageBtnDisabled]}
             >
               <ChevronLeftIcon size={moderateScale(18)} color={currentPage === 1 ? COLORS.sub : COLORS.text} />
             </TouchableOpacity>
@@ -444,7 +409,7 @@ const DischargedPatientsIPD: React.FC = () => {
             <TouchableOpacity
               onPress={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
-              style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]}
+              style={[styles.pageBtn, { backgroundColor: COLORS.card }, currentPage === totalPages && styles.pageBtnDisabled]}
             >
               <ChevronRightIcon size={moderateScale(18)} color={currentPage === totalPages ? COLORS.sub : COLORS.text} />
             </TouchableOpacity>
@@ -471,15 +436,20 @@ const DischargedPatientsIPD: React.FC = () => {
           </View>
         ) : (
           <>
-            <FlatList
+           <FlatList
               ref={flatRef}
               data={pagedData}
               keyExtractor={(it) => String(it?.id)}
               renderItem={renderItem}
               ListEmptyComponent={renderEmpty}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: FOOTER_H + insets.bottom + 24 },
+              ]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              ListFooterComponent={renderPagination} // Add pagination as footer
+              scrollIndicatorInsets={{ bottom: FOOTER_H + insets.bottom + 24 }}
             />
             {renderPagination()}
           </>
@@ -787,9 +757,13 @@ const styles = StyleSheet.create({
     width: moderateScale(36),
     height: moderateScale(36),
     borderRadius: moderateScale(18),
-    backgroundColor: "#f1f5f9",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   pageBtnDisabled: { 
     opacity: 0.4 

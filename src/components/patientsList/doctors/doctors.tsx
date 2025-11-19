@@ -16,6 +16,7 @@ import { AuthFetch } from "../../../auth/auth";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatDateTime } from "../../../utils/dateTime";
+import { COLORS } from "../../../utils/colour";
 
 type RootState = any;
 
@@ -30,19 +31,7 @@ type PatientDoctor = {
   category: "primary" | "secondary";
 };
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  buttonText: "#ffffff",
-  chip: "#eef2f7",
-  chipText: "#0f172a",
-  green: "#16a34a",
-  red: "#ef4444",
-};
+
 
 const FOOTER_H = 70;
 
@@ -187,6 +176,7 @@ export default function DoctorsScreen() {
           />
 
           {/* FAB → navigate to AddDoctorScreen */}
+          {cp.ptype != 21 && (
           <Pressable
             onPress={() => navigation.navigate("AddDoctors" as never)}
             style={[
@@ -196,6 +186,7 @@ export default function DoctorsScreen() {
           >
             <Plus size={20} color={COLORS.buttonText} />
           </Pressable>
+          )}
         </>
       )}
 

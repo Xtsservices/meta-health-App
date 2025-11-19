@@ -43,6 +43,7 @@ import {
 } from "../../utils/types";
 import { showError, showSuccess } from "../../store/toast.slice";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
+import { COLORS } from "../../utils/colour";
 
 type Department = { id: number; name: string };
 
@@ -107,18 +108,7 @@ const AddPatientForm: React.FC = () => {
   const scrollViewRef = useRef<ScrollView>(null);
   const FOOTER_HEIGHT = 70;
 
-  const COLORS = useMemo(() => ({
-    bg: "#f8fafc",
-    card: "#ffffff",
-    text: "#1e293b",
-    sub: "#64748b",
-    border: "#e2e8f0",
-    brand: "#14b8a6",
-    danger: "#ef4444",
-    inputBg: "transparent",
-    placeholder: "#9ca3af",
-    pickerText: "#1e293b",
-  }), []);
+
 
   // ---------- Title list by category ----------
   useEffect(() => {
@@ -288,8 +278,6 @@ const AddPatientForm: React.FC = () => {
     });
   };
 
-  // ---------- Form Validation ----------
-  // ---------- Form Validation ----------
   const validateForm = () => {
     let valid = true;
     const updated = { ...formData };
@@ -299,21 +287,21 @@ const AddPatientForm: React.FC = () => {
       valid = false;
     }
 
-    if (user?.patientStatus == 2) {
-      // For inpatient: validate ward instead of department
-      if (!formData.wardID.value) {
-        updated.wardID = { ...updated.wardID, valid: false, showError: true };
-        valid = false;
-      }
-    } else {
-      if (!formData.departmentID.value) {
-        updated.departmentID = { ...updated.departmentID, valid: false, showError: true };
-        valid = false;
-      }
-      if (!formData.userID.value) {
-        updated.userID = { ...updated.userID, valid: false, showError: true };
-        valid = false;
-      }
+    if (!formData.departmentID.value) {
+      updated.departmentID = { ...updated.departmentID, valid: false, showError: true };
+      valid = false;
+    }
+
+    // Doctor is ALWAYS required for ALL patient statuses
+    if (!formData.userID.value) {
+      updated.userID = { ...updated.userID, valid: false, showError: true };
+      valid = false;
+    }
+
+    // Ward is required ONLY for inpatient (status 2)
+    if (user?.patientStatus == 2 && !formData.wardID.value) {
+      updated.wardID = { ...updated.wardID, valid: false, showError: true };
+      valid = false;
     }
 
     (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach((key) => {
@@ -328,7 +316,6 @@ const AddPatientForm: React.FC = () => {
     return valid;
   };
 
-  // ---------- Submit ----------
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
@@ -355,16 +342,13 @@ const AddPatientForm: React.FC = () => {
     data.append("insurance", numInsurance as any);
     data.append("age", formData.age.value);
 
-    // CHANGE: Use user?.patientStatus instead of patientStatusFromRoute
-    if (user?.patientStatus == 2) {
-      // For inpatient: use ward instead of department
+    if (formData.departmentID.value) {
+      data.append("departmentID", Number(formData.departmentID.value) as any);
+    }
+
+    // Include ward ONLY for inpatient (status 2)
+    if (user?.patientStatus == 2 && formData.wardID.value) {
       data.append("wardID", Number(formData.wardID.value) as any);
-    } else {
-      // For other statuses: use department and doctor
-      data.append("department", Number(formData.department.value));
-      if (formData.departmentID.valid && formData.departmentID.value != null) {
-        data.append("departmentID", Number(formData.departmentID.value) as any);
-      }
     }
 
     // Add doctor for all statuses
@@ -417,7 +401,6 @@ const AddPatientForm: React.FC = () => {
       setLoading(false);
     }
   };
-
   // ---------- Custom Picker with Selected Label ----------
   const CustomPicker = ({
     selectedValue,
@@ -728,105 +711,93 @@ const AddPatientForm: React.FC = () => {
             {renderInput("PIN Code", "pinCode", { keyboardType: "numeric", placeholder: "6-digit PIN" })}
           </View>
 
-          {/* Conditional Section based on Patient Status */}
-          {user?.patientStatus == 2 ? ( // CHANGE: Use user?.patientStatus instead of patientStatusFromRoute
-            /* Inpatient (Status 2): Show Ward instead of Department */
-            <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
-              <Text style={[styles.cardTitle, { color: COLORS.text }]}>Ward & Doctor</Text>
+          {/* Department, Ward & Doctor - Show for ALL patient statuses */}
+          <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+            <Text style={[styles.cardTitle, { color: COLORS.text }]}>
+              {user?.patientStatus == 2 ? "Ward, Department & Doctor" : "Department & Doctor"}
+            </Text>
 
-              {/* Ward Selection */}
-              <View style={styles.inputBlock}>
-                <Text style={[styles.label, { color: COLORS.sub }]}>Ward *</Text>
+            <View style={styles.row}>
+              {/* Department - ALWAYS SHOW */}
+              <View style={user?.patientStatus == 2 ? styles.col : { flex: 1 }}>
+                <Text style={[styles.label, { color: COLORS.sub }]}>Department *</Text>
                 <CustomPicker
-                  selectedValue={formData.wardID.value}
+                  selectedValue={selectedDepartmentID}
                   onValueChange={(id) => {
+                    setSelectedDepartmentID(id);
                     setFormData((prev) => ({
                       ...prev,
-                      wardID: { value: id, valid: true, showError: false, message: "" },
+                      department: { value: String(id ?? ""), valid: true, showError: false, message: "" },
+                      departmentID: { value: id, valid: true, showError: false, message: "" },
                     }));
                   }}
-                  items={wardList?.map(ward => ({
-                    label: capitalizeFirstLetter(ward.name),
-                    value: ward.id
-                  }))}
-                  placeholder="Select Ward"
+                  items={departmentList.map(d => ({ label: d.name, value: d.id }))}
+                  placeholder="Select Department"
+                  enabled={user?.role !== 4000}
                 />
-                {formData.wardID.showError && (
+                {formData.departmentID.showError && (
                   <Text style={[styles.errorText, { color: COLORS.danger }]}>
-                    Please select a ward
+                    Please select a department
                   </Text>
                 )}
               </View>
 
-              {/* Doctor Selection */}
-              <View style={styles.inputBlock}>
-                <Text style={[styles.label, { color: COLORS.sub }]}>Doctor *</Text>
-                <CustomPicker
-                  selectedValue={formData.userID.value}
-                  onValueChange={(id) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      userID: { value: id, valid: true, showError: false, message: "" },
-                    }));
-                  }}
-                  items={doctorList.map(d => ({
-                    label: `${d.firstName} ${d.lastName || ""}`,
-                    value: d.id
-                  }))}
-                  placeholder="Select Doctor"
-                />
-                {formData.userID.showError && (
-                  <Text style={[styles.errorText, { color: COLORS.danger }]}>
-                    Please select a doctor
+              {/* Ward - SHOW ONLY for inpatient (status 2) */}
+              {user?.patientStatus == 2 && (
+                <View style={styles.col}>
+                  <Text style={[styles.label, { color: COLORS.sub }]}>
+                    Ward <Text style={{ color: COLORS.danger }}>*</Text>
                   </Text>
-                )}
-              </View>
+                  <CustomPicker
+                    selectedValue={formData.wardID.value}
+                    onValueChange={(id) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        wardID: { value: id, valid: true, showError: false, message: "" },
+                      }));
+                    }}
+                    items={wardList?.map(ward => ({
+                      label: capitalizeFirstLetter(ward.name),
+                      value: ward.id
+                    }))}
+                    placeholder="Select Ward"
+                  />
+                  {formData.wardID.showError && (
+                    <Text style={[styles.errorText, { color: COLORS.danger }]}>
+                      Please select a ward
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
 
-              {renderInput("Referred By", "referredBy", { placeholder: "Doctor or hospital name" })}
+            {/* Doctor Selection */}
+            <View style={styles.inputBlock}>
+              <Text style={[styles.label, { color: COLORS.sub }]}>Doctor *</Text>
+              <CustomPicker
+                selectedValue={formData.userID.value}
+                onValueChange={(id) => {
+                  const doc = filteredDoctors.find((d) => d.id === id);
+                  setFormData((prev) => ({
+                    ...prev,
+                    userID: { value: id, valid: true, showError: false, message: "" },
+                    departmentID: { value: doc?.departmentID || selectedDepartmentID || undefined, valid: true, showError: false, message: "" },
+                    department: { value: String(doc?.departmentID || selectedDepartmentID || ""), valid: true, showError: false, message: "" },
+                  }));
+                }}
+                items={filteredDoctors?.map(d => ({ label: `${d.firstName} ${d.lastName || ""}`, value: d.id }))}
+                placeholder="Select Doctor"
+                enabled={user?.role !== 4000}
+              />
+              {formData.userID.showError && (
+                <Text style={[styles.errorText, { color: COLORS.danger }]}>
+                  Please select a doctor
+                </Text>
+              )}
             </View>
-          ) : (
-            <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
-              <Text style={[styles.cardTitle, { color: COLORS.text }]}>Department & Doctor</Text>
-              <View style={styles.row}>
-                <View style={styles.col}>
-                  <Text style={[styles.label, { color: COLORS.sub }]}>Department *</Text>
-                  <CustomPicker
-                    selectedValue={selectedDepartmentID}
-                    onValueChange={(id) => {
-                      setSelectedDepartmentID(id);
-                      setFormData((prev) => ({
-                        ...prev,
-                        department: { value: String(id ?? ""), valid: true, showError: false, message: "" },
-                        departmentID: { value: id, valid: true, showError: false, message: "" },
-                      }));
-                    }}
-                    items={departmentList.map(d => ({ label: d.name, value: d.id }))}
-                    placeholder="Select Department"
-                    enabled={user?.role !== 4000}
-                  />
-                </View>
-                <View style={styles.col}>
-                  <Text style={[styles.label, { color: COLORS.sub }]}>Doctor *</Text>
-                  <CustomPicker
-                    selectedValue={formData.userID.value}
-                    onValueChange={(id) => {
-                      const doc = filteredDoctors.find((d) => d.id === id);
-                      setFormData((prev) => ({
-                        ...prev,
-                        userID: { value: id, valid: true, showError: false, message: "" },
-                        departmentID: { value: doc?.departmentID || selectedDepartmentID || undefined, valid: true, showError: false, message: "" },
-                        department: { value: String(doc?.departmentID || selectedDepartmentID || ""), valid: true, showError: false, message: "" },
-                      }));
-                    }}
-                    items={filteredDoctors.map(d => ({ label: `${d.firstName} ${d.lastName || ""}`, value: d.id }))}
-                    placeholder="Select Doctor"
-                    enabled={user?.role !== 4000}
-                  />
-                </View>
-              </View>
-              {renderInput("Referred By", "referredBy", { placeholder: "Doctor or hospital name" })}
-            </View>
-          )}
+
+            {renderInput("Referred By", "referredBy", { placeholder: "Doctor or hospital name" })}
+          </View>
 
           {/* Insurance */}
           <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
