@@ -173,7 +173,7 @@ if (user?.patientStatus === 1) {
       const response = await AuthFetch(url, token);
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
-          ? response.data.patients
+          ? response?.data?.patients
           : [];
 
         const normalizedPatients = patients.map((pat: any) => ({

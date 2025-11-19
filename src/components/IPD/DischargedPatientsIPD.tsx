@@ -49,7 +49,7 @@ const verticalScale = (size: number) => (SCREEN_HEIGHT / 812) * size;
 const moderateScale = (size: number, factor: number = 0.5) => size + (scale(size) - size) * factor;
 
 const PAGE_SIZE = 10;
-
+const FOOTER_H = 70;
 // Compare dates for sorting (newest discharge first)
 function compareDates(a: PatientType, b: PatientType) {
   return new Date(b?.endTime ?? 0).valueOf() - new Date(a?.endTime ?? 0).valueOf();
@@ -391,17 +391,17 @@ const DischargedPatientsIPD: React.FC = () => {
         <Text style={[styles.resultsText, { color: COLORS.text }]}>
           Results: {filteredAndSearched?.length} patients
         </Text>
-        
+
         <View style={styles.pageControls}>
           <Text style={[styles.pageInfo, { color: COLORS.text }]}>
             Page {currentPage} of {totalPages}
           </Text>
-          
+
           <View style={styles.pageButtons}>
             <TouchableOpacity
               onPress={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
-              style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
+              style={[styles.pageBtn, { backgroundColor: COLORS.card }, currentPage === 1 && styles.pageBtnDisabled]}
             >
               <ChevronLeftIcon size={moderateScale(18)} color={currentPage === 1 ? COLORS.sub : COLORS.text} />
             </TouchableOpacity>
@@ -409,7 +409,7 @@ const DischargedPatientsIPD: React.FC = () => {
             <TouchableOpacity
               onPress={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
-              style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]}
+              style={[styles.pageBtn, { backgroundColor: COLORS.card }, currentPage === totalPages && styles.pageBtnDisabled]}
             >
               <ChevronRightIcon size={moderateScale(18)} color={currentPage === totalPages ? COLORS.sub : COLORS.text} />
             </TouchableOpacity>
@@ -436,15 +436,20 @@ const DischargedPatientsIPD: React.FC = () => {
           </View>
         ) : (
           <>
-            <FlatList
+           <FlatList
               ref={flatRef}
               data={pagedData}
               keyExtractor={(it) => String(it?.id)}
               renderItem={renderItem}
               ListEmptyComponent={renderEmpty}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[
+                styles.listContent,
+                { paddingBottom: FOOTER_H + insets.bottom + 24 },
+              ]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              ListFooterComponent={renderPagination} // Add pagination as footer
+              scrollIndicatorInsets={{ bottom: FOOTER_H + insets.bottom + 24 }}
             />
             {renderPagination()}
           </>
@@ -752,9 +757,13 @@ const styles = StyleSheet.create({
     width: moderateScale(36),
     height: moderateScale(36),
     borderRadius: moderateScale(18),
-    backgroundColor: "#f1f5f9",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   pageBtnDisabled: { 
     opacity: 0.4 
