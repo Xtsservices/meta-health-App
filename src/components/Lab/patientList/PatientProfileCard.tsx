@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useSelector } from "react-redux";
+import LinearGradient from 'react-native-linear-gradient';
 // Icons
 import {
   UserIcon,
@@ -32,10 +33,30 @@ const COLORS = {
   sub: "#475569",
   border: "#e2e8f0",
   brand: "#14b8a6",
+  gradientStart: "#14b8a6",
+  gradientEnd: "#0d9488",
   success: "#10b981",
   warning: "#f59e0b",
   info: "#3b82f6",
 };
+
+// Gradient Button Component
+const GradientButton: React.FC<{
+  onPress: () => void;
+  children: React.ReactNode;
+  style?: any;
+}> = ({ onPress, children, style }) => (
+  <TouchableOpacity onPress={onPress} style={[styles.gradientButton, style]}>
+    <LinearGradient
+      colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={styles.gradientButtonInner}
+    >
+      {children}
+    </LinearGradient>
+  </TouchableOpacity>
+);
 
 type PatientDetails = {
   id: number;
@@ -197,15 +218,15 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
           )}
 
           {tab === "completed" && allReports.length > 0 && (
-            <TouchableOpacity
+            <GradientButton
               style={styles.reportsButton}
               onPress={() => setShowReports(!showReports)}
             >
-              <DownloadIcon size={18} color={COLORS.brand} />
+              <DownloadIcon size={18} color="#ffffff" />
               <Text style={styles.reportsButtonText}>
                 {showReports ? "Hide Reports" : "View Reports"}
               </Text>
-            </TouchableOpacity>
+            </GradientButton>
           )}
         </View>
       </View>
@@ -427,10 +448,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: COLORS.text,
   },
-  reportsButton: {
+  gradientButton: {
+    borderRadius: 8,
+    shadowColor: COLORS.brand,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  gradientButtonInner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#eff6ff",
+    justifyContent: "center",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -439,7 +468,7 @@ const styles = StyleSheet.create({
   reportsButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: COLORS.brand,
+    color: "#ffffff",
   },
   divider: {
     height: 1,

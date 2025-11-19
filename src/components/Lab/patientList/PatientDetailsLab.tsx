@@ -8,11 +8,13 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import LinearGradient from 'react-native-linear-gradient';
 
 // Components
 import TestCard from "./TestCard";
@@ -20,6 +22,7 @@ import PatientProfileCard from "./PatientProfileCard";
 import { ArrowLeftIcon } from "../../../utils/SvgIcons";
 import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
+import Footer from "../../dashboard/footer";
 
 // Colors
 const COLORS = {
@@ -29,7 +32,17 @@ const COLORS = {
   sub: "#475569",
   border: "#e2e8f0",
   brand: "#14b8a6",
+  gradientStart: "#14b8a6",
+  gradientEnd: "#0d9488",
+  gradientWarningStart: "#f59e0b",
+  gradientWarningEnd: "#ea580c",
+  gradientSuccessStart: "#10b981",
+  gradientSuccessEnd: "#059669",
+  gradientProcessingStart: "#3b82f6",
+  gradientProcessingEnd: "#1d4ed8",
 };
+
+const FOOTER_H = 64;
 
 type PatientDetails = {
   id: number;
@@ -93,58 +106,60 @@ const PatientDetailsLab: React.FC = () => {
   const [patientDetails, setPatientDetails] = useState<PatientDetails[]>([]);
   const [completedPatientData, setCompletedPatientData] = useState<PatientDetails[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchPatientData = async (isRefresh = false) => {
+    try {
+      if (!isRefresh) setLoading(true);
+      setRefreshing(isRefresh);
+      
+      const token = await AsyncStorage.getItem("token");
+      
+      if (!user?.hospitalID || !token || !timeLineID) {
+        console.error("Missing hospitalID, token, or timeLineID");
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      // Fetch main patient details - EXACT SAME AS WEB
+      let apiEndpoint = prescriptionURL
+        ? `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getWalkinPatientDetails`
+        : `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getPatientDetails`;
+
+      const response = await AuthFetch(apiEndpoint, token);
+      
+      // Handle response structure - EXACT SAME AS WEB
+      if (response?.data?.message === "success") {
+        setPatientDetails(response?.data?.patientList || []);
+      } else {
+        console.error("Failed to fetch patient details:", response);
+        setPatientDetails([]);
+      }
+
+      // Fetch completed patient data for reports tab - EXACT SAME AS WEB
+      if (tab === "completed") {
+        let completedEndpoint = prescriptionURL
+          ? `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getWalkinReportsCompletedPatientDetails`
+          : `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getReportsCompletedPatientDetails`;
+
+        const completedResponse = await AuthFetch(completedEndpoint, token);
+        
+        if (completedResponse?.data?.message === "success") {
+          setCompletedPatientData(completedResponse?.data?.patientList || []);
+        } else {
+          setCompletedPatientData([]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching patient data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchPatientData = async () => {
-      try {
-        setLoading(true);
-        const token = await AsyncStorage.getItem("token");
-        
-        if (!user?.hospitalID || !token) {
-          console.error("Missing hospitalID or token");
-          return;
-        }
-
-        // Fetch main patient details
-        let apiEndpoint = prescriptionURL
-          ? `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getWalkinPatientDetails`
-          : `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getPatientDetails`;
-
-        const response = await AuthFetch(apiEndpoint, token);
-        
-        // Handle response structure
-        if (response?.status === "success" && response?.data?.message === "success") {
-          setPatientDetails(response.data.patientList || []);
-        } else if (response?.message === "success") {
-          setPatientDetails(response.patientList || []);
-        } else {
-          console.error("Failed to fetch patient details:", response);
-          setPatientDetails([]);
-        }
-
-        // Fetch completed patient data for reports tab
-        if (tab === "completed") {
-          let completedEndpoint = prescriptionURL
-            ? `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getWalkinReportsCompletedPatientDetails`
-            : `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getReportsCompletedPatientDetails`;
-
-          const completedResponse = await AuthFetch(completedEndpoint, token);
-          
-          if (completedResponse?.status === "success" && completedResponse?.data?.message === "success") {
-            setCompletedPatientData(completedResponse.data.patientList || []);
-          } else if (completedResponse?.message === "success") {
-            setCompletedPatientData(completedResponse.patientList || []);
-          } else {
-            setCompletedPatientData([]);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching patient data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (timeLineID && user?.hospitalID) {
       fetchPatientData();
     } else {
@@ -152,7 +167,19 @@ const PatientDetailsLab: React.FC = () => {
     }
   }, [timeLineID, user, prescriptionURL, tab]);
 
-  if (loading) {
+  useFocusEffect(
+    React.useCallback(() => {
+      if (timeLineID && user?.hospitalID) {
+        fetchPatientData(true);
+      }
+    }, [timeLineID, user, prescriptionURL, tab])
+  );
+
+  const onRefresh = () => {
+    fetchPatientData(true);
+  };
+
+  if (loading && !refreshing) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
         <View style={styles.loadingContainer}>
@@ -181,70 +208,72 @@ const PatientDetailsLab: React.FC = () => {
     );
   }
 
-// In PatientDetailsLab.tsx - update the TestCard rendering
-return (
-  <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
-    {/* Header */}
-    <View style={styles.header}>
-      <TouchableOpacity 
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
+
+      <ScrollView 
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.brand]}
+            tintColor={COLORS.brand}
+          />
+        }
       >
-        <ArrowLeftIcon size={24} color="#fff" />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>Patient Details</Text>
-      <View style={styles.headerRight} />
-    </View>
+        {/* Patient Profile Card */}
+        <PatientProfileCard
+          patientDetails={currentPatient}
+          completedDetails={completedPatientData}
+          tab={tab}
+        />
 
-    <ScrollView 
-      style={styles.content}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-    >
-      {/* Patient Profile Card */}
-      <PatientProfileCard
-        patientDetails={currentPatient}
-        completedDetails={completedPatientData}
-        tab={tab}
-      />
+        {/* Tests Section - EXACT SAME LOGIC AS WEB */}
+        {tab === "normal" && (
+          <View style={styles.testsSection}>
+            <Text style={styles.sectionTitle}>Tests</Text>
+            {patientDetails.length > 0 ? (
+              patientDetails.map((patient, patientIndex) => {
+                // Handle both testsList array and single test object - EXACT SAME AS WEB
+                const tests = Array.isArray(patient.testsList) 
+                  ? patient.testsList 
+                  : patient.testsList ? [patient.testsList] : [patient];
+                
+                return tests.map((test, testIndex) => (
+                  <TestCard
+                    key={`${test.id || patient.id}-${patientIndex}-${testIndex}`}
+                    testID={patient.id}
+                    testName={test.name || test.test || patient.test || "Unknown Test"}
+                    timeLineID={patient.timeLineID || patient.id}
+                    status={patient.status || test.status || "pending"}
+                    date={patient.addedOn || patient.latestTestTime || ""}
+                    prescriptionURL={prescriptionURL}
+                    test={test.name || test.test}
+                    loincCode={test.loinc_num_ || test.loincCode}
+                    walkinID={patient.id}
+                    patientData={currentPatient}
+                    onStatusChange={() => fetchPatientData(true)} // Refresh when status changes
+                  />
+                ));
+              })
+            ) : (
+              <View style={styles.noTestsContainer}>
+                <Text style={styles.noTestsText}>No tests available</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </ScrollView>
 
-      {/* Tests Section */}
-      {tab === "normal" && (
-        <View style={styles.testsSection}>
-          <Text style={styles.sectionTitle}>Tests</Text>
-          {patientDetails.length > 0 ? (
-            patientDetails.map((patient, patientIndex) => {
-              // Handle both testsList array and single test object
-              const tests = Array.isArray(patient.testsList) 
-                ? patient.testsList 
-                : patient.testsList ? [patient.testsList] : [patient];
-              
-              return tests.map((test, testIndex) => (
-                <TestCard
-                  key={`${test.id || patient.id}-${patientIndex}-${testIndex}`}
-                  testID={patient.id}
-                  testName={test.name || test.test || patient.test || "Unknown Test"}
-                  timeLineID={patient.timeLineID || patient.id}
-                  status={patient.status || test.status || "pending"}
-                  date={patient.addedOn || patient.latestTestTime || ""}
-                  prescriptionURL={prescriptionURL}
-                  test={test.name || test.test}
-                  loincCode={test.loinc_num_ || test.loincCode}
-                  walkinID={patient.id}
-                  patientData={currentPatient} // Add this line to pass patient data
-                />
-              ));
-            })
-          ) : (
-            <View style={styles.noTestsContainer}>
-              <Text style={styles.noTestsText}>No tests available</Text>
-            </View>
-          )}
-        </View>
-      )}
-    </ScrollView>
-  </SafeAreaView>
-);
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"patients"} brandColor="#14b8a6" />
+      </View>
+
+    </SafeAreaView>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -273,9 +302,14 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 20,
   },
+  backButton: {
+    padding: 12,
+    backgroundColor: COLORS.brand,
+    borderRadius: 8,
+  },
   backButtonText: {
     fontSize: 16,
-    color: COLORS.brand,
+    color: "#fff",
     fontWeight: "600",
   },
   header: {
@@ -284,7 +318,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: COLORS.brand,
   },
   backButton: {
     padding: 8,
@@ -313,6 +346,13 @@ const styles = StyleSheet.create({
   noTestsContainer: {
     alignItems: "center",
     padding: 40,
+  },
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: FOOTER_H,
+    justifyContent: "center",
   },
   noTestsText: {
     fontSize: 16,

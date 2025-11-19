@@ -299,17 +299,6 @@ const supportItems = items.filter(item =>
   item.key === "help"
 );
 
-  // Add alert item to patient management
-  const alertItem: SidebarItem = {
-    key: "alerts",
-    label: "Alerts",
-    icon: BellIcon,
-    onPress: () => {
-      onClose();
-    },
-    isAlert: true,
-    alertCount: alertCount,
-  };
 
   return (
     <Modal transparent visible={open} animationType="none" onRequestClose={onClose}>
@@ -370,10 +359,6 @@ const supportItems = items.filter(item =>
                 }}
               />
             ))}
-            <SidebarButton
-              item={alertItem}
-              onPress={alertItem.onPress}
-            />
           </View>
 
           {/* Operations Section */}
@@ -799,7 +784,7 @@ const getSidebarItems = (): SidebarItem[] => {
       key: "walkin",
       label: "Walk-In",
       icon: ShoppingBagIcon,
-      onPress: () => go(`WalkIn${basePath}`)
+      onPress: () => go(`SaleComp`)
     },
     {
       key: "billing",
@@ -810,8 +795,8 @@ const getSidebarItems = (): SidebarItem[] => {
     {
       key: "tax",
       label: "Tax Invoice",
-      icon: ReceiptIcon, // You'll need to import/create this icon
-      onPress: () => go(`TaxInvoice${basePath}`) // Update route as needed
+      icon: ReceiptIcon,
+      onPress: () => go(`TaxInvoice${basePath}`)
     },
     
     // Operations Section
@@ -825,7 +810,7 @@ const getSidebarItems = (): SidebarItem[] => {
       key: "pricing",
       label: "Test Price",
       icon: DollarSignIcon, // You'll need to import/create this icon
-      onPress: () => go(`TestPrice${basePath}`) // Update route as needed
+      onPress: () => go(`TestPricing`) // Update route as needed
     },
     
     // Support Section

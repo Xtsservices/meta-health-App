@@ -6,10 +6,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import LinearGradient from 'react-native-linear-gradient';
 
 // Icons
 import {
@@ -34,6 +36,14 @@ const COLORS = {
   success: "#10b981",
   warning: "#f59e0b",
   info: "#3b82f6",
+  gradientStart: "#14b8a6",
+  gradientEnd: "#0d9488",
+  gradientWarningStart: "#f59e0b",
+  gradientWarningEnd: "#ea580c",
+  gradientSuccessStart: "#10b981",
+  gradientSuccessEnd: "#059669",
+  gradientProcessingStart: "#3b82f6",
+  gradientProcessingEnd: "#1d4ed8",
 };
 
 type TestCardProps = {
@@ -47,6 +57,105 @@ type TestCardProps = {
   loincCode?: string;
   walkinID?: number;
   patientData?: any;
+  onStatusChange?: () => void;
+};
+
+// Gradient Status Pill Component
+const GradientStatusPill: React.FC<{ 
+  text: string; 
+  type: "completed" | "active" | "pending" 
+}> = ({ text, type }) => {
+  const getGradientColors = () => {
+    switch (type) {
+      case "completed":
+        return [COLORS.gradientSuccessStart, COLORS.gradientSuccessEnd];
+      case "active":
+        return [COLORS.gradientProcessingStart, COLORS.gradientProcessingEnd];
+      case "pending":
+        return [COLORS.gradientWarningStart, COLORS.gradientWarningEnd];
+      default:
+        return [COLORS.sub, COLORS.sub];
+    }
+  };
+
+  return (
+    <LinearGradient
+      colors={getGradientColors()}
+      style={styles.gradientPill}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+    >
+      <Text style={styles.gradientPillText}>{text}</Text>
+    </LinearGradient>
+  );
+};
+
+// Gradient Dot Component
+const GradientDot: React.FC<{ 
+  type: "completed" | "active" | "pending";
+  isClickable?: boolean;
+  onPress?: () => void;
+  loading?: boolean;
+}> = ({ type, isClickable = false, onPress, loading = false }) => {
+  const getGradientColors = () => {
+    switch (type) {
+      case "completed":
+        return [COLORS.gradientSuccessStart, COLORS.gradientSuccessEnd];
+      case "active":
+        return [COLORS.gradientProcessingStart, COLORS.gradientProcessingEnd];
+      case "pending":
+        return [COLORS.gradientWarningStart, COLORS.gradientWarningEnd];
+      default:
+        return [COLORS.sub, COLORS.sub];
+    }
+  };
+
+  const DotContent = () => {
+    if (loading) {
+      return <ActivityIndicator size={12} color="#fff" />;
+    }
+    
+    switch (type) {
+      case "completed":
+        return <CheckIcon size={16} color="#fff" />;
+      case "active":
+      case "pending":
+        return <AdjustIcon size={16} color="#fff" />;
+      default:
+        return <AdjustIcon size={16} color="#fff" />;
+    }
+  };
+
+  const dotStyle = [
+    styles.gradientDot,
+    isClickable && styles.clickableDot,
+  ];
+
+  if (onPress && isClickable) {
+    return (
+      <TouchableOpacity onPress={onPress} disabled={loading}>
+        <LinearGradient
+          colors={getGradientColors()}
+          style={dotStyle}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <DotContent />
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <LinearGradient
+      colors={getGradientColors()}
+      style={dotStyle}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+    >
+      <DotContent />
+    </LinearGradient>
+  );
 };
 
 const TestCard: React.FC<TestCardProps> = ({
@@ -59,6 +168,7 @@ const TestCard: React.FC<TestCardProps> = ({
   loincCode,
   walkinID,
   patientData,
+  onStatusChange,
 }) => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
@@ -66,6 +176,7 @@ const TestCard: React.FC<TestCardProps> = ({
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // EXACT SAME LOGIC AS WEB - Handle processing status update
   const handleFirstButtonClick = async () => {
     if (progress !== "pending") return;
     
@@ -74,15 +185,17 @@ const TestCard: React.FC<TestCardProps> = ({
       const token = await AsyncStorage.getItem("token");
 
       let response;
+      
+      // EXACT SAME API CALLS AS WEB
       if (test && loincCode) {
-        // Walk-in test status update
+        // Walk-in test status update - EXACT SAME AS WEB
         response = await AuthPost(
           `test/${user?.hospitalID}/${loincCode}/${walkinID}/walkinTestStatus`,
           { status: "processing" },
           token,
         );
       } else {
-        // Regular test status update
+        // Regular test status update - EXACT SAME AS WEB
         response = await AuthPost(
           `test/${user?.roleName}/${user?.hospitalID}/${testID}/testStatus`,
           { status: "processing" },
@@ -90,18 +203,30 @@ const TestCard: React.FC<TestCardProps> = ({
         );
       }
       
-      if (response?.status === "success" || response?.message === "success") {
+      // EXACT SAME RESPONSE HANDLING AS WEB
+      if (response?.data?.message === "success" || response?.data?.message === "success") {
         setProgress("processing");
+        // Refresh parent component to reflect changes
+        if (onStatusChange) {
+          onStatusChange();
+        }
+        Alert.alert("Success", "Test status updated to processing");
+      } else {
+        Alert.alert("Error", "Failed to update test status");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating test status:', error);
+      Alert.alert("Error", error?.message || "Failed to update test status");
     } finally {
       setLoading(false);
     }
   };
 
+  // EXACT SAME LOGIC AS WEB - Navigate to upload
   const handleSecondButtonClick = () => {
     console.log("Upload button clicked for test:", testName);
+    
+    // EXACT SAME NAVIGATION STATE AS WEB
     const navigationState: any = { 
       timeLineID, 
       testID, 
@@ -109,26 +234,17 @@ const TestCard: React.FC<TestCardProps> = ({
       patientData: patientData  
     };
 
+    // EXACT SAME CONDITIONAL LOGIC AS WEB
     if (test && loincCode) {
       navigationState.walkinID = walkinID;
       navigationState.loincCode = loincCode;
     }
 
+    // Navigate to upload screen - EXACT SAME AS WEB
     navigation.navigate("UploadTest", { 
       state: navigationState
     });
   };
-
-  const StatusPill = ({ text, type }: { text: string; type: "completed" | "active" | "pending" }) => (
-    <View style={[
-      styles.statusPill,
-      type === "completed" && styles.completedPill,
-      type === "active" && styles.activePill,
-      type === "pending" && styles.pendingPill,
-    ]}>
-      <Text style={styles.statusPillText}>{text}</Text>
-    </View>
-  );
 
   const StepHint = ({ text }: { text: string }) => (
     <Text style={styles.stepHint}>{text}</Text>
@@ -159,59 +275,48 @@ const TestCard: React.FC<TestCardProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Progress Timeline */}
+      {/* Progress Timeline - EXACT SAME VISUAL STRUCTURE AS WEB */}
       {expanded && (
         <View style={styles.progressCard}>
-          {/* Step 1 - Received */}
+          {/* Step 1 - Received - EXACT SAME AS WEB */}
           <View style={[styles.timelineItem, styles.completed]}>
             <View style={styles.dotWrapper}>
-              <View style={[styles.dot, styles.completedDot]}>
-                <CheckIcon size={16} color="#fff" />
-              </View>
+              <GradientDot type="completed" />
             </View>
             <View style={styles.content}>
               <View style={styles.row}>
                 <Text style={styles.title}>Test Received</Text>
-                <StatusPill text="Completed" type="completed" />
+                <GradientStatusPill text="Completed" type="completed" />
               </View>
             </View>
           </View>
 
-          {/* Step 2 - Processing */}
+          {/* Step 2 - Processing - EXACT SAME AS WEB */}
           <View style={[
             styles.timelineItem,
             progress === "completed" && styles.completed,
             progress === "processing" && styles.active,
           ]}>
             <View style={styles.dotWrapper}>
-              <TouchableOpacity
-                style={[
-                  styles.dot,
-                  progress === "pending" && styles.clickableDot,
-                  progress === "processing" && styles.activeDot,
-                  progress === "completed" && styles.completedDot,
-                ]}
+              <GradientDot 
+                type={
+                  progress === "completed" ? "completed" :
+                  progress === "processing" ? "active" : "pending"
+                }
+                isClickable={progress === "pending"}
                 onPress={handleFirstButtonClick}
-                disabled={loading || progress !== "pending"}
-              >
-                {loading ? (
-                  <ActivityIndicator size={12} color="#fff" />
-                ) : progress === "completed" ? (
-                  <CheckIcon size={16} color="#fff" />
-                ) : (
-                  <AdjustIcon size={16} color="#fff" />
-                )}
-              </TouchableOpacity>
+                loading={loading}
+              />
             </View>
             <View style={styles.content}>
               <View style={styles.row}>
                 <Text style={styles.title}>Processing</Text>
                 {progress === "completed" ? (
-                  <StatusPill text="Completed" type="completed" />
+                  <GradientStatusPill text="Completed" type="completed" />
                 ) : progress === "processing" ? (
-                  <StatusPill text="In Progress" type="active" />
+                  <GradientStatusPill text="In Progress" type="active" />
                 ) : (
-                  <StatusPill text="Pending" type="pending" />
+                  <GradientStatusPill text="Pending" type="pending" />
                 )}
               </View>
               {progress === "pending" && (
@@ -220,27 +325,17 @@ const TestCard: React.FC<TestCardProps> = ({
             </View>
           </View>
 
-          {/* Step 3 - Result */}
+          {/* Step 3 - Result - EXACT SAME AS WEB */}
           <View style={[
             styles.timelineItem,
             progress === "completed" && styles.completed,
           ]}>
             <View style={styles.dotWrapper}>
-              <TouchableOpacity
-                style={[
-                  styles.dot,
-                  progress === "processing" && styles.clickableDot,
-                  progress === "completed" && styles.completedDot,
-                ]}
+              <GradientDot 
+                type={progress === "completed" ? "completed" : "pending"}
+                isClickable={progress === "processing"}
                 onPress={handleSecondButtonClick}
-                disabled={progress !== "processing" && progress !== "completed"}
-              >
-                {progress === "completed" ? (
-                  <CheckIcon size={16} color="#fff" />
-                ) : (
-                  <AdjustIcon size={16} color="#fff" />
-                )}
-              </TouchableOpacity>
+              />
             </View>
             <View style={styles.content}>
               <View style={styles.row}>
@@ -248,9 +343,9 @@ const TestCard: React.FC<TestCardProps> = ({
                   {progress === "completed" ? "Result Submitted" : "Upload Result"}
                 </Text>
                 {progress === "completed" ? (
-                  <StatusPill text="Submitted" type="completed" />
+                  <GradientStatusPill text="Submitted" type="completed" />
                 ) : (
-                  <StatusPill text="Pending" type="pending" />
+                  <GradientStatusPill text="Pending" type="pending" />
                 )}
               </View>
               {progress === "processing" && (
@@ -330,21 +425,24 @@ const styles = StyleSheet.create({
     marginRight: 12,
     marginTop: 2,
   },
-  dot: {
+  gradientDot: {
     width: 24,
     height: 24,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   clickableDot: {
-    backgroundColor: COLORS.brand,
-  },
-  activeDot: {
-    backgroundColor: COLORS.info,
-  },
-  completedDot: {
-    backgroundColor: COLORS.success,
+    shadowColor: COLORS.brand,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
   },
   content: {
     flex: 1,
@@ -361,25 +459,24 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     flex: 1,
   },
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
+  gradientPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    minWidth: 80,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  completedPill: {
-    backgroundColor: "#dcfce7",
-  },
-  activePill: {
-    backgroundColor: "#dbeafe",
-  },
-  pendingPill: {
-    backgroundColor: "#fef3c7",
-  },
-  statusPillText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: COLORS.text,
+  gradientPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#ffffff",
+    textAlign: "center",
   },
   stepHint: {
     fontSize: 11,

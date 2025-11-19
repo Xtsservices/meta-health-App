@@ -50,7 +50,7 @@ import TreatmentPlanScreen from "../components/patientsList/treatmentplan/Treatm
 import PreviousPrescriptions from "../components/patientsList/PreviousPrescriptions/PreviousPrescriptions";
 import HandshakePatientScreen from "../components/patientsList/HandshakePatientScreen";
 import RequestSurgeryScreen from "../components/patientsList/RequestSurgery";
-import AlertsScreen from "../components/Alerts/AlertsScreen";
+import AlertsScreen from "../components/Alerts/AlertsIpd/AlertsScreen";
 import DischargeScreen from "../components/discharge/DischargeScreen";
 import PatientRevisitScreen from "../components/patientsList/PatientRevisit/PatientRevisitScreen";
 import PocusScreen from "../components/patientsList/pocus/Pocus";
@@ -64,6 +64,17 @@ import PatientDetailsLab from "../components/Lab/patientList/PatientDetailsLab";
 import PatientListLab from "../components/Lab/patientList/PatientListLab";
 import UploadTest from "../components/Lab/patientList/UploadTest";
 import TestCard from "../components/Lab/patientList/TestCard";
+import AlertsLab from "../components/Alerts/AlertsLab/AlertsLab";
+import SaleComp from "../components/Lab/walkIn/SaleComp";
+import PaymentMethodDialog from "../components/Lab/walkIn/PaymentMethodDialog";
+import PaymentScreen from "../components/Lab/walkIn/PaymentScreen";
+import TestPricing from "../components/Lab/testPrice/TestPricing";
+import AddTestPricing from "../components/Lab/testPrice/AddTestPricing";
+import BillingLab from "../components/Lab/billing/BillingLab";
+import TaxInvoiceTabs from "../components/Lab/taxInvoice/TaxInvoiceTabs";
+import TaxInvoiceInPatient from "../components/Lab/taxInvoice/TaxInvoiceInPatient";
+import TaxInvoiceWalkIn from "../components/Lab/taxInvoice/TaxInvoiceWalkIn";
+import ReportsLab from "../components/Lab/patientList/ReportsLab";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -172,28 +183,6 @@ const Routing = () => {
           component={EmergencyDashboard}
           options={{ headerShown: false }}
         />
-
-      {/* labs */}
-      <Stack.Screen 
-        name="PatientListLab" 
-        component={PatientListLab}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="PatientDetailsLab" 
-        component={PatientDetailsLab}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="UploadTest" 
-        component={UploadTest}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="TestCard" 
-        component={TestCard}
-        options={{ headerShown: false }}
-      />
         <Stack.Screen 
           name="DischargedPatientsIPD" 
           component={DischargedPatientsIPD}
@@ -250,6 +239,93 @@ const Routing = () => {
           options={{ title: "Add Physical Examination", headerTitleAlign: "center", headerShown: true }}
         />
 
+
+         {/* labs */}
+          <Stack.Screen 
+            name="PatientListLab" 
+            component={PatientListLab}
+            options={{ title: "Patient List", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="PatientDetailsLab" 
+            component={PatientDetailsLab}
+            options={{ title: "Patient Details", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="UploadTest" 
+            component={UploadTest}
+            options={{ title: "Upload Test Results", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="TestCard" 
+            component={TestCard}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="AlertsLab" 
+            component={AlertsLab}
+            options={{ title: "Alerts", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="SaleComp" 
+            component={SaleComp}
+            options={{ title: "Walk-In", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="PaymentMethodDialog" 
+            component={PaymentMethodDialog}
+            options={{ title: "Walk-In", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="PaymentScreen" 
+            component={PaymentScreen}
+            options={{ title: 'Payment' }}
+          />
+          <Stack.Screen 
+            name="TestPricing" 
+            component={TestPricing}
+            options={{ title: "Test Price", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="AddTestPricing" 
+            component={AddTestPricing}
+            options={{ title: "Add Test Price", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="BillingLab" 
+            component={BillingLab}
+            options={{ title: "Billing", headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="BillingRadio" 
+            component={BillingLab} // Same component, different title
+            options={{ title: 'Radiology Billing' }}
+          />
+           {/* Tax Invoice*/}
+          <Stack.Screen 
+            name="TaxInvoiceLab" 
+            component={TaxInvoiceTabs}
+            options={{ title: 'Laboratory Tax Invoice', headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="TaxInvoiceRadio" 
+            component={TaxInvoiceTabs}
+            options={{ title: 'Radiology Tax Invoice', headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="TaxInvoiceInPatient" 
+            component={TaxInvoiceInPatient}
+            options={{ title: 'In-Patient Tax Invoice', headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen 
+            name="TaxInvoiceWalkIn" 
+            component={TaxInvoiceWalkIn}
+            options={{ title: 'Walk-In Tax Invoice', headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen name="ReportsLab" 
+          component={ReportsLab}
+          options={{ title: 'Reports', headerTitleAlign: "center", headerShown: true }}
+          />
       </Stack.Navigator>
     </NavigationContainer>
   );
