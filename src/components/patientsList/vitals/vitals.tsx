@@ -47,8 +47,8 @@ export default function VitalsTabScreen() {
   const timeline = currentPatinet?.patientTimeLineID;
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<VitalRow[]>([]);
- const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
-    const isOt = route.params?.ot;
+  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+  const isOt = route.params?.ot;
   const bottomPad = FOOTER_H + Math.max(insets.bottom, 16) + 16;
 
   const fetchVitals = useCallback(async () => {
@@ -152,14 +152,16 @@ export default function VitalsTabScreen() {
   const EmptyState = () => (
     <View style={styles.emptyWrap}>
       <Text style={{ color: COLORS.sub, marginBottom: 12 }}>No vital records found.</Text>
-      {!isOt && 
-      <Pressable
-        onPress={() => navigation.navigate("AddVitals" as never)}
-        style={[styles.primaryBtn, { backgroundColor: COLORS.brand }]}
-      >
-        <Plus size={18} color="#fff" />
-        <Text style={styles.primaryBtnText}>Record Vitals</Text>
-      </Pressable>}
+      {currentPatinet.ptype != 21 && !isOt && (
+
+        <Pressable
+          onPress={() => navigation.navigate("AddVitals" as never)}
+          style={[styles.primaryBtn, { backgroundColor: COLORS.brand }]}
+        >
+          <Plus size={18} color="#fff" />
+          <Text style={styles.primaryBtnText}>Record Vitals</Text>
+        </Pressable>
+      )}
     </View>
   );
 
@@ -186,20 +188,22 @@ export default function VitalsTabScreen() {
       )}
 
       {/* FAB */}
-      {!isOt  && rows.length > 0 && (
-        <Pressable
-          onPress={() => navigation.navigate("AddVitals" as never)}
-          style={[
-            styles.fab,
-            {
-              bottom: FOOTER_H + Math.max(insets.bottom, 12) + 12,
-              backgroundColor: COLORS.brand,
-              shadowColor: "#000",
-            },
-          ]}
-        >
-          <Plus size={22} color="#fff" />
-        </Pressable>
+      {!isOt && rows.length > 0 && (
+        currentPatinet.ptype != 21 && (
+          <Pressable
+            onPress={() => navigation.navigate("AddVitals" as never)}
+            style={[
+              styles.fab,
+              {
+                bottom: FOOTER_H + Math.max(insets.bottom, 12) + 12,
+                backgroundColor: COLORS.brand,
+                shadowColor: "#000",
+              },
+            ]}
+          >
+            <Plus size={22} color="#fff" />
+          </Pressable>
+        )
       )}
 
       {/* Footer pinned above system nav */}
@@ -222,13 +226,13 @@ function Chip({ label, bg }: { label: string; bg: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { 
+  safe: {
     flex: 1,
   },
-  loadingWrap: { 
-    flex: 1, 
-    alignItems: "center", 
-    justifyContent: "center" 
+  loadingWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center"
   },
   listContent: {
     padding: 16,
@@ -238,18 +242,18 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
   },
-  rowBetween: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    justifyContent: "space-between" 
+  rowBetween: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
   },
-  title: { 
-    fontSize: 14, 
-    fontWeight: "800" 
+  title: {
+    fontSize: 14,
+    fontWeight: "800"
   },
-  date: { 
-    fontSize: 12, 
-    fontWeight: "600" 
+  date: {
+    fontSize: 12,
+    fontWeight: "600"
   },
   chipsWrap: {
     flexDirection: "row",
@@ -278,9 +282,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
-  primaryBtnText: { 
-    color: "#fff", 
-    fontWeight: "800" 
+  primaryBtnText: {
+    color: "#fff",
+    fontWeight: "800"
   },
   fab: {
     position: "absolute",

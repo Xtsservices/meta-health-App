@@ -173,7 +173,7 @@ console.log(url, "oturl")
 console.log(response, "surgery response")
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
-          ? response.data.patients
+          ? response?.data?.patients
           : [];
 
         const normalizedPatients = patients.map((pat: any) => ({
