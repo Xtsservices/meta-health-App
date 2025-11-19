@@ -28,6 +28,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showError, showSuccess } from "../../store/toast.slice";
 import Footer from "../dashboard/footer";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
+import { COLORS } from "../../utils/colour";
 
 // ---------- Types ----------
 type Ward = { id: number; name: string; availableBeds: number | null };
@@ -48,17 +49,7 @@ const capitalize = (s?: string) =>
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : ""))
     .join(" ");
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  danger: "#ef4444",
-  overlay: "rgba(0,0,0,0.45)",
-  pill: "#f1f5f9",
-};
+
 
 const ACTION_FOOTER_H = 68;      // Submit/Cancel bar height
 const APP_FOOTER_H = 70;         // Bottom <Footer> height

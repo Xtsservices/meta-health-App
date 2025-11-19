@@ -19,6 +19,7 @@ import { ExternalLink } from "lucide-react-native";
 import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
 import Footer from "../../dashboard/footer";
+import { COLORS } from "../../../utils/colour";
 
 
 
@@ -41,17 +42,7 @@ type Prescription = {
   medicineType?: number | string;
 };
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  pillBg: "#ecfeff",
-  pillText: "#0369a1",
-  danger: "#ef4444",
-};
+
 
 const FOOTER_H = 64;
 

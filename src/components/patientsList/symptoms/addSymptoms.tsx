@@ -12,7 +12,7 @@ import {
   Alert,
   FlatList,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Plus, X } from "lucide-react-native";
@@ -22,19 +22,9 @@ import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS } from "../../../utils/colour";
 
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  field: "#f8fafc",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  button: "#14b8a6",
-  buttonText: "#ffffff",
-  pill: "#eef2f7",
-};
+
 
 type Unit = "days" | "weeks" | "months" | "year";
 const UNITS: Unit[] = ["days", "weeks", "months", "year"];
@@ -96,9 +86,10 @@ const fetchSymptomsList = useCallback(async (val: string) => {
 }, [ removeDuplicatesAndFilter]);
 
 const latestFetchRef = useRef(fetchSymptomsList);
-useEffect(() => {
+useFocusEffect(
+  useCallback(() => {
   latestFetchRef.current = fetchSymptomsList;
-}, [fetchSymptomsList]);
+}, [fetchSymptomsList]));
 
 
 const debouncedFetchRef = useRef(

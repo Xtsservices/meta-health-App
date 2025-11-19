@@ -15,6 +15,8 @@ import {
   Settings,
 } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
+import { RootState } from "../../store/store";
+import { useSelector } from "react-redux";
 
 const { width: W } = Dimensions.get("window");
 
@@ -30,10 +32,17 @@ const Footer: React.FC<Props> = ({
   brandColor = "#14b8a6",
 }) => {
   const navigation = useNavigation<any>();
+const user = useSelector((s: RootState) => s.currentUser);
 
   const handleTabPress = (k: TabKey) => {
     if (k === "dashboard") {
+if (user?.roleName === "surgeon" || user?.roleName === "anesthetist")
+{
+   navigation.navigate("OtDashboard");
+}else{
       navigation.navigate("DashboardOpd");
+
+}
     } else if (k === "addPatient") {
       navigation.navigate("AddPatient");
     } else if (k === "patients") {

@@ -14,7 +14,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useSelector } from 'react-redux';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootState } from '../../../store/store';
@@ -36,6 +36,8 @@ import {
   SyrupIcon
 } from '../../../utils/SvgIcons';
 import Footer from '../../dashboard/footer';
+import usePreOpForm from '../../../utils/usePreOpForm';
+import usePostOPStore from '../../../utils/usePostopForm';
 
 // Import responsive utilities
 import {
@@ -75,11 +77,42 @@ const medicationTimes = [
   'As Per Need',
 ];
 
+const mapToStoreFormat = (med: any) => ({
+  name: med.medicineName,
+  days: med.daysCount,
+  dosage: med.doseCount,
+  time: med.medicationTime,
+  notify: false,
+});
+
+
+const getCategoryFromType = (type: number) => {
+  switch (type) {
+    case 1: return "capsules";
+    case 2: return "syrups";
+    case 3: return "tablets";
+    case 4: return "injections";
+    case 5: return "ivLine";
+    case 6: return "tubing";
+    case 7: return "topical";
+    case 8: return "drop";
+    case 9: return "spray";
+    case 10: return "ventilator";
+    default: return "capsules";
+  }
+};
+
+
 const AddMedicineScreen: React.FC = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
+const route = useRoute<any>();
+const activeTab = route.params?.currentTab;
+
+const { medications: preOpMeds, setMedications } = usePreOpForm();
+const { medications: postOpMeds, setPostMedications } = usePostOPStore();
 
   const [medicineData, setMedicineData] = useState({
     timeLineID: currentPatient?.patientTimeLineID || null,
@@ -183,8 +216,21 @@ const AddMedicineScreen: React.FC = () => {
       };
 
       const response = await AuthPost('medicine', { medicines: [finalData] }, token);
-
       if (response?.data?.message === 'success') {
+
+  const category = getCategoryFromType(finalData?.medicineType);
+const newEntry = mapToStoreFormat(finalData);
+if (activeTab === "PreOpRecord") {
+  const existing = preOpMeds[category] || [];
+ 
+  setMedications(category, [...existing, newEntry]);
+}
+
+if (activeTab === "PostOpRecord") {
+  const existing = postOpMeds[category] || [];
+  setPostMedications(category, [...existing, newEntry]);
+}
+
         Alert.alert('Success', 'Medicine added successfully');
         navigation.goBack();
       } else {
