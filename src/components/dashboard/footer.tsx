@@ -42,6 +42,8 @@ const handleTabPress = (k: TabKey) => {
       navigation.navigate("DashboardOpd");
     } else if (user?.patientStatus === 2) {
       navigation.navigate("DashboardIpd");
+    }else if (user?.patientStatus === 2) {
+      navigation.navigate("TriageDashboard");
     } else {
       navigation.navigate("EmergencyDashboard");
     }
