@@ -146,7 +146,7 @@ const TestCard: React.FC<TestCardProps> = ({ testName, timeLineID, status, testI
 
       let response;
       // If loincCode + test exist -> treat as walkin / loinc route
-      if (test?.test) {
+      if (patientData.loinc_num_ && patientData.test ) {
         response = await AuthPost(`test/${user?.roleName}/${user?.hospitalID}/${testID}/testStatus`, { status: "processing" }, token);
       } else {
         // regular test endpoint expects testID (the test record id)

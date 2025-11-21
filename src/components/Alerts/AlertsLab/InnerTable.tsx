@@ -61,7 +61,7 @@ const InnerTable: React.FC<InnerTableProps> = ({
 }) => {
   const calculateTestTotal = (test: TestItem) => {
     const price = test?.testPrice || 0;
-    const gst = test?.gst || 18;
+    const gst = test?.gst ?? 18;
     return price + (price * gst) / 100;
   };
 
@@ -131,7 +131,7 @@ const InnerTable: React.FC<InnerTableProps> = ({
             <>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>GST:</Text>
-                <Text style={styles.detailValue}>{test?.gst || 18}%</Text>
+                <Text style={styles.detailValue}>{test?.gst ?? 18}%</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Base Price:</Text>
@@ -178,8 +178,10 @@ const InnerTable: React.FC<InnerTableProps> = ({
 
       <ScrollView 
         style={styles.testsContainer} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={data?.length === 0 && styles.emptyContent}
+        showsVerticalScrollIndicator={true}
+        nestedScrollEnabled={true}
+        contentContainerStyle={[styles.testsContentContainer, data?.length === 0 && styles.emptyContent]}
+        keyboardShouldPersistTaps="handled"
       >
         {data?.length > 0 ? (
           data?.map((test, index) => renderTestCard(test, index))
@@ -200,17 +202,17 @@ const InnerTable: React.FC<InnerTableProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    margin: SPACING.xs,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-    overflow: 'hidden',
-  },
+  // container: {
+  //   backgroundColor: COLORS.card,
+  //   borderRadius: 16,
+  //   margin: SPACING.xs,
+  //   shadowColor: COLORS.shadow,
+  //   shadowOffset: { width: 0, height: 4 },
+  //   shadowOpacity: 0.1,
+  //   shadowRadius: 12,
+  //   elevation: 5,
+  //   overflow: 'hidden',
+  // },
   header: {
     padding: SPACING.lg,
     backgroundColor: COLORS.bg,
@@ -257,24 +259,34 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     lineHeight: 20,
   },
+
+  // Scroll area for tests
   testsContainer: {
     maxHeight: 400,
   },
+  // ensures scroll content grows and allows scrolling even with few items
+  testsContentContainer: {
+    paddingBottom: SPACING.lg,
+    flexGrow: 1,
+  },
+
   emptyContent: {
     flexGrow: 1,
   },
+
+  // TEST CARD: made transparent / borderless so it doesn't create a second "box" visual
   testCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: 'transparent', // removed inner card background to avoid double-box look
     margin: SPACING.sm,
     borderRadius: 12,
     padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 0, // remove border
+    // remove shadow to avoid nested card shadow
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   testHeader: {
     flexDirection: "row",
@@ -312,6 +324,7 @@ const styles = StyleSheet.create({
   },
   testDetails: {
     gap: SPACING.xs,
+    marginTop: SPACING.xs,
   },
   detailRow: {
     flexDirection: "row",
