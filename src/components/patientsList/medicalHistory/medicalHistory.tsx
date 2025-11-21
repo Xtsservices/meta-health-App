@@ -306,7 +306,7 @@ const dispatch = useDispatch()
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Medical History</Text>
-          {!isOt && patient.ptype !== 21 && (
+          {!isOt && patient.ptype !== 21 && user?.roleName !== "reception" &&(
             <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
               <EditIcon />
               <Text style={styles.editButtonText}>Edit</Text>

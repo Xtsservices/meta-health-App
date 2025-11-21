@@ -146,7 +146,7 @@ if (!token || token === "" || token === "null" || token === "undefined") {
       ) : empty ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No symptoms recorded yet</Text>
-{!isOt && 
+{!isOt && user?.roleName !== "reception" && 
           <Pressable
             style={[styles.cta, { backgroundColor: COLORS.button }]}
             onPress={() => navigation.navigate("AddSymptoms" as never)}
@@ -164,7 +164,7 @@ if (!token || token === "" || token === "null" || token === "undefined") {
             contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           />
-          {!isOt && 
+          {!isOt && user?.roleName !== "reception" && 
           <Pressable
             style={[styles.fab, 
     { 

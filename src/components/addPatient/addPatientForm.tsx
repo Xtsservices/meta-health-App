@@ -84,11 +84,12 @@ const AddPatientForm: React.FC = () => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const category: Category = (route.params?.category ?? "adult") as Category;
-  const patientStatusFromRoute = route.params?.patientStatus ?? patientStatus.opd;
+
 
   const dispatch = useDispatch()
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
+    const patientStatusFromRoute = user?.patientStatus
   const [formData, setFormData] = useState<patientOPDbasicDetailType>(initialFormState);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -324,7 +325,9 @@ const AddPatientForm: React.FC = () => {
     const numHospitalID = Number(user?.hospitalID ?? 0);
     const numCategory = Number(route.params?.category ?? 1);
     const numAddedBy = Number(user?.id ?? 0);
-    const numPtype = Number(patientStatusFromRoute);
+    const numPtype = Number(typeof route.params?.ptype !== "undefined"
+    ? route.params.ptype
+    : patientStatusFromRoute);
     const numPUHID = Number(String(formData.pUHID.value || "").replace(/\D/g, ""));
     const numGender = Number(formData.gender.value);
     const numWeight = Number(formData.weight.value);
@@ -347,7 +350,7 @@ const AddPatientForm: React.FC = () => {
     }
 
     // Include ward ONLY for inpatient (status 2)
-    if (user?.patientStatus == 2 && formData.wardID.value) {
+    if (route.params.ptype === "2" || user?.patientStatus == 2 && formData.wardID.value) {
       data.append("wardID", Number(formData.wardID.value) as any);
     }
 
@@ -743,7 +746,7 @@ const AddPatientForm: React.FC = () => {
               </View>
 
               {/* Ward - SHOW ONLY for inpatient (status 2) */}
-              {user?.patientStatus == 2 && (
+              {user?.patientStatus == 2 || route.params.ptype === "2" && (
                 <View style={styles.col}>
                   <Text style={[styles.label, { color: COLORS.sub }]}>
                     Ward <Text style={{ color: COLORS.danger }}>*</Text>

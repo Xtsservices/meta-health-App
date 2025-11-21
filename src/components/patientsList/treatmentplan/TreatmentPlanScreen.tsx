@@ -210,7 +210,7 @@ const EmptyTreatmentPlan = ({
         <Text style={styles.emptySubtitle}>
           Start by adding medications to create a treatment plan for your patient
         </Text>
-        {!readOnly && 
+        {!readOnly && user?.roleName !== "reception" && 
         <TouchableOpacity style={styles.primaryButton} onPress={onAddMedicine}>
           <PlusIcon size={20} color="#fff" />
           <Text style={styles.primaryButtonText}>Add Medication</Text>
@@ -459,7 +459,7 @@ useEffect(() => {
                 <ClockIcon size={18} color="#14b8a6" />
                 <Text style={styles.secondaryButtonText}>View Timeline</Text>
               </TouchableOpacity>
-                          {!readOnly &&
+                          {!readOnly && user?.roleName !== "reception" &&
               <TouchableOpacity 
                 style={styles.primaryButtonSmall}
                 onPress={handleAddMedicine}
