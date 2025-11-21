@@ -380,7 +380,13 @@ const clickNavigate = useCallback(
     } else if (headingLower === 'inpatient services') {
       patientStatus = 2;
       newRoleName = 'ipd';
-    } else if (
+    }else if (
+      headingLower === 'patient triage' 
+    ) {
+      patientStatus = 3;
+      newRoleName = 'triage';
+    }
+     else if (
       headingLower === 'patient triage' ||
       headingLower === 'critical care' ||
       headingLower === 'urgent care' ||

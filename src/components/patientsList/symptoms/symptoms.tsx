@@ -12,7 +12,7 @@ import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navig
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Trash2, Plus } from "lucide-react-native";
-import { AuthDelete,  AuthFetch } from "../../../auth/auth";
+import { AuthDelete, AuthFetch } from "../../../auth/auth";
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -42,17 +42,17 @@ const cap = (s: string) => (s ? s.slice(0, 1).toUpperCase() + s.slice(1).toLower
 
 export default function SymptomsScreen() {
   const navigation = useNavigation<any>();
-  const  dispatch = useDispatch() 
-    const insets = useSafeAreaInsets();
-    const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
-    const isOt = route.params?.ot;
+  const dispatch = useDispatch()
+  const insets = useSafeAreaInsets();
+  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+  const isOt = route.params?.ot;
   const user = useSelector((s: RootState) => s.currentUser);
-    const currentpatient = useSelector((s: RootState) => s.currentPatient);
-    const timeline = currentpatient?.patientTimeLineID; // may be object or id depending on your store
+  const currentpatient = useSelector((s: RootState) => s.currentPatient);
+  const timeline = currentpatient?.patientTimeLineID; // may be object or id depending on your store
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<SymptomRow[]>([]);
   const footerHeight = 70;
-const fabBottom = footerHeight + insets.bottom + 12;
+  const fabBottom = footerHeight + insets.bottom + 12;
   const load = useCallback(async () => {
     if (!timeline) return;
     setLoading(true);
@@ -95,22 +95,22 @@ const fabBottom = footerHeight + insets.bottom + 12;
         style: "destructive",
         onPress: async () => {
           try {
-           let token = user?.token;
-if (!token || token === "" || token === "null" || token === "undefined") {
-  token = await AsyncStorage.getItem("token");
-}
+            let token = user?.token;
+            if (!token || token === "" || token === "null" || token === "undefined") {
+              token = await AsyncStorage.getItem("token");
+            }
 
             const url = `symptom/${timeline}/${row.id}`
             const res = await AuthDelete(url, token);
             if (res?.status === "success") {
               dispatch(showSuccess(res?.data?.message))
               setList((prev) => prev.filter((x) => x.id !== row.id));
-            }else{
-              dispatch(showError( res?.message || res?.status || "Failed to delete symptom."))
+            } else {
+              dispatch(showError(res?.message || res?.status || "Failed to delete symptom."))
             }
           } catch (error) {
-            dispatch(showError( error?.message || error?.status || "Failed to delete symptom."))
-            
+            dispatch(showError(error?.message || error?.status || "Failed to delete symptom."))
+
           }
         },
       },
@@ -146,14 +146,16 @@ if (!token || token === "" || token === "null" || token === "undefined") {
       ) : empty ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No symptoms recorded yet</Text>
-{!isOt && user?.roleName !== "reception" && 
-          <Pressable
-            style={[styles.cta, { backgroundColor: COLORS.button }]}
-            onPress={() => navigation.navigate("AddSymptoms" as never)}
-          >
-            <Plus size={18} color={COLORS.buttonText} />
-            <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>Add Symptom</Text>
-          </Pressable>}
+          {!isOt && user?.roleName !== "reception" && currentpatient.ptype != 21 && (
+
+            <Pressable
+              style={[styles.cta, { backgroundColor: COLORS.button }]}
+              onPress={() => navigation.navigate("AddSymptoms" as never)}
+            >
+              <Plus size={18} color={COLORS.buttonText} />
+              <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>Add Symptom</Text>
+            </Pressable>
+          )}
         </View>
       ) : (
         <>
@@ -164,20 +166,21 @@ if (!token || token === "" || token === "null" || token === "undefined") {
             contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           />
-          {!isOt && user?.roleName !== "reception" && 
-          <Pressable
-            style={[styles.fab, 
-    { 
-      backgroundColor: COLORS.button,
-      bottom: fabBottom 
-    }]}
-            onPress={() => navigation.navigate("AddSymptoms" as never)}
-          >
-            <Plus size={20} color={COLORS.buttonText} />
-          </Pressable>}
+          {currentpatient.ptype != 21 && !isOt && user?.roleName !== "reception" && (
+            <Pressable
+              style={[styles.fab,
+              {
+                backgroundColor: COLORS.button,
+                bottom: fabBottom
+              }]}
+              onPress={() => navigation.navigate("AddSymptoms" as never)}
+            >
+              <Plus size={20} color={COLORS.buttonText} />
+            </Pressable>
+          )}
         </>
       )}
-       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
       {insets.bottom > 0 && (

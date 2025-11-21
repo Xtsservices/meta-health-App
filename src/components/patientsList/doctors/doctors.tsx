@@ -176,7 +176,7 @@ export default function DoctorsScreen() {
           />
 
           {/* FAB → navigate to AddDoctorScreen */}
-          {user?.roleName !== "reception" && 
+          {user?.roleName !== "reception" && cp.ptype != 21 && (
           <Pressable
             onPress={() => navigation.navigate("AddDoctors" as never)}
             style={[
@@ -185,7 +185,8 @@ export default function DoctorsScreen() {
             ]}
           >
             <Plus size={20} color={COLORS.buttonText} />
-          </Pressable>}
+          </Pressable>
+          )}
         </>
       )}
 

@@ -84,6 +84,7 @@ const AddPatientForm: React.FC = () => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const category: Category = (route.params?.category ?? "adult") as Category;
+ 
 
 
   const dispatch = useDispatch()

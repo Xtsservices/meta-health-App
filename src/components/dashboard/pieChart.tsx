@@ -1,27 +1,39 @@
 // components/dashboard/pieChart.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState, useRef } from "react";
 import { 
   View, 
   Text, 
   StyleSheet, 
-  Dimensions,
   ActivityIndicator,
   Animated,
-  ScrollView
-} from 'react-native';
-import { PieChart as RNPieChart } from 'react-native-chart-kit';
-import { useSelector } from 'react-redux';
-import { RootState } from '../../store/store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthFetch } from '../../auth/auth';
+  ScrollView,
+  AccessibilityInfo,
+} from "react-native";
+import Svg, { G, Path, Circle } from "react-native-svg";
+import { useSelector } from "react-redux";
+import { RootState } from "../../store/store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AuthFetch } from "../../auth/auth";
+import { useFocusEffect } from "@react-navigation/native";
+
+// Responsive utilities
+import {
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  responsiveHeight,
+} from "../../utils/responsive";
 
 interface PieChartProps {
-  selectedWardDataFilter: string;
+  selectedWardDataFilter?: string;
+  data?: ZoneDatum[];
 }
 
 interface ChartData {
   name: string;
-  value: number;
+  value: number; // percentage
   patients: number;
   color: string;
 }
@@ -31,52 +43,81 @@ interface ApiResponse {
   percentage: number;
 }
 
-const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter }) => {
-  const user = useSelector((state: RootState) => state.currentUser);
+interface ZoneDatum {
+  x: string;   // "Red" | "Yellow" | "Green"
+  y: number;   // count
+  color: string;
+}
+/* ---------- SVG helpers ---------- */
+const deg2rad = (d: number) => (d * Math.PI) / 180;
+
+function polarToCartesian(centerX: number, centerY: number, radius: number, angleDeg: number) {
+  const angleRad = deg2rad(angleDeg - 90); // 0 deg at top
+  return {
+    x: centerX + radius * Math.cos(angleRad),
+    y: centerY + radius * Math.sin(angleRad),
+  };
+}
+
+function describeArc(cx: number, cy: number, radius: number, startAngle: number, endAngle: number) {
+  // ensure angles are within 0..360
+  let start = polarToCartesian(cx, cy, radius, endAngle);
+  let end = polarToCartesian(cx, cy, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
+}
+
+/* ---------- Component ---------- */
+const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter, data: zoneData, }) => {
+  const user = useSelector((s: RootState) => s.currentUser);
+  const isTriage = user?.roleName?.toLowerCase() === "triage";
+
   const [data, setData] = useState<ChartData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Animation values
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const scaleAnim = useState(new Animated.Value(0.8))[0];
 
-  const screenWidth = Dimensions.get('window').width;
-  const chartWidth = screenWidth - 96;
-  const chartHeight = 220;
-  const getData = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      if (!user?.hospitalID || !token) {
-        setError("Authentication required");
-        return;
-      }
+  // animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
-      const responseWard = await AuthFetch(
-        `ward/${user.hospitalID}/distributionForStaff/${selectedWardDataFilter}?role=${user.role}&userID=${user.id}`,
-        token
-      );
+  // Responsive sizing (from your utils)
+  // Chart area width uses most of screen width minus paddings from your card/container
+  const containerHorizontalPadding = SPACING.sm * 2; // aligns with card padding
+  const chartMaxWidth = SCREEN_WIDTH - containerHorizontalPadding;
+  const chartSize = Math.min(Math.max(240, Math.round(chartMaxWidth - 40)), Math.round(responsiveHeight(28))); // bounded size
+  const outerRadius = chartSize / 2;
+  const donutThickness = Math.max(20, Math.round(chartSize * 0.22));
+  const innerRadius = Math.max(outerRadius - donutThickness, 12);
+  const centerSize = Math.max(56, Math.round(innerRadius * 1.2)); // center overlay size
 
-      if (responseWard?.status === "success" && responseWard.data?.summary) {
-        const formattedData = responseWard.data.summary.map((res: ApiResponse, index: number) => {
-          const patientsCount = Math.round(res.percentage);
-          return {
-            name: res.ward,
-            value: Number(res.percentage),
-            patients: patientsCount,
-            color: `hsl(${((index * 360) / responseWard.data.summary.length) % 360}, 90%, 65%)`,
-          };
-        });
-        setData(formattedData);
-        
-        // Start animation when data loads
+  // compute total patients for center text
+  const totalPatients = data.reduce((s, d) => s + (d.patients || 0), 0);
+
+  const getData = useCallback(async () => {
+  try {
+    setIsLoading(true);
+    setError(null);
+
+    // ─────────────────────────────────────
+    // TRIAGE MODE: use zoneData from props
+    // ─────────────────────────────────────
+    if (isTriage) {
+      if (zoneData && zoneData.length > 0) {
+        const transformed: ChartData[] = zoneData.map((z) => ({
+          name: z.x,
+          value: z.y,        // counts – used for slice size
+          patients: z.y,     // used in legend
+          color: z.color,
+        }));
+
+        setData(transformed);
+
+        fadeAnim.setValue(0);
+        scaleAnim.setValue(0.95);
         Animated.parallel([
           Animated.timing(fadeAnim, {
             toValue: 1,
-            duration: 600,
+            duration: 420,
             useNativeDriver: true,
           }),
           Animated.spring(scaleAnim, {
@@ -84,87 +125,138 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter }) => {
             friction: 8,
             tension: 40,
             useNativeDriver: true,
-          })
+          }),
         ]).start();
+
+        AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
+          if (enabled) {
+            AccessibilityInfo.announceForAccessibility(
+              `${transformed.length} zones loaded.`
+            );
+          }
+        });
       } else {
         setData([]);
-        setError("No data available");
+        setError("No zone data available");
       }
-    } catch (error) {
-      setError("Failed to load data");
-      setData([]);
-    } finally {
-      setIsLoading(false);
+
+      return; 
     }
-  };
 
-useEffect(() => {
-  fadeAnim.setValue(0);
-  scaleAnim.setValue(0.8);
-  getData();
-}, [selectedWardDataFilter]);
+    
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    if (!user?.hospitalID || !token) {
+      setError("Authentication required");
+      setData([]);
+      return;
+    }
 
-  // Format ward names for better display
-  const formatWardName = (name: string): string => {
-    if (!name) return '';
-    return name
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, l => l.toUpperCase());
-  };
+    const responseWard = await AuthFetch(
+      `ward/${user.hospitalID}/distributionForStaff/${selectedWardDataFilter}?role=${user.role}&userID=${user.id}`,
+      token
+    );
 
-  // Prepare data for react-native-chart-kit
-  const chartData = data?.map(item => ({
-    name: formatWardName(item.name),
-    population: item.value,
-    color: item.color,
-    legendFontColor: '#64748b',
-    legendFontSize: 10
-  }));
+    if (responseWard?.status === "success" && responseWard.data?.summary) {
+      const summary: ApiResponse[] = responseWard.data.summary;
+      const formatted: ChartData[] = summary.map((res, idx) => ({
+        name: res.ward,
+        value: Number(res.percentage),
+        patients: Math.round(res.percentage),
+        color: `hsl(${
+          ((idx * 360) / Math.max(1, summary.length)) % 360
+        }, 90%, 65%)`,
+      }));
 
-  const chartConfig = {
-    backgroundColor: '#ffffff',
-    backgroundGradientFrom: '#ffffff',
-    backgroundGradientTo: '#ffffff',
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForLabels: {
-      fontSize: 10,
-    },
-  };
+      setData(formatted);
 
-  // No Data Component
-  const NoDataMessage = () => (
-    <Animated.View 
-      style={[
-        styles.noDataContainer,
-        {
-          opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }]
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.95);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 420,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
+        if (enabled) {
+          AccessibilityInfo.announceForAccessibility(
+            `${formatted.length} wards loaded.`
+          );
         }
-      ]}
-    >
-      <Text style={styles.noDataIcon}>📊</Text>
-      <Text style={styles.noDataTitle}>No Ward Data</Text>
-      <Text style={styles.noDataText}>
-        No occupancy data available for selected period.
-      </Text>
-    </Animated.View>
+      });
+    } else {
+      setData([]);
+      setError("No data available");
+    }
+  } catch (err) {
+    setError("Failed to load data");
+    setData([]);
+  } finally {
+    setIsLoading(false);
+  }
+}, [
+  user?.hospitalID,
+  user?.token,
+  selectedWardDataFilter,
+  user?.role,
+  user?.id,
+  isTriage,
+  zoneData,
+  fadeAnim,
+  scaleAnim,
+]);
+
+
+  // fetch on focus
+  useFocusEffect(
+    useCallback(() => {
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.95);
+      getData();
+    }, [getData, fadeAnim, scaleAnim])
   );
 
-  // Loading Component
-  const LoadingMessage = () => (
+  const formatWardName = (n: string) =>
+    n ? n.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "";
+
+  // prepare data for drawing
+  const total = data.reduce((s, d) => s + (d.value || 0), 0) || 100;
+  let accAngle = 0;
+
+  // UI states
+const NoData = () => (
+  <Animated.View
+    style={[
+      styles.noDataContainer,
+      { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+    ]}
+  >
+    <Text style={styles.noDataIcon}>📊</Text>
+    <Text style={styles.noDataTitle}>
+      {isTriage ? "No Zone Data" : "No Ward Data"}
+    </Text>
+    <Text style={styles.noDataText}>
+      {isTriage
+        ? "No zone information available."
+        : "No occupancy data available for selected period."}
+    </Text>
+  </Animated.View>
+);
+  const Loading = () => (
     <View style={styles.noDataContainer}>
       <ActivityIndicator size="large" color="#14b8a6" />
       <Text style={styles.noDataTitle}>Loading Data...</Text>
     </View>
   );
-
-  // Error Component
-  const ErrorMessage = () => (
+  const ErrorBox = () => (
     <View style={styles.noDataContainer}>
       <Text style={styles.noDataIcon}>⚠️</Text>
       <Text style={styles.noDataTitle}>Error Loading Data</Text>
@@ -172,114 +264,93 @@ useEffect(() => {
     </View>
   );
 
-  if (isLoading) {
-    return (
-      <View style={styles.chartCard}>
-        <LoadingMessage />
-      </View>
-    );
-  }
+  if (isLoading) return <View style={styles.chartCard}><Loading /></View>;
+  if (error) return <View style={styles.chartCard}><ErrorBox /></View>;
+  if (!data || data.length === 0) return <View style={styles.chartCard}><NoData /></View>;
 
-  if (error) {
-    return (
-      <View style={styles.chartCard}>
-        <ErrorMessage />
-      </View>
-    );
-  }
-
-  if (data.length === 0) {
-    return (
-      <View style={styles.chartCard}>
-        <NoDataMessage />
-      </View>
-    );
-  }
-
-  // Show only first 5 legend items in scrollable area
   const displayedLegends = data.slice(0, 5);
 
   return (
-    <Animated.View 
-      style={[
-        styles.chartCard,
-        {
-          opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }]
-        }
-      ]}
-    >
-      {/* Chart Container */}
-      <View style={[styles.chartContainer, { paddingLeft: 105 }]}>
-        <RNPieChart
-          data={chartData}
-          width={chartWidth}
-          height={180}
-          chartConfig={chartConfig}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="15"
-          center={[10, 0]}
-          absolute={false}
-          hasLegend={false}
-        />
-        <View style={styles.centerCircle}>
-          <Text style={styles.centerText}></Text>
-        </View>
+    <Animated.View style={[styles.chartCard, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+      {/* Chart area (centered) */}
+      <View style={styles.chartWrapper}>
+        <Svg width={chartSize} height={chartSize} viewBox={`0 0 ${chartSize} ${chartSize}`}>
+          <G>
+            {/* Optional background ring (subtle) */}
+            <Circle
+              cx={chartSize / 2}
+              cy={chartSize / 2}
+              r={outerRadius - donutThickness / 2}
+              fill="transparent"
+              stroke="#ffffff"
+              strokeWidth={donutThickness}
+            />
+
+            {/* slices drawn as stroked arcs */}
+            {data.map((slice, idx) => {
+              const startAngle = accAngle;
+              const sweep = (slice.value / total) * 360;
+              const endAngle = startAngle + sweep;
+              const path = describeArc(chartSize / 2, chartSize / 2, outerRadius - donutThickness / 2, startAngle, endAngle);
+              accAngle += sweep;
+              return (
+                <Path
+                  key={`slice-${idx}`}
+                  d={path}
+                  stroke={slice.color}
+                  strokeWidth={donutThickness}
+                  strokeLinecap="butt"
+                  fill="none"
+                />
+              );
+            })}
+
+            {/* center hole */}
+            <Circle
+              cx={chartSize / 2}
+              cy={chartSize / 2}
+              r={innerRadius - 1}
+              fill="#fff"
+              stroke="#f1f5f9"
+              strokeWidth={1}
+            />
+          </G>
+        </Svg>
       </View>
 
-      {/* Legend Container - FIXED: Now shows only 5 items and scrollable */}
+      {/* Legend */}
       <View style={styles.legendContainer}>
         <View style={styles.legendHeader}>
-          <Text style={styles.legendTitle}>Ward Distribution</Text>
+          <Text style={styles.legendTitle}>
+    {isTriage ? "Zone Distribution" : "Ward Distribution"}
+  </Text>
+          {data.length > 5 && <Text style={styles.legendCount}>{data.length} total</Text>}
+        </View>
+
+        <View style={styles.scrollLegendContainer}>
+          <ScrollView showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
+            {displayedLegends.map((ward, index) => (
+              <View key={index} style={styles.legendItem}>
+                <View style={styles.legendLeft}>
+                  <View style={[styles.legendColor, { backgroundColor: ward.color }]} />
+                  <Text style={styles.legendName} numberOfLines={1}>
+                    {formatWardName(ward.name)}
+                  </Text>
+                </View>
+                <View style={styles.legendRight}>
+                  <Text style={styles.legendValue}>{ward.value}%</Text>
+                  <Text style={styles.legendPatients}>({ward.patients})</Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+
           {data.length > 5 && (
-            <Text style={styles.legendCount}>
-              {data.length} total
-            </Text>
+            <View style={styles.moreIndicator}>
+              <Text style={styles.moreText}>Scroll to see all {data.length} wards</Text>
+            </View>
           )}
         </View>
-        
-        {displayedLegends.length === 0 ? (
-          <Text style={styles.noLegendsText}>No ward data available</Text>
-        ) : (
-          <View style={styles.scrollLegendContainer}>
-            <ScrollView 
-              style={styles.legendScrollView}
-              showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
-            >
-              {displayedLegends?.map((ward, index) => (
-                <View key={index} style={styles.legendItem}>
-                  <View style={styles.legendLeft}>
-                    <View 
-                      style={[
-                        styles.legendColor, 
-                        { backgroundColor: ward.color }
-                      ]} 
-                    />
-                    <Text style={styles.legendName} numberOfLines={1}>
-                      {formatWardName(ward.name)}
-                    </Text>
-                  </View>
-                  <View style={styles.legendRight}>
-                    <Text style={styles.legendValue}>
-                      {ward.value}%
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            
-            {/* Show indicator if there are more than 5 wards */}
-            {data.length > 5 && (
-              <View style={styles.moreIndicator}>
-                <Text style={styles.moreText}>
-                  Scroll to see all {data.length} wards
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
       </View>
     </Animated.View>
   );
@@ -287,138 +358,145 @@ useEffect(() => {
 
 const styles = StyleSheet.create({
   chartCard: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    padding: SPACING.sm,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 3,
   },
-  chartContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    height: 180,
-    position: 'relative',
+  chartWrapper: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: SPACING.sm,
   },
-  centerCircle: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
+  centerOverlay: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    zIndex: 1,
+    borderColor: "#f1f5f9",
+    zIndex: 3,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
   },
-  centerText: {
-    fontSize: 18,
-    color: '#94a3b8',
-    fontWeight: '300',
+  centerTitle: {
+    color: "#64748b",
+    fontWeight: "600",
+    marginBottom: 2,
   },
+  centerValue: {
+    color: "#14b8a6",
+    fontWeight: "700",
+  },
+  centerSubtitle: {
+    color: "#94a3b8",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+
   legendContainer: {
-    gap: 8,
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
   },
   legendHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: SPACING.xs,
   },
   legendTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontSize: Math.max(13, FONT_SIZE.md),
+    fontWeight: "600",
+    color: "#374151",
   },
   legendCount: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
+    fontSize: Math.max(11, FONT_SIZE.xs),
+    color: "#64748b",
+    fontWeight: "500",
   },
   scrollLegendContainer: {
-    maxHeight: 200, // Fixed height for scrollable area
-  },
-  legendScrollView: {
-    flexGrow: 0, // Prevent expanding
+    maxHeight: Math.round(responsiveHeight(24)),
   },
   legendItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: SPACING.xs,
   },
   legendLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   legendColor: {
-    width: 12,
-    height: 12,
+    width: Math.max(10, Math.round(ICON_SIZE.sm * 0.8)),
+    height: Math.max(10, Math.round(ICON_SIZE.sm * 0.8)),
     borderRadius: 6,
-    marginRight: 12,
+    marginRight: SPACING.sm,
   },
   legendName: {
-    fontSize: 13,
-    color: '#374151',
-    fontWeight: '500',
+    fontSize: Math.max(12, FONT_SIZE.sm),
+    color: "#374151",
+    fontWeight: "500",
     flex: 1,
   },
   legendRight: {
-    marginLeft: 8,
+    marginLeft: SPACING.xs,
+    alignItems: "flex-end",
   },
   legendValue: {
-    fontSize: 13,
-    color: '#111827',
-    fontWeight: '600',
+    fontSize: Math.max(12, FONT_SIZE.sm),
+    color: "#111827",
+    fontWeight: "600",
   },
-  noLegendsText: {
-    fontSize: 14,
-    color: '#64748b',
-    textAlign: 'center',
-    paddingVertical: 16,
+  legendPatients: {
+    fontSize: Math.max(11, FONT_SIZE.xs),
+    color: "#64748b",
+    marginTop: 2,
   },
-  moreIndicator: {
-    paddingTop: 8,
-    paddingBottom: 4,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  moreText: {
-    fontSize: 11,
-    color: '#94a3b8',
-    fontStyle: 'italic',
-  },
-  // Existing styles
+
   noDataContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: SPACING.lg,
   },
   noDataIcon: {
-    fontSize: 32,
-    marginBottom: 12,
+    fontSize: Math.max(28, FONT_SIZE.xl),
+    marginBottom: SPACING.xs,
   },
   noDataTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-    textAlign: 'center',
+    fontSize: Math.max(14, FONT_SIZE.md),
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: SPACING.xs,
+    textAlign: "center",
   },
   noDataText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
+    fontSize: Math.max(12, FONT_SIZE.sm),
+    color: "#6B7280",
+    textAlign: "center",
     lineHeight: 20,
+  },
+
+  moreIndicator: {
+    paddingTop: SPACING.xs,
+    paddingBottom: SPACING.xs,
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+  },
+  moreText: {
+    fontSize: Math.max(10, FONT_SIZE.xs),
+    color: "#94a3b8",
+    fontStyle: "italic",
   },
 });
 

@@ -154,8 +154,10 @@ if (user?.patientStatus === 1) {
       } else if (user?.patientStatus === 3) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseActive/${patientStatus.emergency}?role=${user?.role}&userID=${user?.id}&zone=${zone}`;
-        } else {
+        } else if (zone) {
           url = `patient/${user.hospitalID}/patients/${patientStatus.emergency}?zone=${zone}&userID=${user?.id}`;
+        }else{
+          url = `patient/${user.hospitalID}/patients/triage/${patientStatus.emergency}`;
         }
       } else {
         if (user?.role === 2003) {
@@ -171,7 +173,7 @@ if (user?.patientStatus === 1) {
       const response = await AuthFetch(url, token);
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
-          ? response.data.patients
+          ? response?.data?.patients
           : [];
 
         const normalizedPatients = patients.map((pat: any) => ({
@@ -429,7 +431,7 @@ if (user?.patientStatus === 1) {
   };
 
   const getAddButtonText = () => {
-    if (user?.patientStatus === 2) return "Admit Patient";
+    if (user?.patientStatus === 2 || user?.roleName === "triage") return "Admit Patient";
     // For other statuses, return empty string so no button shows
     return "";
   };
@@ -441,7 +443,7 @@ if (user?.patientStatus === 1) {
   };
 
   const handleSurgeryWarningClick = (patient: PatientType) => {
-    const patientSurgeries = surgeryData[patient.id] || [];
+    const patientSurgeries = surgeryData[patient?.id] || [];
     const rejectedSurgeries = patientSurgeries.filter(item =>
       item.status?.toLowerCase() === "rejected"
     );
@@ -728,14 +730,14 @@ const approvedDate = formatDate(item?.approvedTime)
                 )}
               </View>
             </View>
-
+{(user?.patientStatus === 2 || user?.patientStatus === 3) && (user?.roleName !== "triage") && 
             <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
               {isOt && 
    `Approved Date: ${approvedDate}`
 }
-              {(user?.patientStatus === 2 || user?.patientStatus === 3) && `• Ward: ${capitalizeFirstLetter(wardName)}`}
+              • Ward: capitalizeFirstLetter(wardName)
               
-            </Text>
+            </Text>}
 
             <View style={styles.infoRow}>
               <Text

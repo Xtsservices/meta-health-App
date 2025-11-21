@@ -18,6 +18,7 @@ import Footer from "../../dashboard/footer";
 import { heriditaryList, infectionList } from "../../../utils/list";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showError } from "../../../store/toast.slice";
+import { Edit2Icon } from "../../../utils/SvgIcons";
 
 // Icon component
 const EditIcon = () => (
@@ -308,8 +309,8 @@ const dispatch = useDispatch()
           <Text style={styles.headerTitle}>Medical History</Text>
           {!isOt && patient.ptype !== 21 && user?.roleName !== "reception" &&(
             <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-              <EditIcon />
-              <Text style={styles.editButtonText}>Edit</Text>
+              <Edit2Icon />
+              
             </TouchableOpacity>
           )}
         </View>
@@ -611,12 +612,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: "#14b8a6",
-    shadowColor: "#14b8a6",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+  
+  
   },
   editButtonText: {
     color: "#fff",

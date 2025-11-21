@@ -62,6 +62,19 @@ DischargeSummaryDownload: undefined;
   AddPhysicalExamination:undefined;
   AddMedicineScreen:undefined;
   MedicationTimelineScreen:undefined;
+  DashboardTriage: undefined
+  AddTriageIssue: undefined;
+  TriageDialog: undefined;
+  TriageFormContext : undefined;
+ 
+  TriageABCD:undefined;
+  TriageGCSForm: undefined;
+  TriageType:undefined;
+  TriageTrauma:undefined;
+  TriageNonTrauma:undefined;
+  TriageZoneForm: undefined;
+
+  
   OtDashboard:undefined;
   DashboardAlerts:undefined;
   OtInnerTabs: undefined;
@@ -92,4 +105,23 @@ DischargeSummaryDownload: undefined;
   DoctorSlots: undefined;
 
 
+
+  // labs:
+  PatientListLab:undefined;
+  PatientDetailsLab:undefined;
+  UploadTest:undefined;
+  TestCard:undefined;
+  AlertsLab:undefined;
+  SaleComp:undefined;
+  PaymentMethodDialog:undefined;
+  PaymentScreen:undefined;
+  TestPricing:undefined;
+  AddTestPricing:undefined;
+  BillingLab:undefined;
+  BillingRadio:undefined;
+  TaxInvoiceLab: undefined;
+  TaxInvoiceRadio: undefined;
+  TaxInvoiceInPatient: undefined;
+  TaxInvoiceWalkIn: undefined;
+  ReportsLab:undefined;
 };

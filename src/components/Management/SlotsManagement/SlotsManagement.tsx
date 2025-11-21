@@ -99,6 +99,7 @@ const SlotsManagement: React.FC = () => {
     setError(null);
 
     try {
+      const token = await AsyncStorage.getItem('token');
       const hospitalID = user?.hospitalID;
       const doctorID = user?.id;
 
