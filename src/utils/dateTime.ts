@@ -230,3 +230,21 @@ export const getCurrentTime = (): string => {
     hour12: true,
   });
 };
+/** Convert 12h time (02:30 PM) to 24h time (14:30) */
+export function convertTo24Hour(time12: string): string {
+  if (!time12) return '';
+  
+  const [time, period] = time12?.split(' ') ?? ['', ''];
+  const [hours, minutes] = time?.split(':') ?? ['00', '00'];
+  
+  let hour = parseInt(hours ?? '0');
+  const minute = minutes ?? '00';
+  
+  if (period?.toUpperCase() === 'PM' && hour < 12) {
+    hour += 12;
+  } else if (period?.toUpperCase() === 'AM' && hour === 12) {
+    hour = 0;
+  }
+  
+  return `${hour.toString().padStart(2, '0')}:${minute}`;
+}

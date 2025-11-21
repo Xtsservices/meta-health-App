@@ -1,5 +1,5 @@
 // components/Pharmacy/DashboardPharma.tsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,10 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  Animated,
+  Easing,
+  Image,
+  Pressable,
 } from "react-native";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,9 +25,22 @@ import { RootState } from "../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../auth/auth";
 import Footer from "../dashboard/footer";
-import Sidebar, { SidebarItem } from "../Sidebar/sidebarPharmacy";
 import { LineChart } from "react-native-chart-kit";
 import { formatDate } from "../../utils/dateTime";
+
+// Import responsive utils and colors
+import { 
+  SPACING, 
+  FONT_SIZE,
+  FOOTER_HEIGHT,
+  ICON_SIZE,
+  isTablet,
+  isSmallDevice,
+  isExtraSmallDevice,
+  responsiveWidth,
+  responsiveHeight 
+} from "../../utils/responsive";
+import { COLORS } from "../../utils/colour";
 
 // Import SVG Icons
 import {
@@ -43,7 +60,10 @@ import {
   HelpCircleIcon,
   LogOutIcon,
   GridIcon,
-  FileTextIcon
+  FileTextIcon,
+  XIcon,
+  UsersIcon,
+  ReceiptIcon
 } from "../../utils/SvgIcons";
 
 // Types
@@ -96,9 +116,18 @@ interface ExpiredMedicineData {
   category: string;
 }
 
-const { width: W, height: H } = Dimensions.get("window");
-const isTablet = W >= 768;
-const isSmallPhone = W < 375;
+interface SidebarItem {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  onPress: () => void;
+  variant?: "default" | "danger" | "muted";
+  isAlert?: boolean;
+  alertCount?: number;
+}
+
+const FOOTER_H = FOOTER_HEIGHT;
+const brandColor = COLORS.brand;
 
 /* -------------------------- Confirm Dialog -------------------------- */
 const ConfirmDialog: React.FC<{
@@ -117,10 +146,10 @@ const ConfirmDialog: React.FC<{
           <Text style={styles.modalMsg}>{message}</Text>
           <View style={styles.modalActions}>
             <TouchableOpacity onPress={onCancel} style={[styles.modalBtn, styles.modalBtnGhost]}>
-              <Text style={[styles.modalBtnText, { color: "#1C7C6B" }]}>Cancel</Text>
+              <Text style={[styles.modalBtnText, { color: COLORS.brand }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onConfirm} style={[styles.modalBtn, styles.modalBtnDanger]}>
-              <Text style={[styles.modalBtnText, { color: "#fff" }]}>{confirmText}</Text>
+              <Text style={[styles.modalBtnText, { color: COLORS.buttonText }]}>{confirmText}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -135,7 +164,7 @@ const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onM
     <View style={styles.header}>
       <Text style={styles.headerTitle}>{title}</Text>
       <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
-        <MenuIcon size={isSmallPhone ? 24 : 30} color="#ffffffff" />
+        <MenuIcon size={isSmallDevice ? ICON_SIZE.sm : ICON_SIZE.md} color={COLORS.buttonText} />
       </TouchableOpacity>
     </View>
   );
@@ -147,19 +176,25 @@ const StatCard: React.FC<{
   value: number | string;
   icon: React.ElementType;
   color: string;
-}> = ({ title, value, icon: Icon, color }) => (
-  <View style={[styles.statCard, { backgroundColor: `${color}15` }]}>
-    <View style={styles.statContent}>
-      <View style={styles.statInfo}>
-        <Text style={styles.statTitle}>{title}</Text>
-        <Text style={styles.statValue}>{value}</Text>
-      </View>
-      <View style={[styles.statIcon, { backgroundColor: `${color}30` }]}>
-        <Icon size={isSmallPhone ? 22 : 28} color={color} />
+}> = ({ title, value, icon: Icon, color }) => {
+  const cardWidth = isTablet 
+    ? responsiveWidth(22) 
+    : (responsiveWidth(100) - SPACING.lg * 2 - SPACING.sm) / 2;
+
+  return (
+    <View style={[styles.statCard, { backgroundColor: `${color}15`, width: cardWidth }]}>
+      <View style={styles.statContent}>
+        <View style={styles.statInfo}>
+          <Text style={styles.statTitle}>{title}</Text>
+          <Text style={styles.statValue}>{value}</Text>
+        </View>
+        <View style={[styles.statIcon, { backgroundColor: `${color}30` }]}>
+          <Icon size={isSmallDevice ? ICON_SIZE.sm : ICON_SIZE.md} color={color} />
+        </View>
       </View>
     </View>
-  </View>
-);
+  );
+};
 
 /* -------------------------- Chart Card -------------------------- */
 const ChartCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -170,6 +205,217 @@ const ChartCard: React.FC<{ title: string; children: React.ReactNode }> = ({ tit
     {children}
   </View>
 );
+
+/* -------------------------- Sidebar Button -------------------------- */
+const SidebarButton: React.FC<{
+  item: SidebarItem;
+  isActive?: boolean;
+  onPress: () => void;
+}> = ({ item, isActive = false, onPress }) => {
+  const Icon = item.icon;
+  const color = item.variant === "danger" ? COLORS.danger : 
+                item.variant === "muted" ? COLORS.sub : 
+                isActive ? COLORS.brand : COLORS.text;
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.sidebarButton,
+        isActive && styles.sidebarButtonActive,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={styles.buttonContent}>
+        <Icon size={20} color={color} />
+        <Text style={[styles.buttonText, { color }]}>{item.label}</Text>
+        {item.isAlert && item.alertCount !== undefined && item.alertCount > 0 && (
+          <View style={styles.alertBadge}>
+            <Text style={styles.alertText}>{item.alertCount}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+/* -------------------------- Avatar -------------------------- */
+const Avatar: React.FC<{ name?: string; uri?: string; size?: number }> = ({
+  name = "",
+  uri,
+  size = 46,
+}) => {
+  const initial = (name || "").trim().charAt(0).toUpperCase() || "U";
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={styles.avatarText}>{initial}</Text>
+    </View>
+  );
+};
+
+/* -------------------------- Sidebar -------------------------- */
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+  userName?: string;
+  userImage?: string;
+  onProfile: () => void;
+  items: SidebarItem[];
+  bottomItems: SidebarItem[];
+  width?: number;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({
+  open,
+  onClose,
+  userName,
+  userImage,
+  onProfile,
+  items,
+  bottomItems,
+  width = Math.min(320, responsiveWidth(82)),
+}) => {
+  const user = useSelector((state: RootState) => state.currentUser);
+  const slide = useRef(new Animated.Value(-width)).current;
+
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: open ? 0 : -width,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [open, slide, width]);
+
+  return (
+    <Modal transparent visible={open} animationType="none" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <Animated.View style={[styles.sidebarContainer, { width, transform: [{ translateX: slide }] }]}>
+        
+        {/* Header */}
+        <View style={styles.sidebarHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <XIcon size={24} color={COLORS.text} />
+          </TouchableOpacity>
+
+          {/* User Profile Section */}
+          <TouchableOpacity style={styles.userProfileSection} onPress={onProfile}>
+            <Avatar name={userName} uri={userImage} size={50} />
+            <View style={styles.userInfo}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {userName || "User"}
+              </Text>
+              <Text style={styles.userMetaId}>
+                Meta Health ID: {user?.id || "N/A"}
+              </Text>
+              <Text style={styles.userDepartment}>
+                Pharmacy
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Navigation Sections */}
+        <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
+          
+          {/* Overview Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Overview</Text>
+            {items?.filter(item => ["dash", "alerts", "orders"].includes(item.key)).map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+
+          {/* Inventory Management Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Inventory Management</Text>
+            {items?.filter(item => ["stock", "add", "orderplacement"].includes(item.key)).map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+
+          {/* Sales & Billing Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sales & Billing</Text>
+            {items?.filter(item => ["sale", "tax"].includes(item.key)).map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+
+          {/* Support Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Support</Text>
+            {items?.filter(item => item.key === "help").map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Bottom Actions */}
+        <View style={styles.bottomActions}>
+          {bottomItems.map((item) => (
+            <TouchableOpacity 
+              key={item.key}
+              style={[
+                styles.bottomButton,
+                item.variant === "danger" ? styles.logoutButton : styles.modulesButton
+              ]}
+              onPress={() => {
+                onClose();
+                item.onPress();
+              }}
+            >
+              <item.icon size={20} color={item.variant === "danger" ? COLORS.danger : COLORS.brand} />
+              <Text style={[
+                styles.bottomButtonText,
+                { color: item.variant === "danger" ? COLORS.danger : COLORS.brand }
+              ]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+};
 
 /* -------------------------- Main Dashboard -------------------------- */
 const DashboardPharma: React.FC = () => {
@@ -197,15 +443,13 @@ const DashboardPharma: React.FC = () => {
   const [isTopMedicationsLoading, setIsTopMedicationsLoading] = useState(false);
   const [isDashboardCountsLoading, setIsDashboardCountsLoading] = useState(false);
 
-  const FOOTER_HEIGHT = hasBottomInsets ? 80 : 70;
-
   // Fetch dashboard counts
   const fetchDashboardCounts = useCallback(async () => {
-    if (!user?.hospitalID || !user?.token) return;
+    if (!user?.hospitalID) return;
 
     setIsDashboardCountsLoading(true);
     try {
-      const token = user.token || (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
       const response = await AuthFetch(
         `medicineInventoryPatientsOrder/${user.hospitalID}/getPharmacyDashboardCount`,
         token
@@ -244,11 +488,11 @@ const DashboardPharma: React.FC = () => {
 
   // Fetch weekly sales data
   const fetchWeeklySalesData = useCallback(async () => {
-    if (!user?.hospitalID || !user?.token) return;
+    if (!user?.hospitalID) return;
 
     setIsWeeklyDataLoading(true);
     try {
-      const token = user.token || (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 7);
       const formattedFromDate = startDate.toISOString().split('T')[0];
@@ -294,11 +538,11 @@ const DashboardPharma: React.FC = () => {
 
   // Fetch top medications
   const fetchTopMedications = useCallback(async () => {
-    if (!user?.hospitalID || !user?.token) return;
+    if (!user?.hospitalID) return;
 
     setIsTopMedicationsLoading(true);
     try {
-      const token = user.token || (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
       const response = await AuthFetch(
         `medicineInventoryPatientsOrder/${user.hospitalID}/getTopMedications`,
         token
@@ -331,11 +575,11 @@ const DashboardPharma: React.FC = () => {
 
   // Fetch recent prescriptions
   const fetchRecentPrescriptions = useCallback(async () => {
-    if (!user?.hospitalID || !user?.token) return;
+    if (!user?.hospitalID) return;
 
     setIsLoading(true);
     try {
-      const token = user.token || (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
       const response = await AuthFetch(
         `medicineInventoryPatientsOrder/${user.hospitalID}/pending/getMedicineInventoryPatientsOrder`,
         token
@@ -366,10 +610,10 @@ const DashboardPharma: React.FC = () => {
 
   // Fetch low stock medicines
   const fetchLowStockMedicines = useCallback(async () => {
-    if (!user?.hospitalID || !user?.token) return;
+    if (!user?.hospitalID) return;
 
     try {
-      const token = user.token || (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
       const response = await AuthFetch(
         `/medicineInventoryPatientsOrder/${user.hospitalID}/getLowStockProductInfo`,
         token
@@ -395,10 +639,10 @@ const DashboardPharma: React.FC = () => {
 
   // Fetch expired medicines
   const fetchExpiredMedicines = useCallback(async () => {
-    if (!user?.hospitalID || !user?.token) return;
+    if (!user?.hospitalID) return;
 
     try {
-      const token = user.token || (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
       const response = await AuthFetch(
         `/medicineInventoryPatientsOrder/${user.hospitalID}/getExpiryProductInfo`,
         token
@@ -513,6 +757,12 @@ const DashboardPharma: React.FC = () => {
       icon: ShoppingCartIcon,
       onPress: () => go("OrderPlacement")
     },
+    {
+      key: "help",
+      label: "Help",
+      icon: HelpCircleIcon,
+      onPress: () => go("HelpScreen")
+    },
   ];
 
   const bottomItems: SidebarItem[] = [
@@ -521,12 +771,6 @@ const DashboardPharma: React.FC = () => {
       label: "Go to Modules",
       icon: GridIcon,
       onPress: () => go("Home")
-    },
-    {
-      key: "help",
-      label: "Help",
-      icon: HelpCircleIcon,
-      onPress: () => go("HelpScreen")
     },
     {
       key: "logout",
@@ -544,7 +788,7 @@ const DashboardPharma: React.FC = () => {
         <Text style={styles.rankText}>#{index + 1}</Text>
       </View>
       <View style={styles.medicationIcon}>
-        <PillIcon size={isSmallPhone ? 16 : 20} color="#14b8a6" />
+        <PillIcon size={isSmallDevice ? ICON_SIZE.sm : ICON_SIZE.md} color={COLORS.brand} />
       </View>
       <View style={styles.medicationInfo}>
         <Text style={styles.medicationName} numberOfLines={1}>
@@ -566,11 +810,11 @@ const DashboardPharma: React.FC = () => {
         <Text style={styles.patientName}>{item?.pName}</Text>
         <View style={[
           styles.statusBadge,
-          { backgroundColor: item?.alertStatus?.toLowerCase() === 'pending' ? '#fef3c7' : '#d1fae5' }
+          { backgroundColor: item?.alertStatus?.toLowerCase() === 'pending' ? COLORS.warning + '20' : COLORS.success + '20' }
         ]}>
           <Text style={[
             styles.statusText,
-            { color: item?.alertStatus?.toLowerCase() === 'pending' ? '#92400e' : '#065f46' }
+            { color: item?.alertStatus?.toLowerCase() === 'pending' ? COLORS.warning : COLORS.success }
           ]}>
             {item?.alertStatus || 'Pending'}
           </Text>
@@ -586,8 +830,9 @@ const DashboardPharma: React.FC = () => {
       </View>
       <View style={styles.prescriptionFooter}>
         <Text style={styles.amountText}>
+          {item?.paidAmount ? `₹${item.paidAmount}` : ''}
         </Text>
-        <EyeIcon size={isSmallPhone ? 14 : 16} color="#6b7280" />
+        <EyeIcon size={isSmallDevice ? 14 : 16} color={COLORS.sub} />
       </View>
     </TouchableOpacity>
   );
@@ -601,7 +846,7 @@ const DashboardPharma: React.FC = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#14b8a6" />
+        <ActivityIndicator size="large" color={COLORS.brand} />
         <Text style={styles.loadingText}>Loading Pharmacy Dashboard...</Text>
       </View>
     );
@@ -609,7 +854,7 @@ const DashboardPharma: React.FC = () => {
 
   return (
     <View style={styles.safeArea}>
-      <StatusBar barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"} />
+      <StatusBar barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"} backgroundColor={COLORS.brand} />
       <HeaderBar title="Pharmacy Management" onMenu={() => setMenuOpen(true)} />
 
       <ScrollView
@@ -617,7 +862,7 @@ const DashboardPharma: React.FC = () => {
         contentContainerStyle={[
           styles.containerContent, 
           { 
-            paddingBottom: FOOTER_HEIGHT + (hasBottomInsets ? insets.bottom : 16) + 16 
+            paddingBottom: FOOTER_H + (hasBottomInsets ? insets.bottom : SPACING.lg) + SPACING.lg 
           }
         ]}
         showsVerticalScrollIndicator={false}
@@ -625,32 +870,32 @@ const DashboardPharma: React.FC = () => {
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
           {isDashboardCountsLoading ? (
-            <ActivityIndicator size="small" color="#14b8a6" />
+            <ActivityIndicator size="small" color={COLORS.brand} />
           ) : dashboardCounts ? (
             <>
               <StatCard
                 title="Prescriptions Today"
                 value={dashboardCounts.prescriptionsToday}
                 icon={FileTextIcon}
-                color="#14b8a6"
+                color={COLORS.brand}
               />
               <StatCard
                 title="Pending Orders"
                 value={dashboardCounts.prescriptionsToday - dashboardCounts.acceptedPrescriptions}
                 icon={ClockIcon}
-                color="#f59e0b"
+                color={COLORS.warning}
               />
               <StatCard
                 title="Low Stock Items"
                 value={dashboardCounts.lowStockItems}
                 icon={AlertTriangleIcon}
-                color="#ef4444"
+                color={COLORS.danger}
               />
               <StatCard
                 title="Revenue Today"
                 value={formatCurrency(dashboardCounts.revenueToday)}
                 icon={IndianRupeeIcon}
-                color="#10b981"
+                color={COLORS.success}
               />
             </>
           ) : (
@@ -661,7 +906,7 @@ const DashboardPharma: React.FC = () => {
         {/* Primary action */}
         <View style={styles.controlPanel}>
           <TouchableOpacity style={styles.primaryBtn} onPress={onAddInventory} activeOpacity={0.85}>
-            <PlusIcon size={isSmallPhone ? 16 : 18} color="#fff" />
+            <PlusIcon size={isSmallDevice ? ICON_SIZE.sm : ICON_SIZE.md} color={COLORS.buttonText} />
             <Text style={styles.primaryBtnText}>Add New Inventory</Text>
           </TouchableOpacity>
         </View>
@@ -671,7 +916,7 @@ const DashboardPharma: React.FC = () => {
           {/* Sales Chart */}
           <ChartCard title="Weekly Sales & Prescriptions">
             {isWeeklyDataLoading ? (
-              <ActivityIndicator size="small" color="#14b8a6" />
+              <ActivityIndicator size="small" color={COLORS.brand} />
             ) : weeklySalesData?.length > 0 ? (
               <View style={styles.chartContainer}>
                 <LineChart
@@ -680,26 +925,26 @@ const DashboardPharma: React.FC = () => {
                     datasets: [
                       {
                         data: weeklySalesData?.map(item => item?.sales),
-                        color: () => '#14b8a6',
+                        color: () => COLORS.brand,
                         strokeWidth: 3,
                       },
                       {
                         data: weeklySalesData?.map(item => item?.prescriptions),
-                        color: () => '#f59e0b',
+                        color: () => COLORS.warning,
                         strokeWidth: 2,
                         withDots: false,
                       },
                     ],
                     legend: ['Sales Revenue', 'Prescriptions'],
                   }}
-                  width={W - (isSmallPhone ? 48 : 64)}
-                  height={isSmallPhone ? 180 : 220}
+                  width={responsiveWidth(90)}
+                  height={isSmallDevice ? 180 : 220}
                   yAxisLabel="₹"
                   yAxisSuffix=""
                   chartConfig={{
-                    backgroundColor: '#ffffff',
-                    backgroundGradientFrom: '#ffffff',
-                    backgroundGradientTo: '#ffffff',
+                    backgroundColor: COLORS.card,
+                    backgroundGradientFrom: COLORS.card,
+                    backgroundGradientTo: COLORS.card,
                     decimalPlaces: 0,
                     color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
                     labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
@@ -709,10 +954,10 @@ const DashboardPharma: React.FC = () => {
                     propsForDots: {
                       r: '5',
                       strokeWidth: '2',
-                      stroke: '#14b8a6',
+                      stroke: COLORS.brand,
                     },
                     propsForBackgroundLines: {
-                      stroke: '#e5e7eb',
+                      stroke: COLORS.border,
                       strokeDasharray: '3 3',
                     },
                   }}
@@ -729,11 +974,11 @@ const DashboardPharma: React.FC = () => {
                 />
                 <View style={styles.legend}>
                   <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#14b8a6' }]} />
+                    <View style={[styles.legendDot, { backgroundColor: COLORS.brand }]} />
                     <Text style={styles.legendText}>Sales Revenue</Text>
                   </View>
                   <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#f59e0b' }]} />
+                    <View style={[styles.legendDot, { backgroundColor: COLORS.warning }]} />
                     <Text style={styles.legendText}>Prescriptions</Text>
                   </View>
                 </View>
@@ -746,7 +991,7 @@ const DashboardPharma: React.FC = () => {
           {/* Top Medications */}
           <ChartCard title="Top Medications">
             {isTopMedicationsLoading ? (
-              <ActivityIndicator size="small" color="#14b8a6" />
+              <ActivityIndicator size="small" color={COLORS.brand} />
             ) : topMedications?.length > 0 ? (
               <FlatList
                 data={topMedications}
@@ -766,7 +1011,7 @@ const DashboardPharma: React.FC = () => {
             <Text style={styles.sectionTitle}>Recent Prescriptions</Text>
             <TouchableOpacity style={styles.viewAllButton}>
               <Text style={styles.viewAllText}>View All</Text>
-              <ChevronRightIcon size={isSmallPhone ? 14 : 16} color="#14b8a6" />
+              <ChevronRightIcon size={isSmallDevice ? 14 : 16} color={COLORS.brand} />
             </TouchableOpacity>
           </View>
           {recentPrescriptions?.length > 0 ? (
@@ -788,10 +1033,10 @@ const DashboardPharma: React.FC = () => {
         styles.footerWrap, 
         { 
           bottom: hasBottomInsets ? insets.bottom : 0,
-          height: FOOTER_HEIGHT
+          height: FOOTER_H
         }
       ]}>
-        <Footer active={"dashboard"} brandColor="#14b8a6" />
+        <Footer active={"dashboard"} brandColor={COLORS.brand} />
       </View>
 
       {hasBottomInsets && (
@@ -831,28 +1076,29 @@ export default DashboardPharma;
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: "#fff" 
+    backgroundColor: COLORS.bg 
   },
 
   /* Header */
   header: {
-    height: isSmallPhone ? 80 : 100,
-    paddingHorizontal: isSmallPhone ? 12 : 16,
+    height: isSmallDevice ? 80 : 100,
+    paddingHorizontal: SPACING.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#14b8a6",
+    backgroundColor: COLORS.brand,
+    paddingTop: Platform.OS === 'ios' ? SPACING.lg : 0,
   },
   headerTitle: { 
-    fontSize: isSmallPhone ? 20 : 24, 
+    fontSize: isSmallDevice ? FONT_SIZE.lg : FONT_SIZE.xl, 
     fontWeight: "700", 
-    color: "#fdfdfdff" 
+    color: COLORS.buttonText 
   },
   menuBtn: {
-    width: isSmallPhone ? 32 : 38,
-    height: isSmallPhone ? 32 : 38,
+    width: isSmallDevice ? 34 : 38,
+    height: isSmallDevice ? 34 : 38,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
@@ -860,42 +1106,44 @@ const styles = StyleSheet.create({
 
   container: { 
     flex: 1, 
-    backgroundColor: "#fff" 
+    backgroundColor: COLORS.bg 
   },
   containerContent: { 
-    padding: isSmallPhone ? 12 : 16, 
-    paddingBottom: 32, 
-    gap: isSmallPhone ? 12 : 16 
+    padding: SPACING.md, 
+    gap: SPACING.lg 
   },
 
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.bg,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: isSmallPhone ? 14 : 16,
-    color: '#6b7280',
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
   },
 
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: isSmallPhone ? 8 : 12,
+    gap: SPACING.sm,
     justifyContent: "space-between"
   },
   statCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: isSmallPhone ? 12 : 16,
-    borderRadius: 12,
+    padding: SPACING.md,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    width: (W - (isSmallPhone ? 12 * 2 : 16 * 2) - (isSmallPhone ? 8 : 12)) / 2,
-    minHeight: isSmallPhone ? 80 : 100,
+    borderColor: COLORS.border,
+    minHeight: isSmallDevice ? 80 : 100,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   statContent: {
     flexDirection: "row",
@@ -907,19 +1155,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statTitle: {
-    fontSize: isSmallPhone ? 12 : 14,
-    color: "#6b7280",
-    marginBottom: 4,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    marginBottom: SPACING.xs,
   },
   statValue: {
-    fontSize: isSmallPhone ? 16 : 20,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "bold",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   statIcon: {
-    width: isSmallPhone ? 40 : 48,
-    height: isSmallPhone ? 40 : 48,
-    borderRadius: isSmallPhone ? 20 : 24,
+    width: isSmallDevice ? 40 : 48,
+    height: isSmallDevice ? 40 : 48,
+    borderRadius: isSmallDevice ? 20 : 24,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -930,52 +1178,60 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end" 
   },
   primaryBtn: {
-    backgroundColor: "#1C7C6B",
-    height: isSmallPhone ? 40 : 44,
+    backgroundColor: COLORS.brand,
+    height: isSmallDevice ? 40 : 44,
     borderRadius: 12,
-    paddingHorizontal: isSmallPhone ? 12 : 14,
+    paddingHorizontal: SPACING.md,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: SPACING.sm,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   primaryBtnText: { 
-    color: "#fff", 
+    color: COLORS.buttonText, 
     fontWeight: "700", 
-    fontSize: isSmallPhone ? 13 : 14 
+    fontSize: FONT_SIZE.sm 
   },
 
   chartsSection: { 
-    gap: isSmallPhone ? 12 : 16 
+    gap: SPACING.lg 
   },
   chartCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: isSmallPhone ? 12 : 16,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: SPACING.md,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   chartHeader: {
-    marginBottom: isSmallPhone ? 12 : 16,
+    marginBottom: SPACING.md,
   },
   chartTitle: {
-    fontSize: isSmallPhone ? 16 : 18,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "600",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   chartContainer: {
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: SPACING.sm,
   },
   legend: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 20,
-    marginTop: 12,
+    gap: SPACING.lg,
+    marginTop: SPACING.md,
   },
   legendItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: SPACING.xs,
   },
   legendDot: {
     width: 12,
@@ -983,131 +1239,135 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   legendText: {
-    fontSize: isSmallPhone ? 11 : 12,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
   },
 
   medicationItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: isSmallPhone ? 10 : 12,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    borderBottomColor: COLORS.border,
   },
   medicationRank: {
-    width: isSmallPhone ? 28 : 32,
-    height: isSmallPhone ? 28 : 32,
-    borderRadius: isSmallPhone ? 14 : 16,
-    backgroundColor: "#f1f5f9",
+    width: isSmallDevice ? 28 : 32,
+    height: isSmallDevice ? 28 : 32,
+    borderRadius: isSmallDevice ? 14 : 16,
+    backgroundColor: COLORS.pill,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: isSmallPhone ? 8 : 12,
+    marginRight: SPACING.sm,
   },
   rankText: {
-    fontSize: isSmallPhone ? 10 : 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "bold",
-    color: "#475569",
+    color: COLORS.sub,
   },
   medicationIcon: {
-    width: isSmallPhone ? 32 : 36,
-    height: isSmallPhone ? 32 : 36,
-    borderRadius: isSmallPhone ? 16 : 18,
-    backgroundColor: "#ecfdf5",
+    width: isSmallDevice ? 32 : 36,
+    height: isSmallDevice ? 32 : 36,
+    borderRadius: isSmallDevice ? 16 : 18,
+    backgroundColor: COLORS.brandLight,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: isSmallPhone ? 8 : 12,
+    marginRight: SPACING.sm,
   },
   medicationInfo: {
     flex: 1,
   },
   medicationName: {
-    fontSize: isSmallPhone ? 13 : 14,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
-    color: "#0f172a",
+    color: COLORS.text,
     marginBottom: 2,
   },
   medicationCategory: {
-    fontSize: isSmallPhone ? 11 : 12,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
   },
   prescribedCount: {
     alignItems: "flex-end",
   },
   prescribedText: {
-    fontSize: isSmallPhone ? 14 : 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "bold",
-    color: "#14b8a6",
+    color: COLORS.brand,
   },
   prescribedLabel: {
-    fontSize: isSmallPhone ? 9 : 10,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
     textTransform: "uppercase",
   },
 
   section: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: isSmallPhone ? 12 : 16,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: SPACING.md,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: isSmallPhone ? 12 : 16,
+    marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: isSmallPhone ? 16 : 18,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "600",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   viewAllButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: SPACING.xs,
   },
   viewAllText: {
-    fontSize: isSmallPhone ? 13 : 14,
-    color: "#14b8a6",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.brand,
     fontWeight: "500",
   },
   prescriptionsList: {
-    gap: isSmallPhone ? 10 : 12,
+    gap: SPACING.sm,
   },
   prescriptionItem: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    padding: isSmallPhone ? 12 : 16,
+    backgroundColor: COLORS.field,
+    borderRadius: 12,
+    padding: SPACING.md,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: COLORS.border,
   },
   prescriptionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   patientName: {
-    fontSize: isSmallPhone ? 14 : 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
     borderRadius: 12,
   },
   statusText: {
-    fontSize: isSmallPhone ? 11 : 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "500",
   },
   prescriptionDetails: {
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   detailText: {
-    fontSize: isSmallPhone ? 13 : 14,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     marginBottom: 2,
   },
   prescriptionFooter: {
@@ -1116,127 +1376,71 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   amountText: {
-    fontSize: isSmallPhone ? 14 : 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
-    color: "#0f172a",
-  },
-
-  alertsSection: {
-    gap: isSmallPhone ? 12 : 16,
-  },
-  alertCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: isSmallPhone ? 12 : 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  alertHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
-  },
-  alertTitle: {
-    fontSize: isSmallPhone ? 14 : 16,
-    fontWeight: "600",
-    color: "#0f172a",
-  },
-  alertCount: {
-    fontSize: isSmallPhone ? 13 : 14,
-    color: "#6b7280",
-  },
-  alertList: {
-    gap: 8,
-  },
-  alertItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  alertItemName: {
-    fontSize: isSmallPhone ? 13 : 14,
-    color: "#0f172a",
-    flex: 1,
-  },
-  stockBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  stockText: {
-    fontSize: isSmallPhone ? 11 : 12,
-    fontWeight: "500",
-  },
-  expiryDate: {
-    fontSize: isSmallPhone ? 11 : 12,
-    color: "#ef4444",
-    fontWeight: "500",
+    color: COLORS.text,
   },
 
   noDataText: {
     textAlign: "center",
-    color: "#6b7280",
-    fontSize: isSmallPhone ? 13 : 14,
-    paddingVertical: 20,
+    color: COLORS.sub,
+    fontSize: FONT_SIZE.sm,
+    paddingVertical: SPACING.xl,
   },
 
   /* Modal */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: COLORS.overlay,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: SPACING.md,
   },
   modalCard: {
     width: "100%",
-    maxWidth: 380,
-    backgroundColor: "#fff",
+    maxWidth: responsiveWidth(90),
+    backgroundColor: COLORS.card,
     borderRadius: 14,
-    padding: 16,
+    padding: SPACING.lg,
   },
   modalTitle: { 
-    fontSize: isSmallPhone ? 16 : 17, 
+    fontSize: FONT_SIZE.lg, 
     fontWeight: "800", 
-    color: "#0b1220" 
+    color: COLORS.text 
   },
   modalMsg: { 
-    fontSize: isSmallPhone ? 13 : 14, 
-    color: "#334155", 
-    marginTop: 8 
+    fontSize: FONT_SIZE.sm, 
+    color: COLORS.text, 
+    marginTop: SPACING.sm 
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 16,
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
   },
   modalBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
     borderRadius: 10,
   },
   modalBtnGhost: {
-    backgroundColor: "#ecfeff",
+    backgroundColor: COLORS.brandLight,
   },
   modalBtnDanger: {
-    backgroundColor: "#ef4444",
+    backgroundColor: COLORS.brand,
   },
   modalBtnText: {
     fontWeight: "700",
-    fontSize: isSmallPhone ? 13 : 14,
+    fontSize: FONT_SIZE.sm,
   },
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e2e8f0",
+    borderTopColor: COLORS.border,
     zIndex: 10,
     elevation: 6,
   },
@@ -1245,7 +1449,143 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     zIndex: 9,
+  },
+
+  // Sidebar Styles
+  sidebarContainer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: COLORS.card,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: SPACING.md,
+    elevation: 8,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 2, height: 0 },
+  },
+  sidebarHeader: {
+    paddingBottom: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: SPACING.md,
+  },
+  closeButton: {
+    position: "absolute",
+    right: 0,
+    top: -SPACING.sm,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.pill,
+  },
+  userProfileSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 50,
+  },
+  userInfo: {
+    marginLeft: SPACING.sm,
+    flex: 1,
+  },
+  userName: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  userMetaId: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginBottom: 2,
+  },
+  userDepartment: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.brand,
+    fontWeight: "600",
+  },
+  sidebarContent: {
+    flex: 1,
+  },
+  sectionTitle: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "600",
+    color: COLORS.sub,
+    marginBottom: SPACING.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sidebarButton: {
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 8,
+    marginBottom: SPACING.xs,
+  },
+  sidebarButtonActive: {
+    backgroundColor: COLORS.brandLight,
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  buttonText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+    flex: 1,
+  },
+  alertBadge: {
+    backgroundColor: COLORS.danger,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  alertText: {
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "700",
+  },
+  bottomActions: {
+    paddingTop: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: SPACING.sm,
+  },
+  bottomButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 8,
+  },
+  modulesButton: {
+    backgroundColor: COLORS.brandLight,
+  },
+  logoutButton: {
+    backgroundColor: COLORS.chipBP,
+  },
+  bottomButtonText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+  avatar: {
+    backgroundColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontWeight: "800",
+    color: COLORS.text,
+    fontSize: FONT_SIZE.md,
   },
 });

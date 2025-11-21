@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,11 @@ import {
   ActivityIndicator,
   Modal,
   Animated,
+  Easing,
+  Image,
+  Pressable,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +34,7 @@ import {
   BellRing,
   Receipt,
   Bed,
+  X,
 } from 'lucide-react-native';
 import { PieChart } from 'react-native-chart-kit';
 
@@ -36,9 +42,22 @@ import { RootState } from '../../store/store';
 import { AuthFetch } from '../../auth/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Footer from '../dashboard/footer';
-import Sidebar, { SidebarItem } from '../Sidebar/sidebarReception';
 import { useNavigation } from '@react-navigation/native';
 import Notes from '../dashboard/Notes';
+
+// Import responsive utils and colors
+import { 
+  SPACING, 
+  FONT_SIZE,
+  FOOTER_HEIGHT,
+  ICON_SIZE,
+  isTablet,
+  isSmallDevice,
+  isExtraSmallDevice,
+  responsiveWidth,
+  responsiveHeight 
+} from "../../utils/responsive";
+import { COLORS } from "../../utils/colour";
 
 interface DeptCount {
   department: string;
@@ -50,40 +69,99 @@ interface DashboardStats {
   thisYear: number;
 }
 
-const { width: W, height: H } = Dimensions.get('window');
-const isSmallScreen = W < 375;
-const isLargeScreen = W > 414;
+interface SidebarItem {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  onPress: () => void;
+  variant?: "default" | "danger" | "muted";
+  isAlert?: boolean;
+  alertCount?: number;
+}
 
+const FOOTER_H = FOOTER_HEIGHT;
+const brandColor = COLORS.brand;
+
+/* -------------------------- Confirm Dialog -------------------------- */
+const ConfirmDialog: React.FC<{
+  visible: boolean;
+  title: string;
+  message: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  confirmText?: string;
+}> = ({ visible, title, message, onCancel, onConfirm, confirmText = "Logout" }) => {
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.modalMsg}>{message}</Text>
+          <View style={styles.modalActions}>
+            <TouchableOpacity onPress={onCancel} style={[styles.modalBtn, styles.modalBtnGhost]}>
+              <Text style={[styles.modalBtnText, { color: COLORS.brand }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onConfirm} style={[styles.modalBtn, styles.modalBtnDanger]}>
+              <Text style={[styles.modalBtnText, { color: COLORS.buttonText }]}>{confirmText}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+/* -------------------------- Header -------------------------- */
 const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onMenu }) => {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onMenu} style={styles.menuBtn}>
-        <MenuIcon size={isSmallScreen ? 24 : 30} color="#ffffffff" />
-      </TouchableOpacity>
+      <View style={styles.headerContent}>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>
+          {title}
+        </Text>
+        <TouchableOpacity 
+          onPress={onMenu} 
+          style={styles.menuBtn} 
+          accessibilityLabel="Open menu"
+          hitSlop={{ 
+            top: SPACING.xs, 
+            bottom: SPACING.xs, 
+            left: SPACING.xs, 
+            right: SPACING.xs 
+          }}
+        >
+          <MenuIcon size={ICON_SIZE.lg} color={COLORS.buttonText} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
+/* -------------------------- Stat Card -------------------------- */
 const StatCard: React.FC<{
   title: string;
   value: number | string;
   icon: React.ElementType;
   color: string;
-}> = ({ title, value, icon: Icon, color }) => (
-  <View style={[styles.statCard, { backgroundColor: `${color}15` }]}>
-    <View style={styles.statContent}>
-      <View style={styles.statInfo}>
-        <Text style={styles.statTitle}>{title}</Text>
-        <Text style={styles.statValue}>{value}</Text>
+}> = ({ title, value, icon: Icon, color }) => {
+  const cardWidth = isTablet 
+    ? (responsiveWidth(100) - SPACING.md * 2 - SPACING.xs) / 2
+    : responsiveWidth(100) - SPACING.md * 2;
+
+  return (
+    <View style={[styles.card, { backgroundColor: COLORS.card, width: cardWidth }]}>
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardValue}>{value}</Text>
       </View>
-      <View style={[styles.statIcon, { backgroundColor: `${color}30` }]}>
-        <Icon size={isSmallScreen ? 24 : 28} color={color} />
+      <View style={styles.iconWrap}>
+        <Icon size={ICON_SIZE.md} color={color} />
       </View>
     </View>
-  </View>
-);
+  );
+};
 
+/* -------------------------- Filter Select -------------------------- */
 const FilterSelect: React.FC<{
   value: string;
   options: Array<{ value: string; label: string }>;
@@ -100,7 +178,7 @@ const FilterSelect: React.FC<{
         onPress={() => setIsOpen(!isOpen)}
       >
         <Text style={styles.filterSelectText}>{selectedOption.label}</Text>
-        <ChevronDown size={isSmallScreen ? 14 : 16} color="#6b7280" />
+        <ChevronDown size={isSmallDevice ? 14 : 16} color={COLORS.sub} />
       </TouchableOpacity>
 
       {isOpen && (
@@ -133,6 +211,7 @@ const FilterSelect: React.FC<{
   );
 };
 
+/* -------------------------- Chart Card -------------------------- */
 const ChartCard: React.FC<{ 
   title: string; 
   icon: React.ElementType;
@@ -174,7 +253,7 @@ const ChartCard: React.FC<{
       <View style={styles.chartHeader}>
         <View style={styles.chartTitleContainer}>
           <View style={[styles.chartIcon, { backgroundColor: `${iconColor}20` }]}>
-            <Icon size={isSmallScreen ? 18 : 20} color={iconColor} />
+            <Icon size={isSmallDevice ? 18 : 20} color={iconColor} />
           </View>
           <Text style={styles.chartTitle}>{title}</Text>
         </View>
@@ -203,6 +282,7 @@ const ChartCard: React.FC<{
   );
 };
 
+/* -------------------------- Bar Chart -------------------------- */
 const BarChartComponent: React.FC<{
   data: Array<{ department: string; patientCount: number }>;
   loading: boolean;
@@ -247,7 +327,7 @@ const BarChartComponent: React.FC<{
           <View style={styles.weekRow}>
             {data.slice(0, 6).map((d, i) => {
               const val = Number(d.patientCount);
-              const h = Math.max(2, (val / max) * (isSmallScreen ? 100 : 130));
+              const h = Math.max(2, (val / max) * (isSmallDevice ? 100 : 130));
               return (
                 <View key={i} style={styles.weekCol}>
                   <View style={[styles.weekBar, { height: h, backgroundColor: color }]} />
@@ -262,8 +342,8 @@ const BarChartComponent: React.FC<{
           <View style={styles.xAxisLabels}>
             {data.slice(0, 6).map((d, i) => (
               <Text key={i} numberOfLines={1} style={styles.xAxisLabel}>
-                {d.department.length > (isSmallScreen ? 6 : 8) ? 
-                  d.department.substring(0, isSmallScreen ? 6 : 8) + '...' : d.department}
+                {d.department.length > (isSmallDevice ? 6 : 8) ? 
+                  d.department.substring(0, isSmallDevice ? 6 : 8) + '...' : d.department}
               </Text>
             ))}
           </View>
@@ -273,11 +353,12 @@ const BarChartComponent: React.FC<{
   );
 };
 
+/* -------------------------- Pie Chart -------------------------- */
 const PieChartComponent: React.FC<{
   data: Array<{ name: string; value: number }>;
   loading: boolean;
 }> = ({ data, loading }) => {
-  const PIE_COLORS = ['#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#0D9488', '#6366F1', '#14B8A6'];
+  const PIE_COLORS = [COLORS.brand, COLORS.danger, COLORS.warning, COLORS.success, COLORS.info, COLORS.primaryDark, COLORS.gradientStart, COLORS.brandDark];
   const fadeAnim = useState(new Animated.Value(0))[0];
   const scaleAnim = useState(new Animated.Value(0.8))[0];
 
@@ -290,16 +371,16 @@ const PieChartComponent: React.FC<{
     name: item.name,
     population: item.value,
     color: PIE_COLORS[index % PIE_COLORS.length],
-    legendFontColor: '#64748b',
+    legendFontColor: COLORS.sub,
     legendFontSize: 10
   })) ?? [];
 
   const chartConfig = {
-    backgroundColor: '#ffffff',
-    backgroundGradientFrom: '#ffffff',
-    backgroundGradientTo: '#ffffff',
+    backgroundColor: COLORS.card,
+    backgroundGradientFrom: COLORS.card,
+    backgroundGradientTo: COLORS.card,
     decimalPlaces: 0,
-    color: () => `rgba(0, 0, 0, 1)`,
+    color: () => COLORS.text,
     style: {
       borderRadius: 16,
     },
@@ -326,7 +407,7 @@ const PieChartComponent: React.FC<{
   if (loading) {
     return (
       <View style={styles.chartContainer}>
-        <ActivityIndicator size="small" color="#8b5cf6" />
+        <ActivityIndicator size="small" color={COLORS.brand} />
       </View>
     );
   }
@@ -354,13 +435,13 @@ const PieChartComponent: React.FC<{
       <View style={styles.pieChartContainer}>
         <PieChart
           data={chartData}
-          width={W - (isSmallScreen ? 64 : 96)}
-          height={isSmallScreen ? 160 : 180}
+          width={responsiveWidth(90)}
+          height={isSmallDevice ? 160 : 180}
           chartConfig={chartConfig}
           accessor="population"
           backgroundColor="transparent"
           paddingLeft="15"
-          center={[isSmallScreen ? 60 : 65, 0]} 
+          center={[isSmallDevice ? 60 : 65, 0]} 
           absolute={false}
           hasLegend={false}
         />
@@ -427,6 +508,7 @@ const PieChartComponent: React.FC<{
   );
 };
 
+/* -------------------------- Spider Chart -------------------------- */
 const SpiderChartComponent: React.FC<{
   data: Array<{ department: string; wardPatients: number }>;
   loading: boolean;
@@ -439,7 +521,7 @@ const SpiderChartComponent: React.FC<{
   if (loading) {
     return (
       <View style={styles.chartContainer}>
-        <ActivityIndicator size="small" color="#10b981" />
+        <ActivityIndicator size="small" color={COLORS.success} />
       </View>
     );
   }
@@ -458,7 +540,7 @@ const SpiderChartComponent: React.FC<{
         <View style={styles.spiderGrid}>
           {data.slice(0, 8).map((item, index) => {
             const angle = (index * 2 * Math.PI) / Math.max(data.length, 1);
-            const radius = isSmallScreen ? 60 : 70;
+            const radius = isSmallDevice ? 60 : 70;
             const valueRadius = (item.wardPatients / maxValue) * radius;
             const x = 100 + Math.cos(angle) * valueRadius;
             const y = 100 + Math.sin(angle) * valueRadius;
@@ -516,6 +598,218 @@ const SpiderChartComponent: React.FC<{
   );
 };
 
+/* -------------------------- Sidebar Button -------------------------- */
+const SidebarButton: React.FC<{
+  item: SidebarItem;
+  isActive?: boolean;
+  onPress: () => void;
+}> = ({ item, isActive = false, onPress }) => {
+  const Icon = item.icon;
+  const color = item.variant === "danger" ? COLORS.danger : 
+                item.variant === "muted" ? COLORS.sub : 
+                isActive ? COLORS.brand : COLORS.text;
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.sidebarButton,
+        isActive && styles.sidebarButtonActive,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={styles.buttonContent}>
+        <Icon size={20} color={color} />
+        <Text style={[styles.buttonText, { color }]}>{item.label}</Text>
+        {item.isAlert && item.alertCount !== undefined && item.alertCount > 0 && (
+          <View style={styles.alertBadge}>
+            <Text style={styles.alertText}>{item.alertCount}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+/* -------------------------- Avatar -------------------------- */
+const Avatar: React.FC<{ name?: string; uri?: string; size?: number }> = ({
+  name = "",
+  uri,
+  size = 46,
+}) => {
+  const initial = (name || "").trim().charAt(0).toUpperCase() || "U";
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={styles.avatarText}>{initial}</Text>
+    </View>
+  );
+};
+
+/* -------------------------- Sidebar -------------------------- */
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+  userName?: string;
+  userImage?: string;
+  onProfile: () => void;
+  items: SidebarItem[];
+  bottomItems: SidebarItem[];
+  width?: number;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({
+  open,
+  onClose,
+  userName,
+  userImage,
+  onProfile,
+  items,
+  bottomItems,
+  width = Math.min(320, responsiveWidth(82)),
+}) => {
+  const user = useSelector((state: RootState) => state.currentUser);
+  const slide = useRef(new Animated.Value(-width)).current;
+
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: open ? 0 : -width,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [open, slide, width]);
+
+  return (
+    <Modal transparent visible={open} animationType="none" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <Animated.View style={[styles.sidebarContainer, { width, transform: [{ translateX: slide }] }]}>
+        
+        {/* Header */}
+        <View style={styles.sidebarHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <X size={24} color={COLORS.text} />
+          </TouchableOpacity>
+
+          {/* User Profile Section */}
+          <TouchableOpacity style={styles.userProfileSection} onPress={onProfile}>
+            <Avatar name={userName} uri={userImage} size={50} />
+            <View style={styles.userInfo}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {userName || "User"}
+              </Text>
+              <Text style={styles.userMetaId}>
+                Meta Health ID: {user?.id || "N/A"}
+              </Text>
+              <Text style={styles.userDepartment}>
+                Reception
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Navigation Sections */}
+        <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
+          
+          {/* Overview Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Overview</Text>
+            {items?.filter(item => ["dash", "alerts"].includes(item.key)).map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+
+          {/* Patient Management Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Patient Management</Text>
+            {items?.filter(item => ["patients", "records", "appointments"].includes(item.key)).map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+
+          {/* Operations Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Operations</Text>
+            {items?.filter(item => ["taxinvoice", "Ward", "doctor"].includes(item.key)).map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+
+          {/* Support Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Support</Text>
+            {items?.filter(item => item.key === "help").map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Bottom Actions */}
+        <View style={styles.bottomActions}>
+          {bottomItems.map((item) => (
+            <TouchableOpacity 
+              key={item.key}
+              style={[
+                styles.bottomButton,
+                item.variant === "danger" ? styles.logoutButton : styles.modulesButton
+              ]}
+              onPress={() => {
+                onClose();
+                item.onPress();
+              }}
+            >
+              <item.icon size={20} color={item.variant === "danger" ? COLORS.danger : COLORS.brand} />
+              <Text style={[
+                styles.bottomButtonText,
+                { color: item.variant === "danger" ? COLORS.danger : COLORS.brand }
+              ]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+};
+
+/* -------------------------- Main Dashboard -------------------------- */
 const DashboardReception: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((state: RootState) => state.currentUser);
@@ -542,8 +836,6 @@ const DashboardReception: React.FC = () => {
   const [ipdLoading, setIpdLoading] = useState(true);
   const [emergencyLoading, setEmergencyLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
-
-  const FOOTER_HEIGHT = isSmallScreen ? 60 : 70;
 
   const extractCounts = (res: any): DeptCount[] => {
     if (!res?.data) return [];
@@ -580,7 +872,7 @@ const DashboardReception: React.FC = () => {
   };
 
   const fetchData = async (ptype: 1 | 2 | 3, year: string, month: string = '') => {
-    if (!user?.hospitalID || !user?.token) return null;
+    if (!user?.hospitalID) return null;
 
     const isMonthly = month && month !== '';
     const filterType = isMonthly ? 'month' : 'year';
@@ -593,7 +885,7 @@ const DashboardReception: React.FC = () => {
     if (isMonthly) queryParams.append('filterMonth', month);
 
     const url = `patient/${user.hospitalID}/patientsCount/byDepartment?${queryParams.toString()}`;
-    const token = user.token ?? (await AsyncStorage.getItem('token'));
+    const token = await AsyncStorage.getItem('token');
 
     try {
       const response = await AuthFetch(url, token);
@@ -604,11 +896,11 @@ const DashboardReception: React.FC = () => {
   };
 
   const fetchStats = async () => {
-    if (!user?.hospitalID || !user?.token) return;
+    if (!user?.hospitalID) return;
 
     setStatsLoading(true);
     try {
-      const token = user.token ?? (await AsyncStorage.getItem('token'));
+      const token = await AsyncStorage.getItem('token');
       
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
@@ -705,56 +997,56 @@ const DashboardReception: React.FC = () => {
     }
   };
 
-const sidebarItems: SidebarItem[] = [
-  { 
-    key: "dash", 
-    label: "Dashboard", 
-    icon: LayoutDashboard, 
-    onPress: () => go("DashboardReception") 
-  },
-  { 
-    key: "patients", 
-    label: "Add Patient", 
-    icon: Users, 
-    onPress: () => go("PatientRegistration") 
-  },
-  { 
-    key: "alerts", 
-    label: "Alerts", 
-    icon: BellRing, 
-    onPress: () => go("alerts") 
-  },
-  { 
-    key: "taxinvoice", 
-    label: "Tax Invoice", 
-    icon: Receipt, 
-    onPress: () => go("Appointments") 
-  },
-  { 
-    key: "records", 
-    label: "Patient List", 
-    icon: FileText, 
-    onPress: () => go("PatientRecords") 
-  },
-  { 
-    key: "appointments", 
-    label: "Appointments", 
-    icon: Calendar, 
-    onPress: () => go("Appointments") 
-  },
-  { 
-    key: "Ward", 
-    label: "Ward Management", 
-    icon: Bed, 
-    onPress: () => go("WardManagement") 
-  },
-  { 
-    key: "doctor", 
-    label: "Doctor Management", 
-    icon: Stethoscope, 
-    onPress: () => go("DoctorManagement") 
-  },
-];
+  const sidebarItems: SidebarItem[] = [
+    { 
+      key: "dash", 
+      label: "Dashboard", 
+      icon: LayoutDashboard, 
+      onPress: () => go("DashboardReception") 
+    },
+    { 
+      key: "patients", 
+      label: "Add Patient", 
+      icon: Users, 
+      onPress: () => go("PatientRegistration") 
+    },
+    { 
+      key: "alerts", 
+      label: "Alerts", 
+      icon: BellRing, 
+      onPress: () => go("alerts") 
+    },
+    { 
+      key: "taxinvoice", 
+      label: "Tax Invoice", 
+      icon: Receipt, 
+      onPress: () => go("Appointments") 
+    },
+    { 
+      key: "records", 
+      label: "Patient List", 
+      icon: FileText, 
+      onPress: () => go("PatientRecords") 
+    },
+    { 
+      key: "appointments", 
+      label: "Appointments", 
+      icon: Calendar, 
+      onPress: () => go("Appointments") 
+    },
+    { 
+      key: "Ward", 
+      label: "Ward Management", 
+      icon: Bed, 
+      onPress: () => go("WardManagement") 
+    },
+    { 
+      key: "doctor", 
+      label: "Doctor Management", 
+      icon: Stethoscope, 
+      onPress: () => go("DoctorManagement") 
+    },
+  ];
 
   const bottomItems: SidebarItem[] = [
     { 
@@ -780,11 +1072,12 @@ const sidebarItems: SidebarItem[] = [
 
   return (
     <View style={styles.safeArea}>
+      <StatusBar barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"} backgroundColor={COLORS.brand} />
       <HeaderBar title="Hospital Overview" onMenu={() => setMenuOpen(true)} />
 
       <ScrollView
         style={styles.container}
-        contentContainerStyle={[styles.containerContent, { paddingBottom: FOOTER_HEIGHT + insets.bottom + 16 }]}
+        contentContainerStyle={[styles.containerContent, { paddingBottom: FOOTER_H + insets.bottom + SPACING.md }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.welcomeSection}>
@@ -796,25 +1089,28 @@ const sidebarItems: SidebarItem[] = [
           </Text>
         </View>
 
-        <View style={styles.statsGrid}>
-          <StatCard
-            title="This Month"
-            value={statsLoading ? '...' : stats.thisMonth}
-            icon={Users}
-            color="#14b8a6"
-          />
-          <StatCard
-            title="This Year"
-            value={statsLoading ? '...' : stats.thisYear}
-            icon={UserPlus}
-            color="#10b981"
-          />
+        {/* Stats Container - Two cards side by side */}
+        <View style={styles.statsContainer}>
+          <View style={styles.topRow}>
+            <StatCard
+              title="This Month"
+              value={statsLoading ? '...' : stats.thisMonth}
+              icon={Users}
+              color={COLORS.brand}
+            />
+            <StatCard
+              title="This Year"
+              value={statsLoading ? '...' : stats.thisYear}
+              icon={UserPlus}
+              color={COLORS.success}
+            />
+          </View>
         </View>
 
         <ChartCard 
           title="Emergency Statistics" 
           icon={Activity} 
-          iconColor="#ef4444"
+          iconColor={COLORS.danger}
           onYearChange={setEmergencyYear}
           onMonthChange={setEmergencyMonth}
           selectedYear={emergencyYear}
@@ -823,7 +1119,7 @@ const sidebarItems: SidebarItem[] = [
           <BarChartComponent 
             data={emergencyChartData}
             loading={emergencyLoading}
-            color="#0D9488"
+            color={COLORS.primaryDark}
           />
         </ChartCard>
 
@@ -834,7 +1130,7 @@ const sidebarItems: SidebarItem[] = [
         <ChartCard 
           title="Out Patient (OPD)" 
           icon={Heart} 
-          iconColor="#8b5cf6"
+          iconColor={COLORS.info}
           onYearChange={setOpdYear}
           onMonthChange={setOpdMonth}
           selectedYear={opdYear}
@@ -849,7 +1145,7 @@ const sidebarItems: SidebarItem[] = [
         <ChartCard 
           title="In Patient (IPD)" 
           icon={Stethoscope} 
-          iconColor="#10b981"
+          iconColor={COLORS.success}
           onYearChange={setIpdYear}
           onMonthChange={setIpdMonth}
           selectedYear={ipdYear}
@@ -863,7 +1159,7 @@ const sidebarItems: SidebarItem[] = [
       </ScrollView>
 
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
-        <Footer active={"dashboard"} brandColor="#14b8a6" />
+        <Footer active={"dashboard"} brandColor={COLORS.brand} />
       </View>
 
       <Sidebar
@@ -879,170 +1175,180 @@ const sidebarItems: SidebarItem[] = [
         bottomItems={bottomItems}
       />
 
-      <Modal transparent visible={confirmVisible} animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Confirm Logout</Text>
-            <Text style={styles.modalMsg}>
-              Are you sure you want to logout? This will clear your saved session.
-            </Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity 
-                onPress={() => setConfirmVisible(false)} 
-                style={[styles.modalBtn, styles.modalBtnGhost]}
-              >
-                <Text style={[styles.modalBtnText, { color: "#1C7C6B" }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={confirmLogout} 
-                style={[styles.modalBtn, styles.modalBtnDanger]}
-              >
-                <Text style={[styles.modalBtnText, { color: "#fff" }]}>Logout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ConfirmDialog
+        visible={confirmVisible}
+        title="Confirm Logout"
+        message="Are you sure you want to logout? This will clear your saved session."
+        onCancel={() => setConfirmVisible(false)}
+        onConfirm={confirmLogout}
+        confirmText="Logout"
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
-  container: { flex: 1, backgroundColor: "#fff" },
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: COLORS.bg 
+  },
+  container: { 
+    flex: 1, 
+    backgroundColor: COLORS.bg 
+  },
   containerContent: { 
-    padding: isSmallScreen ? 12 : 16, 
-    gap: isSmallScreen ? 12 : 16 
+    padding: SPACING.sm, 
+    gap: SPACING.sm 
   },
 
   header: {
-    height: isSmallScreen ? 80 : 100,
-    paddingHorizontal: isSmallScreen ? 12 : 16,
+    height: Platform.OS === 'ios' 
+      ? (isExtraSmallDevice ? 90 : isSmallDevice ? 100 : 110)
+      : (isExtraSmallDevice ? 70 : isSmallDevice ? 80 : 90),
+    paddingHorizontal: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.brand,
+    paddingTop: Platform.OS === 'ios' 
+      ? (isExtraSmallDevice ? 30 : 40) 
+      : (isExtraSmallDevice ? 15 : 20),
+    justifyContent: 'center',
+  },
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#14b8a6",
+    width: '100%',
   },
   headerTitle: { 
-    fontSize: isSmallScreen ? 20 : 24, 
+    fontSize: FONT_SIZE.xxl,
     fontWeight: "700", 
-    color: "#fdfdfdff" 
+    color: COLORS.buttonText,
+    flex: 1,
+    textAlign: 'center',
+    marginRight: SPACING.md,
   },
   menuBtn: {
-    width: isSmallScreen ? 34 : 38,
-    height: isSmallScreen ? 34 : 38,
-    borderRadius: 10,
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.xs,
     alignItems: "center",
     justifyContent: "center",
+    position: 'absolute',
+    right: 0,
   },
 
   welcomeSection: {
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   welcomeTitle: {
-    fontSize: isSmallScreen ? 20 : 24,
+    fontSize: isSmallDevice ? FONT_SIZE.lg : FONT_SIZE.xl,
     fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 4,
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
   },
   welcomeSubtitle: {
-    fontSize: isSmallScreen ? 14 : 16,
-    color: '#64748b',
+    fontSize: isSmallDevice ? FONT_SIZE.sm : FONT_SIZE.md,
+    color: COLORS.sub,
   },
 
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: isSmallScreen ? 8 : 12,
-    justifyContent: "space-between"
+  statsContainer: {
+    gap: SPACING.sm,
   },
-  statCard: {
+  topRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    justifyContent: "space-between",
+    alignItems: "stretch",
+  },
+  card: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: isSmallScreen ? 12 : 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    width: (W - (isSmallScreen ? 12 * 2 : 16 * 2) - (isSmallScreen ? 8 : 12)) / 2,
+    padding: SPACING.sm,
+    borderRadius: SPACING.md,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    minHeight: isExtraSmallDevice ? 70 : 80,
   },
-  statContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  cardContent: {
+    flex: 1,
+  },
+  iconWrap: {
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.sm,
     alignItems: "center",
-    flex: 1,
-  },
-  statInfo: {
-    flex: 1,
-  },
-  statTitle: {
-    fontSize: isSmallScreen ? 12 : 14,
-    color: "#6b7280",
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: isSmallScreen ? 18 : 20,
-    fontWeight: "bold",
-    color: "#0f172a",
-  },
-  statIcon: {
-    width: isSmallScreen ? 40 : 48,
-    height: isSmallScreen ? 40 : 48,
-    borderRadius: isSmallScreen ? 20 : 24,
     justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: COLORS.brandLight,
+    marginLeft: SPACING.xs,
+  },
+  cardTitle: { 
+    color: COLORS.text, 
+    fontSize: FONT_SIZE.xs, 
+    opacity: 0.75, 
+    marginBottom: 4 
+  },
+  cardValue: { 
+    color: COLORS.text, 
+    fontSize: FONT_SIZE.lg, 
+    fontWeight: "700" 
   },
 
   notesSection: {
-    marginTop: 8,
+    marginTop: SPACING.sm,
   },
 
   chartCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: isSmallScreen ? 12 : 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
+    backgroundColor: COLORS.card,
+    borderRadius: SPACING.md,
+    padding: SPACING.sm,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
   chartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: isSmallScreen ? 12 : 16,
+    flexDirection: responsiveWidth(100) < 375 ? "column" : "row",
+    justifyContent: "space-between",
+    alignItems: responsiveWidth(100) < 375 ? "flex-start" : "center",
+    marginBottom: SPACING.sm,
+    gap: responsiveWidth(100) < 375 ? SPACING.xs : 0,
   },
   chartTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.sm,
   },
   chartIcon: {
-    width: isSmallScreen ? 28 : 32,
-    height: isSmallScreen ? 28 : 32,
+    width: isSmallDevice ? 28 : 32,
+    height: isSmallDevice ? 28 : 32,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   chartTitle: {
-    fontSize: isSmallScreen ? 16 : 18,
+    fontSize: isSmallDevice ? FONT_SIZE.md : FONT_SIZE.lg,
     fontWeight: "600",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   chartContainer: {
-    minHeight: isSmallScreen ? 150 : 200,
+    minHeight: isSmallDevice ? 150 : 200,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   filterGroup: {
     flexDirection: 'row',
-    gap: isSmallScreen ? 6 : 8,
+    backgroundColor: COLORS.pill,
+    borderRadius: SPACING.xs,
+    padding: 4,
+    gap: SPACING.xs,
   },
   filterSelectContainer: {
     position: 'relative',
@@ -1050,35 +1356,35 @@ const styles = StyleSheet.create({
   filterSelect: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: isSmallScreen ? 10 : 12,
-    paddingVertical: isSmallScreen ? 6 : 8,
-    backgroundColor: '#f8fafc',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    backgroundColor: COLORS.card,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    minWidth: isSmallScreen ? 80 : 90,
+    borderColor: COLORS.border,
+    minWidth: isSmallDevice ? 80 : 90,
   },
   filterSelectText: {
-    fontSize: isSmallScreen ? 10 : 12,
-    color: '#374151',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.text,
     fontWeight: '500',
   },
   filterDropdown: {
     position: 'absolute',
     top: '100%',
     right: 0,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.card,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
     zIndex: 1000,
-    marginTop: 4,
+    marginTop: SPACING.xs,
     maxHeight: 150,
     minWidth: 120,
   },
@@ -1086,42 +1392,42 @@ const styles = StyleSheet.create({
     maxHeight: 150,
   },
   filterOption: {
-    paddingHorizontal: isSmallScreen ? 10 : 12,
-    paddingVertical: isSmallScreen ? 8 : 10,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: COLORS.border,
   },
   filterOptionLast: {
     borderBottomWidth: 0,
   },
   filterOptionText: {
-    fontSize: isSmallScreen ? 10 : 12,
-    color: '#374151',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.text,
   },
   filterOptionTextSelected: {
-    color: '#14b8a6',
+    color: COLORS.brand,
     fontWeight: '600',
   },
 
   barChartCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.card,
     borderRadius: 12,
-    padding: isSmallScreen ? 12 : 16,
-    gap: isSmallScreen ? 12 : 16,
+    padding: SPACING.md,
+    gap: SPACING.md,
   },
   barChartContainer: { 
     flexDirection: "row", 
-    gap: isSmallScreen ? 6 : 8 
+    gap: SPACING.xs 
   },
   yAxis: { 
     justifyContent: "space-between", 
-    height: isSmallScreen ? 120 : 150, 
+    height: isSmallDevice ? 120 : 150, 
     paddingVertical: 2 
   },
   yAxisLabel: { 
-    color: "#6B7280", 
-    fontSize: isSmallScreen ? 9 : 10, 
-    width: isSmallScreen ? 25 : 30, 
+    color: COLORS.sub, 
+    fontSize: FONT_SIZE.xs, 
+    width: isSmallDevice ? 25 : 30, 
     textAlign: "right" 
   },
   chartArea: { 
@@ -1131,14 +1437,14 @@ const styles = StyleSheet.create({
     flexDirection: "row", 
     alignItems: "flex-end", 
     justifyContent: "space-between", 
-    height: isSmallScreen ? 100 : 130, 
-    paddingHorizontal: 6 
+    height: isSmallDevice ? 100 : 130, 
+    paddingHorizontal: SPACING.xs 
   },
   weekCol: { 
     alignItems: "center", 
     justifyContent: "flex-end", 
     flex: 1, 
-    maxWidth: isSmallScreen ? 40 : 50 
+    maxWidth: isSmallDevice ? 40 : 50 
   },
   weekBar: { 
     width: "60%", 
@@ -1147,35 +1453,35 @@ const styles = StyleSheet.create({
     minHeight: 2 
   },
   barValueText: {
-    fontSize: isSmallScreen ? 9 : 10,
-    color: '#374151',
-    marginTop: 4,
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.text,
+    marginTop: SPACING.xs,
     fontWeight: '600',
   },
   xAxisLine: { 
     height: 1, 
-    backgroundColor: "#E5E7EB", 
-    marginHorizontal: 6 
+    backgroundColor: COLORS.border, 
+    marginHorizontal: SPACING.xs 
   },
   xAxisLabels: { 
     flexDirection: "row", 
     justifyContent: "space-between", 
-    paddingHorizontal: 6, 
-    paddingTop: 4 
+    paddingHorizontal: SPACING.xs, 
+    paddingTop: SPACING.xs 
   },
   xAxisLabel: { 
-    color: "#6B7280", 
-    fontSize: isSmallScreen ? 9 : 10, 
+    color: COLORS.sub, 
+    fontSize: FONT_SIZE.xs, 
     flex: 1, 
     textAlign: "center", 
-    maxWidth: isSmallScreen ? 40 : 50 
+    maxWidth: isSmallDevice ? 40 : 50 
   },
 
   pieChartCard: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.card,
     borderRadius: 16,
-    padding: isSmallScreen ? 12 : 16,
-    shadowColor: '#000',
+    padding: SPACING.md,
+    shadowColor: COLORS.shadow,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -1187,48 +1493,48 @@ const styles = StyleSheet.create({
   pieChartContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: isSmallScreen ? 12 : 16,
-    height: isSmallScreen ? 160 : 180,
+    marginBottom: SPACING.md,
+    height: isSmallDevice ? 160 : 180,
     position: 'relative',
   },
   pieCenterCircle: {
     position: 'absolute',
-    width: isSmallScreen ? 60 : 80,
-    height: isSmallScreen ? 60 : 80,
-    borderRadius: isSmallScreen ? 30 : 40,
-    backgroundColor: '#ffffff',
+    width: isSmallDevice ? 60 : 80,
+    height: isSmallDevice ? 60 : 80,
+    borderRadius: isSmallDevice ? 30 : 40,
+    backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: COLORS.border,
     zIndex: 1,
   },
   pieCenterText: {
-    fontSize: isSmallScreen ? 14 : 18,
-    color: '#94a3b8',
+    fontSize: isSmallDevice ? FONT_SIZE.sm : FONT_SIZE.lg,
+    color: COLORS.placeholder,
     fontWeight: '300',
   },
   pieLegendContainer: {
-    gap: isSmallScreen ? 6 : 8,
+    gap: SPACING.xs,
   },
   pieLegendHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: isSmallScreen ? 6 : 8,
+    marginBottom: SPACING.xs,
   },
   pieLegendTitle: {
-    fontSize: isSmallScreen ? 12 : 14,
+    fontSize: FONT_SIZE.sm,
     fontWeight: '600',
-    color: '#374151',
+    color: COLORS.text,
   },
   pieLegendCount: {
-    fontSize: isSmallScreen ? 10 : 12,
-    color: '#64748b',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
     fontWeight: '500',
   },
   pieScrollLegendContainer: {
-    maxHeight: isSmallScreen ? 150 : 200,
+    maxHeight: isSmallDevice ? 150 : 200,
   },
   pieLegendScrollView: {
     flexGrow: 0,
@@ -1237,7 +1543,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: isSmallScreen ? 6 : 8,
+    paddingVertical: SPACING.xs,
   },
   pieLegendLeft: {
     flexDirection: 'row',
@@ -1245,52 +1551,52 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pieLegendColor: {
-    width: isSmallScreen ? 10 : 12,
-    height: isSmallScreen ? 10 : 12,
-    borderRadius: isSmallScreen ? 5 : 6,
-    marginRight: isSmallScreen ? 8 : 12,
+    width: isSmallDevice ? 10 : 12,
+    height: isSmallDevice ? 10 : 12,
+    borderRadius: isSmallDevice ? 5 : 6,
+    marginRight: SPACING.sm,
   },
   pieLegendName: {
-    fontSize: isSmallScreen ? 11 : 13,
-    color: '#374151',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.text,
     fontWeight: '500',
     flex: 1,
   },
   pieLegendRight: {
-    marginLeft: isSmallScreen ? 6 : 8,
+    marginLeft: SPACING.xs,
     alignItems: 'flex-end',
   },
   pieLegendValue: {
-    fontSize: isSmallScreen ? 11 : 13,
-    color: '#111827',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.text,
     fontWeight: '600',
   },
   pieLegendPercentage: {
-    fontSize: isSmallScreen ? 9 : 11,
-    color: '#64748b',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
   },
   pieNoLegendsText: {
-    fontSize: isSmallScreen ? 12 : 14,
-    color: '#64748b',
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     textAlign: 'center',
-    paddingVertical: isSmallScreen ? 12 : 16,
+    paddingVertical: SPACING.md,
   },
   pieMoreIndicator: {
-    paddingTop: isSmallScreen ? 6 : 8,
-    paddingBottom: isSmallScreen ? 2 : 4,
+    paddingTop: SPACING.xs,
+    paddingBottom: SPACING.xs,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: COLORS.border,
   },
   pieMoreText: {
-    fontSize: isSmallScreen ? 9 : 11,
-    color: '#94a3b8',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.placeholder,
     fontStyle: 'italic',
   },
 
   spiderContainer: {
     width: '100%',
-    height: isSmallScreen ? 250 : 300,
+    height: isSmallDevice ? 250 : 300,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1299,22 +1605,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   spiderGrid: {
-    width: isSmallScreen ? 160 : 200,
-    height: isSmallScreen ? 160 : 200,
+    width: isSmallDevice ? 160 : 200,
+    height: isSmallDevice ? 160 : 200,
     position: 'relative',
   },
   spiderCircle: {
     position: 'absolute',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: COLORS.border,
     borderRadius: 100,
     borderStyle: 'dashed',
   },
   spiderLine: {
     position: 'absolute',
-    width: isSmallScreen ? 60 : 70,
+    width: isSmallDevice ? 60 : 70,
     height: 1,
-    backgroundColor: '#10b981',
+    backgroundColor: COLORS.success,
     opacity: 0.6,
     transformOrigin: 'left center',
   },
@@ -1323,96 +1629,243 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10b981',
+    backgroundColor: COLORS.success,
   },
   spiderLabel: {
     position: 'absolute',
     alignItems: 'center',
     transform: [{ translateX: -25 }, { translateY: -10 }],
-    minWidth: isSmallScreen ? 50 : 60,
+    minWidth: isSmallDevice ? 50 : 60,
   },
   spiderLabelText: {
-    fontSize: isSmallScreen ? 9 : 10,
-    color: '#374151',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.text,
     textAlign: 'center',
     fontWeight: '500',
   },
   spiderValueText: {
-    fontSize: isSmallScreen ? 8 : 9,
-    color: '#10b981',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.success,
     fontWeight: '600',
     textAlign: 'center',
   },
 
   noDataText: {
     textAlign: "center",
-    color: "#6b7280",
-    fontSize: isSmallScreen ? 12 : 14,
-    paddingVertical: isSmallScreen ? 15 : 20,
+    color: COLORS.sub,
+    fontSize: FONT_SIZE.sm,
+    paddingVertical: isSmallDevice ? 15 : 20,
   },
   moreItemsText: {
     textAlign: "center",
-    color: "#6b7280",
-    fontSize: isSmallScreen ? 10 : 12,
+    color: COLORS.sub,
+    fontSize: FONT_SIZE.xs,
     fontStyle: 'italic',
-    marginTop: 6,
+    marginTop: SPACING.xs,
   },
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: COLORS.overlay,
     alignItems: "center",
     justifyContent: "center",
-    padding: isSmallScreen ? 16 : 24,
+    padding: SPACING.md,
   },
   modalCard: {
-    width: "100%",
-    maxWidth: isSmallScreen ? 320 : 380,
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: isSmallScreen ? 12 : 16,
+    width: responsiveWidth(85),
+    maxWidth: 380,
+    backgroundColor: COLORS.card,
+    borderRadius: SPACING.md,
+    padding: SPACING.sm,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
   modalTitle: { 
-    fontSize: isSmallScreen ? 15 : 17, 
+    fontSize: FONT_SIZE.lg, 
     fontWeight: "800", 
-    color: "#0b1220" 
+    color: COLORS.text 
   },
   modalMsg: { 
-    fontSize: isSmallScreen ? 12 : 14, 
-    color: "#334155", 
-    marginTop: 6 
+    fontSize: FONT_SIZE.sm, 
+    color: COLORS.text, 
+    marginTop: SPACING.xs,
+    lineHeight: 20,
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: isSmallScreen ? 8 : 10,
-    marginTop: isSmallScreen ? 12 : 16,
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   modalBtn: {
-    paddingHorizontal: isSmallScreen ? 12 : 14,
-    paddingVertical: isSmallScreen ? 8 : 10,
-    borderRadius: 10,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: SPACING.xs,
+    minWidth: responsiveWidth(20),
+    alignItems: 'center',
   },
   modalBtnGhost: {
-    backgroundColor: "#ecfeff",
+    backgroundColor: COLORS.brandLight,
   },
   modalBtnDanger: {
-    backgroundColor: "#ef4444",
+    backgroundColor: COLORS.brand,
   },
   modalBtnText: {
     fontWeight: "700",
-    fontSize: isSmallScreen ? 12 : 14,
+    fontSize: FONT_SIZE.sm,
   },
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e2e8f0",
+    borderTopColor: COLORS.border,
     zIndex: 10,
     elevation: 6,
+  },
+
+  // Sidebar Styles
+  sidebarContainer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: COLORS.card,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: SPACING.md,
+    elevation: 8,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 2, height: 0 },
+  },
+  sidebarHeader: {
+    paddingBottom: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: SPACING.md,
+  },
+  closeButton: {
+    position: "absolute",
+    right: 0,
+    top: -SPACING.sm,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.pill,
+  },
+  userProfileSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 50,
+  },
+  userInfo: {
+    marginLeft: SPACING.sm,
+    flex: 1,
+  },
+  userName: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  userMetaId: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginBottom: 2,
+  },
+  userDepartment: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.brand,
+    fontWeight: "600",
+  },
+  sidebarContent: {
+    flex: 1,
+  },
+  section: {
+    marginBottom: SPACING.lg,
+  },
+  sectionTitle: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "600",
+    color: COLORS.sub,
+    marginBottom: SPACING.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sidebarButton: {
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 8,
+    marginBottom: SPACING.xs,
+  },
+  sidebarButtonActive: {
+    backgroundColor: COLORS.brandLight,
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  buttonText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+    flex: 1,
+  },
+  alertBadge: {
+    backgroundColor: COLORS.danger,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  alertText: {
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "700",
+  },
+  bottomActions: {
+    paddingTop: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: SPACING.sm,
+  },
+  bottomButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 8,
+  },
+  modulesButton: {
+    backgroundColor: COLORS.brandLight,
+  },
+  logoutButton: {
+    backgroundColor: COLORS.chipBP,
+  },
+  bottomButtonText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+  avatar: {
+    backgroundColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontWeight: "800",
+    color: COLORS.text,
+    fontSize: FONT_SIZE.md,
   },
 });
 

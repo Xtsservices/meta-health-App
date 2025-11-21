@@ -85,4 +85,23 @@ DischargeSummaryDownload: undefined;
   PostOpRecordNotes:undefined;
 
 
+
+  // labs:
+  PatientListLab:undefined;
+  PatientDetailsLab:undefined;
+  UploadTest:undefined;
+  TestCard:undefined;
+  AlertsLab:undefined;
+  SaleComp:undefined;
+  PaymentMethodDialog:undefined;
+  PaymentScreen:undefined;
+  TestPricing:undefined;
+  AddTestPricing:undefined;
+  BillingLab:undefined;
+  BillingRadio:undefined;
+  TaxInvoiceLab: undefined;
+  TaxInvoiceRadio: undefined;
+  TaxInvoiceInPatient: undefined;
+  TaxInvoiceWalkIn: undefined;
+  ReportsLab:undefined;
 };
