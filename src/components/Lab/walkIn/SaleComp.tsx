@@ -1,3 +1,4 @@
+// SaleComp.tsx
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
@@ -42,9 +43,9 @@ import {
 } from "../../../utils/validation";
 import Footer from "../../dashboard/footer";
 
-// Document picker
-import DocumentPicker from "react-native-document-picker";
 import { launchImageLibrary } from "react-native-image-picker";
+import { pick, types } from "@react-native-documents/picker";
+import RNFS from "react-native-fs";
 import { showError } from "../../../store/toast.slice";
 
 const FOOTER_H = FOOTER_HEIGHT;
@@ -86,68 +87,108 @@ const generateID = () => {
   );
 };
 
+type FileItem = {
+  uri: string;
+  name: string;
+  type: string;
+  size?: number;
+};
+
 const FileUpload: React.FC<{
-  files: any[];
+  files: FileItem[];
   fileURLs: string[];
-  onFileChange: (file: any) => void;
+  onFileChange: (file: FileItem) => void;
   onFileRemove: (index: number) => void;
 }> = ({ files, fileURLs, onFileChange, onFileRemove }) => {
   const dispatch = useDispatch();
 
-  const pickDocument = async () => {
+  const openGallery = async () => {
     try {
-      const res = await DocumentPicker.pick({
-        type: [DocumentPicker.types.images, DocumentPicker.types.pdf],
-        allowMultiSelection: false,
-      });
-
-      const picked = Array.isArray(res) ? res?.[0] : res;
-      if (!picked) return;
-
-      onFileChange({
-        uri: picked.uri,
-        name: picked.name || "document",
-        type: (picked.type as string) || "application/octet-stream",
-        size: picked.size ?? 0,
-      });
-    } catch (err: any) {
-      try {
-        if (DocumentPicker.isCancel && DocumentPicker.isCancel(err)) {
-          return;
-        }
-      } catch (e) {
-        // ignore
-      }
-      dispatch(showError("Failed to pick document"));
-    }
-  };
-
-  const pickImageFromLibrary = async () => {
-    try {
-      const result = await launchImageLibrary({
+      const res = await launchImageLibrary({
         mediaType: "photo",
         quality: 0.8,
+        selectionLimit: 1,
         maxWidth: 1024,
         maxHeight: 1024,
       });
 
-      if ((result as any).didCancel) return;
-      if ((result as any).errorCode) {
-        dispatch(showError((result as any).errorMessage || "Failed to pick image"));
+      if ((res as any).didCancel) return;
+      if ((res as any).errorCode) {
+        dispatch(showError((res as any).errorMessage || "Failed to pick image"));
         return;
       }
 
-      const asset = (result as any).assets?.[0];
+      const asset = (res as any).assets?.[0];
       if (!asset?.uri) return;
 
-      onFileChange({
+      const file: FileItem = {
         uri: asset.uri,
         name: asset.fileName || `photo_${Date.now()}.jpg`,
         type: asset.type || "image/jpeg",
         size: asset.fileSize ?? 0,
-      });
+      };
+
+      // enforce 20MB limit
+      if (file.size && file.size > 20 * 1024 * 1024) {
+        dispatch(showError("File exceeds 20 MB limit"));
+        return;
+      }
+
+      onFileChange(file);
     } catch (error) {
       dispatch(showError("Failed to pick image"));
+    }
+  };
+
+  const pickDocuments = async () => {
+    try {
+      const results = await pick({
+        allowMultiSelection: false,
+        type: [types.allFiles],
+      });
+
+      // map and, on android, copy content:// URIs to accessible file path
+      const mapped = await Promise.all(
+        results.map(async (file) => {
+          let uri = file.uri;
+          // Android content uri handling
+          if (Platform.OS === "android" && uri.startsWith("content://")) {
+            const dest = `${RNFS.DocumentDirectoryPath}/${file.name}`;
+            try {
+              await RNFS.copyFile(uri, dest);
+              uri = "file://" + dest;
+            } catch (e) {
+              // fallback: leave as-is
+            }
+          }
+
+          const mappedFile: FileItem = {
+            uri,
+            name: file.name,
+            type: file.type || "application/octet-stream",
+            size: file.size,
+          };
+
+          // enforce 20MB if size provided
+          if (mappedFile.size && mappedFile.size > 20 * 1024 * 1024) {
+            // skip large files
+            dispatch(showError(`${file.name} exceeds 20 MB limit`));
+            return null;
+          }
+          return mappedFile;
+        })
+      );
+
+      const filtered = mapped.filter(Boolean) as FileItem[];
+      if (filtered.length > 0) {
+        filtered.forEach((f) => onFileChange(f));
+      }
+    } catch (error: any) {
+      // If user cancelled — many libs throw; ignore
+      if (!error?.message?.toLowerCase()?.includes("cancel")) {
+        console.log("Document picking error:", error);
+        dispatch(showError("Failed to pick document"));
+      }
     }
   };
 
@@ -156,8 +197,8 @@ const FileUpload: React.FC<{
       "Select File Type",
       "Choose how you want to upload the file",
       [
-        { text: "Choose from Gallery", onPress: pickImageFromLibrary },
-        { text: "Choose Document", onPress: pickDocument },
+        { text: "Choose from Gallery", onPress: openGallery },
+        { text: "Choose Document", onPress: pickDocuments },
         { text: "Cancel", style: "cancel" },
       ],
       { cancelable: true }
@@ -205,13 +246,13 @@ const FileUpload: React.FC<{
                     </Text>
 
                     <View style={styles.fileActions}>
-                      <TouchableOpacity
+                      {/* <TouchableOpacity
                         style={styles.viewButton}
                         onPress={() => handleViewFile(url)}
                         activeOpacity={0.7}
                       >
                         <Text style={styles.viewButtonText}>View</Text>
-                      </TouchableOpacity>
+                      </TouchableOpacity> */}
 
                       <TouchableOpacity
                         style={styles.deleteButton}
@@ -255,7 +296,7 @@ const SaleComp: React.FC<{
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [discount, setDiscount] = useState<number>(0);
-  const [files, setFiles] = useState<any[]>([]);
+  const [files, setFiles] = useState<FileItem[]>([]);
   const [fileURLs, setFileURLs] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [suggestions, setSuggestions] = useState<TestType[]>([]);
@@ -268,7 +309,8 @@ const SaleComp: React.FC<{
       const token = await AsyncStorage.getItem("token");
       if (!token) {
         dispatch(showError("Please login to continue"));
-        navigation.navigate("Login" as never);
+        // @ts-ignore
+        navigation.navigate("Login");
         return false;
       }
       return true;
@@ -313,6 +355,8 @@ const SaleComp: React.FC<{
         setDiscount(0);
         setFormErrors({});
         setSelectedTest(null);
+        setSuggestions([]);
+        setTestList([]);
       };
 
       initialize();
@@ -350,7 +394,7 @@ const SaleComp: React.FC<{
           const uniqueTests: TestType[] = Array.from(
             new Map(
               (testData as any[]).map((el: any) => [
-                el?.LOINC_Code,
+                el?.LOINC_Code ?? String(Math.random()),
                 {
                   loinc_num_: el?.LOINC_Code ?? String(Math.random()),
                   name: el?.LOINC_Name ?? "Unknown Test",
@@ -382,7 +426,7 @@ const SaleComp: React.FC<{
     };
   }, [searchQuery, user?.hospitalID, department]);
 
-  const handleFileChange = (file: any) => {
+  const handleFileChange = (file: FileItem) => {
     setFiles((prev) => [...prev, file]);
     setFileURLs((prev) => [...prev, file.uri]);
   };
@@ -401,7 +445,7 @@ const SaleComp: React.FC<{
 
     if (!isValid) {
       setFormErrors(errors);
-      Object.values(errors)?.forEach(error => {
+      Object.values(errors)?.forEach((error) => {
         if (error) dispatch(showError(error));
       });
       return false;
@@ -421,15 +465,31 @@ const SaleComp: React.FC<{
     return true;
   };
 
+  // Helper to normalize search sources
+  const findMatchForQuery = (q: string) => {
+    const lower = q.trim().toLowerCase();
+    if (!lower) return null;
+
+    const combined = [...testList, ...suggestions];
+    let match =
+      combined.find((t) => (t.name || "").toLowerCase() === lower) ||
+      combined.find((t) => (t.loinc_num_ || "").toLowerCase() === lower) ||
+      combined.find((t) => (t.name || "").toLowerCase().includes(lower));
+
+    return match || null;
+  };
+
   const handleAddTest = useCallback(() => {
     const addTestToList = (testToAdd: TestType) => {
       if (!selectedTests.some((t) => t.loinc_num_ === testToAdd.loinc_num_)) {
         const toAdd = { ...testToAdd, testNotes: noteInput ?? "" };
-        setSelectedTests((prev) => [toAdd, ...prev]);
+        setSelectedTests((prev) => [...prev, toAdd]); // append for predictable display order
+        // clear input states
         setSelectedTest(null);
         setSearchQuery("");
         setNoteInput("");
         setSuggestions([]);
+        // scroll to bottom to show newly added test
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 120);
@@ -443,13 +503,9 @@ const SaleComp: React.FC<{
       return;
     }
 
-    const q = (searchQuery || "").trim().toLowerCase();
+    const q = (searchQuery || "").trim();
     if (q.length > 0) {
-      const match =
-        testList.find((t) => (t.name || "").toLowerCase() === q) ||
-        testList.find((t) => (t.loinc_num_ || "").toLowerCase() === q) ||
-        suggestions.find((t) => (t.name || "").toLowerCase().includes(q)) ||
-        suggestions?.[0];
+      const match = findMatchForQuery(q);
 
       if (match) {
         addTestToList(match);
@@ -464,8 +520,13 @@ const SaleComp: React.FC<{
     setSelectedTests((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const grossAmount = selectedTests?.reduce((acc, test) => acc + (test.testPrice ?? 0), 0) || 0;
-  const gstAmount = selectedTests?.reduce((acc, test) => acc + (test.testPrice ?? 0) * ((test.gst ?? 0) / 100), 0) || 0;
+  const grossAmount =
+    selectedTests?.reduce((acc, test) => acc + (test.testPrice ?? 0), 0) || 0;
+  const gstAmount =
+    selectedTests?.reduce(
+      (acc, test) => acc + (test.testPrice ?? 0) * ((test.gst ?? 0) / 100),
+      0
+    ) || 0;
   const totalAmount = grossAmount + gstAmount;
   const discountedAmount = totalAmount - (totalAmount * discount) / 100;
 
@@ -476,6 +537,7 @@ const SaleComp: React.FC<{
     if (validateFormData()) {
       setIsSubmitting(true);
       try {
+        // @ts-ignore
         await navigation.navigate("PaymentScreen", {
           amount: discountedAmount,
           selectedTests,
@@ -484,7 +546,7 @@ const SaleComp: React.FC<{
           discount,
           department,
           user,
-        } as never);
+        });
       } catch (error) {
         dispatch(showError("Failed to proceed to payment"));
       } finally {
@@ -518,8 +580,12 @@ const SaleComp: React.FC<{
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
-              paddingBottom: FOOTER_H + insets.bottom + SPACING.xl + Math.min(keyboardHeight, FOOTER_H),
-              minHeight: Math.max(SCREEN_HEIGHT - FOOTER_H - insets.top - insets.bottom, SCREEN_HEIGHT * 0.7),
+              paddingBottom:
+                FOOTER_H + insets.bottom + SPACING.xl + Math.min(keyboardHeight, FOOTER_H),
+              minHeight: Math.max(
+                SCREEN_HEIGHT - FOOTER_H - insets.top - insets.bottom,
+                SCREEN_HEIGHT * 0.7
+              ),
             }}
           >
             <View style={styles.content}>
@@ -529,7 +595,11 @@ const SaleComp: React.FC<{
                   ref={(ref) => (inputRefs.current.name = ref)}
                   style={[
                     styles.input,
-                    { backgroundColor: COLORS.inputBg, borderColor: formErrors.name ? COLORS.danger : COLORS.border, color: COLORS.text },
+                    {
+                      backgroundColor: COLORS.inputBg,
+                      borderColor: formErrors.name ? COLORS.danger : COLORS.border,
+                      color: COLORS.text,
+                    },
                   ]}
                   placeholder="Enter patient name"
                   placeholderTextColor={placeholderColor}
@@ -549,7 +619,11 @@ const SaleComp: React.FC<{
                     ref={(ref) => (inputRefs.current.mobileNumber = ref)}
                     style={[
                       styles.input,
-                      { backgroundColor: COLORS.inputBg, borderColor: formErrors.mobileNumber ? COLORS.danger : COLORS.border, color: COLORS.text },
+                      {
+                        backgroundColor: COLORS.inputBg,
+                        borderColor: formErrors.mobileNumber ? COLORS.danger : COLORS.border,
+                        color: COLORS.text,
+                      },
                     ]}
                     placeholder="Enter mobile number"
                     placeholderTextColor={placeholderColor}
@@ -570,7 +644,11 @@ const SaleComp: React.FC<{
                     ref={(ref) => (inputRefs.current.city = ref)}
                     style={[
                       styles.input,
-                      { backgroundColor: COLORS.inputBg, borderColor: formErrors.city ? COLORS.danger : COLORS.border, color: COLORS.text },
+                      {
+                        backgroundColor: COLORS.inputBg,
+                        borderColor: formErrors.city ? COLORS.danger : COLORS.border,
+                        color: COLORS.text,
+                      },
                     ]}
                     placeholder="Enter city"
                     placeholderTextColor={placeholderColor}
