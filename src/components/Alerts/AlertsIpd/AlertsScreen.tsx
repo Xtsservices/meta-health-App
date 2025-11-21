@@ -11,17 +11,18 @@ import {
 } from "react-native";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { RootState } from "../../store/store";
+import { RootState } from "../../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AuthFetch, AuthPatch } from "../../auth/auth";
+import { AuthFetch, AuthPatch } from "../../../auth/auth";
+
+import { BellIcon, MenuIcon } from "../../../utils/SvgIcons";
+import { RESPONSIVE, styles } from "./AlertsStyles";
+import { AlertType } from "../../../utils/types";
+import Footer from "../../dashboard/footer";
+import { useDispatch } from 'react-redux';
+import { showError } from "../../../store/toast.slice";
 import AllAlerts from "./AllAlerts";
 import WatchedAlerts from "./WatchedAlerts";
-import { BellIcon, MenuIcon } from "../../utils/SvgIcons";
-import { RESPONSIVE, styles } from "./AlertsStyles";
-import { AlertType } from "../../utils/types";
-import Footer from "../dashboard/footer";
-import { useDispatch } from 'react-redux';
-import { showError } from "../../store/toast.slice";
 
 const TabButton: React.FC<{
   title: string;

@@ -34,34 +34,62 @@ const Footer: React.FC<Props> = ({
   const navigation = useNavigation<any>();
   const user = useSelector((state: RootState) => state.currentUser);
 
-const handleTabPress = (k: TabKey) => {
-  if (k === "dashboard") {
-    if (user?.roleName === "surgeon" || user?.roleName === "anesthetist") {
-      navigation.navigate("OtDashboard");
-    } else if (user?.patientStatus === 1) {
-      navigation.navigate("DashboardOpd");
-    } else if (user?.patientStatus === 2) {
-      navigation.navigate("DashboardIpd");
+  const handleTabPress = (k: TabKey) => {
+    if (k === "dashboard") {
+      if (user?.roleName === "surgeon" || user?.roleName === "anesthetist") {
+        navigation.navigate("OtDashboard");
+      } else if (user?.roleName === "pathology" || user?.roleName === "radiology") {
+        navigation.navigate("DashboardLab");
+      } else if (user?.patientStatus === 1) {
+        navigation.navigate("DashboardOpd");
+      } else if (user?.patientStatus === 2) {
+        navigation.navigate("DashboardIpd");
     }else if (user?.patientStatus === 2) {
       navigation.navigate("TriageDashboard");
-    } else {
-      navigation.navigate("EmergencyDashboard");
+      } else {
+        navigation.navigate("EmergencyDashboard");
+      }
+    } else if (k === "addPatient") {
+      // For pathology and radiology roles, navigate to SaleComp (Walk-in)
+      if (user?.roleName === "pathology" || user?.roleName === "radiology") {
+        navigation.navigate("SaleComp");
+      } else {
+        navigation.navigate("AddPatient");
+      }
+    } else if (k === "patients") {
+      // For pathology and radiology roles, navigate to PatientListLab
+      if (user?.roleName === "pathology" || user?.roleName === "radiology") {
+        navigation.navigate("PatientListLab");
+      } else {
+        navigation.navigate("PatientList");
+      }
+    } else if (k === "management") {
+      navigation.navigate("Management");
     }
-  } else if (k === "addPatient") {
-    navigation.navigate("AddPatient");
-  } else if (k === "patients") {
-    navigation.navigate("PatientList");
-  } else if (k === "management") {
-    navigation.navigate("Management");
-  }
-};
+  };
+
+  const getTabLabel = (k: TabKey): string => {
+    if (k === "addPatient" && (user?.roleName === "pathology" || user?.roleName === "radiology")) {
+      return "Walk-in";
+    }
+    
+    const labels = {
+      dashboard: "Dashboard",
+      addPatient: "Add Patient",
+      patients: "Patients List",
+      management: "Management",
+    };
+    
+    return labels[k];
+  };
 
   const Item: React.FC<{
     k: TabKey;
-    label: string;
     Icon: React.ElementType;
-  }> = ({ k, label, Icon }) => {
+  }> = ({ k, Icon }) => {
     const isActive = active === k;
+    const label = getTabLabel(k);
+    
     return (
       <TouchableOpacity
         accessibilityRole="button"
@@ -89,10 +117,10 @@ const handleTabPress = (k: TabKey) => {
 
   return (
     <View style={[styles.footer, { backgroundColor: brandColor }]}>
-      <Item k="dashboard" label="Dashboard" Icon={LayoutDashboard} />
-      <Item k="addPatient" label="Add Patient" Icon={UserPlus2} />
-      <Item k="patients" label="Patients List" Icon={ListIcon} />
-      <Item k="management" label="Management" Icon={Settings} />
+      <Item k="dashboard" Icon={LayoutDashboard} />
+      <Item k="addPatient" Icon={UserPlus2} />
+      <Item k="patients" Icon={ListIcon} />
+      <Item k="management" Icon={Settings} />
     </View>
   );
 };

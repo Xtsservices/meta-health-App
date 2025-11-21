@@ -8,9 +8,10 @@ import {
   TextInput,
   Modal,
 } from "react-native";
-import { formatDateTime } from "../../utils/dateTime";
+import { AlertType } from "../../../utils/types";
 import { styles } from "./AlertsStyles";
-import { AlertType } from "../../utils/types";
+import { formatDateTime } from "../../../utils/dateTime";
+
 
 
 interface AllAlertsProps {
