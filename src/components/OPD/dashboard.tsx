@@ -176,7 +176,6 @@ const dispatch = useDispatch()
       const monthParam = m === "0" ? "" : `&filterMonth=${m}`;
       const url = `patient/${user.hospitalID}/patients/count/fullYearFilterLineChart/1?filter=${filterType}&filterYear=${y}${monthParam}`;
       const response = await AuthFetch(url, token);
-
       if (response?.status === "success") {
         const counts: any[] = Array.isArray(response?.data?.counts)
           ? response?.data?.counts

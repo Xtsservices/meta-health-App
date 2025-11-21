@@ -80,6 +80,19 @@ import AddPhysicalExaminationScreen from "../components/patientsList/PhysicalExa
 import AddMedicineScreen from "../components/patientsList/treatmentplan/AddMedicineScreen";
 import MedicationTimelineScreen from "../components/patientsList/treatmentplan/MedicationTimelineScreen";
 import DischargedPatientsIPD from "../components/IPD/DischargedPatientsIPD";
+import dashboard from "../components/Triage/dashboard";
+import addTriageIssue from "../components/Triage/addTriageIssue";
+import triageDialog from "../components/Triage/triageDialog";
+import triageFormContext from "../components/Triage/context/triageFormContext";
+
+import triageABCDScreen from "../components/Triage/triageABCDScreen";
+import triageGCSForm from "../components/Triage/triageGCSForm";
+import triageType from "../components/Triage/triageType";
+import traumaForm from "../components/Triage/traumaForm";
+import nontraumaForm from "../components/Triage/nontraumaForm";
+import triageZone from "../components/Triage/triageZone";
+
+
 import consentForm from "../components/OT/consentForm";
 import postOpNotes from "../components/OT/postOpNotes";
 import PatientDetailsLab from "../components/Lab/patientList/PatientDetailsLab";
@@ -283,6 +296,17 @@ const Routing = () => {
           component={AddPhysicalExaminationScreen}
           options={{ title: "Add Physical Examination", headerTitleAlign: "center", headerShown: true }}
         />
+
+        <Stack.Screen name="DashboardTriage" component={dashboard} options={{ headerShown: false }} />
+        <Stack.Screen name="AddTriageIssue" component={addTriageIssue} options={{ headerShown: false }} />
+        <Stack.Screen name="TriageDialog" component={triageDialog} options={{ headerShown: false }} />
+        <Stack.Screen name="TriageFormContext" component={triageFormContext} options={{ headerShown: false }} />
+        <Stack.Screen name="TriageABCD" component={triageABCDScreen} options={{ title: "Triage ABCD", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageGCSForm" component={triageGCSForm} options={{ title: "Triage GCS Form", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageType" component={triageType} options={{ title: "Triage type", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageTrauma" component={traumaForm} options={{ title: "Triage trauma", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageNonTrauma" component={nontraumaForm} options={{ title: "Triage trauma", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageZoneForm" component={triageZone} options={{ title: "Triage zone", headerTitleAlign: "center", headerShown: true }} />
 
 
          {/* labs */}

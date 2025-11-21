@@ -179,7 +179,7 @@ if (!match) {
       };
       const res = await AuthPost("symptom", body, token);
       if (res?.status === "success" || res?.status === "success") {
-         dispatch( showSuccess(res?.message || "Failed to submit symptoms."));
+         dispatch( showSuccess(res?.message || "Symptoms added successfully"));
         navigation.goBack(); 
       } else {
          dispatch( showError(res?.message || "Failed to submit symptoms."));
