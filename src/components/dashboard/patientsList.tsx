@@ -1,5 +1,5 @@
 // PatientTable.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,7 @@ import { AuthFetch } from '../../auth/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatDateTime, } from "../../utils/dateTime";
 import { PatientType } from '../../utils/types';
-import { NavigationProp, useNavigation } from '@react-navigation/native';
+import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { showError } from '../../store/toast.slice';
 
 const PatientTable = ({ 
@@ -39,14 +39,19 @@ const user = useSelector((s: RootState) => s.currentUser);
   const fetchRecentPatients = async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     try {
-      let endpoint = user?.role === 2003
+  let endpoint
+      if (patientType === 3 && !zone){
+endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${user?.id}&role=${user?.role}&category=triage`
+      }else{
+ endpoint = user?.role === 2003
         ? `patient/${user?.hospitalID}/patients/nurseRecent/${patientType}?userID=${user?.id}&role=${user?.role}`
         : `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${user?.id}&role=${user?.role}`;
+      }
+      
 
       if (zone !== undefined) {
         endpoint += `&zone=${zone}`;
       }
-
       const response = await AuthFetch(endpoint, token);
       if (response?.status === 'success' && Array.isArray(response?.data?.patients)) {
         const latestFive = response?.data?.patients.slice(0, 5);
@@ -61,12 +66,13 @@ const user = useSelector((s: RootState) => s.currentUser);
     }
   };
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     if (user && fetchOnce?.current) {
       fetchOnce.current = false;
       fetchRecentPatients();
     }
-  }, [user]);
+  }, [user]))
 
   // Handle View Patient
   const handleView = async (id: number) => {

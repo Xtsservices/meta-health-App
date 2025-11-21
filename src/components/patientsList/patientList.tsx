@@ -154,8 +154,10 @@ if (user?.patientStatus === 1) {
       } else if (user?.patientStatus === 3) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseActive/${patientStatus.emergency}?role=${user?.role}&userID=${user?.id}&zone=${zone}`;
-        } else {
+        } else if (zone) {
           url = `patient/${user.hospitalID}/patients/${patientStatus.emergency}?zone=${zone}&userID=${user?.id}`;
+        }else{
+          url = `patient/${user.hospitalID}/patients/triage/${patientStatus.emergency}`;
         }
       } else {
         if (user?.role === 2003) {
@@ -167,10 +169,8 @@ if (user?.patientStatus === 1) {
 }else{
   url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
 }
-      
-console.log(url, "oturl")
+      console.log(url, "oturl")
       const response = await AuthFetch(url, token);
-console.log(response, "surgery response")
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response?.data?.patients
@@ -403,7 +403,7 @@ console.log(pagedData, "complete patients list")
   };
 
   const getAddButtonText = () => {
-    if (user?.patientStatus === 2) return "Admit Patient";
+    if (user?.patientStatus === 2 || user?.roleName === "triage") return "Admit Patient";
     // For other statuses, return empty string so no button shows
     return "";
   };
@@ -415,7 +415,7 @@ console.log(pagedData, "complete patients list")
   };
 
   const handleSurgeryWarningClick = (patient: PatientType) => {
-    const patientSurgeries = surgeryData[patient.id] || [];
+    const patientSurgeries = surgeryData[patient?.id] || [];
     const rejectedSurgeries = patientSurgeries.filter(item =>
       item.status?.toLowerCase() === "rejected"
     );
@@ -607,7 +607,7 @@ console.log(pagedData, "complete patients list")
 
   const handleView = (patient :any) => {
 const patientStatusKey =
-            patient.status.toUpperCase() as keyof typeof OTPatientStages;
+            patient?.status?.toUpperCase() as keyof typeof OTPatientStages;
           setPatientStage(OTPatientStages[patientStatusKey]);
         
  navigation.navigate("PatientProfile", { id: patient.id });
@@ -703,14 +703,14 @@ const approvedDate = formatDate(item?.approvedTime)
                 )}
               </View>
             </View>
-
+{(user?.patientStatus === 2 || user?.patientStatus === 3) && (user?.roleName !== "triage") && 
             <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
               {isOt && 
    `Approved Date: ${approvedDate}`
 }
-              {(user?.patientStatus === 2 || user?.patientStatus === 3) && `• Ward: ${capitalizeFirstLetter(wardName)}`}
+              • Ward: capitalizeFirstLetter(wardName)
               
-            </Text>
+            </Text>}
 
             <View style={styles.infoRow}>
               <Text

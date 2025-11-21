@@ -38,6 +38,8 @@ import { currentPatient as setCurrentPatientAction } from "../../store/store";
 import TransferPatient from "./transferPatient";
 import OtTabs from "../OT/otTabs";
 import DischargeSummaryDownload from "./dischargeSummaryDownload";
+import AddTriageIssue from "../Triage/addTriageIssue";
+import { Edit2Icon } from "../../utils/SvgIcons";
 import { COLORS } from "../../utils/colour";
 // ---- types ----
 type RootState = any;
@@ -518,6 +520,7 @@ const PatientProfileOPD: React.FC = () => {
           {/* Profile Card (icons moved to top-right inside card) */}
           <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
             {/* top-right actions */}
+            {user?.roleName !== "triage" && 
             <View style={styles.cardActions}>
               {!isDischargedPatient  && (
                 <TouchableOpacity
@@ -528,7 +531,7 @@ const PatientProfileOPD: React.FC = () => {
                     { borderColor: COLORS.border, backgroundColor: COLORS.card2, opacity: isReceptionView ? 0.5 : 1 },
                   ]}
                 >
-                  <Edit3 size={16} color={COLORS.text} />
+                  <Edit2Icon size={16} color={COLORS.text} />
                 </TouchableOpacity>
               )}
 
@@ -542,7 +545,7 @@ const PatientProfileOPD: React.FC = () => {
               >
                 <MoreVertical size={16} color={COLORS.text} />
               </TouchableOpacity>
-            </View>
+            </View>}
 
             {/* left side avatar + name */}
             <View style={styles.row}>
@@ -647,8 +650,13 @@ const PatientProfileOPD: React.FC = () => {
               </View>
             )}
           </View>
-          
-          {user?.roleName === "surgeon" || user?.roleName === "anesthetist"  ? <OtTabs/> : <Tabs/>}
+         {user?.roleName === "triage" ? (
+  <AddTriageIssue />
+) : (
+  <>
+    {(user?.roleName === "surgeon" || user?.roleName === "anesthetist") ? <OtTabs /> : <Tabs />}
+  </>
+)}
           
         </ScrollView>
 

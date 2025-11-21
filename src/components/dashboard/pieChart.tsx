@@ -27,7 +27,8 @@ import {
 } from "../../utils/responsive";
 
 interface PieChartProps {
-  selectedWardDataFilter: string;
+  selectedWardDataFilter?: string;
+  data?: ZoneDatum[];
 }
 
 interface ChartData {
@@ -42,6 +43,11 @@ interface ApiResponse {
   percentage: number;
 }
 
+interface ZoneDatum {
+  x: string;   // "Red" | "Yellow" | "Green"
+  y: number;   // count
+  color: string;
+}
 /* ---------- SVG helpers ---------- */
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 
@@ -62,8 +68,10 @@ function describeArc(cx: number, cy: number, radius: number, startAngle: number,
 }
 
 /* ---------- Component ---------- */
-const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter }) => {
+const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter, data: zoneData, }) => {
   const user = useSelector((s: RootState) => s.currentUser);
+  const isTriage = user?.roleName?.toLowerCase() === "triage";
+
   const [data, setData] = useState<ChartData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,65 +94,126 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter }) => {
   const totalPatients = data.reduce((s, d) => s + (d.patients || 0), 0);
 
   const getData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
+  try {
+    setIsLoading(true);
+    setError(null);
 
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      if (!user?.hospitalID || !token) {
-        setError("Authentication required");
-        setData([]);
-        return;
-      }
-
-      const responseWard = await AuthFetch(
-        `ward/${user.hospitalID}/distributionForStaff/${selectedWardDataFilter}?role=${user.role}&userID=${user.id}`,
-        token
-      );
-
-      if (responseWard?.status === "success" && responseWard.data?.summary) {
-        const summary: ApiResponse[] = responseWard.data.summary;
-        const formatted: ChartData[] = summary.map((res, idx) => ({
-          name: res.ward,
-          value: Number(res.percentage),
-          patients: Math.round(res.percentage), // original approach
-          color: `hsl(${((idx * 360) / Math.max(1, summary.length)) % 360}, 90%, 65%)`,
+    // ─────────────────────────────────────
+    // TRIAGE MODE: use zoneData from props
+    // ─────────────────────────────────────
+    if (isTriage) {
+      if (zoneData && zoneData.length > 0) {
+        const transformed: ChartData[] = zoneData.map((z) => ({
+          name: z.x,
+          value: z.y,        // counts – used for slice size
+          patients: z.y,     // used in legend
+          color: z.color,
         }));
 
-        setData(formatted);
+        setData(transformed);
 
-        // animate
         fadeAnim.setValue(0);
         scaleAnim.setValue(0.95);
         Animated.parallel([
-          Animated.timing(fadeAnim, { toValue: 1, duration: 420, useNativeDriver: true }),
-          Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 420,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            friction: 8,
+            tension: 40,
+            useNativeDriver: true,
+          }),
         ]).start();
 
         AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
           if (enabled) {
-            AccessibilityInfo.announceForAccessibility(`${formatted.length} wards loaded.`);
+            AccessibilityInfo.announceForAccessibility(
+              `${transformed.length} zones loaded.`
+            );
           }
         });
       } else {
         setData([]);
-        setError("No data available");
+        setError("No zone data available");
       }
-    } catch (err) {
-      setError("Failed to load data");
-      setData([]);
-    } finally {
-      setIsLoading(false);
+
+      return; 
     }
-  }, [
-    user?.hospitalID,
-    user?.token,
-    selectedWardDataFilter,
-    user?.role,
-    user?.id,
-    fadeAnim,
-    scaleAnim,
-  ]);
+
+    
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    if (!user?.hospitalID || !token) {
+      setError("Authentication required");
+      setData([]);
+      return;
+    }
+
+    const responseWard = await AuthFetch(
+      `ward/${user.hospitalID}/distributionForStaff/${selectedWardDataFilter}?role=${user.role}&userID=${user.id}`,
+      token
+    );
+
+    if (responseWard?.status === "success" && responseWard.data?.summary) {
+      const summary: ApiResponse[] = responseWard.data.summary;
+      const formatted: ChartData[] = summary.map((res, idx) => ({
+        name: res.ward,
+        value: Number(res.percentage),
+        patients: Math.round(res.percentage),
+        color: `hsl(${
+          ((idx * 360) / Math.max(1, summary.length)) % 360
+        }, 90%, 65%)`,
+      }));
+
+      setData(formatted);
+
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.95);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 420,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
+        if (enabled) {
+          AccessibilityInfo.announceForAccessibility(
+            `${formatted.length} wards loaded.`
+          );
+        }
+      });
+    } else {
+      setData([]);
+      setError("No data available");
+    }
+  } catch (err) {
+    setError("Failed to load data");
+    setData([]);
+  } finally {
+    setIsLoading(false);
+  }
+}, [
+  user?.hospitalID,
+  user?.token,
+  selectedWardDataFilter,
+  user?.role,
+  user?.id,
+  isTriage,
+  zoneData,
+  fadeAnim,
+  scaleAnim,
+]);
+
 
   // fetch on focus
   useFocusEffect(
@@ -163,13 +232,24 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter }) => {
   let accAngle = 0;
 
   // UI states
-  const NoData = () => (
-    <Animated.View style={[styles.noDataContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-      <Text style={styles.noDataIcon}>📊</Text>
-      <Text style={styles.noDataTitle}>No Ward Data</Text>
-      <Text style={styles.noDataText}>No occupancy data available for selected period.</Text>
-    </Animated.View>
-  );
+const NoData = () => (
+  <Animated.View
+    style={[
+      styles.noDataContainer,
+      { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+    ]}
+  >
+    <Text style={styles.noDataIcon}>📊</Text>
+    <Text style={styles.noDataTitle}>
+      {isTriage ? "No Zone Data" : "No Ward Data"}
+    </Text>
+    <Text style={styles.noDataText}>
+      {isTriage
+        ? "No zone information available."
+        : "No occupancy data available for selected period."}
+    </Text>
+  </Animated.View>
+);
   const Loading = () => (
     <View style={styles.noDataContainer}>
       <ActivityIndicator size="large" color="#14b8a6" />
@@ -241,7 +321,9 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter }) => {
       {/* Legend */}
       <View style={styles.legendContainer}>
         <View style={styles.legendHeader}>
-          <Text style={styles.legendTitle}>Ward Distribution</Text>
+          <Text style={styles.legendTitle}>
+    {isTriage ? "Zone Distribution" : "Ward Distribution"}
+  </Text>
           {data.length > 5 && <Text style={styles.legendCount}>{data.length} total</Text>}
         </View>
 
