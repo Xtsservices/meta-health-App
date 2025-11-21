@@ -176,7 +176,7 @@ export default function DoctorsScreen() {
           />
 
           {/* FAB → navigate to AddDoctorScreen */}
-          {cp.ptype != 21 && (
+          {user?.roleName !== "reception" && cp.ptype != 21 && (
           <Pressable
             onPress={() => navigation.navigate("AddDoctors" as never)}
             style={[

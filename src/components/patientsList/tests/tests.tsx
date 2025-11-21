@@ -209,7 +209,7 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
       ) : empty ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No tests prescribed yet</Text>
-          {!readOnly &&
+          {!readOnly && user?.roleName !== "reception" &&
           <Pressable
             style={[styles.cta, { backgroundColor: COLORS.button }]}
             onPress={() => navigation.navigate("AddTests" as never, {currentTab: activetab})}
@@ -231,7 +231,7 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
             ItemSeparatorComponent={() => <View style={{ height: moderateScale(12) }} />}
             showsVerticalScrollIndicator={false}
           />
-          {!readOnly && 
+          {!readOnly && user?.roleName !== "reception" && 
           <Pressable
             style={[styles.fab, { 
               backgroundColor: COLORS.button,

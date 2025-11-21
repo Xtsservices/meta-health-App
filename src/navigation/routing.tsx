@@ -95,6 +95,13 @@ import triageZone from "../components/Triage/triageZone";
 
 import consentForm from "../components/OT/consentForm";
 import postOpNotes from "../components/OT/postOpNotes";
+import wardManagement from "../components/Reception/wardManagement";
+import AppointmentTabsMobile from "../components/Reception/appointments.tsx/appointmentTabs";
+import appointmentForm from "../components/Reception/appointments.tsx/appointmentForm";
+import appointmentList from "../components/Reception/appointments.tsx/appointmentList";
+import receptionPatientsList from "../components/Reception/receptionPatientsList";
+import DoctorManagementMobile from "../components/Reception/doctorManagement/doctorManagement";
+import DoctorSlotsScreen from "../components/Reception/doctorManagement/doctorSlots";
 import PatientDetailsLab from "../components/Lab/patientList/PatientDetailsLab";
 import PatientListLab from "../components/Lab/patientList/PatientListLab";
 import UploadTest from "../components/Lab/patientList/UploadTest";
@@ -296,6 +303,13 @@ const Routing = () => {
           component={AddPhysicalExaminationScreen}
           options={{ title: "Add Physical Examination", headerTitleAlign: "center", headerShown: true }}
         />
+        <Stack.Screen name="WardManagement" component={wardManagement} options={{ title: "Ward Management", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="AppointmentTab" component={AppointmentTabsMobile} options={{ title: "Appointments", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="AppointmentForm" component={appointmentForm} options={{ title: "Appointments", headerTitleAlign: "center", headerShown: false }}  />
+        <Stack.Screen name="AppointmentList" component={appointmentList} options={{headerShown: false} }  />
+        <Stack.Screen name="ReceptionPatientsList" component={receptionPatientsList} options={{ title: "Patients List", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="DoctorManagement" component={DoctorManagementMobile} options={{ title: "Doctor management", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="DoctorSlots" component={DoctorSlotsScreen} options={{ title: "Doctor slots", headerTitleAlign: "center", headerShown: true }}  />
 
         <Stack.Screen name="DashboardTriage" component={dashboard} options={{ headerShown: false }} />
         <Stack.Screen name="AddTriageIssue" component={addTriageIssue} options={{ headerShown: false }} />

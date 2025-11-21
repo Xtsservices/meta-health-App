@@ -169,7 +169,7 @@ if (user?.patientStatus === 1) {
 }else{
   url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
 }
-      console.log(url, "oturl")
+      
       const response = await AuthFetch(url, token);
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
@@ -269,8 +269,8 @@ if (user?.patientStatus === 1) {
         let surgeryArray: FullSurgeryData[] = [];
 
         if (Array.isArray(response.data?.data)) {
-          surgeryArray = response.data.data;
-        } else if (Array.isArray(response.data)) {
+          surgeryArray = response?.data?.data;
+        } else if (Array.isArray(response?.data)) {
           surgeryArray = response.data;
         }
 
@@ -315,12 +315,41 @@ if (user?.patientStatus === 1) {
     };
   }, []);
 
+    const fetchFollowupPatients = useCallback(async () => {
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    if (!user?.hospitalID || !token) return;
+
+    try {
+      setLoading(true);
+      const response = await AuthFetch(
+        `followup/${user.hospitalID}/active`,
+        token
+      );
+      if (response?.status === "success") {
+        setAllPatients(response.data?.followUps as PatientType[]);
+      } else {
+        setAllPatients([]);
+      }
+    } catch (e) {
+      setAllPatients([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.hospitalID]);
+
+
   useEffect(() => {
-    fetchPatients();
+    if (filterValue === 1) {
+      // Follow-up filter – use followup API
+      fetchFollowupPatients();
+    } else {
+      // Normal flows (active / previous)
+      fetchPatients();
+    }
     if (user?.patientStatus === 2 || user?.patientStatus === 3) {
       fetchWards();
     }
-  }, [fetchPatients, fetchWards, user?.patientStatus]);
+  }, [fetchPatients, fetchWards, user?.patientStatus, fetchFollowupPatients, filterValue]);
 
   const filteredAndSearched = useMemo(() => {
     let base: PatientType[] = allPatients;
@@ -376,7 +405,6 @@ if (user?.patientStatus === 1) {
     const start = (currentPage - 1) * PAGE_SIZE;
     return filteredAndSearched.slice(start, start + PAGE_SIZE);
   }, [filteredAndSearched, currentPage]);
-console.log(pagedData, "complete patients list")
   useEffect(() => {
     setCurrentPage(1);
   }, [filterValue, wardFilter, search]);
@@ -614,7 +642,6 @@ const patientStatusKey =
   }
 
   const renderItem = ({ item }: { item: PatientType }) => {
-    console.log(item, "patient details ", item?.approvedTime)
     const paddedId = String(item?.id ?? "").padStart(4, "0");
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
@@ -857,7 +884,6 @@ const approvedDate = formatDate(item?.approvedTime)
       </View>
     </Modal>
   );
-console.log(pagedData, "complet epatiens list")
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: COLORS.bg, paddingBottom: Math.max(insets.bottom, 12) }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>

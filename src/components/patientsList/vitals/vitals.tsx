@@ -152,7 +152,7 @@ export default function VitalsTabScreen() {
   const EmptyState = () => (
     <View style={styles.emptyWrap}>
       <Text style={{ color: COLORS.sub, marginBottom: 12 }}>No vital records found.</Text>
-      {currentPatinet.ptype != 21 && !isOt && (
+      {currentPatinet.ptype != 21 && !isOt && user?.roleName !== "reception" && (
 
         <Pressable
           onPress={() => navigation.navigate("AddVitals" as never)}
@@ -188,7 +188,7 @@ export default function VitalsTabScreen() {
       )}
 
       {/* FAB */}
-      {!isOt && rows.length > 0 && (
+      {!isOt && rows.length > 0 && user?.roleName !== "reception" &&(
         currentPatinet.ptype != 21 && (
           <Pressable
             onPress={() => navigation.navigate("AddVitals" as never)}

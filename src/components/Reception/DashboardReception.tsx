@@ -1008,7 +1008,7 @@ const DashboardReception: React.FC = () => {
       key: "patients", 
       label: "Add Patient", 
       icon: Users, 
-      onPress: () => go("PatientRegistration") 
+      onPress: () => go("AddPatient") 
     },
     { 
       key: "alerts", 
@@ -1026,13 +1026,13 @@ const DashboardReception: React.FC = () => {
       key: "records", 
       label: "Patient List", 
       icon: FileText, 
-      onPress: () => go("PatientRecords") 
+      onPress: () => go("ReceptionPatientsList") 
     },
     { 
       key: "appointments", 
       label: "Appointments", 
       icon: Calendar, 
-      onPress: () => go("Appointments") 
+      onPress: () => go("AppointmentTab") 
     },
     { 
       key: "Ward", 

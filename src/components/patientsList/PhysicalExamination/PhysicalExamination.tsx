@@ -251,24 +251,25 @@ export default function PhysicalExaminationScreen() {
               <Text style={[styles.emptyText, { color: COLORS.sub }]}>
                 No physical examination records found
               </Text>
+              {user?.roleName !== "reception" && 
               <Pressable
                 style={styles.cta}
                 onPress={() => navigation.navigate("AddPhysicalExamination" as never)}
               >
                 <PlusIcon size={RESPONSIVE.icon.sm} color={COLORS.buttonText} />
                 <Text style={styles.ctaText}>Add Physical Examination</Text>
-              </Pressable>
+              </Pressable>}
             </View>
           }
         />
       )}
-
+{user?.roleName !== "reception" &&
       <Pressable
         style={styles.fab}
         onPress={() => navigation.navigate("AddPhysicalExamination" as never)}
       >
         <PlusIcon size={RESPONSIVE.icon.md} color={COLORS.buttonText} />
-      </Pressable>
+      </Pressable>}
       
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />

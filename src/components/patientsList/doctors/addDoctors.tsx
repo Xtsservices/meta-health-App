@@ -111,7 +111,6 @@ export default function AddDoctorScreen() {
 
   const debouncedSubmit = useMemo(
     () => debounce(handleSubmit, DEBOUNCE_DELAY),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [handleSubmit]
   );
 
