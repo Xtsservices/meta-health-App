@@ -1,4 +1,3 @@
-// components/PatientProfileCard.tsx
 import React, { useState } from "react";
 import {
   View,
@@ -24,21 +23,7 @@ import {
 } from "../../../utils/SvgIcons";
 import { formatDate, formatDateTime } from "../../../utils/dateTime";
 import { RootState } from "../../../store/store";
-
-// Colors
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  gradientStart: "#14b8a6",
-  gradientEnd: "#0d9488",
-  success: "#10b981",
-  warning: "#f59e0b",
-  info: "#3b82f6",
-};
+import { COLORS } from "../../../utils/colour";
 
 // Gradient Button Component
 const GradientButton: React.FC<{
@@ -137,9 +122,9 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
   }
 
   // Patient Information
-  const name = patientDetails?.pName || patientDetails?.patientName || "Unknown Patient";
+  const name = patientDetails?.pName ?? patientDetails?.patientName ?? "Unknown Patient";
   const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
-  const uhid = patientDetails?.patientID || patientDetails?.pID || "—";
+  const uhid = patientDetails?.patientID ?? patientDetails?.pID ?? "—";
   const isWalkIn = !patientDetails?.patientID;
   const isDischarged = !!patientDetails?.dischargeDate;
 
@@ -156,17 +141,17 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
                    formatDate(patientDetails.addedOn) : "—";
 
   const doctorName = patientDetails?.doctor_firstName || patientDetails?.doctor_lastName ?
-    `${patientDetails?.doctor_firstName || ""} ${patientDetails?.doctor_lastName || ""}`.trim()
-    : patientDetails?.doctorName || "—";
+    `${patientDetails?.doctor_firstName ?? ""} ${patientDetails?.doctor_lastName ?? ""}`.trim()
+    : patientDetails?.doctorName ?? "—";
 
-  const followUpText = patientDetails?.followUp || 
-                      patientDetails?.follow_up || 
-                      patientDetails?.followup || 
-                      patientDetails?.FollowUp || "";
+  const followUpText = patientDetails?.followUp ?? 
+                      patientDetails?.follow_up ?? 
+                      patientDetails?.followup ?? 
+                      patientDetails?.FollowUp ?? "";
 
   // Extract all reports
   const allReports: Attachment[] = Array.isArray(completedDetails) ?
-    completedDetails.flatMap((patient) => patient?.attachments || []) : [];
+    completedDetails.flatMap((patient) => patient?.attachments ?? []) : [];
 
   const handleReportDownload = (fileURL: string) => {
     Linking.openURL(fileURL).catch(err => 
@@ -176,9 +161,9 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
 
   const getFileIcon = (mimeType: string) => {
     if (mimeType === "application/pdf") return "📄";
-    if (mimeType.startsWith('image/')) return "🖼️";
-    if (mimeType.startsWith('audio/')) return "🎵";
-    if (mimeType.startsWith('video/')) return "🎬";
+    if (mimeType?.startsWith('image/')) return "🖼️";
+    if (mimeType?.startsWith('audio/')) return "🎵";
+    if (mimeType?.startsWith('video/')) return "🎬";
     return "📎";
   };
 
@@ -200,13 +185,7 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
           <View style={styles.titleSection}>
             <Text style={styles.patientName}>{formattedName}</Text>
             <Text style={styles.uhid}>UHID: {uhid}</Text>
-            <View style={styles.pillContainer}>
-              {isWalkIn && (
-                <View style={[styles.pill, styles.walkInPill]}>
-                  <Text style={styles.pillText}>Walk-In</Text>
-                </View>
-              )}
-            </View>
+            
           </View>
         </View>
 
@@ -216,18 +195,6 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
               <Text style={styles.pillText}>Discharged</Text>
             </View>
           )}
-
-          {tab === "completed" && allReports.length > 0 && (
-            <GradientButton
-              style={styles.reportsButton}
-              onPress={() => setShowReports(!showReports)}
-            >
-              <DownloadIcon size={18} color="#ffffff" />
-              <Text style={styles.reportsButtonText}>
-                {showReports ? "Hide Reports" : "View Reports"}
-              </Text>
-            </GradientButton>
-          )}
         </View>
       </View>
 
@@ -235,16 +202,7 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
 
       {/* Details Grid */}
       <View style={styles.detailsGrid}>
-        <View style={styles.detailItem}>
-          <View style={styles.detailIcon}>
-            <GenderIcon size={16} color={COLORS.sub} />
-          </View>
-          <View style={styles.detailContent}>
-            <Text style={styles.detailLabel}>Gender</Text>
-            <Text style={styles.detailValue}>{genderText}</Text>
-          </View>
-        </View>
-
+    
         <View style={styles.detailItem}>
           <View style={styles.detailIcon}>
             <CalendarIcon size={16} color={COLORS.sub} />
@@ -297,7 +255,7 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Location</Text>
               <Text style={styles.detailValue}>
-                {`${patientDetails?.city || ""} ${patientDetails?.state || ""}`.trim()}
+                {`${patientDetails?.city ?? ""} ${patientDetails?.state ?? ""}`.trim()}
               </Text>
             </View>
           </View>
@@ -333,7 +291,7 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
                 {allReports.map((attachment, index) => (
                   <View key={`${attachment.id}-${index}`} style={styles.reportCard}>
                     <Text style={styles.reportTestName} numberOfLines={1}>
-                      {attachment.test || "Test Report"}
+                      {attachment.test ?? "Test Report"}
                     </Text>
                     <View style={styles.reportIcon}>
                       <Text style={styles.reportIconText}>

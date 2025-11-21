@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { COLORS } from "../../../utils/colour";
+import { SPACING, FONT_SIZE } from "../../../utils/responsive";
 
 interface PaginationProps {
   currentPage: number;
@@ -19,63 +20,73 @@ const Pagination: React.FC<PaginationProps> = ({
   itemsPerPage,
   currentItemsCount,
 }) => {
-  const pageNumbers = [];
-  const maxPagesToShow = 5;
-  
-  let startPage = Math.max(0, currentPage - Math.floor(maxPagesToShow / 2));
-  let endPage = Math.min(totalPages - 1, startPage + maxPagesToShow - 1);
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxPagesToShow = 5;
+    
+    let startPage = Math.max(0, currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(totalPages - 1, startPage + maxPagesToShow - 1);
 
-  if (endPage - startPage + 1 < maxPagesToShow) {
-    startPage = Math.max(0, endPage - maxPagesToShow + 1);
-  }
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(0, endPage - maxPagesToShow + 1);
+    }
 
-  for (let i = startPage; i <= endPage; i++) {
-    pageNumbers.push(i);
-  }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
 
-  const showLeftEllipsis = startPage > 0;
-  const showRightEllipsis = endPage < totalPages - 1;
+    return pages;
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.infoText}>
-        Showing {currentItemsCount === 0 ? 0 : (currentPage * itemsPerPage) + 1} to{" "}
-        {Math.min((currentPage + 1) * itemsPerPage, totalItems)} of {totalItems} entries
-      </Text>
+      <View style={styles.paginationInfo}>
+        <Text style={styles.infoText}>
+          Showing {currentItemsCount} of {totalItems} entries
+        </Text>
+      </View>
       
-      <View style={styles.controls}>
+      <View style={styles.paginationControls}>
         <TouchableOpacity
-          style={[styles.navButton, currentPage === 0 && styles.disabledButton]}
+          style={[styles.pageButton, currentPage === 0 && styles.disabledButton]}
           onPress={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 0}
         >
-          <ChevronLeft size={20} color={currentPage === 0 ? "#9ca3af" : "#374151"} />
+          <Text style={[styles.pageButtonText, currentPage === 0 && styles.disabledText]}>
+            Previous
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.pageNumbers}>
-          {showLeftEllipsis && <Text style={styles.ellipsis}>...</Text>}
-          
-          {pageNumbers.map((pageNum) => (
+          {getPageNumbers()?.map((page) => (
             <TouchableOpacity
-              key={pageNum}
-              style={[styles.pageButton, currentPage === pageNum && styles.activePageButton]}
-              onPress={() => onPageChange(pageNum)}
+              key={page}
+              style={[
+                styles.pageNumber,
+                currentPage === page && styles.activePageNumber,
+              ]}
+              onPress={() => onPageChange(page)}
             >
-              <Text style={[styles.pageText, currentPage === pageNum && styles.activePageText]}>
-                {pageNum + 1}
+              <Text
+                style={[
+                  styles.pageNumberText,
+                  currentPage === page && styles.activePageNumberText,
+                ]}
+              >
+                {page + 1}
               </Text>
             </TouchableOpacity>
           ))}
-          
-          {showRightEllipsis && <Text style={styles.ellipsis}>...</Text>}
         </View>
 
         <TouchableOpacity
-          style={[styles.navButton, currentPage >= totalPages - 1 && styles.disabledButton]}
+          style={[styles.pageButton, currentPage === totalPages - 1 && styles.disabledButton]}
           onPress={() => onPageChange(currentPage + 1)}
-          disabled={currentPage >= totalPages - 1}
+          disabled={currentPage === totalPages - 1}
         >
-          <ChevronRight size={20} color={currentPage >= totalPages - 1 ? "#9ca3af" : "#374151"} />
+          <Text style={[styles.pageButtonText, currentPage === totalPages - 1 && styles.disabledText]}>
+            Next
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -84,53 +95,63 @@ const Pagination: React.FC<PaginationProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: "center",
-    marginVertical: 16,
-    gap: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: SPACING.lg,
+    paddingHorizontal: SPACING.sm,
+  },
+  paginationInfo: {
+    flex: 1,
   },
   infoText: {
-    fontSize: 14,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
   },
-  controls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  navButton: {
-    padding: 8,
-    borderRadius: 6,
-    backgroundColor: "#f3f4f6",
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  pageNumbers: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  paginationControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   pageButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
     borderRadius: 6,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: COLORS.pill,
   },
-  activePageButton: {
-    backgroundColor: "#14b8a6",
+  disabledButton: {
+    backgroundColor: COLORS.card,
   },
-  pageText: {
-    fontSize: 14,
-    color: "#374151",
-    fontWeight: "500",
+  pageButtonText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '500',
+    color: COLORS.brand,
   },
-  activePageText: {
-    color: "#ffffff",
+  disabledText: {
+    color: COLORS.placeholder,
   },
-  ellipsis: {
-    fontSize: 14,
-    color: "#6b7280",
-    paddingHorizontal: 8,
+  pageNumbers: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+  },
+  pageNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.pill,
+  },
+  activePageNumber: {
+    backgroundColor: COLORS.brand,
+  },
+  pageNumberText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '500',
+    color: COLORS.sub,
+  },
+  activePageNumberText: {
+    color: COLORS.buttonText,
   },
 });
 

@@ -7,6 +7,15 @@ import {
   TouchableOpacity,
 } from "react-native";
 
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE,
+  isTablet 
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { formatDateTime } from "../../../utils/dateTime";
+
 interface TestItem {
   id: string;
   test?: string;
@@ -51,25 +60,13 @@ const InnerTable: React.FC<InnerTableProps> = ({
   rejectedReason,
 }) => {
   const calculateTestTotal = (test: TestItem) => {
-    const price = test.testPrice || 0;
-    const gst = test.gst || 18;
+    const price = test?.testPrice || 0;
+    const gst = test?.gst || 18;
     return price + (price * gst) / 100;
   };
 
   const calculateGrandTotal = () => {
-    return data.reduce((total, test) => total + calculateTestTotal(test), 0);
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return "N/A";
-    }
+    return data?.reduce((total, test) => total + calculateTestTotal(test), 0);
   };
 
   const renderBillingSummary = () => {
@@ -80,73 +77,82 @@ const InnerTable: React.FC<InnerTableProps> = ({
     return (
       <View style={styles.billingSummary}>
         <Text style={styles.summaryTitle}>Payment Summary</Text>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Gross Amount:</Text>
-          <Text style={styles.summaryValue}>₹{grandTotal.toFixed(2)}</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Paid Amount:</Text>
-          <Text style={styles.summaryValue}>₹{paid.toFixed(2)}</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Due Amount:</Text>
-          <Text style={[styles.summaryValue, due > 0 ? styles.dueAmount : styles.paidAmount]}>
-            ₹{due.toFixed(2)}
-          </Text>
+        
+        <View style={styles.summaryGrid}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Gross Amount</Text>
+            <Text style={styles.summaryValue}>₹{grandTotal.toFixed(2)}</Text>
+          </View>
+          
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Paid Amount</Text>
+            <Text style={styles.summaryValue}>₹{paid.toFixed(2)}</Text>
+          </View>
+          
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Due Amount</Text>
+            <Text style={[styles.summaryValue, due > 0 ? styles.dueAmount : styles.paidAmount]}>
+              ₹{due.toFixed(2)}
+            </Text>
+          </View>
         </View>
       </View>
     );
   };
 
   const renderTestCard = (test: TestItem, index: number) => (
-    <View key={test.id} style={styles.testCard}>
+    <View key={test?.id} style={styles.testCard}>
       <View style={styles.testHeader}>
-        <Text style={styles.testNumber}>Test {index + 1}</Text>
-        <Text style={styles.testId}>ID: {test.id}</Text>
+        <View style={styles.testBadge}>
+          <Text style={styles.testBadgeText}>Test {index + 1}</Text>
+        </View>
+        <Text style={styles.testId}>ID: {test?.id}</Text>
       </View>
       
-      <View style={styles.testDetails}>
+      <View style={styles.testContent}>
         <Text style={styles.testName}>
-          {test.test || test.testName || "N/A"}
+          {test?.test || test?.testName || "Unnamed Test"}
         </Text>
         
-        <View style={styles.testInfoRow}>
-          <Text style={styles.testInfoLabel}>HSN Code:</Text>
-          <Text style={styles.testInfoValue}>{test.hsn || "1236"}</Text>
+        <View style={styles.testDetails}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>HSN Code:</Text>
+            <Text style={styles.detailValue}>{test?.hsn || "1236"}</Text>
+          </View>
+          
+          {test?.loinc_num_ && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>LOINC Code:</Text>
+              <Text style={styles.detailValue}>{test?.loinc_num_}</Text>
+            </View>
+          )}
+          
+          {labBilling && (
+            <>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>GST:</Text>
+                <Text style={styles.detailValue}>{test?.gst || 18}%</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Base Price:</Text>
+                <Text style={styles.detailValue}>₹{test?.testPrice || 0}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Total with GST:</Text>
+                <Text style={styles.detailValue}>₹{calculateTestTotal(test).toFixed(2)}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Order Date:</Text>
+                <Text style={styles.detailValue}>{formatDateTime(test?.addedOn || "")}</Text>
+              </View>
+            </>
+          )}
         </View>
         
-        {test.loinc_num_ && (
-          <View style={styles.testInfoRow}>
-            <Text style={styles.testInfoLabel}>LOINC Code:</Text>
-            <Text style={styles.testInfoValue}>{test.loinc_num_}</Text>
-          </View>
-        )}
-        
-        {labBilling && (
-          <>
-            <View style={styles.testInfoRow}>
-              <Text style={styles.testInfoLabel}>GST:</Text>
-              <Text style={styles.testInfoValue}>{test.gst || 18}%</Text>
-            </View>
-            <View style={styles.testInfoRow}>
-              <Text style={styles.testInfoLabel}>Price:</Text>
-              <Text style={styles.testInfoValue}>₹{test.testPrice || 0}</Text>
-            </View>
-            <View style={styles.testInfoRow}>
-              <Text style={styles.testInfoLabel}>Total:</Text>
-              <Text style={styles.testInfoValue}>₹{calculateTestTotal(test).toFixed(2)}</Text>
-            </View>
-            <View style={styles.testInfoRow}>
-              <Text style={styles.testInfoLabel}>Date:</Text>
-              <Text style={styles.testInfoValue}>{formatDate(test.addedOn || "")}</Text>
-            </View>
-          </>
-        )}
-        
-        {isRejected && test.reason && (
+        {isRejected && test?.reason && (
           <View style={styles.rejectionSection}>
-            <Text style={styles.rejectionLabel}>Rejection Reason:</Text>
-            <Text style={styles.rejectionReason}>{test.reason}</Text>
+            <Text style={styles.rejectionLabel}>Rejection Reason</Text>
+            <Text style={styles.rejectionReason}>{test?.reason}</Text>
           </View>
         )}
       </View>
@@ -156,21 +162,34 @@ const InnerTable: React.FC<InnerTableProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Test Details</Text>
-        <Text style={styles.headerSubtitle}>Department: {department}</Text>
+        <View style={styles.headerMain}>
+          <Text style={styles.headerTitle}>Test Details</Text>
+          <View style={styles.departmentBadge}>
+            <Text style={styles.departmentText}>{department}</Text>
+          </View>
+        </View>
         {isRejected && rejectedReason && (
-          <Text style={styles.rejectedHeader}>
-            Overall Rejection: {rejectedReason}
-          </Text>
+          <View style={styles.overallRejection}>
+            <Text style={styles.overallRejectionLabel}>Overall Rejection:</Text>
+            <Text style={styles.overallRejectionReason}>{rejectedReason}</Text>
+          </View>
         )}
       </View>
 
-      <ScrollView style={styles.testsContainer} showsVerticalScrollIndicator={false}>
-        {data.length > 0 ? (
-          data.map((test, index) => renderTestCard(test, index))
+      <ScrollView 
+        style={styles.testsContainer} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={data?.length === 0 && styles.emptyContent}
+      >
+        {data?.length > 0 ? (
+          data?.map((test, index) => renderTestCard(test, index))
         ) : (
           <View style={styles.noDataContainer}>
+            <Text style={styles.noDataIcon}>🔍</Text>
             <Text style={styles.noDataText}>No test details available</Text>
+            <Text style={styles.noDataSubtext}>
+              There are no tests associated with this order.
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -182,158 +201,211 @@ const InnerTable: React.FC<InnerTableProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    margin: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    margin: SPACING.xs,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 12,
+    elevation: 5,
+    overflow: 'hidden',
   },
   header: {
-    padding: 16,
-    backgroundColor: "#f8fafc",
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.bg,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: COLORS.border,
+  },
+  headerMain: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: isTablet ? FONT_SIZE.lg : FONT_SIZE.md,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  departmentBadge: {
+    backgroundColor: COLORS.chipHR,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: 12,
+  },
+  departmentText: {
+    fontSize: FONT_SIZE.xs,
     fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 4,
+    color: COLORS.info,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 4,
+  overallRejection: {
+    backgroundColor: COLORS.chipBP,
+    padding: SPACING.sm,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.danger,
   },
-  rejectedHeader: {
-    fontSize: 14,
-    color: "#ef4444",
-    fontWeight: "500",
-    fontStyle: "italic",
+  overallRejectionLabel: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+    color: COLORS.danger,
+    marginBottom: SPACING.xs,
+  },
+  overallRejectionReason: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    lineHeight: 20,
   },
   testsContainer: {
     maxHeight: 400,
-    padding: 8,
+  },
+  emptyContent: {
+    flexGrow: 1,
   },
   testCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
+    backgroundColor: COLORS.card,
+    margin: SPACING.sm,
+    borderRadius: 12,
+    padding: SPACING.md,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   testHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
-    paddingBottom: 8,
+    marginBottom: SPACING.sm,
+    paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: COLORS.bg,
   },
-  testNumber: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
+  testBadge: {
+    backgroundColor: COLORS.brand,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  testBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "700",
+    color: COLORS.buttonText,
   },
   testId: {
-    fontSize: 12,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
     fontWeight: "500",
   },
-  testDetails: {
-    gap: 6,
+  testContent: {
+    gap: SPACING.sm,
   },
   testName: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 4,
+    color: COLORS.text,
+    lineHeight: 22,
   },
-  testInfoRow: {
+  testDetails: {
+    gap: SPACING.xs,
+  },
+  detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  testInfoLabel: {
-    fontSize: 14,
-    color: "#6b7280",
+  detailLabel: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     fontWeight: "500",
   },
-  testInfoValue: {
-    fontSize: 14,
-    color: "#374151",
+  detailValue: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
     fontWeight: "600",
   },
   rejectionSection: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: "#fef2f2",
-    borderRadius: 6,
+    marginTop: SPACING.xs,
+    padding: SPACING.sm,
+    backgroundColor: COLORS.chipBP,
+    borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: "#ef4444",
+    borderLeftColor: COLORS.danger,
   },
   rejectionLabel: {
-    fontSize: 12,
-    color: "#dc2626",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.danger,
     fontWeight: "600",
-    marginBottom: 2,
+    marginBottom: 4,
   },
   rejectionReason: {
-    fontSize: 12,
-    color: "#b91c1c",
-    fontStyle: "italic",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    lineHeight: 20,
   },
   noDataContainer: {
-    padding: 20,
+    padding: SPACING.xl,
     alignItems: "center",
     justifyContent: "center",
   },
+  noDataIcon: {
+    fontSize: 48,
+    marginBottom: SPACING.md,
+  },
   noDataText: {
-    fontSize: 14,
-    color: "#9ca3af",
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: SPACING.xs,
+  },
+  noDataSubtext: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.placeholder,
+    textAlign: "center",
     fontStyle: "italic",
   },
   billingSummary: {
-    padding: 16,
-    backgroundColor: "#f8fafc",
+    padding: SPACING.lg,
+    backgroundColor: COLORS.bg,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    borderTopColor: COLORS.border,
   },
   summaryTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 12,
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+    textAlign: 'center',
   },
-  summaryRow: {
+  summaryGrid: {
+    gap: SPACING.sm,
+  },
+  summaryItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    paddingVertical: SPACING.xs,
   },
   summaryLabel: {
-    fontSize: 14,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    fontWeight: "500",
   },
   summaryValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "700",
+    color: COLORS.text,
   },
   dueAmount: {
-    color: "#ef4444",
+    color: COLORS.danger,
   },
   paidAmount: {
-    color: "#059669",
+    color: COLORS.success,
   },
 });
 

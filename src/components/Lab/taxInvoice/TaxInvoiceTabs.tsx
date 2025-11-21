@@ -14,9 +14,18 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import TaxInvoiceInPatient from "./TaxInvoiceInPatient";
 import TaxInvoiceWalkIn from "./TaxInvoiceWalkIn";
 
-const { width: W, height: H } = Dimensions.get("window");
-const isTablet = W >= 768;
-const isSmallScreen = W < 375;
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE,
+  isTablet,
+  isSmallDevice,
+  SCREEN_WIDTH,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { formatDate } from "../../../utils/dateTime";
+
+const { width: W } = Dimensions.get("window");
 
 interface TaxInvoiceTabsProps {
   type?: "medicine" | "test";
@@ -74,7 +83,7 @@ const TaxInvoiceTabs: React.FC<TaxInvoiceTabsProps> = ({ type }) => {
   const getDateRangeText = () => {
     if (!startDate) return "Select Date Range";
     
-    const formatDate = (date: Date) => {
+    const formatDisplayDate = (date: Date) => {
       return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -83,9 +92,9 @@ const TaxInvoiceTabs: React.FC<TaxInvoiceTabsProps> = ({ type }) => {
     };
     
     if (startDate && endDate) {
-      return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+      return `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`;
     }
-    return formatDate(startDate);
+    return formatDisplayDate(startDate);
   };
 
   const renderContent = () => {
@@ -142,7 +151,7 @@ const TaxInvoiceTabs: React.FC<TaxInvoiceTabsProps> = ({ type }) => {
                 activeTab === "In_Hospital_Tax_Invoice" && styles.activeTabButtonText,
               ]}
             >
-              IPD Tax Invoice
+              IPD
             </Text>
           </TouchableOpacity>
 
@@ -159,7 +168,7 @@ const TaxInvoiceTabs: React.FC<TaxInvoiceTabsProps> = ({ type }) => {
                 activeTab === "opd_Hospital_Tax_Invoice" && styles.activeTabButtonText,
               ]}
             >
-              OPD Tax Invoice
+              OPD
             </Text>
           </TouchableOpacity>
 
@@ -176,7 +185,7 @@ const TaxInvoiceTabs: React.FC<TaxInvoiceTabsProps> = ({ type }) => {
                 activeTab === "Walk_In_Tax_Invoice" && styles.activeTabButtonText,
               ]}
             >
-              Walk-In Tax Invoice
+              Walk-In
             </Text>
           </TouchableOpacity>
         </View>
@@ -187,13 +196,13 @@ const TaxInvoiceTabs: React.FC<TaxInvoiceTabsProps> = ({ type }) => {
             style={[styles.dateRangeButton, startDate && styles.activeDateButton]}
             onPress={handleCalendarPress}
           >
-            <Calendar size={20} color={startDate ? "#10B981" : "#6B7280"} />
+            <Calendar size={20} color={startDate ? COLORS.success : COLORS.sub} />
             <Text style={[styles.dateRangeText, startDate && styles.activeDateText]}>
               {getDateRangeText()}
             </Text>
             {startDate && (
               <TouchableOpacity onPress={handleClearDates} style={styles.clearButton}>
-                <X size={18} color="#EF4444" />
+                <X size={18} color={COLORS.danger} />
               </TouchableOpacity>
             )}
           </TouchableOpacity>
@@ -215,17 +224,17 @@ const TaxInvoiceTabs: React.FC<TaxInvoiceTabsProps> = ({ type }) => {
               <TouchableOpacity style={styles.dateInput} onPress={handleStartDatePress}>
                 <Text style={styles.dateInputLabel}>From Date</Text>
                 <Text style={styles.dateInputValue}>
-                  {startDate ? startDate.toLocaleDateString() : "Select start date"}
+                  {startDate ? formatDate(startDate) : "Select start date"}
                 </Text>
-                <ChevronDown size={20} color="#6B7280" />
+                <ChevronDown size={20} color={COLORS.sub} />
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.dateInput} onPress={handleEndDatePress}>
                 <Text style={styles.dateInputLabel}>To Date</Text>
                 <Text style={styles.dateInputValue}>
-                  {endDate ? endDate.toLocaleDateString() : "Select end date"}
+                  {endDate ? formatDate(endDate) : "Select end date"}
                 </Text>
-                <ChevronDown size={20} color="#6B7280" />
+                <ChevronDown size={20} color={COLORS.sub} />
               </TouchableOpacity>
             </View>
 
@@ -275,165 +284,165 @@ const TaxInvoiceTabs: React.FC<TaxInvoiceTabsProps> = ({ type }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.bg,
   },
   tabHeaders: {
     flexDirection: isTablet ? "row" : "column",
     justifyContent: "space-between",
     alignItems: isTablet ? "flex-end" : "stretch",
-    paddingHorizontal: isSmallScreen ? 12 : 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: "#f8fafc",
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    backgroundColor: COLORS.card,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: COLORS.border,
   },
   buttonContainer: {
     flexDirection: "row",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: COLORS.field,
     borderRadius: 8,
     padding: 4,
-    marginBottom: isTablet ? 0 : 12,
+    marginBottom: isTablet ? 0 : SPACING.md,
     flex: isTablet ? 1 : 0,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
   },
   activeTabButton: {
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
+    backgroundColor: COLORS.card,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
   tabButtonText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "500",
-    color: "#6b7280",
+    color: COLORS.sub,
   },
   activeTabButtonText: {
-    color: "#14b8a6",
+    color: COLORS.brand,
     fontWeight: "600",
   },
   calendarContainer: {
-    marginLeft: isTablet ? 16 : 0,
+    marginLeft: isTablet ? SPACING.md : 0,
   },
   dateRangeButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: "#ffffff",
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: COLORS.border,
     borderRadius: 8,
-    gap: 8,
+    gap: SPACING.sm,
   },
   activeDateButton: {
-    borderColor: "#10B981",
-    backgroundColor: "#f0fdf4",
+    borderColor: COLORS.success,
+    backgroundColor: COLORS.success + '10',
   },
   dateRangeText: {
-    fontSize: 14,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     fontWeight: "500",
   },
   activeDateText: {
-    color: "#10B981",
+    color: COLORS.success,
   },
   clearButton: {
     padding: 4,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: COLORS.overlay,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: SPACING.lg,
   },
   datePickerContainer: {
-    backgroundColor: "#ffffff",
+    backgroundColor: COLORS.card,
     borderRadius: 12,
-    padding: 20,
+    padding: SPACING.lg,
     width: "100%",
     maxWidth: 400,
   },
   datePickerTitle: {
-    fontSize: 18,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "600",
-    color: "#111827",
-    marginBottom: 16,
+    color: COLORS.text,
+    marginBottom: SPACING.lg,
     textAlign: "center",
   },
   dateInputsContainer: {
-    gap: 12,
-    marginBottom: 20,
+    gap: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   dateInput: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#f9fafb",
+    padding: SPACING.md,
+    backgroundColor: COLORS.field,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: COLORS.border,
     borderRadius: 8,
   },
   dateInputLabel: {
-    fontSize: 14,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     fontWeight: "500",
   },
   dateInputValue: {
-    fontSize: 14,
-    color: "#111827",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
     fontWeight: "500",
   },
   datePickerActions: {
     flexDirection: "row",
-    gap: 12,
+    gap: SPACING.md,
   },
   cancelButton: {
     flex: 1,
-    padding: 12,
-    backgroundColor: "#ffffff",
+    padding: SPACING.md,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: COLORS.border,
     borderRadius: 8,
     alignItems: "center",
   },
   cancelButtonText: {
-    fontSize: 14,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     fontWeight: "500",
   },
   applyButton: {
     flex: 1,
-    padding: 12,
-    backgroundColor: "#10B981",
+    padding: SPACING.md,
+    backgroundColor: COLORS.success,
     borderRadius: 8,
     alignItems: "center",
   },
   disabledButton: {
-    backgroundColor: "#e5e7eb",
+    backgroundColor: COLORS.field,
   },
   applyButtonText: {
-    fontSize: 14,
-    color: "#ffffff",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.buttonText,
     fontWeight: "600",
   },
   disabledButtonText: {
-    color: "#9ca3af",
+    color: COLORS.placeholder,
   },
   tabContent: {
     flex: 1,
-    padding: isSmallScreen ? 12 : 16,
+    padding: SPACING.md,
   },
 });
 

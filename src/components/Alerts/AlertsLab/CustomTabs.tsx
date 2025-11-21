@@ -1,5 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { COLORS } from "../../../utils/colour";
+import { SPACING, FONT_SIZE, isTablet } from "../../../utils/responsive";
 
 interface Tab {
   key: string;
@@ -15,53 +17,61 @@ interface CustomTabsProps {
 const CustomTabs: React.FC<CustomTabsProps> = ({ tabs, activeTab, onTabChange }) => {
   return (
     <View style={styles.container}>
-      {tabs.map((tab, index) => (
-        <TouchableOpacity
-          key={tab.key}
-          style={[styles.tabButton, activeTab === index && styles.activeTab]}
-          onPress={() => onTabChange(index)}
-        >
-          <Text style={[styles.tabText, activeTab === index && styles.activeTabText]}>
-            {tab.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
+      <View style={styles.tabsContainer}>
+        {tabs?.map((tab, index) => (
+          <TouchableOpacity
+            key={tab?.key}
+            style={[
+              styles.tab,
+              activeTab === index && styles.activeTab,
+            ]}
+            onPress={() => onTabChange(index)}
+          >
+            <Text style={[
+              styles.tabText,
+              activeTab === index && styles.activeTabText,
+            ]}>
+              {tab?.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: COLORS.card,
     borderRadius: 8,
     padding: 4,
-    marginHorizontal: 16,
-    marginVertical: 12,
   },
-  tabButton: {
+  tabsContainer: {
+    flexDirection: "row",
+  },
+  tab: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
   },
   activeTab: {
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
+    backgroundColor: COLORS.card,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "500",
-    color: "#6b7280",
+    color: COLORS.sub,
   },
   activeTabText: {
-    color: "#14b8a6",
+    color: COLORS.brand,
     fontWeight: "600",
   },
 });

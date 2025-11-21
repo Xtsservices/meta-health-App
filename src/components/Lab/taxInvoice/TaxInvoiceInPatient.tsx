@@ -8,15 +8,28 @@ import {
   ActivityIndicator,
   Dimensions,
 } from "react-native";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react-native";
-import { useSelector } from "react-redux";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react-native";
+import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../../auth/auth";
 import { RootState } from "../../../store/store";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width: W } = Dimensions.get("window");
-const isTablet = W >= 768;
-const isSmallScreen = W < 375;
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  ICON_SIZE,
+  isTablet,
+  FOOTER_HEIGHT,
+  SCREEN_HEIGHT,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { formatDate, formatDateTime } from "../../../utils/dateTime";
+import Footer from "../../dashboard/footer";
+import { showError } from "../../../store/toast.slice";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface Test {
   testID: number;
@@ -63,12 +76,14 @@ const TaxInvoiceInPatient: React.FC<TaxInvoiceInPatientProps> = ({
   startDate,
   endDate,
 }) => {
+  const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.currentUser);
+  const insets = useSafeAreaInsets();
   const [patientsData, setPatientsData] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage] = useState(10);
 
   const getDepartmentName = (deptType: number) => {
     switch (deptType) {
@@ -79,18 +94,6 @@ const TaxInvoiceInPatient: React.FC<TaxInvoiceInPatientProps> = ({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      });
-    } catch {
-      return "Invalid Date";
-    }
-  };
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -98,7 +101,7 @@ const TaxInvoiceInPatient: React.FC<TaxInvoiceInPatientProps> = ({
         const token = await AsyncStorage.getItem("token");
         
         if (!user?.hospitalID || !token) {
-          console.log("Missing hospitalID or token");
+          dispatch(showError("Not authorized. Please login again."));
           return;
         }
 
@@ -109,33 +112,31 @@ const TaxInvoiceInPatient: React.FC<TaxInvoiceInPatientProps> = ({
         if (type === "medicine") {
           apiPath = `medicineInventoryPatientsOrder/${user.hospitalID}/${departmentType}/getMedicineInventoryPatientsOrderCompletedWithRegPatient?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
         } else {
-          const department = user.roleName === 'radiology' ? 'Radiology' : 'Pathology';
-          apiPath = `test/getOpdIpdTaxInvoiceData/${user.hospitalID}/${department}?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
+          const department = user?.roleName === 'radiology' ? 'Radiology' : 'Pathology';
+          apiPath = `test/getOpdIpdTaxInvoiceData/${user?.hospitalID}/${department}?startDate=${formattedStartDate}&endDate=${formattedEndDate}`;
         }
 
         const response = await AuthFetch(apiPath, token);
-        console.log("Tax Invoice API Response:", response);
 
         if (response?.data || response?.data?.message === "success") {
           const data = response?.data?.data || response;
           let filteredData = data;
           
           if (type !== "medicine") {
-            filteredData = data.filter((each: any) => each.departmemtType === departmentType);
+            filteredData = data?.filter((each: any) => each?.departmemtType === departmentType) ?? [];
           }
           
           // Sort by date (newest first)
-          const sortedData = filteredData.sort((a: Patient, b: Patient) => {
-            return new Date(b.addedOn).getTime() - new Date(a.addedOn).getTime();
-          });
+          const sortedData = filteredData?.sort((a: Patient, b: Patient) => {
+            return new Date(b?.addedOn ?? 0).getTime() - new Date(a?.addedOn ?? 0).getTime();
+          }) ?? [];
           
           setPatientsData(sortedData);
         } else {
-          console.log("No data found");
           setPatientsData([]);
         }
       } catch (error) {
-        console.error("Error fetching tax invoice data:", error);
+        dispatch(showError("Failed to load tax invoice data"));
         setPatientsData([]);
       } finally {
         setLoading(false);
@@ -151,26 +152,20 @@ const TaxInvoiceInPatient: React.FC<TaxInvoiceInPatientProps> = ({
     setExpandedRow(expandedRow === id ? null : id);
   };
 
-  const handleDownload = async (patient: Patient) => {
-    // Implement PDF download functionality
-    console.log("Download tax invoice for:", patient.pName);
-    // You would integrate with your PDF generation service here
-  };
-
   const calculateTotalAmount = (patient: Patient) => {
-    if (type === "medicine" && patient.medicinesList) {
-      return patient.medicinesList.reduce((total: number, medicine: any) => {
-        const price = medicine.sellingPrice || 0;
-        const gst = medicine.gst || 0;
-        const quantity = medicine.updatedQuantity || 1;
+    if (type === "medicine" && patient?.medicinesList) {
+      return patient?.medicinesList?.reduce((total: number, medicine: any) => {
+        const price = medicine?.sellingPrice ?? 0;
+        const gst = medicine?.gst ?? 0;
+        const quantity = medicine?.updatedQuantity ?? 1;
         return total + (price * quantity * (1 + gst / 100));
-      }, 0);
-    } else if (patient.testsList) {
-      return patient.testsList.reduce((total: number, test: Test) => {
-        const price = test.testPrice || 0;
-        const gst = test.gst || 0;
+      }, 0) ?? 0;
+    } else if (patient?.testsList) {
+      return patient?.testsList?.reduce((total: number, test: Test) => {
+        const price = test?.testPrice ?? 0;
+        const gst = test?.gst ?? 0;
         return total + (price * (1 + gst / 100));
-      }, 0);
+      }, 0) ?? 0;
     }
     return 0;
   };
@@ -182,19 +177,16 @@ const TaxInvoiceInPatient: React.FC<TaxInvoiceInPatientProps> = ({
     }
   };
 
-  const handleChangeRowsPerPage = (value: string) => {
-    setRowsPerPage(parseInt(value, 10));
-    setPage(0);
-    setExpandedRow(null);
-  };
+  const totalPages = Math.ceil(patientsData?.length / rowsPerPage) || 1;
+  const paginatedData = patientsData?.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage) ?? [];
 
-  const totalPages = Math.ceil(patientsData.length / rowsPerPage) || 1;
-  const paginatedData = patientsData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  // Calculate table width based on screen size
+  const tableWidth = Math.max(SCREEN_WIDTH - SPACING.md * 2, 800);
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#14b8a6" />
+        <ActivityIndicator size="large" color={COLORS.brand} />
         <Text style={styles.loadingText}>Loading Tax Invoices...</Text>
       </View>
     );
@@ -202,207 +194,223 @@ const TaxInvoiceInPatient: React.FC<TaxInvoiceInPatientProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.tableContainer}>
-        {/* Table Header */}
-        <View style={styles.tableHeader}>
-          <Text style={[styles.headerCell, { flex: 0.5 }]}>S.No</Text>
-          <Text style={[styles.headerCell, { flex: 1 }]}>Patient ID</Text>
-          <Text style={[styles.headerCell, { flex: 1.5 }]}>Patient Name</Text>
-          <Text style={[styles.headerCell, { flex: 1 }]}>Department</Text>
-          <Text style={[styles.headerCell, { flex: 1.5 }]}>Doctor Name</Text>
-          <Text style={[styles.headerCell, { flex: 1 }]}>Admission Date</Text>
-          <Text style={[styles.headerCell, { flex: 0.8 }]}>Action</Text>
-        </View>
-
-        {/* Table Body */}
-        <ScrollView style={styles.tableBody}>
-          {paginatedData.length === 0 ? (
-            <View style={styles.noDataContainer}>
-              <Text style={styles.noDataText}>No New Tax Invoice !!</Text>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Main Table Container with Horizontal Scroll */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={true}
+          style={styles.horizontalScrollView}
+          contentContainerStyle={styles.horizontalScrollContent}
+        >
+          <View style={[styles.tableWrapper, { width: tableWidth }]}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.headerCell, styles.snoCell]}>S.No</Text>
+              <Text style={[styles.headerCell, styles.pidCell]}>Patient ID</Text>
+              <Text style={[styles.headerCell, styles.nameCell]}>Patient Name</Text>
+              <Text style={[styles.headerCell, styles.deptCell]}>Department</Text>
+              <Text style={[styles.headerCell, styles.doctorCell]}>Doctor Name</Text>
+              <Text style={[styles.headerCell, styles.dateCell]}>Admission Date</Text>
+              <Text style={[styles.headerCell, styles.actionCell]}>Action</Text>
             </View>
-          ) : (
-            paginatedData.map((patient, index) => (
-              <View key={patient.id}>
-                {/* Main Row */}
-                <TouchableOpacity
-                  style={[
-                    styles.tableRow,
-                    expandedRow === patient.id && styles.expandedRow,
-                  ]}
-                  onPress={() => handleRowClick(patient.id)}
-                >
-                  <Text style={[styles.cell, { flex: 0.5 }]}>
-                    {page * rowsPerPage + index + 1}
+
+            {/* Table Body */}
+            <View style={styles.tableBody}>
+              {paginatedData?.length === 0 ? (
+                <View style={styles.noDataContainer}>
+                  <Text style={styles.noDataText}>No Tax Invoices Found</Text>
+                  <Text style={styles.noDataSubtext}>
+                    {startDate && endDate 
+                      ? `No invoices found between ${formatDate(startDate?.toISOString())} and ${formatDate(endDate?.toISOString())}`
+                      : "No invoices available for the selected period"
+                    }
                   </Text>
-                  <Text style={[styles.cell, { flex: 1 }]}>
-                    {patient.patientID || patient.patientTimeLineID || "-"}
-                  </Text>
-                  <Text style={[styles.cell, { flex: 1.5 }]}>{patient.pName}</Text>
-                  <Text style={[styles.cell, { flex: 1 }]}>
-                    {getDepartmentName(patient.departmemtType)}
-                  </Text>
-                  <Text style={[styles.cell, { flex: 1.5 }]}>
-                    {patient.firstName} {patient.lastName}
-                  </Text>
-                  <Text style={[styles.cell, { flex: 1 }]}>
-                    {formatDate(patient.addedOn)}
-                  </Text>
-                  <View style={[styles.cell, { flex: 0.8, alignItems: 'center' }]}>
+                </View>
+              ) : (
+                paginatedData?.map((patient, index) => (
+                  <View key={patient?.id} style={styles.rowContainer}>
+                    {/* Main Row */}
                     <TouchableOpacity
-                      style={styles.downloadButton}
-                      onPress={() => handleDownload(patient)}
+                      style={[
+                        styles.tableRow,
+                        expandedRow === patient?.id && styles.expandedRow,
+                      ]}
+                      onPress={() => handleRowClick(patient?.id)}
                     >
-                      <Download size={16} color="#ffffff" />
+                      <Text style={[styles.cell, styles.snoCell]}>
+                        {page * rowsPerPage + index + 1}
+                      </Text>
+                      <Text style={[styles.cell, styles.pidCell]}>
+                        {patient?.patientID || patient?.patientTimeLineID || "-"}
+                      </Text>
+                      <Text style={[styles.cell, styles.nameCell]} numberOfLines={1} ellipsizeMode="tail">
+                        {patient?.pName}
+                      </Text>
+                      <Text style={[styles.cell, styles.deptCell]}>
+                        {getDepartmentName(patient?.departmemtType)}
+                      </Text>
+                      <Text style={[styles.cell, styles.doctorCell]} numberOfLines={1} ellipsizeMode="tail">
+                        {patient?.firstName} {patient?.lastName}
+                      </Text>
+                      <Text style={[styles.cell, styles.dateCell]}>
+                        {formatDate(patient?.addedOn)}
+                      </Text>
+                      <View style={[styles.cell, styles.actionCell]}>
+                        {expandedRow === patient?.id ? (
+                          <ChevronUp size={ICON_SIZE.sm} color={COLORS.brand} />
+                        ) : (
+                          <ChevronDown size={ICON_SIZE.sm} color={COLORS.brand} />
+                        )}
+                      </View>
                     </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
 
-                {/* Expanded Details */}
-                {expandedRow === patient.id && (
-                  <View style={styles.expandedContent}>
-                    <Text style={styles.detailsTitle}>Test Details</Text>
-                    
-                    {/* Tests/Medicines List */}
-                    <View style={styles.innerTableHeader}>
-                      <Text style={[styles.innerHeaderCell, { flex: 0.5 }]}>S.No</Text>
-                      <Text style={[styles.innerHeaderCell, { flex: 1 }]}>Item ID</Text>
-                      <Text style={[styles.innerHeaderCell, { flex: 2 }]}>Item Name</Text>
-                      <Text style={[styles.innerHeaderCell, { flex: 1 }]}>Charges</Text>
-                      <Text style={[styles.innerHeaderCell, { flex: 1 }]}>GST</Text>
-                      <Text style={[styles.innerHeaderCell, { flex: 1 }]}>Amount</Text>
-                    </View>
+                    {/* Expanded Details */}
+                    {expandedRow === patient?.id && (
+                      <View style={styles.expandedContent}>
+                        <View style={styles.detailsHeader}>
+                          <Text style={styles.detailsTitle}>
+                            {type === "medicine" ? "Medicine Details" : "Test Details"}
+                          </Text>
+                          <Text style={styles.patientInfo}>
+                            Patient: {patient?.pName} | ID: {patient?.patientID || patient?.patientTimeLineID || "-"}
+                          </Text>
+                        </View>
+                        
+                        {/* Inner Table with Horizontal Scroll */}
+                        <ScrollView 
+                          horizontal 
+                          showsHorizontalScrollIndicator={true}
+                          style={styles.innerHorizontalScroll}
+                        >
+                          <View style={styles.innerTableContainer}>
+                            {/* Items List */}
+                            <View style={styles.innerTableHeader}>
+                              <Text style={[styles.innerHeaderCell, styles.innerSnoCell]}>#</Text>
+                              <Text style={[styles.innerHeaderCell, styles.innerIdCell]}>Item ID</Text>
+                              <Text style={[styles.innerHeaderCell, styles.innerNameCell]}>Item Name</Text>
+                              <Text style={[styles.innerHeaderCell, styles.innerChargeCell]}>Charges</Text>
+                              <Text style={[styles.innerHeaderCell, styles.innerGstCell]}>GST</Text>
+                              <Text style={[styles.innerHeaderCell, styles.innerAmountCell]}>Amount</Text>
+                            </View>
 
-                    <ScrollView style={styles.innerTableBody}>
-                      {(type === "medicine" ? patient.medicinesList : patient.testsList)?.map((item: any, itemIndex: number) => {
-                        const price = item.testPrice || item.sellingPrice || 0;
-                        const gst = item.gst || 0;
-                        const gstAmount = (price * gst) / 100;
-                        const totalAmount = price + gstAmount;
+                            <View style={styles.innerTableBody}>
+                              {(type === "medicine" ? patient?.medicinesList : patient?.testsList)?.map((item: any, itemIndex: number) => {
+                                const price = item?.testPrice || item?.sellingPrice || 0;
+                                const gst = item?.gst || 0;
+                                const gstAmount = (price * gst) / 100;
+                                const totalAmount = price + gstAmount;
 
-                        return (
-                          <View key={itemIndex} style={styles.innerTableRow}>
-                            <Text style={[styles.innerCell, { flex: 0.5 }]}>{itemIndex + 1}</Text>
-                            <Text style={[styles.innerCell, { flex: 1 }]}>
-                              {item.testID || item.id || "-"}
-                            </Text>
-                            <Text style={[styles.innerCell, { flex: 2 }]}>
-                              {item.testName || item.medicineName || item.name || "N/A"}
-                            </Text>
-                            <Text style={[styles.innerCell, { flex: 1 }]}>₹{price.toFixed(2)}</Text>
-                            <Text style={[styles.innerCell, { flex: 1 }]}>₹{gstAmount.toFixed(2)}</Text>
-                            <Text style={[styles.innerCell, { flex: 1 }]}>₹{totalAmount.toFixed(2)}</Text>
+                                return (
+                                  <View key={itemIndex} style={styles.innerTableRow}>
+                                    <Text style={[styles.innerCell, styles.innerSnoCell]}>{itemIndex + 1}</Text>
+                                    <Text style={[styles.innerCell, styles.innerIdCell]} numberOfLines={1} ellipsizeMode="tail">
+                                      {item?.testID || item?.id || "-"}
+                                    </Text>
+                                    <Text style={[styles.innerCell, styles.innerNameCell]} numberOfLines={2} ellipsizeMode="tail">
+                                      {item?.testName || item?.medicineName || item?.name || "N/A"}
+                                    </Text>
+                                    <Text style={[styles.innerCell, styles.innerChargeCell]}>₹{price.toFixed(2)}</Text>
+                                    <Text style={[styles.innerCell, styles.innerGstCell]}>₹{gstAmount.toFixed(2)}</Text>
+                                    <Text style={[styles.innerCell, styles.innerAmountCell]}>₹{totalAmount.toFixed(2)}</Text>
+                                  </View>
+                                );
+                              }) ?? []}
+                            </View>
                           </View>
-                        );
-                      })}
-                    </ScrollView>
+                        </ScrollView>
 
-                    {/* Total Amount */}
-                    <View style={styles.totalContainer}>
-                      <Text style={styles.totalLabel}>Total Amount:</Text>
-                      <Text style={styles.totalAmount}>
-                        ₹{calculateTotalAmount(patient).toFixed(2)}
-                      </Text>
-                    </View>
+                        {/* Total Amount */}
+                        <View style={styles.totalContainer}>
+                          <Text style={styles.totalLabel}>Total Amount:</Text>
+                          <Text style={styles.totalAmount}>
+                            ₹{calculateTotalAmount(patient).toFixed(2)}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            ))
-          )}
-        </ScrollView>
-      </View>
-
-      {/* Pagination */}
-      {patientsData.length > 0 && (
-        <View style={styles.paginationContainer}>
-          <Text style={styles.paginationInfo}>
-            Showing {patientsData.length === 0 ? 0 : page * rowsPerPage + 1} to{" "}
-            {Math.min((page + 1) * rowsPerPage, patientsData.length)} of {patientsData.length} entries
-          </Text>
-          
-          <View style={styles.paginationControls}>
-            <View style={styles.rowsPerPageContainer}>
-              <Text style={styles.rowsPerPageText}>Show:</Text>
-              <ScrollView horizontal style={styles.rowsPerPageSelect}>
-                {[10, 15, 20].map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.rowsPerPageOption,
-                      rowsPerPage === option && styles.activeRowsPerPageOption,
-                    ]}
-                    onPress={() => handleChangeRowsPerPage(option.toString())}
-                  >
-                    <Text
-                      style={[
-                        styles.rowsPerPageOptionText,
-                        rowsPerPage === option && styles.activeRowsPerPageOptionText,
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.pageNavigation}>
-              <TouchableOpacity
-                style={[styles.navButton, page === 0 && styles.disabledNavButton]}
-                onPress={() => handleChangePage(page - 1)}
-                disabled={page === 0}
-              >
-                <ChevronLeft size={20} color={page === 0 ? "#9ca3af" : "#374151"} />
-              </TouchableOpacity>
-
-              <View style={styles.pageNumbers}>
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i;
-                  } else if (page < 3) {
-                    pageNum = i;
-                  } else if (page > totalPages - 4) {
-                    pageNum = totalPages - 5 + i;
-                  } else {
-                    pageNum = page - 2 + i;
-                  }
-
-                  return (
-                    <TouchableOpacity
-                      key={pageNum}
-                      style={[
-                        styles.pageNumber,
-                        page === pageNum && styles.activePageNumber,
-                      ]}
-                      onPress={() => handleChangePage(pageNum)}
-                    >
-                      <Text
-                        style={[
-                          styles.pageNumberText,
-                          page === pageNum && styles.activePageNumberText,
-                        ]}
-                      >
-                        {pageNum + 1}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.navButton,
-                  page >= totalPages - 1 && styles.disabledNavButton,
-                ]}
-                onPress={() => handleChangePage(page + 1)}
-                disabled={page >= totalPages - 1}
-              >
-                <ChevronRight size={20} color={page >= totalPages - 1 ? "#9ca3af" : "#374151"} />
-              </TouchableOpacity>
+                ))
+              )}
             </View>
           </View>
-        </View>
-      )}
+        </ScrollView>
+
+        {/* Pagination */}
+        {patientsData?.length > 0 && (
+          <View style={styles.paginationContainer}>
+            <Text style={styles.paginationInfo}>
+              Showing {page * rowsPerPage + 1} to {Math.min((page + 1) * rowsPerPage, patientsData?.length)} of {patientsData?.length} entries
+            </Text>
+            
+            <View style={styles.paginationControls}>
+              <View style={styles.pageNavigation}>
+                <TouchableOpacity
+                  style={[styles.navButton, page === 0 && styles.disabledNavButton]}
+                  onPress={() => handleChangePage(page - 1)}
+                  disabled={page === 0}
+                >
+                  <ChevronLeft size={ICON_SIZE.sm} color={page === 0 ? COLORS.placeholder : COLORS.brand} />
+                </TouchableOpacity>
+
+                <View style={styles.pageNumbers}>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i;
+                    } else if (page < 3) {
+                      pageNum = i;
+                    } else if (page > totalPages - 4) {
+                      pageNum = totalPages - 5 + i;
+                    } else {
+                      pageNum = page - 2 + i;
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        key={pageNum}
+                        style={[
+                          styles.pageNumber,
+                          page === pageNum && styles.activePageNumber,
+                        ]}
+                        onPress={() => handleChangePage(pageNum)}
+                      >
+                        <Text
+                          style={[
+                            styles.pageNumberText,
+                            page === pageNum && styles.activePageNumberText,
+                          ]}
+                        >
+                          {pageNum + 1}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.navButton,
+                    page >= totalPages - 1 && styles.disabledNavButton,
+                  ]}
+                  onPress={() => handleChangePage(page + 1)}
+                  disabled={page >= totalPages - 1}
+                >
+                  <ChevronRight size={ICON_SIZE.sm} color={page >= totalPages - 1 ? COLORS.placeholder : COLORS.brand} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Footer */}
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"patients"} brandColor={COLORS.brand} />
+      </View>
     </View>
   );
 };
@@ -410,197 +418,261 @@ const TaxInvoiceInPatient: React.FC<TaxInvoiceInPatientProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.bg,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: FOOTER_HEIGHT + SPACING.lg,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.bg,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#64748b',
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
   },
-  tableContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    overflow: "hidden",
+
+  // Horizontal Scroll for Main Table
+  horizontalScrollView: {
+    flex: 1,
+  },
+  horizontalScrollContent: {
+    paddingHorizontal: SPACING.md,
+  },
+
+  // Table Styles
+  tableWrapper: {
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    marginTop: SPACING.md,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    overflow: 'hidden',
+    minWidth: 800,
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#009688",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    backgroundColor: COLORS.brand,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    minWidth: 800,
   },
   headerCell: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#ffffff",
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "700",
+    color: COLORS.buttonText,
     textAlign: "center",
+    paddingHorizontal: SPACING.xs,
   },
+  // Column width definitions - Fixed widths for proper alignment
+  snoCell: { width: 60 },
+  pidCell: { width: 100 },
+  nameCell: { width: 150 },
+  deptCell: { width: 100 },
+  doctorCell: { width: 150 },
+  dateCell: { width: 120 },
+  actionCell: { width: 60 },
+
   tableBody: {
-    maxHeight: 400,
+    minWidth: 800,
   },
   noDataContainer: {
-    padding: 40,
+    padding: SPACING.xl,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: COLORS.card,
+    minHeight: 200,
+    minWidth: 800,
   },
   noDataText: {
-    fontSize: 16,
-    color: "#9ca3af",
+    fontSize: FONT_SIZE.lg,
+    color: COLORS.sub,
     fontWeight: "600",
-    textTransform: "uppercase",
+    marginBottom: SPACING.xs,
+  },
+  noDataSubtext: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.placeholder,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  rowContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    minWidth: 800,
   },
   tableRow: {
     flexDirection: "row",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
     alignItems: "center",
-    backgroundColor: "#b2caea",
+    backgroundColor: COLORS.card,
+    minHeight: 60,
+    minWidth: 800,
   },
   expandedRow: {
-    backgroundColor: "#d8e8fa",
+    backgroundColor: COLORS.field,
   },
   cell: {
-    fontSize: 14,
-    color: "#374151",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
     textAlign: "center",
+    fontWeight: "500",
+    paddingHorizontal: SPACING.xs,
   },
-  downloadButton: {
-    backgroundColor: "#14b8a6",
-    padding: 8,
-    borderRadius: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+
+  // Expanded Content Styles
   expandedContent: {
-    backgroundColor: "#f8fafc",
-    padding: 16,
+    backgroundColor: COLORS.field,
+    padding: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: COLORS.border,
+  },
+  detailsHeader: {
+    marginBottom: SPACING.md,
   },
   detailsTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 12,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
   },
+  patientInfo: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    fontWeight: "500",
+  },
+  
+  // Inner Table Horizontal Scroll
+  innerHorizontalScroll: {
+    marginBottom: SPACING.md,
+  },
+  innerTableContainer: {
+    minWidth: 600,
+  },
+  
+  // Inner Table Styles
   innerTableHeader: {
     flexDirection: "row",
-    backgroundColor: "#4f46e5",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: 4,
-    marginBottom: 8,
+    backgroundColor: COLORS.brandDark,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    borderRadius: 6,
+    marginBottom: SPACING.sm,
+    minWidth: 600,
   },
   innerHeaderCell: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "600",
-    color: "#ffffff",
+    color: COLORS.buttonText,
     textAlign: "center",
+    paddingHorizontal: SPACING.xs,
   },
+  // Inner table column widths - Fixed widths
+  innerSnoCell: { width: 40 },
+  innerIdCell: { width: 80 },
+  innerNameCell: { width: 200 },
+  innerChargeCell: { width: 90 },
+  innerGstCell: { width: 90 },
+  innerAmountCell: { width: 100 },
+
   innerTableBody: {
-    maxHeight: 200,
-    marginBottom: 12,
+    minWidth: 600,
   },
   innerTableRow: {
     flexDirection: "row",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: COLORS.border + '40',
     alignItems: "center",
+    backgroundColor: COLORS.card,
+    borderRadius: 4,
+    marginBottom: 2,
+    minHeight: 44,
+    minWidth: 600,
   },
   innerCell: {
-    fontSize: 12,
-    color: "#374151",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.text,
     textAlign: "center",
+    fontWeight: "500",
+    paddingHorizontal: SPACING.xs,
   },
+  
   totalContainer: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    paddingTop: SPACING.md,
+    borderTopWidth: 2,
+    borderTopColor: COLORS.border,
+    marginTop: SPACING.sm,
   },
   totalLabel: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginRight: 8,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    fontWeight: "600",
   },
   totalAmount: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+    color: COLORS.success,
   },
+
+  // Pagination Styles
   paginationContainer: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.md,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   paginationInfo: {
-    fontSize: 14,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     textAlign: "center",
-    marginBottom: 12,
+    marginBottom: SPACING.md,
+    fontWeight: "500",
   },
   paginationControls: {
     flexDirection: isTablet ? "row" : "column",
-    justifyContent: "space-between",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 16,
-  },
-  rowsPerPageContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  rowsPerPageText: {
-    fontSize: 14,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  rowsPerPageSelect: {
-    flexGrow: 0,
-  },
-  rowsPerPageOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#f3f4f6",
-    borderRadius: 6,
-    marginRight: 4,
-  },
-  activeRowsPerPageOption: {
-    backgroundColor: "#14b8a6",
-  },
-  rowsPerPageOptionText: {
-    fontSize: 14,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  activeRowsPerPageOptionText: {
-    color: "#ffffff",
+    gap: SPACING.md,
   },
   pageNavigation: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: SPACING.sm,
   },
   navButton: {
-    padding: 8,
-    backgroundColor: "#f3f4f6",
-    borderRadius: 6,
+    padding: SPACING.sm,
+    backgroundColor: COLORS.field,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   disabledNavButton: {
     opacity: 0.5,
@@ -608,24 +680,48 @@ const styles = StyleSheet.create({
   pageNumbers: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: SPACING.xs,
   },
   pageNumber: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#f3f4f6",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.field,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   activePageNumber: {
-    backgroundColor: "#14b8a6",
+    backgroundColor: COLORS.brand,
+    borderColor: COLORS.brand,
   },
   pageNumberText: {
-    fontSize: 14,
-    color: "#374151",
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
     fontWeight: "500",
+    textAlign: 'center',
   },
   activePageNumberText: {
-    color: "#ffffff",
+    color: COLORS.buttonText,
+    fontWeight: "600",
+  },
+
+  // Footer Styles
+  footerWrap: {
+    left: 0,
+    right: 0,
+    height: FOOTER_HEIGHT,
+    justifyContent: "center",
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });
 

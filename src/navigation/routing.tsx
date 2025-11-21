@@ -88,7 +88,6 @@ import UploadTest from "../components/Lab/patientList/UploadTest";
 import TestCard from "../components/Lab/patientList/TestCard";
 import AlertsLab from "../components/Alerts/AlertsLab/AlertsLab";
 import SaleComp from "../components/Lab/walkIn/SaleComp";
-import PaymentMethodDialog from "../components/Lab/walkIn/PaymentMethodDialog";
 import PaymentScreen from "../components/Lab/walkIn/PaymentScreen";
 import TestPricing from "../components/Lab/testPrice/TestPricing";
 import AddTestPricing from "../components/Lab/testPrice/AddTestPricing";
@@ -318,14 +317,9 @@ const Routing = () => {
             options={{ title: "Walk-In", headerTitleAlign: "center", headerShown: true }}
           />
           <Stack.Screen 
-            name="PaymentMethodDialog" 
-            component={PaymentMethodDialog}
-            options={{ title: "Walk-In", headerTitleAlign: "center", headerShown: true }}
-          />
-          <Stack.Screen 
             name="PaymentScreen" 
             component={PaymentScreen}
-            options={{ title: 'Payment' }}
+            options={{ title: "Payment", headerTitleAlign: "center", headerShown: true }}
           />
           <Stack.Screen 
             name="TestPricing" 

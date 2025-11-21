@@ -6,7 +6,6 @@ import {
   ScrollView,
   StatusBar,
   TouchableOpacity,
-  Dimensions,
   Platform,
   ActivityIndicator,
   Modal,
@@ -19,6 +18,7 @@ import {
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Custom Icons
 import {
@@ -42,12 +42,23 @@ import {
 } from "../../utils/SvgIcons";
 
 import { RootState } from "../../store/store";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../auth/auth";
 import BarChartActualScheduled from "../dashboard/lineGraph";
 import Footer from "../dashboard/footer";
 import { formatDateTime } from "../../utils/dateTime";
 import MyTasks from "../../pages/nurseDashboard/MyTasks";
+
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE,
+  FOOTER_HEIGHT,
+  isTablet,
+  isSmallDevice,
+  responsiveWidth,
+  responsiveHeight 
+} from "../../utils/responsive";
+import { COLORS } from "../../utils/colour";
 
 // Types
 type XY = { x: number | string; y: number };
@@ -86,10 +97,8 @@ interface SidebarItem {
   alertCount?: number;
 }
 
-const { width: W, height: H } = Dimensions.get("window");
-const isTablet = W >= 768;
-const isSmallScreen = W < 375;
-const isLargeScreen = W > 414;
+const FOOTER_H = FOOTER_HEIGHT;
+const brandColor = COLORS.brand;
 
 // Confirm Dialog Component
 const ConfirmDialog: React.FC<{
@@ -108,10 +117,10 @@ const ConfirmDialog: React.FC<{
           <Text style={styles.modalMsg}>{message}</Text>
           <View style={styles.modalActions}>
             <TouchableOpacity onPress={onCancel} style={[styles.modalBtn, styles.modalBtnGhost]}>
-              <Text style={[styles.modalBtnText, { color: "#14b8a6" }]}>Cancel</Text>
+              <Text style={[styles.modalBtnText, { color: COLORS.brand }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onConfirm} style={[styles.modalBtn, styles.modalBtnDanger]}>
-              <Text style={[styles.modalBtnText, { color: "#fff" }]}>{confirmText}</Text>
+              <Text style={[styles.modalBtnText, { color: COLORS.buttonText }]}>{confirmText}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -129,7 +138,7 @@ const HeaderBar: React.FC<{
     <View style={styles.header}>
       <Text style={styles.headerTitle}>{title}</Text>
       <TouchableOpacity onPress={onMenu} style={styles.menuBtn}>
-        <MenuIcon size={isSmallScreen ? 24 : 30} color="#ffffffff" />
+        <MenuIcon size={isSmallDevice ? 24 : 30} color={COLORS.buttonText} />
       </TouchableOpacity>
     </View>
   );
@@ -142,20 +151,18 @@ const KpiCard: React.FC<{
   icon: React.ReactNode;
   bg: string;
 }> = ({ title, value, icon, bg }) => {
+  const cardWidth = isTablet 
+    ? responsiveWidth(18) 
+    : (responsiveWidth(100) - SPACING.lg * 2 - SPACING.sm) / 2;
+
   return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: bg, width: (W - 16 * 2 - 12) / 2 },
-        isTablet && { width: (W - 16 * 2 - 12 * 4) / 5 },
-      ]}
-    >
+    <View style={[styles.card, { backgroundColor: bg, width: cardWidth }]}>
       <View>
         <Text style={styles.cardTitle}>{title}</Text>
         <Text style={styles.cardValue}>{value ?? "--"}</Text>
       </View>
-      <View style={[styles.iconWrap, { backgroundColor: `#14b8a615` }]}>
-        {React.cloneElement(icon as React.ReactElement, { color: "#14b8a6" })}
+      <View style={[styles.iconWrap, { backgroundColor: COLORS.brandLight }]}>
+        {React.cloneElement(icon as React.ReactElement, { color: COLORS.brand })}
       </View>
     </View>
   );
@@ -168,9 +175,9 @@ const SidebarButton: React.FC<{
   onPress: () => void;
 }> = ({ item, isActive = false, onPress }) => {
   const Icon = item.icon;
-  const color = item.variant === "danger" ? "#b91c1c" : 
-                item.variant === "muted" ? "#475569" : 
-                isActive ? "#14b8a6" : "#0b1220";
+  const color = item.variant === "danger" ? COLORS.danger : 
+                item.variant === "muted" ? COLORS.sub : 
+                isActive ? COLORS.brand : COLORS.text;
 
   return (
     <TouchableOpacity
@@ -237,7 +244,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onProfile,
   items,
   bottomItems,
-  width = Math.min(320, W * 0.82),
+  width = Math.min(320, responsiveWidth(82)),
 }) => {
   const user = useSelector((state: RootState) => state.currentUser);
   const slide = useRef(new Animated.Value(-width)).current;
@@ -278,27 +285,25 @@ const Sidebar: React.FC<SidebarProps> = ({
     }).start();
   }, [open, slide, width]);
 
+  // Overview Section - Dashboard & Alerts
+  const overviewItems = items?.filter(item => 
+    item?.key === "dash" || item?.key === "alerts"
+  );
 
-// Overview Section - Dashboard & Alerts
-const overviewItems = items.filter(item => 
-  item.key === "dash" || item.key === "alerts"
-);
+  // Patient Management Section
+  const patientManagementItems = items?.filter(item => 
+    ["patients", "walkin", "billing", "tax"].includes(item?.key)
+  );
 
-// Patient Management Section
-const patientManagementItems = items.filter(item => 
-  ["patients", "walkin", "billing", "tax"].includes(item.key)
-);
+  // Operations Section  
+  const operationsItems = items?.filter(item => 
+    ["management", "pricing"].includes(item?.key)
+  );
 
-// Operations Section  
-const operationsItems = items.filter(item => 
-  ["management", "pricing"].includes(item.key)
-);
-
-// Support Section
-const supportItems = items.filter(item => 
-  item.key === "help"
-);
-
+  // Support Section
+  const supportItems = items?.filter(item => 
+    item?.key === "help"
+  );
 
   return (
     <Modal transparent visible={open} animationType="none" onRequestClose={onClose}>
@@ -308,7 +313,7 @@ const supportItems = items.filter(item =>
         {/* Header */}
         <View style={styles.sidebarHeader}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <XIcon size={24} color="#0b1220" />
+            <XIcon size={24} color={COLORS.text} />
           </TouchableOpacity>
 
           {/* User Profile Section */}
@@ -336,11 +341,11 @@ const supportItems = items.filter(item =>
             <Text style={styles.sectionTitle}>Overview</Text>
             {overviewItems?.map((item) => (
               <SidebarButton
-                key={item.key}
+                key={item?.key}
                 item={item}
                 onPress={() => {
                   onClose();
-                  item.onPress();
+                  item?.onPress?.();
                 }}
               />
             ))}
@@ -351,11 +356,11 @@ const supportItems = items.filter(item =>
             <Text style={styles.sectionTitle}>Patient Management</Text>
             {patientManagementItems?.map((item) => (
               <SidebarButton
-                key={item.key}
+                key={item?.key}
                 item={item}
                 onPress={() => {
                   onClose();
-                  item.onPress();
+                  item?.onPress?.();
                 }}
               />
             ))}
@@ -366,11 +371,11 @@ const supportItems = items.filter(item =>
             <Text style={styles.sectionTitle}>Operations</Text>
             {operationsItems?.map((item) => (
               <SidebarButton
-                key={item.key}
+                key={item?.key}
                 item={item}
                 onPress={() => {
                   onClose();
-                  item.onPress();
+                  item?.onPress?.();
                 }}
               />
             ))}
@@ -381,11 +386,11 @@ const supportItems = items.filter(item =>
             <Text style={styles.sectionTitle}>Support</Text>
             {supportItems?.map((item) => (
               <SidebarButton
-                key={item.key}
+                key={item?.key}
                 item={item}
                 onPress={() => {
                   onClose();
-                  item.onPress();
+                  item?.onPress?.();
                 }}
               />
             ))}
@@ -396,22 +401,22 @@ const supportItems = items.filter(item =>
         <View style={styles.bottomActions}>
           {bottomItems?.map((item) => (
             <TouchableOpacity 
-              key={item.key}
+              key={item?.key}
               style={[
                 styles.bottomButton,
-                item.variant === "danger" ? styles.logoutButton : styles.modulesButton
+                item?.variant === "danger" ? styles.logoutButton : styles.modulesButton
               ]}
               onPress={() => {
                 onClose();
-                item.onPress();
+                item?.onPress?.();
               }}
             >
-              <item.icon size={20} color={item.variant === "danger" ? "#b91c1c" : "#14b8a6"} />
+              <item.icon size={20} color={item?.variant === "danger" ? COLORS.danger : COLORS.brand} />
               <Text style={[
                 styles.bottomButtonText,
-                { color: item.variant === "danger" ? "#b91c1c" : "#14b8a6" }
+                { color: item?.variant === "danger" ? COLORS.danger : COLORS.brand }
               ]}>
-                {item.label}
+                {item?.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -444,8 +449,6 @@ const DashboardLab: React.FC = () => {
   const [approvedToday, setApprovedToday] = useState(0);
   const [rejectedToday, setRejectedToday] = useState(0);
 
-  const FOOTER_HEIGHT = isSmallScreen ? 60 : 70;
-  const brandColor = '#14b8a6';
   const departmentName = departmentType === 'radiology' ? 'Radiology' : 'Laboratory';
   const dashboardTitle = `${departmentName} Services Dashboard`;
 
@@ -453,6 +456,7 @@ const DashboardLab: React.FC = () => {
     try {
       const token = await AsyncStorage.getItem("token");
       if (!user?.hospitalID || !token) {
+        setRecentPatients([]);
         return;
       }
 
@@ -465,18 +469,18 @@ const DashboardLab: React.FC = () => {
           token
         );
 
-        if (alertsResponse?.status === "success" && Array.isArray(alertsResponse.data?.alerts)) {
+        if (alertsResponse?.status === "success" && Array.isArray(alertsResponse?.data?.alerts)) {
           const alertsWithDepartments = await Promise.all(
             alertsResponse?.data?.alerts?.map(async (alert: any) => {
-              let departmentName = alert.dept || "--";
+              let departmentName = alert?.dept || "--";
 
-              if (alert.departmentID) {
+              if (alert?.departmentID) {
                 try {
                   const departmentData = await AuthFetch(
                     `department/singledpt/${alert.departmentID}`,
                     token
                   );
-                  departmentName = departmentData.department?.[0]?.name || departmentName;
+                  departmentName = departmentData?.department?.[0]?.name || departmentName;
                 } catch {
                   // Use default department name
                 }
@@ -484,18 +488,18 @@ const DashboardLab: React.FC = () => {
 
               return {
                 ...alert,
-                id: alert.id || alert.timeLineID,
+                id: alert?.id || alert?.timeLineID,
                 isFromAlert: true,
-                alertTimestamp: alert.addedOn || alert.createdAt || alert.timestamp || alert.orderDate,
+                alertTimestamp: alert?.addedOn || alert?.createdAt || alert?.timestamp || alert?.orderDate,
                 departmentName: departmentName,
-                doctorName: alert.doctor_firstName
-                  ? `${alert.doctor_firstName} ${alert.doctor_lastName || ''}`.trim()
+                doctorName: alert?.doctor_firstName
+                  ? `${alert?.doctor_firstName} ${alert?.doctor_lastName || ''}`.trim()
                   : "--",
-                patientID: alert.patientID,
-                pID: alert.pID,
-                pName: alert.pName,
-                patientName: alert.patientName,
-                ptype: alert.ptype
+                patientID: alert?.patientID,
+                pID: alert?.pID,
+                pName: alert?.pName,
+                patientName: alert?.patientName,
+                ptype: alert?.ptype
               };
             })
           );
@@ -512,23 +516,23 @@ const DashboardLab: React.FC = () => {
           token
         );
 
-        if (response?.message === "success" && Array.isArray(response.patientList)) {
+        if (response?.message === "success" && Array.isArray(response?.patientList)) {
           const regularPatients = response?.patientList?.map((patient: any) => ({
             ...patient,
-            id: patient.timeLineID || patient.id,
+            id: patient?.timeLineID || patient?.id,
             isFromAlert: false,
-            departmentName: patient.department_name || patient.dept || "--",
-            doctorName: patient.doctor_firstName && patient.doctor_lastName
-              ? `${patient.doctor_firstName} ${patient.doctor_lastName}`
-              : patient.firstName && patient.lastName
-                ? `${patient.firstName} ${patient.lastName}`
+            departmentName: patient?.department_name || patient?.dept || "--",
+            doctorName: patient?.doctor_firstName && patient?.doctor_lastName
+              ? `${patient?.doctor_firstName} ${patient?.doctor_lastName}`
+              : patient?.firstName && patient?.lastName
+                ? `${patient?.firstName} ${patient?.lastName}`
                 : "--",
-            alertTimestamp: patient.latestTestTime || patient.addedOn,
-            patientID: patient.patientID,
-            pID: patient.pID,
-            pName: patient.pName,
-            patientName: patient.patientName,
-            ptype: patient.ptype
+            alertTimestamp: patient?.latestTestTime || patient?.addedOn,
+            patientID: patient?.patientID,
+            pID: patient?.pID,
+            pName: patient?.pName,
+            patientName: patient?.patientName,
+            ptype: patient?.ptype
           }));
           patientList = [...patientList, ...regularPatients];
         }
@@ -542,95 +546,97 @@ const DashboardLab: React.FC = () => {
           token
         );
 
-        if (walkinResponse?.status === 200 && Array.isArray(walkinResponse.data)) {
+        if (walkinResponse?.status === 200 && Array.isArray(walkinResponse?.data)) {
           const walkinPatients = walkinResponse?.data?.map((patient: any) => ({
             ...patient,
-            id: patient.id,
+            id: patient?.id,
             isFromAlert: false,
-            departmentName: patient.department || "--",
+            departmentName: patient?.department || "--",
             doctorName: "--",
-            alertTimestamp: patient.addedOn,
-            patientID: patient.pID,
-            pID: patient.pID,
-            pName: patient.pName,
-            patientName: patient.pName,
+            alertTimestamp: patient?.addedOn,
+            patientID: patient?.pID,
+            pID: patient?.pID,
+            pName: patient?.pName,
+            patientName: patient?.pName,
             ptype: 1,
-            prescriptionURL: patient.prescriptionURL || patient.fileName
+            prescriptionURL: patient?.prescriptionURL || patient?.fileName
           }));
           patientList = [...patientList, ...walkinPatients];
         }
       } catch {
+        // Silent catch for walk-in patients
       }
 
       const sortedPatients = patientList
-        .filter(patient => patient.alertTimestamp)
-        .sort((a: any, b: any) => {
-          const dateA = new Date(a.alertTimestamp || 0);
-          const dateB = new Date(b.alertTimestamp || 0);
+        ?.filter(patient => patient?.alertTimestamp)
+        ?.sort((a: any, b: any) => {
+          const dateA = new Date(a?.alertTimestamp || 0);
+          const dateB = new Date(b?.alertTimestamp || 0);
           return dateB.getTime() - dateA.getTime();
         })
-        .slice(0, 5);
+        ?.slice(0, 5);
 
-      setRecentPatients(sortedPatients);
+      setRecentPatients(sortedPatients || []);
     } catch {
       setRecentPatients([]);
     }
   }, [user?.hospitalID, user?.id, departmentType]);
 
- const getTestCount = useCallback(async () => {
-  try {
-    const token = await AsyncStorage.getItem("token");
-    if (!user?.hospitalID || !token) {
-      return;
-    }
+  const getTestCount = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!user?.hospitalID || !token) {
+        return;
+      }
 
-    const res = await AuthFetch(
-      `test/${user.hospitalID}/${user.roleName}/getTestsDashboardCount`,
-      token
-    );    
-    let countsData = null;
+      const res = await AuthFetch(
+        `test/${user.hospitalID}/${user.roleName}/getTestsDashboardCount`,
+        token
+      );    
+      
+      let countsData = null;
 
-    if (res?.status === "success") {
-      if (res?.data?.data) {
-        countsData = res.data.data;
+      if (res?.status === "success") {
+        if (res?.data?.data) {
+          countsData = res.data.data;
+        } else if (res?.data) {
+          countsData = res.data;
+        }
+      } else if (res?.message === "success") {
+        countsData = res.data;
       } else if (res?.data) {
         countsData = res.data;
       }
-    } else if (res?.message === "success") {
-      countsData = res.data;
-    } else if (res?.data) {
-      countsData = res.data;
-    }
-    
-    if (countsData) {
-      const {
-        dailyTests = 0,
-        pendingResults = 0,
-        completedToday = 0,
-        approvedToday = 0,
-        rejectedToday = 0,
-      } = countsData;
+      
+      if (countsData) {
+        const {
+          dailyTests = 0,
+          pendingResults = 0,
+          completedToday = 0,
+          approvedToday = 0,
+          rejectedToday = 0,
+        } = countsData;
 
-      setDailyTests(dailyTests);
-      setPendingResults(pendingResults);
-      setCompletedToday(completedToday);
-      setApprovedToday(approvedToday);
-      setRejectedToday(rejectedToday);
-    } else {
+        setDailyTests(dailyTests);
+        setPendingResults(pendingResults);
+        setCompletedToday(completedToday);
+        setApprovedToday(approvedToday);
+        setRejectedToday(rejectedToday);
+      } else {
+        setDailyTests(0);
+        setPendingResults(0);
+        setCompletedToday(0);
+        setApprovedToday(0);
+        setRejectedToday(0);
+      }
+    } catch {
       setDailyTests(0);
       setPendingResults(0);
       setCompletedToday(0);
       setApprovedToday(0);
       setRejectedToday(0);
     }
-  } catch {
-    setDailyTests(0);
-    setPendingResults(0);
-    setCompletedToday(0);
-    setApprovedToday(0);
-    setRejectedToday(0);
-  }
-}, [user?.hospitalID, departmentType]);
+  }, [user?.hospitalID, departmentType]);
 
   const getTestsBargraphData = useCallback(async (year: string, month: string) => {
     try {
@@ -658,15 +664,15 @@ const DashboardLab: React.FC = () => {
         counts = res.data.counts;
       }
 
-      if (Array.isArray(counts) && counts.length > 0) {
+      if (Array.isArray(counts) && counts?.length > 0) {
         const processedData = counts?.map((c: any) => ({
-          x: c.filter_value,
-          y: Number(c.tests_processed || 0),
+          x: c?.filter_value,
+          y: Number(c?.tests_processed || 0),
         }));
         
         const completedData = counts?.map((c: any) => ({
-          x: c.filter_value,
-          y: Number(c.tests_completed || 0),
+          x: c?.filter_value,
+          y: Number(c?.tests_completed || 0),
         }));
 
         setLineProcessed(processedData);
@@ -699,13 +705,15 @@ const DashboardLab: React.FC = () => {
 
     if (user?.hospitalID) {
       loadDashboardData();
+    } else {
+      setLoading(false);
     }
   }, [user?.hospitalID, getRecentPatients, getTestCount, getTestsBargraphData, filterYear, filterMonth]);
 
   const handleRowClick = (patient: PatientCardData) => {
-    const idToPass = patient.prescriptionURL || patient?.fileName
-      ? patient.id
-      : patient.timeLineID;
+    const idToPass = patient?.prescriptionURL || patient?.fileName
+      ? patient?.id
+      : patient?.timeLineID;
 
     const newState: {
       timeLineID: number | undefined;
@@ -718,13 +726,13 @@ const DashboardLab: React.FC = () => {
       patientData: patient,
     };
 
-    if (patient.prescriptionURL || patient?.fileName) {
-      newState.prescriptionURL = patient.prescriptionURL || patient?.fileName;
+    if (patient?.prescriptionURL || patient?.fileName) {
+      newState.prescriptionURL = patient?.prescriptionURL || patient?.fileName;
     }
 
     const alertRoute = departmentType === 'radiology' 
-      ? "/hospital-dashboard/radiology/alerts" 
-      : "/hospital-dashboard/pathology/alerts";
+      ? "AlertsLab" 
+      : "AlertsLab";
     
     navigation.navigate(alertRoute, { state: newState });
   };
@@ -755,73 +763,73 @@ const DashboardLab: React.FC = () => {
     }
   };
 
-const getSidebarItems = (): SidebarItem[] => {
-  const basePath = departmentType === 'radiology' ? 'Radio' : 'Lab';
-  
-  return [
-    // Overview Section
-    {
-      key: "dash",
-      label: "Dashboard",
-      icon: LayoutDashboardIcon,
-      onPress: () => go("DashboardLab")
-    },
-    {
-      key: "alerts", 
-      label: "Alerts",
-      icon: AlertTriangleIcon,
-      onPress: () => go(`AlertsLab`)
-    },
+  const getSidebarItems = (): SidebarItem[] => {
+    const basePath = departmentType === 'radiology' ? 'Radio' : 'Lab';
     
-    // Patient Management Section
-    {
-      key: "patients",
-      label: "Patient List",
-      icon: UsersIcon,
-      onPress: () => go(`PatientListLab`)
-    },
-    {
-      key: "walkin",
-      label: "Walk-In",
-      icon: ShoppingBagIcon,
-      onPress: () => go(`SaleComp`)
-    },
-    {
-      key: "billing",
-      label: "Billing",
-      icon: FileTextIcon,
-      onPress: () => go(`Billing${basePath}`)
-    },
-    {
-      key: "tax",
-      label: "Tax Invoice",
-      icon: ReceiptIcon,
-      onPress: () => go(`TaxInvoice${basePath}`)
-    },
-    
-    // Operations Section
-    {
-      key: "management",
-      label: "Management",
-      icon: SettingsIcon,
-      onPress: () => go("Management")
-    },
-    {
-      key: "pricing",
-      label: "Test Price",
-      icon: DollarSignIcon, // You'll need to import/create this icon
-      onPress: () => go(`TestPricing`) // Update route as needed
-    },
-    
-    // Support Section
-    {
-      key: "help",
-      label: "Help",
-      icon: HelpCircleIcon,
-      onPress: () => go("HelpScreen")
-    },
-  ];
-};
+    return [
+      // Overview Section
+      {
+        key: "dash",
+        label: "Dashboard",
+        icon: LayoutDashboardIcon,
+        onPress: () => go("DashboardLab")
+      },
+      {
+        key: "alerts", 
+        label: "Alerts",
+        icon: AlertTriangleIcon,
+        onPress: () => go(`AlertsLab`)
+      },
+      
+      // Patient Management Section
+      {
+        key: "patients",
+        label: "Patient List",
+        icon: UsersIcon,
+        onPress: () => go(`PatientListLab`)
+      },
+      {
+        key: "walkin",
+        label: "Walk-In",
+        icon: ShoppingBagIcon,
+        onPress: () => go(`SaleComp`)
+      },
+      {
+        key: "billing",
+        label: "Billing",
+        icon: FileTextIcon,
+        onPress: () => go(`Billing${basePath}`)
+      },
+      {
+        key: "tax",
+        label: "Tax Invoice",
+        icon: ReceiptIcon,
+        onPress: () => go(`TaxInvoice${basePath}`)
+      },
+      
+      // Operations Section
+      {
+        key: "management",
+        label: "Management",
+        icon: SettingsIcon,
+        onPress: () => go("Management")
+      },
+      {
+        key: "pricing",
+        label: "Test Price",
+        icon: DollarSignIcon,
+        onPress: () => go(`TestPricing`)
+      },
+      
+      // Support Section
+      {
+        key: "help",
+        label: "Help",
+        icon: HelpCircleIcon,
+        onPress: () => go("HelpScreen")
+      },
+    ];
+  };
 
   const bottomItems: SidebarItem[] = [
     {
@@ -843,17 +851,18 @@ const getSidebarItems = (): SidebarItem[] => {
     <TouchableOpacity
       style={styles.patientRow}
       onPress={() => handleRowClick(item)}
+      activeOpacity={0.7}
     >
       <View style={styles.patientInfo}>
-        <Text style={styles.patientId}>{item.patientID || item.pID || "--"}</Text>
-        <Text style={styles.patientName}>{item.pName || item.patientName || "--"}</Text>
+        <Text style={styles.patientId}>{item?.patientID || item?.pID || "--"}</Text>
+        <Text style={styles.patientName}>{item?.pName || item?.patientName || "--"}</Text>
         <Text style={styles.patientType}>{getPatientType(item)}</Text>
       </View>
       <View style={styles.patientDetails}>
         <Text style={styles.doctor}>{item?.doctorName || item?.doctor_firstName || "--"}</Text>
         <Text style={styles.date}>
           {formatDateTime(
-            item.alertTimestamp || item.addedOn || item.createdAt || item.timestamp
+            item?.alertTimestamp || item?.addedOn || item?.createdAt || item?.timestamp
           )}
         </Text>
       </View>
@@ -879,7 +888,7 @@ const getSidebarItems = (): SidebarItem[] => {
 
   return (
     <View style={styles.safeArea}>
-      <StatusBar barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"} />
+      <StatusBar barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"} backgroundColor={COLORS.brand} />
       <HeaderBar 
         title={dashboardTitle} 
         onMenu={() => setMenuOpen(true)}
@@ -887,7 +896,7 @@ const getSidebarItems = (): SidebarItem[] => {
 
       <ScrollView
         style={styles.container}
-        contentContainerStyle={[styles.containerContent, { paddingBottom: FOOTER_HEIGHT + insets.bottom + 16 }]}
+        contentContainerStyle={[styles.containerContent, { paddingBottom: FOOTER_H + insets.bottom + SPACING.lg }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.statsGrid}>
@@ -895,31 +904,31 @@ const getSidebarItems = (): SidebarItem[] => {
             title="Daily Tests"
             value={dailyTests}
             icon={<MainIcon size={25} color={brandColor} />}
-            bg="#ffffff"
+            bg={COLORS.card}
           />
           <KpiCard
             title="Pending Results"
             value={pendingResults}
             icon={<ClockIcon size={25} color={brandColor} />}
-            bg="#ffffff"
+            bg={COLORS.card}
           />
           <KpiCard
             title="Completed Today"
             value={completedToday}
             icon={<FileTextIcon size={25} color={brandColor} />}
-            bg="#ffffff"
+            bg={COLORS.card}
           />
           <KpiCard
             title="Approved Tests"
             value={approvedToday}
             icon={<AlertTriangleIcon size={25} color={brandColor} />}
-            bg="#ffffff"
+            bg={COLORS.card}
           />
           <KpiCard
             title="Rejected Tests"
             value={rejectedToday}
             icon={<AlertTriangleIcon size={25} color={brandColor} />}
-            bg="#ffffff"
+            bg={COLORS.card}
           />
         </View>
 
@@ -935,7 +944,7 @@ const getSidebarItems = (): SidebarItem[] => {
             />
           </View>
 
-          <View style={styles.notesContainer}>
+          <View>
             <MyTasks />
           </View>
         </View>
@@ -948,15 +957,18 @@ const getSidebarItems = (): SidebarItem[] => {
             </View>
           </View>
 
-          {recentPatients.length === 0 ? (
+          {recentPatients?.length === 0 ? (
             <View style={styles.noDataContainer}>
               <Text style={styles.noDataText}>No recent patients found</Text>
+              <Text style={styles.noDataSubtext}>
+                Patient data will appear here as new orders come in
+              </Text>
             </View>
           ) : (
             <FlatList
               data={recentPatients}
               renderItem={renderPatientRow}
-              keyExtractor={(item, index) => `${item.id}-${index}`}
+              keyExtractor={(item, index) => `${item?.id}-${index}`}
               scrollEnabled={false}
             />
           )}
@@ -967,6 +979,7 @@ const getSidebarItems = (): SidebarItem[] => {
         <Footer active={"dashboard"} brandColor={brandColor} />
       </View>
 
+      {/* Bottom Safe Area Shield */}
       {insets.bottom > 0 && (
         <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
       )}
@@ -997,104 +1010,99 @@ const getSidebarItems = (): SidebarItem[] => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: COLORS.bg 
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.bg,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: isSmallScreen ? 14 : 16,
-    color: '#64748b',
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
   },
   header: {
-    height: isSmallScreen ? 80 : 100,
-    paddingHorizontal: isSmallScreen ? 12 : 16,
+    height: isSmallDevice ? 80 : 100,
+    paddingHorizontal: SPACING.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#14b8a6",
+    backgroundColor: COLORS.brand,
+    paddingTop: Platform.OS === 'ios' ? SPACING.lg : 0,
   },
   headerTitle: { 
-    fontSize: isSmallScreen ? 20 : 24, 
+    fontSize: isSmallDevice ? FONT_SIZE.lg : FONT_SIZE.xl, 
     fontWeight: "700", 
-    color: "#fdfdfdff" 
+    color: COLORS.buttonText 
   },
   menuBtn: {
-    width: isSmallScreen ? 34 : 38,
-    height: isSmallScreen ? 34 : 38,
+    width: isSmallDevice ? 34 : 38,
+    height: isSmallDevice ? 34 : 38,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { 
+    flex: 1, 
+    backgroundColor: COLORS.bg 
+  },
   containerContent: { 
-    padding: isSmallScreen ? 12 : 16, 
-    paddingBottom: 32, 
-    gap: isSmallScreen ? 12 : 16 
+    padding: SPACING.md, 
+    gap: SPACING.lg 
   },
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: isSmallScreen ? 8 : 12,
+    gap: SPACING.sm,
     justifyContent: "space-between"
   },
   card: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: isSmallScreen ? 12 : 14,
+    padding: SPACING.md,
     borderRadius: 16,
-    shadowColor: "#000",
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 2,
   },
   iconWrap: {
-    width: isSmallScreen ? 36 : 40,
-    height: isSmallScreen ? 36 : 40,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   cardTitle: { 
-    color: "#0f172a", 
-    fontSize: isSmallScreen ? 12 : 13, 
+    color: COLORS.text, 
+    fontSize: FONT_SIZE.sm, 
     opacity: 0.75, 
-    marginBottom: 4 
+    marginBottom: SPACING.xs 
   },
   cardValue: { 
-    color: "#0b1220", 
-    fontSize: isSmallScreen ? 18 : 22, 
+    color: COLORS.text, 
+    fontSize: FONT_SIZE.xl, 
     fontWeight: "700" 
   },
   chartsRow: {
     flexDirection: isTablet ? "row" : "column",
-    gap: isSmallScreen ? 12 : 16,
+    gap: SPACING.lg,
   },
   chartContainer: {
     flex: isTablet ? 2 : 1,
   },
-  notesContainer: {
-    flex: isTablet ? 1 : 1,
-    minHeight: isSmallScreen ? 250 : 300,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: isSmallScreen ? 12 : 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
   tableContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     borderRadius: 16,
-    padding: isSmallScreen ? 12 : 16,
-    shadowColor: "#000",
+    padding: SPACING.md,
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 2,
@@ -1103,128 +1111,132 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: SPACING.md,
   },
   headerText: {
     flex: 1,
   },
   tableTitle: {
-    fontSize: isSmallScreen ? 16 : 18,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   tableSubtitle: {
-    fontSize: isSmallScreen ? 12 : 14,
-    color: "#64748b",
-    marginTop: 4,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    marginTop: SPACING.xs,
   },
   patientRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: isSmallScreen ? 10 : 12,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: COLORS.border,
   },
   patientInfo: {
     flex: 1,
   },
   patientId: {
-    fontSize: isSmallScreen ? 12 : 14,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   patientName: {
-    fontSize: isSmallScreen ? 14 : 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
-    color: "#0f172a",
+    color: COLORS.text,
     marginTop: 2,
   },
   patientType: {
-    fontSize: isSmallScreen ? 10 : 12,
-    color: "#64748b",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
     marginTop: 2,
   },
   patientDetails: {
     alignItems: "flex-end",
   },
-  department: {
-    fontSize: isSmallScreen ? 12 : 14,
-    color: "#374151",
-    fontWeight: "500",
-  },
   doctor: {
-    fontSize: isSmallScreen ? 10 : 12,
-    color: "#6b7280",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
     marginTop: 2,
   },
   date: {
-    fontSize: isSmallScreen ? 9 : 11,
-    color: "#9ca3af",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.placeholder,
     marginTop: 2,
   },
   noDataContainer: {
-    paddingVertical: 40,
+    paddingVertical: SPACING.xl,
     alignItems: "center",
   },
   noDataText: {
-    fontSize: isSmallScreen ? 14 : 16,
-    color: "#9ca3af",
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
     textAlign: "center",
+    fontWeight: "600",
+  },
+  noDataSubtext: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.placeholder,
+    textAlign: "center",
+    marginTop: SPACING.xs,
+    fontStyle: "italic",
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: COLORS.overlay,
     alignItems: "center",
     justifyContent: "center",
-    padding: isSmallScreen ? 16 : 24,
+    padding: SPACING.md,
   },
   modalCard: {
     width: "100%",
-    maxWidth: isSmallScreen ? 320 : 380,
-    backgroundColor: "#fff",
+    maxWidth: responsiveWidth(90),
+    backgroundColor: COLORS.card,
     borderRadius: 14,
-    padding: isSmallScreen ? 12 : 16,
+    padding: SPACING.lg,
   },
   modalTitle: { 
-    fontSize: isSmallScreen ? 15 : 17, 
+    fontSize: FONT_SIZE.lg, 
     fontWeight: "800", 
-    color: "#0b1220" 
+    color: COLORS.text 
   },
   modalMsg: { 
-    fontSize: isSmallScreen ? 12 : 14, 
-    color: "#334155", 
-    marginTop: 8 
+    fontSize: FONT_SIZE.sm, 
+    color: COLORS.text, 
+    marginTop: SPACING.sm 
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: isSmallScreen ? 8 : 10,
-    marginTop: isSmallScreen ? 12 : 16,
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
   },
   modalBtn: {
-    paddingHorizontal: isSmallScreen ? 12 : 14,
-    paddingVertical: isSmallScreen ? 8 : 10,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
     borderRadius: 10,
   },
   modalBtnGhost: {
-    backgroundColor: "#f0f9ff",
+    backgroundColor: COLORS.brandLight,
   },
   modalBtnDanger: {
-    backgroundColor: "#14b8a6",
+    backgroundColor: COLORS.brand,
   },
   modalBtnText: {
     fontWeight: "700",
-    fontSize: isSmallScreen ? 12 : 14,
+    fontSize: FONT_SIZE.sm,
   },
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    height: FOOTER_H,
+    backgroundColor: COLORS.card,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e2e8f0",
+    borderTopColor: COLORS.border,
     zIndex: 10,
     elevation: 6,
   },
@@ -1233,44 +1245,40 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     zIndex: 9,
   },
   // Sidebar Styles
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.25)",
-  },
   sidebarContainer: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.md,
     elevation: 8,
-    shadowColor: "#000",
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.2,
     shadowRadius: 10,
     shadowOffset: { width: 2, height: 0 },
   },
   sidebarHeader: {
-    paddingBottom: 20,
+    paddingBottom: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    marginBottom: 16,
+    borderBottomColor: COLORS.border,
+    marginBottom: SPACING.md,
   },
   closeButton: {
     position: "absolute",
     right: 0,
-    top: -10,
+    top: -SPACING.sm,
     width: 40,
     height: 40,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f1f5f9",
+    backgroundColor: COLORS.pill,
   },
   userProfileSection: {
     flexDirection: "row",
@@ -1278,60 +1286,60 @@ const styles = StyleSheet.create({
     paddingRight: 50,
   },
   userInfo: {
-    marginLeft: 12,
+    marginLeft: SPACING.sm,
     flex: 1,
   },
   userName: {
-    fontSize: isSmallScreen ? 14 : 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
-    color: "#0b1220",
+    color: COLORS.text,
     marginBottom: 2,
   },
   userMetaId: {
-    fontSize: isSmallScreen ? 10 : 12,
-    color: "#64748b",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
     marginBottom: 2,
   },
   userDepartment: {
-    fontSize: isSmallScreen ? 10 : 12,
-    color: "#14b8a6",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.brand,
     fontWeight: "600",
   },
   sidebarContent: {
     flex: 1,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: SPACING.lg,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "600",
-    color: "#64748b",
-    marginBottom: 12,
+    color: COLORS.sub,
+    marginBottom: SPACING.sm,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   sidebarButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
     borderRadius: 8,
-    marginBottom: 4,
+    marginBottom: SPACING.xs,
   },
   sidebarButtonActive: {
-    backgroundColor: "#f0fdfa",
+    backgroundColor: COLORS.brandLight,
   },
   buttonContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: SPACING.sm,
   },
   buttonText: {
-    fontSize: isSmallScreen ? 13 : 15,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     flex: 1,
   },
   alertBadge: {
-    backgroundColor: "#ef4444",
+    backgroundColor: COLORS.danger,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1340,43 +1348,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   alertText: {
-    color: "#fff",
-    fontSize: 10,
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "700",
   },
   bottomActions: {
-    paddingTop: 20,
+    paddingTop: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    gap: 8,
+    borderTopColor: COLORS.border,
+    gap: SPACING.sm,
   },
   bottomButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
     borderRadius: 8,
   },
   modulesButton: {
-    backgroundColor: "#f0fdfa",
+    backgroundColor: COLORS.brandLight,
   },
   logoutButton: {
-    backgroundColor: "#fef2f2",
+    backgroundColor: COLORS.chipBP,
   },
   bottomButtonText: {
-    fontSize: isSmallScreen ? 13 : 14,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
   },
   avatar: {
-    backgroundColor: "#e2e8f0",
+    backgroundColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarText: {
     fontWeight: "800",
-    color: "#0b1220",
-    fontSize: 16,
+    color: COLORS.text,
+    fontSize: FONT_SIZE.md,
   },
 });
 

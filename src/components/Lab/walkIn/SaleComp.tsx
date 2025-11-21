@@ -1,5 +1,4 @@
-// SaleComp.tsx - UPDATED VERSION
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,27 +6,49 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Dimensions,
   Alert,
-  Modal,
   FlatList,
   Image,
   Platform,
+  StatusBar,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Dimensions,
+  Linking,
 } from "react-native";
-import { useSelector } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
+import { useSelector, useDispatch } from "react-redux";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AuthFetch, AuthPost } from "../../../auth/auth";
+import { AuthPost } from "../../../auth/auth";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Document picker (non-expo)
-import DocumentPicker from "@react-native-documents/picker";
+// Utils
+import {
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  responsiveWidth,
+  responsiveHeight,
+  isTablet,
+  isSmallDevice,
+  FOOTER_HEIGHT,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import {
+  saleFormValidationRules,
+  validateForm,
+} from "../../../utils/validation";
+import Footer from "../../dashboard/footer";
 
-// Image / Camera picker (non-expo)
-import { launchImageLibrary, launchCamera, Asset } from "react-native-image-picker";
+// Document picker
+import DocumentPicker from "react-native-document-picker";
+import { launchImageLibrary } from "react-native-image-picker";
+import { showError } from "../../../store/toast.slice";
 
-const { width: W } = Dimensions.get("window");
-const isTablet = W >= 768;
-const isSmallScreen = W < 375;
+const FOOTER_H = FOOTER_HEIGHT;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // Types
 interface TestType {
@@ -47,9 +68,12 @@ interface FormDataType {
   quantity: number;
 }
 
-type PaymentMethod = "cards" | "online" | "cash";
+interface FormErrors {
+  name?: string;
+  city?: string;
+  mobileNumber?: string;
+}
 
-// Generate unique patient ID
 const generateID = () => {
   const now = new Date();
   return (
@@ -62,35 +86,39 @@ const generateID = () => {
   );
 };
 
-// ————— File Upload Component (non-expo) —————
 const FileUpload: React.FC<{
   files: any[];
   fileURLs: string[];
   onFileChange: (file: any) => void;
   onFileRemove: (index: number) => void;
 }> = ({ files, fileURLs, onFileChange, onFileRemove }) => {
-  // Document picker (single)
+  const dispatch = useDispatch();
+
   const pickDocument = async () => {
     try {
       const res = await DocumentPicker.pick({
-        presentationStyle: "fullScreen",
-        type: ["image/*", "application/pdf"],
+        type: [DocumentPicker.types.images, DocumentPicker.types.pdf],
         allowMultiSelection: false,
       });
 
-      const picked = Array.isArray(res) ? res[0] : res;
+      const picked = Array.isArray(res) ? res?.[0] : res;
       if (!picked) return;
 
       onFileChange({
         uri: picked.uri,
-        name: picked.name || (picked.uri ? picked.uri.split("/").pop() : "document"),
-        mimeType: picked.mimeType || picked.type || "application/octet-stream",
+        name: picked.name || "document",
+        type: (picked.type as string) || "application/octet-stream",
         size: picked.size ?? 0,
       });
     } catch (err: any) {
-      if (err?.code === "DOCUMENT_PICKER_CANCELED") return;
-      Alert.alert("Error", "Failed to pick document");
-      console.error("DocumentPicker error:", err);
+      try {
+        if (DocumentPicker.isCancel && DocumentPicker.isCancel(err)) {
+          return;
+        }
+      } catch (e) {
+        // ignore
+      }
+      dispatch(showError("Failed to pick document"));
     }
   };
 
@@ -99,57 +127,27 @@ const FileUpload: React.FC<{
       const result = await launchImageLibrary({
         mediaType: "photo",
         quality: 0.8,
-        selectionLimit: 1,
+        maxWidth: 1024,
+        maxHeight: 1024,
       });
 
-      if (result.didCancel) return;
-      if (result.errorCode) {
-        console.error("ImagePicker error", result.errorMessage);
-        Alert.alert("Error", result.errorMessage || "Failed to pick image");
+      if ((result as any).didCancel) return;
+      if ((result as any).errorCode) {
+        dispatch(showError((result as any).errorMessage || "Failed to pick image"));
         return;
       }
 
-      const asset: Asset | undefined = result.assets && result.assets[0];
-      if (!asset || !asset.uri) return;
+      const asset = (result as any).assets?.[0];
+      if (!asset?.uri) return;
 
       onFileChange({
         uri: asset.uri,
         name: asset.fileName || `photo_${Date.now()}.jpg`,
-        mimeType: asset.type || "image/jpeg",
+        type: asset.type || "image/jpeg",
         size: asset.fileSize ?? 0,
       });
     } catch (error) {
-      Alert.alert("Error", "Failed to pick image");
-      console.error(error);
-    }
-  };
-
-  const takePhoto = async () => {
-    try {
-      const result = await launchCamera({
-        mediaType: "photo",
-        quality: 0.8,
-      });
-
-      if (result.didCancel) return;
-      if (result.errorCode) {
-        console.error("Camera error", result.errorMessage);
-        Alert.alert("Error", result.errorMessage || "Failed to open camera");
-        return;
-      }
-
-      const asset: Asset | undefined = result.assets && result.assets[0];
-      if (!asset || !asset.uri) return;
-
-      onFileChange({
-        uri: asset.uri,
-        name: asset.fileName || `camera_${Date.now()}.jpg`,
-        mimeType: asset.type || "image/jpeg",
-        size: asset.fileSize ?? 0,
-      });
-    } catch (error) {
-      Alert.alert("Error", "Failed to take photo");
-      console.error(error);
+      dispatch(showError("Failed to pick image"));
     }
   };
 
@@ -158,7 +156,6 @@ const FileUpload: React.FC<{
       "Select File Type",
       "Choose how you want to upload the file",
       [
-        { text: "Take Photo", onPress: takePhoto },
         { text: "Choose from Gallery", onPress: pickImageFromLibrary },
         { text: "Choose Document", onPress: pickDocument },
         { text: "Cancel", style: "cancel" },
@@ -167,42 +164,39 @@ const FileUpload: React.FC<{
     );
   };
 
-  return (
-    <View style={styles.fileUploadContainer}>
-      <Text style={styles.sectionTitle}>Upload Patient Test Prescription</Text>
+  const handleViewFile = async (uri: string) => {
+    try {
+      await Linking.openURL(uri);
+    } catch (e) {
+      dispatch(showError("Cannot open file - No app available to view this file"));
+    }
+  };
 
-      {fileURLs.length === 0 ? (
-        <TouchableOpacity style={styles.uploadArea} onPress={showFilePickerOptions}>
-          <Text style={styles.uploadIcon}>📁</Text>
-          <Text style={styles.uploadText}>
-            Tap to select files from your device
-            {"\n"}
-            <Text style={styles.uploadSubtext}>
-              Accepted formats: PDF, PNG, JPG. Each file must be under 20 MB.
-            </Text>
-          </Text>
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { marginBottom: SPACING.sm }]}>Upload Prescription</Text>
+
+      {fileURLs?.length === 0 ? (
+        <TouchableOpacity style={styles.uploadArea} onPress={showFilePickerOptions} activeOpacity={0.7}>
+          <Text style={styles.uploadText}>Tap to select files from your device</Text>
+          <Text style={styles.uploadSubtext}>PDF, PNG, JPG — max 20 MB</Text>
         </TouchableOpacity>
       ) : (
-        <View style={styles.uploadedFilesContainer}>
-          <Text style={styles.uploadedFilesTitle}>Uploaded Documents</Text>
+        <View>
+          <Text style={styles.uploadedFilesTitle}>Uploaded</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.uploadedFilesList}>
-              {fileURLs.map((url, index) => {
-                const file = files[index];
-                const isImage = (file?.mimeType || file?.type || "").startsWith("image/");
-                const isPdf = (file?.mimeType || "").includes("pdf") || (file?.name || "").endsWith(".pdf");
+              {fileURLs?.map((url, index) => {
+                const file = files?.[index];
+                const isImage = (file?.type || "").startsWith("image/");
 
                 return (
                   <View key={index} style={styles.uploadedFile}>
                     {isImage ? (
                       <Image source={{ uri: url }} style={styles.fileThumbnail} />
-                    ) : isPdf ? (
-                      <View style={styles.pdfThumbnail}>
-                        <Text style={styles.pdfIcon}>📄</Text>
-                      </View>
                     ) : (
                       <View style={styles.pdfThumbnail}>
-                        <Text style={styles.pdfIcon}>📄</Text>
+                        <Text style={{ color: COLORS.sub }}>PDF</Text>
                       </View>
                     )}
 
@@ -213,15 +207,18 @@ const FileUpload: React.FC<{
                     <View style={styles.fileActions}>
                       <TouchableOpacity
                         style={styles.viewButton}
-                        onPress={() => {
-                          Alert.alert("View File", "File viewing functionality would open here");
-                        }}
+                        onPress={() => handleViewFile(url)}
+                        activeOpacity={0.7}
                       >
                         <Text style={styles.viewButtonText}>View</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity style={styles.deleteButton} onPress={() => onFileRemove(index)}>
-                        <Text style={styles.deleteButtonText}>Delete</Text>
+                      <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={() => onFileRemove(index)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ color: COLORS.buttonText }}>Delete</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -235,16 +232,16 @@ const FileUpload: React.FC<{
   );
 };
 
-// ————— Main Sale Component —————
 const SaleComp: React.FC<{
   department: "Radiology" | "Pathology";
 }> = ({ department = "Pathology" }) => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const user = useSelector((state: any) => state.currentUser);
+  const insets = useSafeAreaInsets();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const inputRefs = useRef<{ [key: string]: TextInput | null }>({});
 
-  console.log("SaleComp props - Department:", department);
-
-  // State
   const [testList, setTestList] = useState<TestType[]>([]);
   const [selectedTest, setSelectedTest] = useState<TestType | null>(null);
   const [selectedTests, setSelectedTests] = useState<TestType[]>([]);
@@ -256,437 +253,776 @@ const SaleComp: React.FC<{
     patientID: generateID(),
     quantity: 0,
   });
-  const [isPayment, setIsPayment] = useState<boolean>(false);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [discount, setDiscount] = useState<number>(0);
-  const [discountReason, setDiscountReason] = useState<string>("");
-  const [discountReasonID, setDiscountReasonID] = useState<string>("");
   const [files, setFiles] = useState<any[]>([]);
   const [fileURLs, setFileURLs] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [suggestions, setSuggestions] = useState<TestType[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  // Single useEffect for search functionality
+  const checkAuth = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        dispatch(showError("Please login to continue"));
+        navigation.navigate("Login" as never);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      dispatch(showError("Authentication check failed"));
+      return false;
+    }
+  }, [navigation, dispatch]);
+
   useEffect(() => {
-    console.log("Search useEffect - Query:", searchQuery, "Department:", department);
-    
-    const handleSearch = async () => {
-      if (searchQuery.length >= 1) {
-        console.log("Searching for tests:", searchQuery);
-        
-        try {
-          const token = await AsyncStorage.getItem("token");
-          if (!user?.hospitalID) return;
+    const onShow = (e: any) => setKeyboardHeight(e.endCoordinates?.height ?? 0);
+    const onHide = () => setKeyboardHeight(0);
 
-          const response = await AuthPost(
-            `test/getlabTestsdata/${user.hospitalID}/${department}`, 
-            { text: searchQuery }, 
-            token
+    const subShow = Keyboard.addListener("keyboardDidShow", onShow);
+    const subHide = Keyboard.addListener("keyboardDidHide", onHide);
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let active = true;
+      const initialize = async () => {
+        const isAuthenticated = await checkAuth();
+        if (!isAuthenticated) return;
+
+        if (!active) return;
+        setFormData({
+          name: "",
+          city: "",
+          mobileNumber: "",
+          patientID: generateID(),
+          quantity: 0,
+        });
+        setSelectedTests([]);
+        setFiles([]);
+        setFileURLs([]);
+        setSearchQuery("");
+        setDiscount(0);
+        setFormErrors({});
+        setSelectedTest(null);
+      };
+
+      initialize();
+
+      return () => {
+        active = false;
+      };
+    }, [checkAuth])
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const handleSearch = async () => {
+      if (!searchQuery || searchQuery.trim().length < 1) {
+        setSuggestions([]);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (!user?.hospitalID) {
+          setSuggestions([]);
+          return;
+        }
+
+        const response = await AuthPost(
+          `test/getlabTestsdata/${user?.hospitalID}/${department}`,
+          { text: searchQuery },
+          token
+        );
+
+        if (response?.data?.message === "success") {
+          const testData = response?.data?.data ?? [];
+          const uniqueTests: TestType[] = Array.from(
+            new Map(
+              (testData as any[]).map((el: any) => [
+                el?.LOINC_Code,
+                {
+                  loinc_num_: el?.LOINC_Code ?? String(Math.random()),
+                  name: el?.LOINC_Name ?? "Unknown Test",
+                  department: el?.Department ?? department,
+                  testPrice: Number(el?.testPrice ?? 0),
+                  gst: Number(el?.gst ?? 0),
+                } as TestType,
+              ])
+            ).values()
           );
-          console.log("Test API Response:", response);
-          
-          if (response?.data?.message === "success") {
-            const testData = response?.data?.data;
-            const uniqueTests: TestType[] = Array.from(
-              new Map(
-                testData.map((el: any) => [
-                  el.LOINC_Code,
-                  {
-                    loinc_num_: el.LOINC_Code,
-                    name: el.LOINC_Name,
-                    department: el.Department,
-                    testPrice: el.testPrice,
-                    gst: el.gst,
-                  } as TestType,
-                ])
-              ).values()
-            );
+          if (!cancelled) {
             setTestList(uniqueTests);
             setSuggestions(uniqueTests);
-            console.log("Test suggestions found:", uniqueTests.length);
-          } else {
-            setSuggestions([]);
           }
-        } catch (error) {
-          console.error("Error fetching test data:", error);
-          setSuggestions([]);
+        } else {
+          if (!cancelled) setSuggestions([]);
         }
-      } else {
-        console.log("Clearing suggestions");
-        setSuggestions([]);
+      } catch (error) {
+        if (!cancelled) setSuggestions([]);
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     };
 
-    const timeoutId = setTimeout(handleSearch, 300);
-    
-    return () => clearTimeout(timeoutId);
+    const id = setTimeout(handleSearch, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
   }, [searchQuery, user?.hospitalID, department]);
 
-  // Debug useEffect (optional - remove in production)
-  useEffect(() => {
-    console.log("=== STATE UPDATE ===");
-    console.log("Department:", department);
-    console.log("Search Query:", searchQuery);
-    console.log("Suggestions:", suggestions.length);
-    console.log("Test List:", testList.length);
-    console.log("Selected Test:", selectedTest?.name);
-    console.log("Selected Tests:", selectedTests.length);
-    console.log("====================");
-  }, [searchQuery, suggestions, testList, selectedTest, selectedTests, department]);
-
-  // File handling
   const handleFileChange = (file: any) => {
-    const normalizedUri = Platform.OS === "ios" && file.uri?.startsWith("file://") ? file.uri.replace("file://", "") : file.uri;
-    const fileObj = { ...file, uri: normalizedUri };
-    setFiles((prev) => [...prev, fileObj]);
+    setFiles((prev) => [...prev, file]);
     setFileURLs((prev) => [...prev, file.uri]);
   };
 
   const handleFileRemove = (index: number) => {
     const updatedFiles = [...files];
     const updatedURLs = [...fileURLs];
-
     updatedFiles.splice(index, 1);
     updatedURLs.splice(index, 1);
-
     setFiles(updatedFiles);
     setFileURLs(updatedURLs);
   };
 
-  // Validation & submit
-  const validateForm = (): boolean => {
-    const { name, city, mobileNumber } = formData;
+  const validateFormData = (): boolean => {
+    const { isValid, errors } = validateForm(formData, saleFormValidationRules);
 
-    if (!name.trim()) {
-      Alert.alert("Error", "Please enter patient name");
+    if (!isValid) {
+      setFormErrors(errors);
+      Object.values(errors)?.forEach(error => {
+        if (error) dispatch(showError(error));
+      });
       return false;
     }
 
-    if (!city.trim()) {
-      Alert.alert("Error", "Please enter city");
+    if (files?.length === 0) {
+      dispatch(showError("Please upload the test prescription"));
       return false;
     }
 
-    if (!mobileNumber.trim() || mobileNumber.length < 10) {
-      Alert.alert("Error", "Please enter a valid mobile number");
+    if (selectedTests?.length === 0) {
+      dispatch(showError("Please add at least one test"));
       return false;
     }
 
-    if (files.length === 0) {
-      Alert.alert("Error", "Please upload the test prescription");
-      return false;
-    }
-
-    if (selectedTests.length === 0) {
-      Alert.alert("Error", "Please add at least one test");
-      return false;
-    }
-
+    setFormErrors({});
     return true;
   };
 
-  const handleProceedToPay = () => {
-    if (validateForm()) {
-      navigation.navigate("PaymentScreen", {
-        amount: discountedAmount,
-        selectedTests,
-        formData,
-        files,
-        discount,
-        discountReason,
-        discountReasonID,
-        department,
-        user
-      });
-    }
-  };
-
-  // Handle add test
-  const handleAddTest = () => {
-    if (selectedTest) {
-      if (!selectedTests.some((test) => test.loinc_num_ === selectedTest.loinc_num_)) {
-        const testToAdd: TestType = {
-          ...selectedTest,
-          testNotes: noteInput,
-        };
-        setSelectedTests((prev) => [testToAdd, ...prev]);
+  const handleAddTest = useCallback(() => {
+    const addTestToList = (testToAdd: TestType) => {
+      if (!selectedTests.some((t) => t.loinc_num_ === testToAdd.loinc_num_)) {
+        const toAdd = { ...testToAdd, testNotes: noteInput ?? "" };
+        setSelectedTests((prev) => [toAdd, ...prev]);
         setSelectedTest(null);
         setSearchQuery("");
         setNoteInput("");
         setSuggestions([]);
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 120);
       } else {
-        Alert.alert("Error", "Test already added");
+        dispatch(showError("Test already added"));
       }
-    } else {
-      Alert.alert("Error", "Please select a test first");
+    };
+
+    if (selectedTest) {
+      addTestToList(selectedTest);
+      return;
     }
-  };
+
+    const q = (searchQuery || "").trim().toLowerCase();
+    if (q.length > 0) {
+      const match =
+        testList.find((t) => (t.name || "").toLowerCase() === q) ||
+        testList.find((t) => (t.loinc_num_ || "").toLowerCase() === q) ||
+        suggestions.find((t) => (t.name || "").toLowerCase().includes(q)) ||
+        suggestions?.[0];
+
+      if (match) {
+        addTestToList(match);
+        return;
+      }
+    }
+
+    dispatch(showError("Please select a test first"));
+  }, [selectedTest, searchQuery, testList, suggestions, noteInput, selectedTests, dispatch]);
 
   const handleRemoveTest = (index: number) => {
     setSelectedTests((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Calculate amounts
-  const grossAmount = selectedTests.reduce((acc, test) => acc + (test.testPrice ?? 0), 0);
-  const gstAmount = selectedTests.reduce((acc, test) => acc + (test.testPrice ?? 0) * ((test.gst ?? 0) / 100), 0);
+  const grossAmount = selectedTests?.reduce((acc, test) => acc + (test.testPrice ?? 0), 0) || 0;
+  const gstAmount = selectedTests?.reduce((acc, test) => acc + (test.testPrice ?? 0) * ((test.gst ?? 0) / 100), 0) || 0;
   const totalAmount = grossAmount + gstAmount;
   const discountedAmount = totalAmount - (totalAmount * discount) / 100;
 
+  const handleProceedToPay = async () => {
+    const isAuthenticated = await checkAuth();
+    if (!isAuthenticated) return;
+
+    if (validateFormData()) {
+      setIsSubmitting(true);
+      try {
+        await navigation.navigate("PaymentScreen", {
+          amount: discountedAmount,
+          selectedTests,
+          formData,
+          files,
+          discount,
+          department,
+          user,
+        } as never);
+      } catch (error) {
+        dispatch(showError("Failed to proceed to payment"));
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+  };
+
+  const focusInput = (fieldName: string) => {
+    inputRefs.current[fieldName]?.focus();
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    }, 100);
+  };
+
+  const placeholderColor = (COLORS as any).placeholder ?? COLORS.sub;
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Patient Details */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Enter Patient Details</Text>
+    <KeyboardAvoidingView
+      style={styles.safe}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? FOOTER_H + insets.bottom : FOOTER_H}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={[styles.container, { backgroundColor: COLORS.bg }]}>
+          <StatusBar barStyle="dark-content" backgroundColor={COLORS.brand} />
 
-        <View style={styles.formRow}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Name *</Text>
-            <TextInput style={styles.textInput} placeholder="Enter patient name" value={formData.name} onChangeText={(text) => setFormData((prev) => ({ ...prev, name: text }))} />
-          </View>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingBottom: FOOTER_H + insets.bottom + SPACING.xl + Math.min(keyboardHeight, FOOTER_H),
+              minHeight: Math.max(SCREEN_HEIGHT - FOOTER_H - insets.top - insets.bottom, SCREEN_HEIGHT * 0.7),
+            }}
+          >
+            <View style={styles.content}>
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: COLORS.text }]}>Patient Name *</Text>
+                <TextInput
+                  ref={(ref) => (inputRefs.current.name = ref)}
+                  style={[
+                    styles.input,
+                    { backgroundColor: COLORS.inputBg, borderColor: formErrors.name ? COLORS.danger : COLORS.border, color: COLORS.text },
+                  ]}
+                  placeholder="Enter patient name"
+                  placeholderTextColor={placeholderColor}
+                  value={formData.name}
+                  onChangeText={(text) => {
+                    setFormData((prev) => ({ ...prev, name: text }));
+                    if (formErrors.name) setFormErrors((p) => ({ ...p, name: undefined }));
+                  }}
+                />
+                {formErrors.name && <Text style={styles.errorText}>{formErrors.name}</Text>}
+              </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Patient ID</Text>
-            <TextInput style={[styles.textInput, styles.disabledInput]} value={formData.patientID} editable={false} />
-          </View>
-        </View>
+              <View style={styles.formRowSimple}>
+                <View style={[styles.formHalf]}>
+                  <Text style={[styles.label, { color: COLORS.text }]}>Mobile Number *</Text>
+                  <TextInput
+                    ref={(ref) => (inputRefs.current.mobileNumber = ref)}
+                    style={[
+                      styles.input,
+                      { backgroundColor: COLORS.inputBg, borderColor: formErrors.mobileNumber ? COLORS.danger : COLORS.border, color: COLORS.text },
+                    ]}
+                    placeholder="Enter mobile number"
+                    placeholderTextColor={placeholderColor}
+                    keyboardType="phone-pad"
+                    value={formData.mobileNumber}
+                    onChangeText={(text) => {
+                      setFormData((prev) => ({ ...prev, mobileNumber: text }));
+                      if (formErrors.mobileNumber) setFormErrors((p) => ({ ...p, mobileNumber: undefined }));
+                    }}
+                    maxLength={10}
+                  />
+                  {formErrors.mobileNumber && <Text style={styles.errorText}>{formErrors.mobileNumber}</Text>}
+                </View>
 
-        <View style={styles.formRow}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Mobile Number *</Text>
-            <TextInput style={styles.textInput} placeholder="Enter mobile number" keyboardType="phone-pad" value={formData.mobileNumber} onChangeText={(text) => setFormData((prev) => ({ ...prev, mobileNumber: text }))} maxLength={10} />
-          </View>
+                <View style={[styles.formHalf]}>
+                  <Text style={[styles.label, { color: COLORS.text }]}>City *</Text>
+                  <TextInput
+                    ref={(ref) => (inputRefs.current.city = ref)}
+                    style={[
+                      styles.input,
+                      { backgroundColor: COLORS.inputBg, borderColor: formErrors.city ? COLORS.danger : COLORS.border, color: COLORS.text },
+                    ]}
+                    placeholder="Enter city"
+                    placeholderTextColor={placeholderColor}
+                    value={formData.city}
+                    onChangeText={(text) => {
+                      setFormData((prev) => ({ ...prev, city: text }));
+                      if (formErrors.city) setFormErrors((p) => ({ ...p, city: undefined }));
+                    }}
+                  />
+                  {formErrors.city && <Text style={styles.errorText}>{formErrors.city}</Text>}
+                </View>
+              </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>City *</Text>
-            <TextInput style={styles.textInput} placeholder="Enter city" value={formData.city} onChangeText={(text) => setFormData((prev) => ({ ...prev, city: text }))} />
-          </View>
-        </View>
-      </View>
-
-      {/* File Upload */}
-      <FileUpload files={files} fileURLs={fileURLs} onFileChange={handleFileChange} onFileRemove={handleFileRemove} />
-
-      {/* Search & Add Tests */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Select Tests</Text>
-
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <TextInput 
-              style={styles.searchInput} 
-              placeholder="Search tests..." 
-              value={searchQuery} 
-              onChangeText={(text) => {
-                console.log("Search text changed:", text);
-                setSearchQuery(text);
-              }}
-            />
-
-            {suggestions.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                <FlatList
-                  data={suggestions}
-                  keyExtractor={(item, index) => `${item.loinc_num_}-${index}`}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.suggestionItem}
-                      onPress={() => {
-                        console.log("Test selected:", item.name);
-                        setSelectedTest(item);
-                        setSearchQuery(item.name);
-                        setSuggestions([]);
-                      }}
-                    >
-                      <Text style={styles.suggestionText}>{item.name}</Text>
-                      <Text style={styles.suggestionPrice}>₹{item.testPrice}</Text>
-                    </TouchableOpacity>
-                  )}
-                  style={styles.suggestionsList}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: COLORS.text }]}>Patient ID</Text>
+                <TextInput
+                  style={[styles.input, styles.disabledInput, { backgroundColor: COLORS.inputBg, color: COLORS.sub }]}
+                  value={formData.patientID}
+                  editable={false}
                 />
               </View>
-            )}
-          </View>
 
-          <View style={styles.noteInputContainer}>
-            <Text style={styles.label}>Test Notes</Text>
-            <TextInput 
-              style={styles.noteInput} 
-              placeholder="Enter test note" 
-              multiline 
-              numberOfLines={3} 
-              value={noteInput} 
-              onChangeText={setNoteInput} 
-            />
-          </View>
+              <FileUpload files={files} fileURLs={fileURLs} onFileChange={handleFileChange} onFileRemove={handleFileRemove} />
 
-          <TouchableOpacity style={styles.addButton} onPress={handleAddTest}>
-            <Text style={styles.addButtonText}>+ Add Test</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+              <View style={styles.formGroup}>
+                <Text style={[styles.sectionTitle, { color: COLORS.text }]}>Select Tests</Text>
 
-      {/* Selected Tests Table */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Tests Prescribed</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: COLORS.inputBg, borderColor: COLORS.border, color: COLORS.text, marginTop: SPACING.sm }]}
+                  placeholder="Type to search tests..."
+                  placeholderTextColor={placeholderColor}
+                  value={searchQuery}
+                  onChangeText={(t) => {
+                    setSearchQuery(t);
+                    setSelectedTest(null);
+                  }}
+                />
 
-        {selectedTests.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No tests selected</Text>
-          </View>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={styles.tableHeaderCell}>Test Name</Text>
-                <Text style={styles.tableHeaderCell}>Loinc Code</Text>
-                <Text style={styles.tableHeaderCell}>Notes</Text>
-                <Text style={styles.tableHeaderCell}>GST</Text>
-                <Text style={styles.tableHeaderCell}>Amount</Text>
-                <Text style={styles.tableHeaderCell}>Action</Text>
+                {isLoading && (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color={COLORS.brand} />
+                    <Text style={styles.loadingText}>Searching tests...</Text>
+                  </View>
+                )}
+
+                {suggestions?.length > 0 ? (
+                  <View style={[styles.suggestionsBox, { borderColor: COLORS.border, backgroundColor: COLORS.card }]}>
+                    <FlatList
+                      data={suggestions}
+                      keyExtractor={(item, index) => `${item.loinc_num_}-${index}`}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={styles.suggestionRow}
+                          onPress={() => {
+                            setSelectedTest(item);
+                            setSearchQuery(item.name);
+                            setSuggestions([]);
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.suggestionText, { color: COLORS.text }]}>{item.name}</Text>
+                            <Text style={[styles.suggestionMeta, { color: COLORS.sub }]}>{item.loinc_num_}</Text>
+                          </View>
+                          <Text style={[styles.suggestionPrice, { color: COLORS.text }]}>₹{item.testPrice}</Text>
+                        </TouchableOpacity>
+                      )}
+                      style={{ maxHeight: responsiveHeight(220) }}
+                    />
+                  </View>
+                ) : (
+                  searchQuery.trim().length > 0 &&
+                  !isLoading && (
+                    <View style={[styles.emptyStateSimple, { marginTop: SPACING.sm }]}>
+                      <Text style={{ color: COLORS.sub }}>No tests found</Text>
+                      <Text style={{ color: COLORS.sub, marginTop: SPACING.xs }}>Try a different keyword</Text>
+                    </View>
+                  )
+                )}
+
+                <TextInput
+                  style={[styles.input, { backgroundColor: COLORS.inputBg, borderColor: COLORS.border, color: COLORS.text, marginTop: SPACING.sm }]}
+                  placeholder="Notes (optional)"
+                  placeholderTextColor={placeholderColor}
+                  value={noteInput}
+                  onChangeText={setNoteInput}
+                />
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, (!selectedTest && !searchQuery) && styles.disabledButton, { marginTop: SPACING.md }]}
+                  onPress={handleAddTest}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.primaryButtonText}>Add Test</Text>
+                </TouchableOpacity>
               </View>
 
-              {selectedTests.map((test, index) => (
-                <View key={index} style={styles.tableRow}>
-                  <Text style={styles.tableCell}>{test.name}</Text>
-                  <Text style={styles.tableCell}>{test.loinc_num_}</Text>
-                  <Text style={styles.tableCell}>{test.testNotes && test.testNotes.trim() !== "" ? test.testNotes : "-"}</Text>
-                  <Text style={styles.tableCell}>{test.gst}%</Text>
-                  <Text style={styles.tableCell}>₹{test.testPrice}</Text>
-                  <TouchableOpacity style={styles.deleteButton} onPress={() => handleRemoveTest(index)}>
-                    <Text style={styles.deleteButtonText}>🗑️</Text>
-                  </TouchableOpacity>
+              <View style={styles.formGroup}>
+                <Text style={[styles.sectionTitle, { color: COLORS.text }]}>Tests Prescribed</Text>
+
+                {selectedTests?.length === 0 ? (
+                  <View style={styles.emptyStateSimple}>
+                    <Text style={{ color: COLORS.sub, textAlign: "center" }}>No tests selected</Text>
+                    <Text style={{ color: COLORS.sub, marginTop: SPACING.xs, textAlign: "center" }}>Use the search above to add tests</Text>
+                  </View>
+                ) : (
+                  <View style={styles.listBox}>
+                    {selectedTests.map((test, index) => (
+                      <View key={test.loinc_num_ + "-" + index} style={[styles.listRow, index === selectedTests.length - 1 ? { borderBottomWidth: 0 } : {}]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.suggestionText, { color: COLORS.text }]} numberOfLines={1}>
+                            {test.name}
+                          </Text>
+                          <Text style={[styles.suggestionMeta, { color: COLORS.sub }]}>{test.loinc_num_}</Text>
+                          {test.testNotes && <Text style={[styles.noteText, { color: COLORS.sub }]}>Note: {test.testNotes}</Text>}
+                        </View>
+
+                        <View style={{ width: responsiveWidth(120), alignItems: "flex-end" }}>
+                          <Text style={[styles.amountValue, { color: COLORS.text }]}>₹{test.testPrice?.toFixed(2)}</Text>
+                          <TouchableOpacity onPress={() => handleRemoveTest(index)} style={{ marginTop: SPACING.sm }}>
+                            <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>Remove</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {selectedTests?.length > 0 && (
+                <View style={styles.formGroup}>
+                  <Text style={[styles.sectionTitle, { color: COLORS.text }]}>Payment Details</Text>
+
+                  <View style={styles.rowSimple}>
+                    <View style={styles.halfInfo}>
+                      <Text style={[styles.metaLabel, { color: COLORS.sub }]}>Gross</Text>
+                      <Text style={[styles.metaValue, { color: COLORS.text }]}>₹{grossAmount.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.halfInfo}>
+                      <Text style={[styles.metaLabel, { color: COLORS.sub }]}>GST</Text>
+                      <Text style={[styles.metaValue, { color: COLORS.text }]}>₹{gstAmount.toFixed(2)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: SPACING.md }}>
+                    <Text style={[styles.label, { color: COLORS.text }]}>Discount %</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: COLORS.inputBg, borderColor: COLORS.border, color: COLORS.text }]}
+                      placeholder="0"
+                      placeholderTextColor={placeholderColor}
+                      keyboardType="numeric"
+                      value={discount === 0 ? "" : discount.toString()}
+                      onChangeText={(text) => {
+                        const value = parseInt(text) || 0;
+                        if (value >= 0 && value <= 100) setDiscount(value);
+                      }}
+                    />
+                  </View>
+
+                  <View style={[styles.divider, { marginTop: SPACING.md }]} />
+
+                  <View style={[styles.rowSimple, { marginTop: SPACING.md }]}>
+                    <View style={styles.halfInfo}>
+                      <Text style={[styles.metaLabel, { color: COLORS.sub }]}>Total Amount</Text>
+                      <Text style={[styles.totalAmountValue, { color: COLORS.brand }]}>₹{discountedAmount.toFixed(2)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity style={[styles.secondaryButton]} onPress={() => navigation.goBack()} disabled={isSubmitting}>
+                      <Text style={styles.secondaryButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.primaryButton, isSubmitting && styles.disabledButton]} onPress={handleProceedToPay} disabled={isSubmitting}>
+                      {isSubmitting ? <ActivityIndicator size="small" color={COLORS.buttonText} /> : <Text style={styles.primaryButtonText}>Proceed to Pay</Text>}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              ))}
+              )}
             </View>
           </ScrollView>
-        )}
-      </View>
 
-      {/* Payment */}
-      {selectedTests.length > 0 && (
-        <View style={styles.paymentSection}>
-          <Text style={styles.sectionTitle}>Payment Details</Text>
-
-          <View style={styles.discountContainer}>
-            <View style={styles.discountInput}>
-              <Text style={styles.label}>Discount %</Text>
-              <TextInput style={styles.textInput} placeholder="0" keyboardType="numeric" value={discount === 0 ? "" : discount.toString()} onChangeText={(text) => {
-                const value = parseInt(text) || 0;
-                if (value >= 0 && value <= 100) setDiscount(value);
-              }} />
-            </View>
-
-            <View style={styles.discountInput}>
-              <Text style={styles.label}>Reason</Text>
-              <TextInput style={styles.textInput} placeholder="Enter reason" value={discountReason} onChangeText={setDiscountReason} />
-            </View>
-
-            <View style={styles.discountInput}>
-              <Text style={styles.label}>ID</Text>
-              <TextInput style={styles.textInput} placeholder="Enter ID" value={discountReasonID} onChangeText={setDiscountReasonID} />
-            </View>
-          </View>
-
-          <View style={styles.amountBreakdown}>
-            <View style={styles.amountRow}>
-              <Text style={styles.amountLabel}>Gross Amount:</Text>
-              <Text style={styles.amountValue}>₹{grossAmount.toFixed(2)}</Text>
-            </View>
-            <View style={styles.amountRow}>
-              <Text style={styles.amountLabel}>GST Amount:</Text>
-              <Text style={styles.amountValue}>₹{gstAmount.toFixed(2)}</Text>
-            </View>
-            <View style={styles.amountRow}>
-              <Text style={styles.amountLabel}>Discount:</Text>
-              <Text style={styles.amountValue}>-₹{(totalAmount * discount / 100).toFixed(2)}</Text>
-            </View>
-            <View style={[styles.amountRow, styles.totalAmountRow]}>
-              <Text style={styles.totalAmountLabel}>Total Amount:</Text>
-              <Text style={styles.totalAmountValue}>₹{discountedAmount.toFixed(2)}</Text>
-            </View>
-          </View>
-
-          <View style={styles.paymentActions}>
-            <TouchableOpacity style={styles.cancelActionButton} onPress={() => navigation.goBack()}>
-              <Text style={styles.cancelActionText}>Cancel</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.payButton} onPress={handleProceedToPay}>
-              <Text style={styles.payButtonText}>
-                Total: ₹{discountedAmount.toFixed(2)}
-                {"\n"}
-                <Text style={styles.payButtonSubtext}>Proceed to Pay</Text>
-              </Text>
-            </TouchableOpacity>
+          <View style={[styles.footerWrap, { bottom: insets.bottom, zIndex: 50, elevation: 10 }]}>
+            <Footer active={"walkin"} brandColor={COLORS.brand} />
           </View>
         </View>
-      )}
-    </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  section: { padding: 16, borderBottomWidth: 1, borderBottomColor: "#e5e7eb" },
-  sectionTitle: { fontSize: 18, fontWeight: "700", color: "#1f2937", marginBottom: 16 },
-  formRow: { flexDirection: isSmallScreen ? "column" : "row", gap: 12, marginBottom: 12 },
-  inputContainer: { flex: 1, marginBottom: isSmallScreen ? 12 : 0 },
-  label: { fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 4 },
-  textInput: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: "#fff" },
-  disabledInput: { backgroundColor: "#f3f4f6", color: "#6b7280" },
-  fileUploadContainer: { padding: 16 },
-  uploadArea: { borderWidth: 2, borderColor: "#9ca3af", borderStyle: "dashed", borderRadius: 8, padding: 32, alignItems: "center", justifyContent: "center", backgroundColor: "#f9fafb" },
-  uploadIcon: { fontSize: 48, marginBottom: 16 },
-  uploadText: { textAlign: "center", color: "#6b7280", marginBottom: 16, fontSize: 14 },
-  uploadSubtext: { fontSize: 12, color: "#9ca3af" },
-  uploadedFilesContainer: { marginTop: 16 },
-  uploadedFilesTitle: { fontSize: 16, fontWeight: "600", color: "#374151", marginBottom: 12 },
-  uploadedFilesList: { flexDirection: "row", gap: 12 },
-  uploadedFile: { alignItems: "center", padding: 12, borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8, minWidth: 120, backgroundColor: "#fff" },
-  fileThumbnail: { width: 64, height: 64, borderRadius: 4 },
-  pdfThumbnail: { width: 64, height: 64, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center", borderRadius: 4 },
-  pdfIcon: { fontSize: 32 },
-  fileName: { fontSize: 12, color: "#374151", marginTop: 8, textAlign: "center" },
-  fileActions: { flexDirection: "row", marginTop: 8, gap: 4 },
-  viewButton: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: "#3b82f6", borderRadius: 4 },
-  viewButtonText: { color: "#fff", fontSize: 12, fontWeight: "500" },
-  deleteButton: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: "#ef4444", borderRadius: 4 },
-  deleteButtonText: { color: "#fff", fontSize: 12, fontWeight: "500" },
-  searchContainer: { flexDirection: isSmallScreen ? "column" : "row", gap: 12, alignItems: "flex-start" },
-  searchInputContainer: { flex: 1, position: "relative", width: isSmallScreen ? "100%" : "auto" },
-  searchInput: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 12, fontSize: 16, backgroundColor: "#fff" },
-  suggestionsContainer: { position: "absolute", top: "100%", left: 0, right: 0, backgroundColor: "#fff", borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8, zIndex: 1000, maxHeight: 200, elevation: 4, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  suggestionsList: { maxHeight: 200 },
-  suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#f3f4f6", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  suggestionText: { fontSize: 14, color: "#374151", flex: 1 },
-  suggestionPrice: { fontSize: 14, color: "#059669", fontWeight: "600" },
-  noteInputContainer: { width: isSmallScreen ? "100%" : 120 },
-  noteInput: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 12, fontSize: 14, backgroundColor: "#fff", height: 80, textAlignVertical: "top" },
-  addButton: { backgroundColor: "#14b8a6", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8, alignItems: "center", justifyContent: "center", minWidth: 80, alignSelf: isSmallScreen ? "stretch" : "auto" },
-  addButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  emptyState: { padding: 40, alignItems: "center", justifyContent: "center" },
-  emptyStateText: { fontSize: 16, color: "#9ca3af", textAlign: "center" },
-  table: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8, overflow: "hidden", minWidth: isSmallScreen ? 600 : 800 },
-  tableHeader: { flexDirection: "row", backgroundColor: "#14b8a6", paddingVertical: 12, paddingHorizontal: 8 },
-  tableHeaderCell: { flex: 1, fontSize: 14, fontWeight: "600", color: "#fff", textAlign: "center", minWidth: 100 },
-  tableRow: { flexDirection: "row", paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "#e5e7eb", alignItems: "center", minHeight: 60 },
-  tableCell: { flex: 1, fontSize: 14, color: "#374151", textAlign: "center", minWidth: 100 },
-  quantityInput: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 4, padding: 4, textAlign: "center", fontSize: 14, minWidth: 60 },
-  paymentSection: { padding: 16, backgroundColor: "#f8fafc" },
-  discountContainer: { flexDirection: isSmallScreen ? "column" : "row", gap: 12, marginBottom: 16 },
-  discountInput: { flex: 1, marginBottom: isSmallScreen ? 12 : 0 },
-  amountBreakdown: { backgroundColor: "#fff", padding: 16, borderRadius: 8, marginBottom: 16 },
-  amountRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  amountLabel: { fontSize: 14, color: "#6b7280" },
-  amountValue: { fontSize: 14, color: "#374151", fontWeight: "500" },
-  totalAmountRow: { borderTopWidth: 1, borderTopColor: "#e5e7eb", paddingTop: 8, marginTop: 8 },
-  totalAmountLabel: { fontSize: 16, fontWeight: "600", color: "#1f2937" },
-  totalAmountValue: { fontSize: 18, fontWeight: "700", color: "#059669" },
-  paymentActions: { flexDirection: isSmallScreen ? "column" : "row", justifyContent: "space-between", alignItems: "center", gap: isSmallScreen ? 12 : 0 },
-  cancelActionButton: { paddingHorizontal: 24, paddingVertical: 12, borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, alignSelf: isSmallScreen ? "stretch" : "auto", alignItems: "center" },
-  cancelActionText: { fontSize: 16, color: "#374151", fontWeight: "500" },
-  payButton: { backgroundColor: "#14b8a6", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8, alignItems: "center", alignSelf: isSmallScreen ? "stretch" : "auto" },
-  payButtonText: { color: "#fff", fontSize: 16, fontWeight: "600", textAlign: "center" },
-  payButtonSubtext: { fontSize: 14, fontWeight: "400" },
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  container: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xl,
+  },
+  section: {
+    marginBottom: SPACING.md,
+  },
+  sectionTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+    marginBottom: SPACING.xs,
+  },
+  formGroup: {
+    marginBottom: SPACING.lg,
+  },
+  label: {
+    fontSize: FONT_SIZE.sm,
+    marginBottom: SPACING.xs,
+    fontWeight: "600",
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: SPACING.md,
+    fontSize: FONT_SIZE.md,
+  },
+  disabledInput: {
+    opacity: 0.9,
+  },
+  formRowSimple: {
+    flexDirection: isSmallDevice ? "column" : "row",
+    gap: SPACING.md,
+  },
+  formHalf: {
+    flex: 1,
+  },
+  uploadArea: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: 8,
+    padding: SPACING.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    borderColor: COLORS.border,
+  },
+  uploadText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  uploadSubtext: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginTop: SPACING.xs,
+    textAlign: "center",
+  },
+  uploadedFilesTitle: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+    marginBottom: SPACING.sm,
+  },
+  uploadedFilesList: {
+    flexDirection: "row",
+    gap: SPACING.md,
+  },
+  uploadedFile: {
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginRight: SPACING.md,
+    alignItems: "center",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  fileThumbnail: {
+    width: responsiveWidth(64),
+    height: responsiveHeight(64),
+    borderRadius: 8,
+  },
+  pdfThumbnail: {
+    width: responsiveWidth(64),
+    height: responsiveHeight(64),
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.lightGrey,
+  },
+  fileName: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.sm,
+    maxWidth: responsiveWidth(100),
+    textAlign: "center",
+  },
+  fileActions: {
+    flexDirection: "row",
+    marginTop: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  viewButton: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 6,
+    backgroundColor: COLORS.info,
+  },
+  viewButtonText: {
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.xs,
+  },
+  deleteButton: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 6,
+    backgroundColor: COLORS.danger,
+  },
+  suggestionsBox: {
+    marginTop: SPACING.sm,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1,
+  },
+  suggestionRow: {
+    padding: SPACING.md,
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+  },
+  suggestionText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+  suggestionMeta: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs,
+  },
+  suggestionPrice: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+  },
+  primaryButton: {
+    backgroundColor: COLORS.brand,
+    padding: SPACING.md,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  primaryButtonText: {
+    color: COLORS.buttonText,
+    fontWeight: "700",
+    fontSize: FONT_SIZE.md,
+  },
+  disabledButton: {
+    backgroundColor: COLORS.sub,
+    opacity: 0.6,
+  },
+  emptyStateSimple: {
+    padding: SPACING.xl,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.card,
+  },
+  listBox: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: SPACING.sm,
+    backgroundColor: COLORS.card,
+  },
+  listRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: SPACING.sm,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+  },
+  amountValue: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+  },
+  noteText: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs,
+    fontStyle: "italic",
+  },
+  rowSimple: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  halfInfo: {
+    flex: 1,
+  },
+  metaLabel: {
+    fontSize: FONT_SIZE.xs,
+  },
+  metaValue: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "600",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  totalAmountValue: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+  },
+  actionButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: SPACING.lg,
+    gap: SPACING.md,
+  },
+  secondaryButton: {
+    padding: SPACING.md,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    flex: 1,
+  },
+  secondaryButtonText: {
+    color: COLORS.text,
+    fontWeight: "600",
+  },
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: FOOTER_H,
+    justifyContent: "center",
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  errorText: {
+    color: COLORS.danger,
+    marginTop: SPACING.xs,
+    fontSize: FONT_SIZE.xs,
+  },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: SPACING.sm,
+    padding: SPACING.sm,
+  },
+  loadingText: {
+    marginLeft: SPACING.sm,
+    color: COLORS.sub,
+    fontSize: FONT_SIZE.sm,
+  },
 });
 
 export default SaleComp;

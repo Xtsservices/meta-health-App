@@ -3,23 +3,24 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   StatusBar,
   TouchableOpacity,
-  Dimensions,
   Platform,
   ActivityIndicator,
   Modal,
-  FlatList,
   Animated,
   Easing,
-  Image,
   Pressable,
   Alert,
+  FlatList,
+  SafeAreaView,
+  ScrollView,
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import LinearGradient from 'react-native-linear-gradient';
 
 // Custom Icons
 import {
@@ -30,12 +31,24 @@ import {
   ShoppingBagIcon,
   XIcon,
 } from "../../../utils/SvgIcons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../../auth/auth";
-import { RootState } from "../../../store/store";
 import PatientOuterTable from "../../Alerts/AlertsLab/OuterTable";
-import CustomTabs from "../../Alerts/AlertsLab/CustomTabs";
 import Footer from "../../dashboard/footer";
+
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE,
+  FOOTER_HEIGHT,
+  isTablet,
+  isSmallDevice,
+  SCREEN_WIDTH,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { showError } from "../../../store/toast.slice";
+
+const FOOTER_H = FOOTER_HEIGHT;
+const brandColor = COLORS.brand;
 
 // Types
 type LabTestOrder = {
@@ -67,11 +80,6 @@ interface SidebarItem {
   variant?: "default" | "danger" | "muted";
 }
 
-const { width: W, height: H } = Dimensions.get("window");
-const isTablet = W >= 768;
-const isSmallScreen = W < 375;
-const brandColor = '#14b8a6';
-
 // Sidebar Component
 const Sidebar: React.FC<{
   open: boolean;
@@ -83,7 +91,7 @@ const Sidebar: React.FC<{
   bottomItems: SidebarItem[];
 }> = ({ open, onClose, userName, userImage, onProfile, items, bottomItems }) => {
   const slide = React.useRef(new Animated.Value(-300)).current;
-  const width = Math.min(320, W * 0.82);
+  const width = Math.min(320, SCREEN_WIDTH * 0.82);
 
   useEffect(() => {
     Animated.timing(slide, {
@@ -100,45 +108,45 @@ const Sidebar: React.FC<{
       <Animated.View style={[styles.sidebarContainer, { width, transform: [{ translateX: slide }] }]}>
         <View style={styles.sidebarHeader}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <XIcon size={24} color="#0b1220" />
+            <XIcon size={24} color={COLORS.text} />
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.sidebarContent}>
-          {items.map((item) => (
+          {items?.map((item) => (
             <TouchableOpacity
-              key={item.key}
+              key={item?.key}
               style={styles.sidebarButton}
               onPress={() => {
                 onClose();
-                item.onPress();
+                item?.onPress?.();
               }}
             >
-              <item.icon size={20} color="#0b1220" />
-              <Text style={styles.sidebarButtonText}>{item.label}</Text>
+              <item.icon size={20} color={COLORS.text} />
+              <Text style={styles.sidebarButtonText}>{item?.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
         <View style={styles.bottomActions}>
-          {bottomItems.map((item) => (
+          {bottomItems?.map((item) => (
             <TouchableOpacity
-              key={item.key}
+              key={item?.key}
               style={[
                 styles.bottomButton,
-                item.variant === "danger" && styles.logoutButton,
+                item?.variant === "danger" && styles.logoutButton,
               ]}
               onPress={() => {
                 onClose();
-                item.onPress();
+                item?.onPress?.();
               }}
             >
-              <item.icon size={20} color={item.variant === "danger" ? "#b91c1c" : "#14b8a6"} />
+              <item.icon size={20} color={item?.variant === "danger" ? COLORS.danger : COLORS.brand} />
               <Text style={[
                 styles.bottomButtonText,
-                { color: item.variant === "danger" ? "#b91c1c" : "#14b8a6" }
+                { color: item?.variant === "danger" ? COLORS.danger : COLORS.brand }
               ]}>
-                {item.label}
+                {item?.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -148,67 +156,104 @@ const Sidebar: React.FC<{
   );
 };
 
-// Header Component
-const HeaderBar: React.FC<{ 
-  title: string; 
-  onMenu: () => void;
-}> = ({ title, onMenu }) => {
-  return (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onMenu} style={styles.menuBtn}>
-        <MenuIcon size={isSmallScreen ? 24 : 30} color="#ffffffff" />
-      </TouchableOpacity>
-    </View>
-  );
-};
-
 // IPD Orders Component
 const IpdOrders: React.FC = () => {
-  const user = useSelector((s: RootState) => s.currentUser);
+  const navigation = useNavigation<any>();
+  const dispatch = useDispatch();
+  const user = useSelector((s: any) => s.currentUser);
   const [ipdOrders, setIpdOrders] = useState<LabTestOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const rowsPerPage = 10;
 
   const getPatientBillingData = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("token");
       if (!user?.hospitalID || !token) {
-        console.log("Missing hospitalID or token");
+        dispatch(showError("Not authorized. Please login again."));
         return [];
       }
 
       const response = await AuthFetch(
-        `test/${user.roleName}/${user.hospitalID}/approved/getBillingData`,
+        `test/${user?.roleName}/${user?.hospitalID}/approved/getBillingData`,
         token
       );
 
-      console.log("IPD Billing API Response:", response);
-
-      if (response?.data?.message === "success" && Array.isArray(response?.data?.billingData)) {
-        // Filter for IPD orders (ptype 2 or 3)
-        const filterData: LabTestOrder[] = response.data.billingData.filter(
-          (each: LabTestOrder) => each.ptype === 2 || each.ptype === 3
+      const billingData = response?.data?.billingData || response?.billingData;
+      
+      if ((response?.data?.message === "success" || response?.message === "success") && Array.isArray(billingData)) {
+        const filterData: LabTestOrder[] = billingData?.filter(
+          (each: LabTestOrder) => each?.ptype === 2 || each?.ptype === 3
         );
 
-        console.log("Filtered IPD Orders:", filterData);
-
-        // Sort latest data on top
-        const sortedData = filterData.sort((a: LabTestOrder, b: LabTestOrder) => {
-          const dateA = new Date(a.addedOn || 0).getTime();
-          const dateB = new Date(b.addedOn || 0).getTime();
-          return dateB - dateA; // latest first
+        const sortedData = filterData?.sort((a: LabTestOrder, b: LabTestOrder) => {
+          const dateA = new Date(a?.completed_status || ((a?.testsList?.[0] as any)?.approved_status) || a?.addedOn || 0).getTime();
+          const dateB = new Date(b?.completed_status || ((b?.testsList?.[0] as any)?.approved_status) || b?.addedOn || 0).getTime();
+          return dateB - dateA;
         });
 
         return sortedData;
       } else {
-        console.log("Invalid response format for IPD:", response);
+        dispatch(showError("No IPD orders found"));
         return [];
       }
     } catch (error) {
-      console.error("Error fetching IPD billing data:", error);
+      dispatch(showError("Failed to load IPD orders"));
       return [];
     }
   }, [user?.hospitalID, user?.roleName]);
+
+  // Pagination calculations
+  const totalItems = ipdOrders?.length ?? 0;
+  const totalPages = Math.ceil(totalItems / rowsPerPage);
+  
+  const indexOfFirstRow = currentPage * rowsPerPage;
+  const indexOfLastRow = indexOfFirstRow + rowsPerPage;
+  const pagedData = ipdOrders?.slice(indexOfFirstRow, indexOfLastRow) ?? [];
+
+  const handleProceedToPay = (order: LabTestOrder) => {
+    const dueAmount = calculateDueAmount(order);
+
+    navigation.navigate("PaymentScreen", {
+      orderData: order,
+      amount: dueAmount,
+      department: user?.roleName || 'lab',
+      user: user,
+      onPaymentSuccess: () => {
+        refreshOrders();
+      }
+    });
+  };
+
+  const refreshOrders = async () => {
+    try {
+      const data = await getPatientBillingData();
+      setIpdOrders(data);
+    } catch (error) {
+      dispatch(showError("Failed to refresh orders"));
+    }
+  };
+
+  const calculateDueAmount = (order: LabTestOrder) => {
+    if (!order?.testsList || order?.testsList?.length === 0) return 0;
+    
+    let totalAmount = 0;
+    order?.testsList?.forEach((test: any) => {
+      const price = test?.testPrice || 0;
+      const gst = test?.gst || 18;
+      totalAmount += price + (price * gst) / 100;
+    });
+    
+    const paidAmount = parseFloat(order?.paidAmount || "0");
+    return Math.max(0, totalAmount - paidAmount);
+  };
+
+  // Pagination navigation function
+  const goToPage = (page: number) => {
+    if (page >= 0 && page < totalPages) {
+      setCurrentPage(page);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -216,10 +261,8 @@ const IpdOrders: React.FC = () => {
       try {
         const data = await getPatientBillingData();
         setIpdOrders(data);
-        console.log("IPD Orders set:", data);
       } catch (error) {
-        console.error("Error loading IPD data:", error);
-        Alert.alert("Error", "Failed to load IPD orders");
+        dispatch(showError("Failed to load IPD orders"));
       } finally {
         setLoading(false);
       }
@@ -240,65 +283,120 @@ const IpdOrders: React.FC = () => {
   }
 
   return (
-    <PatientOuterTable
-      title="IPD Orders"
-      data={ipdOrders}
-      isButton={false}
-      patientOrderPay="patientOrderPay"
-      isBilling={true}
-    />
+    <View style={{ flex: 1 }}>
+      <PatientOuterTable
+        title="IPD Orders"
+        data={pagedData}
+        isButton={false}
+        patientOrderPay="patientOrderPay"
+        isBilling={true}
+        onProceedToPay={handleProceedToPay}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={goToPage}
+      />
+    </View>
   );
 };
 
 // OPD Orders Component
 const OpdOrders: React.FC = () => {
-  const user = useSelector((s: RootState) => s.currentUser);
+  const navigation = useNavigation<any>();
+  const dispatch = useDispatch();
+  const user = useSelector((s: any) => s.currentUser);
   const [opdOrders, setOpdOrders] = useState<LabTestOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const rowsPerPage = 10;
 
   const getPatientBillingData = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("token");
       if (!user?.hospitalID || !token) {
-        console.log("Missing hospitalID or token for OPD");
+        dispatch(showError("Not authorized. Please login again."));
         return [];
       }
 
       const response = await AuthFetch(
-        `test/${user.roleName}/${user.hospitalID}/approved/getBillingData`,
+        `test/${user?.roleName}/${user?.hospitalID}/approved/getBillingData`,
         token
       );
 
-      console.log("OPD Billing API Response:", response);
-
-      // Handle both response formats
       const billingData = response?.data?.billingData || response?.billingData;
       
       if ((response?.data?.message === "success" || response?.message === "success") && Array.isArray(billingData)) {
-        // Filter for OPD orders (ptype 21)
-        const filterData = billingData.filter(
-          (each: LabTestOrder) => each.ptype === 21
+        const filterData = billingData?.filter(
+          (each: LabTestOrder) => each?.ptype === 21
         );
 
-        console.log("Filtered OPD Orders:", filterData);
-
-        // Sort latest data on top
-        const sortedData = filterData.sort((a: LabTestOrder, b: LabTestOrder) => {
-          const dateA = new Date(a.addedOn || 0).getTime();
-          const dateB = new Date(b.addedOn || 0).getTime();
-          return dateB - dateA; // latest first
+        const sortedData = filterData?.sort((a: LabTestOrder, b: LabTestOrder) => {
+          const dateA = new Date(a?.completed_status || ((a?.testsList?.[0] as any)?.approved_status) || a?.addedOn || 0).getTime();
+          const dateB = new Date(b?.completed_status || ((b?.testsList?.[0] as any)?.approved_status) || b?.addedOn || 0).getTime();
+          return dateB - dateA;
         });
 
         return sortedData;
       } else {
-        console.log("Invalid response format for OPD:", response);
+        dispatch(showError("No OPD orders found"));
         return [];
       }
     } catch (error) {
-      console.error("Error fetching OPD billing data:", error);
+      dispatch(showError("Failed to load OPD orders"));
       return [];
     }
   }, [user?.hospitalID, user?.roleName]);
+
+  // Pagination calculations
+  const totalItems = opdOrders?.length ?? 0;
+  const totalPages = Math.ceil(totalItems / rowsPerPage);
+  
+  const indexOfFirstRow = currentPage * rowsPerPage;
+  const indexOfLastRow = indexOfFirstRow + rowsPerPage;
+  const pagedData = opdOrders?.slice(indexOfFirstRow, indexOfLastRow) ?? [];
+
+  const handleProceedToPay = (order: LabTestOrder) => {
+    const dueAmount = calculateDueAmount(order);
+
+    navigation.navigate("PaymentScreen", {
+      orderData: order,
+      amount: dueAmount,
+      department: user?.roleName || 'lab',
+      user: user,
+      onPaymentSuccess: () => {
+        refreshOrders();
+      }
+    });
+  };
+
+  const refreshOrders = async () => {
+    try {
+      const data = await getPatientBillingData();
+      setOpdOrders(data);
+    } catch (error) {
+      dispatch(showError("Failed to refresh orders"));
+    }
+  };
+
+  const calculateDueAmount = (order: LabTestOrder) => {
+    if (!order?.testsList || order?.testsList?.length === 0) return 0;
+    
+    let totalAmount = 0;
+    order?.testsList?.forEach((test: any) => {
+      const price = test?.testPrice || 0;
+      const gst = test?.gst || 18;
+      totalAmount += price + (price * gst) / 100;
+    });
+    
+    const paidAmount = parseFloat(order?.paidAmount || "0");
+    return Math.max(0, totalAmount - paidAmount);
+  };
+
+  // Pagination navigation function
+  const goToPage = (page: number) => {
+    if (page >= 0 && page < totalPages) {
+      setCurrentPage(page);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -306,10 +404,8 @@ const OpdOrders: React.FC = () => {
       try {
         const data = await getPatientBillingData();
         setOpdOrders(data);
-        console.log("OPD Orders set:", data);
       } catch (error) {
-        console.error("Error loading OPD data:", error);
-        Alert.alert("Error", "Failed to load OPD orders");
+        dispatch(showError("Failed to load OPD orders"));
       } finally {
         setLoading(false);
       }
@@ -330,13 +426,19 @@ const OpdOrders: React.FC = () => {
   }
 
   return (
-    <PatientOuterTable
-      title="OPD Orders"
-      data={opdOrders}
-      isButton={false}
-      patientOrderOpd="patientOrderOpd"
-      isBilling={true}
-    />
+    <View style={{ flex: 1 }}>
+      <PatientOuterTable
+        title="OPD Orders"
+        data={pagedData}
+        isButton={false}
+        patientOrderOpd="patientOrderOpd"
+        isBilling={true}
+        onProceedToPay={handleProceedToPay}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={goToPage}
+      />
+    </View>
   );
 };
 
@@ -362,26 +464,38 @@ const OrdersTabs: React.FC = () => {
 
   return (
     <View style={styles.tabsMainContainer}>
-      <View style={styles.tabHeaders}>
-        {tabs.map((tab) => (
+      {/* Enhanced Tab Headers with Gradient */}
+      <View style={styles.tabContainer}>
+        {tabs?.map((tab) => (
           <TouchableOpacity
-            key={tab.key}
-            style={[
-              styles.tabHeaderButton,
-              activeTab === tab.label && styles.activeTabHeader
-            ]}
-            onPress={() => setActiveTab(tab.label)}
+            key={tab?.key}
+            style={[styles.tab, activeTab === tab?.label && styles.tabActive]}
+            onPress={() => {
+              setActiveTab(tab?.label);
+            }}
           >
-            <Text style={[
-              styles.tabHeaderText,
-              activeTab === tab.label && styles.activeTabHeaderText
-            ]}>
-              {tab.label}
-            </Text>
+            {activeTab === tab?.label ? (
+              <LinearGradient
+                colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                style={styles.tabGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={[styles.tabText, styles.tabTextActive]}>
+                  {tab?.label}
+                </Text>
+              </LinearGradient>
+            ) : (
+              <Text style={[styles.tabText, { color: COLORS.sub }]}>
+                {tab?.label}
+              </Text>
+            )}
           </TouchableOpacity>
         ))}
       </View>
-      <View style={styles.tabContent}>
+
+      {/* Tab Content */}
+      <View style={styles.tabContentArea}>
         {renderContent()}
       </View>
     </View>
@@ -391,12 +505,11 @@ const OrdersTabs: React.FC = () => {
 // Main BillingLab Component
 const BillingLab: React.FC = () => {
   const navigation = useNavigation<any>();
-  const user = useSelector((s: RootState) => s.currentUser);
+  const user = useSelector((s: any) => s.currentUser);
   const insets = useSafeAreaInsets();
 
   const departmentType = user?.roleName === 'radiology' ? 'radiology' : 'pathology';
   const departmentName = departmentType === 'radiology' ? 'Radiology' : 'Laboratory';
-  const billingTitle = `${departmentName} Billing`;
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -463,8 +576,7 @@ const BillingLab: React.FC = () => {
 
   return (
     <View style={styles.safeArea}>
-      <StatusBar barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"} backgroundColor="#14b8a6" />
-
+      <StatusBar barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"} backgroundColor={COLORS.brand} />
       <View style={styles.container}>
         <OrdersTabs />
       </View>
@@ -496,88 +608,106 @@ const BillingLab: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: "#fff" 
+    backgroundColor: COLORS.bg 
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.bg,
     minHeight: 200,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: isSmallScreen ? 14 : 16,
-    color: '#64748b',
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
   },
   header: {
-    height: isSmallScreen ? 80 : 100,
-    paddingHorizontal: isSmallScreen ? 12 : 16,
+    height: isSmallDevice ? 80 : 100,
+    paddingHorizontal: SPACING.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#14b8a6",
+    backgroundColor: COLORS.brand,
+    paddingTop: Platform.OS === 'ios' ? SPACING.lg : 0,
   },
   headerTitle: { 
-    fontSize: isSmallScreen ? 20 : 24, 
+    fontSize: isSmallDevice ? FONT_SIZE.lg : FONT_SIZE.xl, 
     fontWeight: "700", 
-    color: "#ffffff" 
+    color: COLORS.buttonText 
   },
   menuBtn: {
-    width: isSmallScreen ? 34 : 38,
-    height: isSmallScreen ? 34 : 38,
+    width: isSmallDevice ? 34 : 38,
+    height: isSmallDevice ? 34 : 38,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   container: { 
     flex: 1, 
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.bg,
+    marginBottom: FOOTER_H,
   },
   tabsMainContainer: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.bg,
   },
-  tabHeaders: {
+  // --- Tab styles copied from AlertsLab (gradient tabs) ---
+  tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: isSmallScreen ? 12 : 16,
-    paddingTop: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    backgroundColor: COLORS.card,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
+    borderRadius: 12,
+    padding: 4,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    overflow: 'hidden',
+    height: 52,
   },
-  tabHeaderButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    marginRight: 8,
+  tab: {
+    flex: 1,
     borderRadius: 8,
-    backgroundColor: "transparent",
+    overflow: 'hidden',
   },
-  activeTabHeader: {
-    backgroundColor: "#14b8a6",
+  tabActive: {
+    // gradient applied via LinearGradient wrapper
   },
-  tabHeaderText: {
-    fontSize: 16,
+  tabGradient: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabText: {
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.sm,
     fontWeight: "600",
-    color: "#64748b",
+    textAlign: "center",
+    paddingVertical: SPACING.sm,
   },
-  activeTabHeaderText: {
-    color: "#ffffff",
+  tabTextActive: {
+    color: COLORS.buttonText,
+    fontWeight: "700",
+  },
+  tabContentArea: {
+    flex: 1,
   },
   tabContent: {
     flex: 1,
-    padding: isSmallScreen ? 12 : 16,
   },
+  // --- end tab styles ---
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 0,
-    backgroundColor: "#fff",
+    height: FOOTER_H,
+    backgroundColor: COLORS.card,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#e2e8f0",
+    borderTopColor: COLORS.border,
     zIndex: 10,
     elevation: 6,
   },
@@ -586,44 +716,43 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     zIndex: 9,
   },
-  // Sidebar Styles
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: COLORS.overlay,
   },
   sidebarContainer: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.md,
     elevation: 8,
-    shadowColor: "#000",
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.2,
     shadowRadius: 10,
     shadowOffset: { width: 2, height: 0 },
   },
   sidebarHeader: {
-    paddingBottom: 20,
+    paddingBottom: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    marginBottom: 16,
+    borderBottomColor: COLORS.border,
+    marginBottom: SPACING.md,
   },
   closeButton: {
     position: "absolute",
     right: 0,
-    top: -10,
+    top: -SPACING.sm,
     width: 40,
     height: 40,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f1f5f9",
+    backgroundColor: COLORS.pill,
   },
   sidebarContent: {
     flex: 1,
@@ -631,36 +760,36 @@ const styles = StyleSheet.create({
   sidebarButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
     borderRadius: 8,
-    marginBottom: 4,
-    gap: 12,
+    marginBottom: SPACING.xs,
+    gap: SPACING.sm,
   },
   sidebarButtonText: {
-    fontSize: isSmallScreen ? 13 : 15,
+    fontSize: isSmallDevice ? FONT_SIZE.sm : FONT_SIZE.md,
     fontWeight: "600",
-    color: "#0b1220",
+    color: COLORS.text,
   },
   bottomActions: {
-    paddingTop: 20,
+    paddingTop: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    gap: 8,
+    borderTopColor: COLORS.border,
+    gap: SPACING.sm,
   },
   bottomButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
     borderRadius: 8,
   },
   logoutButton: {
-    backgroundColor: "#fef2f2",
+    backgroundColor: COLORS.chipBP,
   },
   bottomButtonText: {
-    fontSize: isSmallScreen ? 13 : 14,
+    fontSize: isSmallDevice ? FONT_SIZE.sm : FONT_SIZE.sm,
     fontWeight: "600",
   },
 });

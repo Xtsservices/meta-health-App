@@ -1,100 +1,72 @@
 import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-} from "react-native";
-
-const { width: W } = Dimensions.get("window");
-const isTablet = W >= 768;
+import { View, Text, StyleSheet } from "react-native";
+import { SPACING, FONT_SIZE, isTablet } from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
 
 interface Test {
-  testID: number;
-  testName: string;
-  testPrice: number | null;
-  gst: number | null;
+  testID?: number | string;
+  testName?: string;
+  testPrice?: number | null;
+  gst?: number | null;
 }
 
 interface Discount {
   discount: number;
-  discountReason: string;
-  discountReasonID: string;
+  discountReason?: string;
+  discountReasonID?: string;
 }
 
 interface Patient {
-  patientID: number;
-  pName: string;
-  firstName: string;
-  lastName: string;
-  addedOn: string;
-  departmemtType: number;
-  hospitalID: number;
-  category: string;
-  discount: Discount[] | null;
-  testsList: Test[];
+  testsList?: Test[];
+  discount?: Discount[] | null;
 }
 
-interface IpdInnerTableProps {
+interface Props {
   data: Patient;
-  taxInvoice?: string;
-  type?: string;
 }
 
-const IpdOpdInnerTable: React.FC<IpdInnerTableProps> = ({
-  data,
-}) => {
-  const calculateTotalAmount = () => {
-    const subtotal = data.testsList.reduce((acc, item) => {
-      const testPrice = item.testPrice || 0;
-      const gst = item.gst || 0;
-      return acc + testPrice + (testPrice * gst) / 100;
-    }, 0);
+const IpdOpdInnerTable: React.FC<Props> = ({ data }) => {
+  const subtotal = (data?.testsList ?? []).reduce((acc, item) => {
+    const testPrice = item?.testPrice ?? 0;
+    const gst = item?.gst ?? 0;
+    return acc + testPrice + (testPrice * gst) / 100;
+  }, 0);
 
-    const discountPercentage = data.discount?.[0]?.discount ?? 0;
-    const finalTotal = subtotal - (subtotal * discountPercentage) / 100;
-
-    return finalTotal;
-  };
+  const discountPercentage = data?.discount?.[0]?.discount ?? 0;
+  const finalTotal = subtotal - (subtotal * discountPercentage) / 100;
 
   return (
     <View style={styles.container}>
-      {/* Inner Table Header */}
-      <View style={styles.innerTableHeader}>
-        <Text style={[styles.innerHeaderCell, { flex: 0.5 }]}>S.No</Text>
-        <Text style={[styles.innerHeaderCell, { flex: 1 }]}>Test ID</Text>
-        <Text style={[styles.innerHeaderCell, { flex: 2 }]}>Test Name</Text>
-        <Text style={[styles.innerHeaderCell, { flex: 1 }]}>Charges</Text>
-        <Text style={[styles.innerHeaderCell, { flex: 1 }]}>GST</Text>
-        <Text style={[styles.innerHeaderCell, { flex: 1 }]}>Amount</Text>
+      <View style={styles.headerRow}>
+        <Text style={[styles.hCell, styles.colSno]}>S.No</Text>
+        <Text style={[styles.hCell, styles.colId]}>Test ID</Text>
+        <Text style={[styles.hCell, styles.colName]}>Test Name</Text>
+        <Text style={[styles.hCell, styles.colCharges]}>Charges</Text>
+        <Text style={[styles.hCell, styles.colGst]}>GST</Text>
+        <Text style={[styles.hCell, styles.colAmount]}>Amount</Text>
       </View>
 
-      {/* Inner Table Body */}
-      <ScrollView style={styles.innerTableBody}>
-        {data.testsList?.map((item, index) => {
-          const testPrice = item.testPrice || 0;
-          const gst = item.gst || 0;
-          const gstAmount = (testPrice * gst) / 100;
-          const totalAmount = testPrice + gstAmount;
+      {(data?.testsList ?? []).map((t, i) => {
+        const price = t?.testPrice ?? 0;
+        const gst = t?.gst ?? 0;
+        const gstAmount = (price * gst) / 100;
+        const total = price + gstAmount;
 
-          return (
-            <View key={index} style={styles.innerTableRow}>
-              <Text style={[styles.innerCell, { flex: 0.5 }]}>{index + 1}</Text>
-              <Text style={[styles.innerCell, { flex: 1 }]}>{item.testID}</Text>
-              <Text style={[styles.innerCell, { flex: 2 }]}>{item.testName}</Text>
-              <Text style={[styles.innerCell, { flex: 1 }]}>₹{testPrice.toFixed(2)}</Text>
-              <Text style={[styles.innerCell, { flex: 1 }]}>₹{gstAmount.toFixed(2)}</Text>
-              <Text style={[styles.innerCell, { flex: 1 }]}>₹{totalAmount.toFixed(2)}</Text>
-            </View>
-          );
-        })}
-      </ScrollView>
+        return (
+          <View key={`${t?.testID}-${i}`} style={styles.row}>
+            <Text style={[styles.cell, styles.colSno]}>{i + 1}</Text>
+            <Text style={[styles.cell, styles.colId]}>{t?.testID ?? "-"}</Text>
+            <Text style={[styles.cell, styles.colName]}>{t?.testName ?? "N/A"}</Text>
+            <Text style={[styles.cell, styles.colCharges]}>₹{price.toFixed(2)}</Text>
+            <Text style={[styles.cell, styles.colGst]}>₹{gstAmount.toFixed(2)}</Text>
+            <Text style={[styles.cell, styles.colAmount]}>₹{total.toFixed(2)}</Text>
+          </View>
+        );
+      })}
 
-      {/* Total Amount */}
-      <View style={styles.totalContainer}>
-        <Text style={styles.totalLabel}>Total Amount:</Text>
-        <Text style={styles.totalAmount}>₹{calculateTotalAmount().toFixed(2)}</Text>
+      <View style={styles.totalRow}>
+        <Text style={styles.totalLabel}>Total Amount</Text>
+        <Text style={styles.totalValue}>₹{finalTotal.toFixed(2)}</Text>
       </View>
     </View>
   );
@@ -102,58 +74,83 @@ const IpdOpdInnerTable: React.FC<IpdInnerTableProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    overflow: "hidden",
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    marginTop: SPACING.sm,
   },
-  innerTableHeader: {
+  headerRow: {
     flexDirection: "row",
-    backgroundColor: "#4f46e5",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  innerHeaderCell: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#ffffff",
-    textAlign: "center",
-  },
-  innerTableBody: {
-    maxHeight: 200,
-  },
-  innerTableRow: {
-    flexDirection: "row",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: COLORS.border,
     alignItems: "center",
+    backgroundColor: COLORS.brand,
   },
-  innerCell: {
-    fontSize: 14,
-    color: "#374151",
-    textAlign: "center",
+  hCell: {
+    fontWeight: "700",
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.buttonText,
+    textAlign: "left",
+    paddingHorizontal: SPACING.xs,
   },
-  totalContainer: {
+  row: {
+    flexDirection: "row",
+    paddingVertical: SPACING.md,
+    alignItems: "flex-start",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border + '20',
+  },
+  cell: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    paddingHorizontal: SPACING.xs,
+    flexWrap: "wrap",
+  },
+  colSno: { 
+    width: isTablet ? 50 : 40,
+    textAlign: 'center'
+  },
+  colId: { 
+    width: isTablet ? 100 : 80 
+  },
+  colName: { 
+    flex: 1, 
+    minWidth: isTablet ? 160 : 140 
+  },
+  colCharges: { 
+    width: isTablet ? 100 : 90,
+    textAlign: 'right'
+  },
+  colGst: { 
+    width: isTablet ? 100 : 90,
+    textAlign: 'right'
+  },
+  colAmount: { 
+    width: isTablet ? 110 : 100,
+    textAlign: 'right'
+  },
+  totalRow: {
+    marginTop: SPACING.md,
     flexDirection: "row",
     justifyContent: "flex-end",
     alignItems: "center",
-    padding: 16,
+    paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    backgroundColor: "#f8fafc",
+    borderTopColor: COLORS.border,
   },
   totalLabel: {
-    fontSize: 16,
-    color: "#6b7280",
-    marginRight: 12,
-  },
-  totalAmount: {
-    fontSize: 18,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    marginRight: SPACING.md,
     fontWeight: "600",
-    color: "#1f2937",
+  },
+  totalValue: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+    color: COLORS.success,
   },
 });
 

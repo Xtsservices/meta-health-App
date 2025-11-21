@@ -1,22 +1,39 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   LayoutAnimation,
+  TextInput,
+  Modal,
+  Image,
   Dimensions,
+  Platform,
+  FlatList,
+  SafeAreaView,
   Alert,
 } from "react-native";
 import InnerTable from "./InnerTable";
-import { AuthPost } from "../../../auth/auth"; // CHANGED: Import AuthPost instead of AuthFetch
+import { AuthPost, AuthFetch } from "../../../auth/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 
-const { width: W } = Dimensions.get("window");
-const isTablet = W >= 768;
-const isSmallScreen = W < 375;
+// Utils
+import {
+  SPACING,
+  FONT_SIZE,
+  isTablet,
+  isSmallDevice,
+  SCREEN_WIDTH,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { formatDateTime } from "../../../utils/dateTime";
+import { UserIcon } from "lucide-react-native";
+import { FilterIcon } from "../../../utils/SvgIcons";
+import { showSuccess, showError } from "../../../store/toast.slice";
+
+const PAGE_SIZE = isTablet ? 15 : 10;
 
 interface PatientOuterTableProps {
   title: string;
@@ -29,583 +46,481 @@ interface PatientOuterTableProps {
   expandedPatientId?: string | null;
   onPatientExpand?: (patientId: string | null) => void;
   isRejectedTab?: boolean;
+  onProceedToPay?: (order: any) => void;
+  filter?: string;
+  onFilterChange?: (filter: string) => void;
+  showFilter?: boolean;
+  currentPage?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
 }
 
 const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   title,
-  data,
+  data = [],
   isButton,
-  patientOrderPay,
-  patientOrderOpd,
   isBilling,
-  alertFrom,
   expandedPatientId,
   onPatientExpand,
   isRejectedTab = false,
+  onProceedToPay,
+  filter = "All",
+  onFilterChange,
+  showFilter = false,
+  currentPage: externalCurrentPage,
+  totalPages: externalTotalPages,
+  onPageChange,
 }) => {
+  const dispatch = useDispatch();
+  const [internalPageOneBased, setInternalPageOneBased] = useState(1);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [actionValues, setActionValues] = useState<{ [key: string]: string }>({});
   const [rejectReasons, setRejectReasons] = useState<{ [key: string]: string }>({});
-  const [showRejectDialog, setShowRejectDialog] = useState<string | null>(null);
+  const [selectedRejectId, setSelectedRejectId] = useState<string | null>(null);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [departmentNames, setDepartmentNames] = useState<{ [key: string]: string }>({});
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const user = useSelector((state: any) => state.currentUser);
 
+  const isExternalPagination = typeof externalCurrentPage === "number" && typeof externalTotalPages === "number" && typeof onPageChange === "function";
+
+  const totalItems = data?.length ?? 0;
+  const internalTotalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const currentPageOneBased = isExternalPagination ? externalCurrentPage + 1 : internalPageOneBased;
+  const effectiveTotalPages = isExternalPagination ? externalTotalPages : internalTotalPages;
+
+  const pagedData = isExternalPagination
+    ? data
+    : data?.slice((currentPageOneBased - 1) * PAGE_SIZE, currentPageOneBased * PAGE_SIZE) ?? [];
+
+  const filterOptions = [
+    { label: "All Departments", value: "All" },
+    { label: "Outpatient Care", value: "OPD" },
+    { label: "Inpatient Services", value: "IPD" },
+    { label: "Emergency", value: "Emergency" },
+  ];
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchDepartmentNames = async () => {
+      if (!data || data.length === 0) return;
+      const token = await AsyncStorage.getItem("token");
+      if (!token) return;
+
+      const deptIds = Array.from(new Set(data.map((p: any) => p?.departmentID).filter(Boolean)));
+      const newDeptNames: { [key: string]: string } = {};
+
+      await Promise.all(
+        deptIds.map(async (departmentID) => {
+          try {
+            const departmentData = await AuthFetch(`department/singledpt/${departmentID}`, token);
+            const departmentName =
+              departmentData?.department?.[0]?.name ||
+              departmentData?.data?.department?.[0]?.name ||
+              departmentData?.name ||
+              departmentData?.data?.name ||
+              'Unknown Department';
+            newDeptNames[departmentID] = departmentName;
+          } catch (e) {
+            // ignore individual failures
+          }
+        })
+      );
+
+      data?.forEach((patient: any) => {
+        if (!patient?.departmentID) {
+          const key = patient?.id || patient?.patientID || Math.random().toString();
+          newDeptNames[key] = patient?.dept || patient?.departmentName || patient?.department_name || 'Unknown Department';
+        }
+      });
+
+      if (mounted) setDepartmentNames(prev => ({ ...prev, ...newDeptNames }));
+    };
+    fetchDepartmentNames();
+    return () => { mounted = false; };
+  }, [data]);
+
+  const getDepartmentName = (patient: any) => {
+    if (!patient) return 'Unknown Department';
+    const departmentID = patient?.departmentID;
+    if (departmentID && departmentNames[departmentID]) return departmentNames[departmentID];
+    const key = patient?.id || patient?.patientID;
+    if (key && departmentNames[key]) return departmentNames[key];
+    return patient?.dept || patient?.departmentName || patient?.department_name || 'Unknown Department';
+  };
+
   const handleRowClick = (id: string) => {
-    const newExpandedRow = expandedRow === id ? null : id;
-    setExpandedRow(newExpandedRow);
-    
-    if (onPatientExpand) {
-      onPatientExpand(newExpandedRow === id ? id : null);
-    }
-    
+    const next = expandedRow === id ? null : id;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedRow(next);
+    if (onPatientExpand) onPatientExpand(next);
+  };
+
+  const handleFocus = (inputName: string) => setFocusedInput(inputName);
+  const handleBlur = () => setFocusedInput(null);
+
+  const goToPage = (pageIndexZeroBased: number) => {
+    if (isExternalPagination) {
+      const clamped = Math.max(0, Math.min(pageIndexZeroBased, effectiveTotalPages - 1));
+      onPageChange?.(clamped);
+      setExpandedRow(null);
+      if (onPatientExpand) onPatientExpand(null);
+    } else {
+      const oneBased = pageIndexZeroBased + 1;
+      if (oneBased >= 1 && oneBased <= effectiveTotalPages) {
+        setInternalPageOneBased(oneBased);
+        setExpandedRow(null);
+        if (onPatientExpand) onPatientExpand(null);
+      }
+    }
   };
 
   const calculateDueAmount = (order: any) => {
-    if (!order.testsList || order.testsList.length === 0) return 0;
-    
-    let totalAmount = 0;
-    order.testsList.forEach((test: any) => {
-      const price = test.testPrice || 0;
-      const gst = test.gst || 18;
-      totalAmount += price + (price * gst) / 100;
+    if (!order?.testsList || order?.testsList?.length === 0) return 0;
+    let total = 0;
+    order.testsList.forEach((t: any) => {
+      const price = Number(t?.testPrice) || 0;
+      const gst = Number(t?.gst) || 18;
+      total += price + (price * gst) / 100;
     });
-    
-    const paidAmount = parseFloat(order.paidAmount || "0");
-    return Math.max(0, totalAmount - paidAmount);
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return "Invalid Date";
-    }
+    const paid = parseFloat(order?.paidAmount || '0') || 0;
+    return Math.max(0, total - paid);
   };
 
   const getStatusColor = (status: string) => {
-    const statusLower = status.toLowerCase();
-    if (statusLower === "completed" || statusLower === "paid" || statusLower === "accepted") {
-      return { backgroundColor: "#10B981", color: "#065F46" };
-    }
-    if (statusLower === "pending") {
-      return { backgroundColor: "#F59E0B", color: "#92400E" };
-    }
-    if (statusLower === "rejected") {
-      return { backgroundColor: "#EF4444", color: "#991B1B" };
-    }
-    return { backgroundColor: "#6B7280", color: "#F9FAFB" };
-  };
-
-  const handleActionChange = async (id: string, value: string) => {
-    if (value === "Accepted") {
-      await handleApproveOrder(id);
-    } else if (value === "Rejected") {
-      setShowRejectDialog(id);
-    } else {
-      setActionValues(prev => ({ ...prev, [id]: value }));
-    }
+    const s = (status || '').toLowerCase();
+    if (s === 'completed' || s === 'paid' || s === 'accepted') return { backgroundColor: COLORS.chipRR, color: COLORS.success };
+    if (s === 'pending') return { backgroundColor: COLORS.chipTemp, color: COLORS.warning };
+    if (s === 'rejected') return { backgroundColor: COLORS.chipBP, color: COLORS.danger };
+    return { backgroundColor: COLORS.pill, color: COLORS.sub };
   };
 
   const handleApproveOrder = async (orderId: string) => {
     try {
-      const token = await AsyncStorage.getItem("token");
-      const order = data.find(item => item.id === orderId);
-      
-      if (!order) {
-        Alert.alert("Error", "Order not found");
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        dispatch(showError("Not authorized. Please login again."));
         return;
       }
 
-      // CHANGED: Use AuthPost instead of AuthFetch for POST request
-      const response = await AuthPost(
-        `test/${user.roleName}/${user.hospitalID}/approved/${order.patientTimeLineID || order.id}`,
-        {}, // Empty body since no data needed for approval
-        token
-      );
-      
-      console.log("Approve response:", response);
-
-      if (response?.message === "success" || response?.data?.message === "success") {
-        setActionValues(prev => ({ ...prev, [orderId]: "Accepted" }));
-        Alert.alert("Success", "Order approved successfully");
-      } else {
-        Alert.alert("Error", response?.message || "Failed to approve order");
+      const order = data.find((d: any) => d?.id === orderId);
+      if (!order) {
+        dispatch(showError("Order not found"));
+        return;
       }
-    } catch (error) {
-      console.error("Error approving order:", error);
-      Alert.alert("Error", "Failed to approve order");
+
+      const res = await AuthPost(`test/${user?.roleName}/${user?.hospitalID}/approved/${order?.timeLineID || order?.id}`, {}, token);
+      if (res?.message === 'success' || res?.data?.message === 'success') {
+        setActionValues(prev => ({ ...prev, [orderId]: 'Accepted' }));
+        dispatch(showSuccess("Order approved successfully"));
+      } else {
+        dispatch(showError(res?.message || "Failed to approve order"));
+      }
+    } catch (e) {
+      dispatch(showError("Failed to approve order"));
     }
   };
 
-  const handleRejectOrder = async (orderId: string) => {
-    const reason = rejectReasons[orderId];
-    if (!reason || !reason.trim()) {
-      Alert.alert("Error", "Please enter a rejection reason");
+  const handleRejectOrder = async () => {
+    const orderId = selectedRejectId;
+    if (!orderId) return;
+    const reason = (rejectReasons[orderId] || '').trim();
+    if (!reason) {
+      dispatch(showError("Please enter a rejection reason"));
       return;
     }
 
     try {
-      const token = await AsyncStorage.getItem("token");
-      const order = data.find(item => item.id === orderId);
-      
-      if (!order) {
-        Alert.alert("Error", "Order not found");
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        dispatch(showError("Not authorized. Please login again."));
         return;
       }
 
-      // CHANGED: Use AuthPost instead of AuthFetch for POST request
-      const response = await AuthPost(
-        `test/${user.roleName}/${user.hospitalID}/rejected/${order.patientTimeLineID || order.id}`,
-        { rejectReason: reason }, // Body with rejection reason
-        token
-      );
-
-      if (response?.message === "success" || response?.data?.message === "success") {
-        setActionValues(prev => ({ ...prev, [orderId]: "Rejected" }));
-        setShowRejectDialog(null);
-        setRejectReasons(prev => ({ ...prev, [orderId]: "" }));
-        Alert.alert("Success", "Order rejected successfully");
-      } else {
-        Alert.alert("Error", response?.message || "Failed to reject order");
+      const order = data.find((d: any) => d?.id === orderId);
+      if (!order) {
+        dispatch(showError("Order not found"));
+        return;
       }
-    } catch (error) {
-      console.error("Error rejecting order:", error);
-      Alert.alert("Error", "Failed to reject order");
+
+      const res = await AuthPost(`test/${user?.roleName}/${user?.hospitalID}/rejected/${order?.timeLineID || order?.id}`, { rejectReason: reason }, token);
+      if (res?.message === 'success' || res?.data?.message === 'success') {
+        setActionValues(prev => ({ ...prev, [orderId]: 'Rejected' }));
+        setSelectedRejectId(null);
+        setRejectReasons(prev => ({ ...prev, [orderId]: '' }));
+        dispatch(showSuccess("Order rejected successfully"));
+      } else {
+        dispatch(showError(res?.message || "Failed to reject order"));
+      }
+    } catch (e) {
+      dispatch(showError("Failed to reject order"));
     }
   };
 
-  const renderPatientCard = (patient: any, index: number) => {
-    const isExpanded = expandedRow === patient.id;
-    const dueAmount = calculateDueAmount(patient);
-    const isHighlighted = expandedPatientId === patient.id;
-    const currentAction = actionValues[patient.id] || "Pending";
-    const statusStyle = getStatusColor(currentAction);
+  const shouldShowRejectButton = (patient: any) => patient?.ptype === 21;
+
+  const renderPagination = () => {
+    if (effectiveTotalPages <= 1) return null;
+
+    const displayCurrent = isExternalPagination ? (externalCurrentPage ?? 0) + 1 : internalPageOneBased;
 
     return (
-      <View key={patient.id} style={styles.patientCard}>
-        <TouchableOpacity
-          style={[
-            styles.patientCardHeader,
-            isExpanded && styles.expandedCardHeader,
-            isHighlighted && styles.highlightedCard,
-          ]}
-          onPress={() => handleRowClick(patient.id)}
-        >
-          <View style={styles.patientBasicInfo}>
-            <View style={styles.patientIdRow}>
-              <Text style={styles.patientIndex}>#{index + 1}</Text>
-              <Text style={styles.patientId}>ID: {patient.patientID || patient.pID || "-"}</Text>
-            </View>
-            <Text style={styles.patientName}>{patient.pName || patient.patientName || "-"}</Text>
-            <Text style={styles.patientDepartment}>{patient.dept || "Unknown"}</Text>
-          </View>
+      <View style={styles.paginationWrapper}>
+        <View style={styles.paginationBar}>
+          <TouchableOpacity
+            onPress={() => goToPage((isExternalPagination ? (externalCurrentPage ?? 0) : (internalPageOneBased - 1)) - 1)}
+            disabled={(isExternalPagination ? (externalCurrentPage ?? 0) : (internalPageOneBased - 1)) === 0}
+            style={[
+              styles.pageBtn,
+              ((isExternalPagination ? (externalCurrentPage ?? 0) : (internalPageOneBased - 1)) === 0) && styles.pageBtnDisabled,
+            ]}
+          >
+            <Text style={styles.paginationButtonText}>‹</Text>
+          </TouchableOpacity>
 
-          <View style={styles.patientDetails}>
-            <Text style={styles.doctorName}>
-              Dr. {patient.doctor_firstName && patient.doctor_lastName 
-                ? `${patient.doctor_firstName} ${patient.doctor_lastName}`
-                : patient.firstName && patient.lastName
-                ? `${patient.firstName} ${patient.lastName}`
-                : "-"}
-            </Text>
-            <Text style={styles.date}>{formatDate(patient.addedOn)}</Text>
-            
-            {isBilling && (
-              <View style={styles.billingInfo}>
-                <Text style={styles.dueAmount}>Due: ₹{dueAmount.toFixed(2)}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}>
-                  <Text style={[styles.statusText, { color: statusStyle.color }]}>
-                    {dueAmount === 0 ? "Paid" : "Pending"}
-                  </Text>
+          <Text style={styles.pageInfo}>
+            Page {displayCurrent} of {effectiveTotalPages}
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => goToPage((isExternalPagination ? (externalCurrentPage ?? 0) : (internalPageOneBased - 1)) + 1)}
+            disabled={(isExternalPagination ? (externalCurrentPage ?? 0) : (internalPageOneBased - 1)) >= (effectiveTotalPages - 1)}
+            style={[
+              styles.pageBtn,
+              ((isExternalPagination ? (externalCurrentPage ?? 0) : (internalPageOneBased - 1)) >= (effectiveTotalPages - 1)) && styles.pageBtnDisabled,
+            ]}
+          >
+            <Text style={styles.paginationButtonText}>›</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderPatientCard = (patient: any) => {
+    const isExpanded = expandedRow === patient?.id || expandedRow === (patient?.patientID ?? patient?.pID);
+    const dueAmount = calculateDueAmount(patient);
+    const currentAction = actionValues[patient?.id] || 'Pending';
+    const statusStyle = getStatusColor(currentAction);
+    const departmentName = getDepartmentName(patient);
+
+    return (
+      <View key={patient?.id ?? patient?.patientID} style={[styles.patientCard]}>
+        <TouchableOpacity style={[styles.patientCardHeader, isExpanded && styles.expandedCardHeader]} onPress={() => handleRowClick(patient?.id ?? patient?.patientID)} activeOpacity={0.7}>
+          <View style={styles.patientMainInfo}>
+            <View style={styles.patientHeader}>
+              <View style={styles.patientIdentity}>
+                <View style={styles.avatar}>
+                  {patient?.photo ? <Image source={{ uri: patient?.photo }} style={styles.avatarImage} /> : <UserIcon size={20} color={COLORS.sub} />}
+                </View>
+                <View style={styles.patientInfo}>
+                  <Text style={styles.patientName}>{patient?.pName || patient?.patientName || 'Unknown Patient'}</Text>
+                  <Text style={styles.patientId}>ID: {patient?.patientID || patient?.pID || '-'}</Text>
                 </View>
               </View>
-            )}
-          </View>
+              <View style={styles.arrowContainer}><Text style={[styles.arrow, isExpanded && styles.arrowExpanded]}>{isExpanded ? '▲' : '▼'}</Text></View>
+            </View>
 
-          <View style={styles.cardActions}>
-            {isButton && !isRejectedTab && (
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.approveButton]}
-                  onPress={() => handleActionChange(patient.id, "Accepted")}
-                  disabled={currentAction === "Accepted"}
-                >
-                  <Text style={styles.approveButtonText}>
-                    {currentAction === "Accepted" ? "Approved" : "Approve"}
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.rejectButton]}
-                  onPress={() => setShowRejectDialog(patient.id)}
-                  disabled={currentAction === "Rejected"}
-                >
-                  <Text style={styles.rejectButtonText}>
-                    {currentAction === "Rejected" ? "Rejected" : "Reject"}
-                  </Text>
-                </TouchableOpacity>
+            <View style={styles.patientDetails}>
+              <View style={styles.detailColumn}><Text style={styles.detailLabel}>Department</Text><Text style={styles.detailValue}>{departmentName}</Text></View>
+              <View style={styles.detailColumn}><Text style={styles.detailLabel}>Doctor</Text><Text style={styles.detailValue} numberOfLines={1}>{patient?.doctor_firstName && patient?.doctor_lastName ? `${patient?.doctor_firstName} ${patient?.doctor_lastName}` : patient?.firstName && patient?.lastName ? `${patient?.firstName} ${patient?.lastName}` : 'Not Assigned'}</Text></View>
+              <View style={styles.detailColumn}><Text style={styles.detailLabel}>Order Date</Text><Text style={styles.detailValue}>{formatDateTime(patient?.addedOn)}</Text></View>
+            </View>
+
+            {isBilling && (
+              <View style={styles.billingInfo}>
+                <View style={styles.amountRow}><Text style={styles.amountLabel}>Due Amount:</Text><Text style={[styles.dueAmount, dueAmount > 0 && styles.dueAmountHighlight]}>₹{dueAmount.toFixed(2)}</Text></View>
+                <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}><Text style={[styles.statusText, { color: statusStyle.color }]}>{dueAmount === 0 ? 'Paid' : 'Pending'}</Text></View>
               </View>
             )}
-
-            <TouchableOpacity 
-              style={styles.expandButton}
-              onPress={() => handleRowClick(patient.id)}
-            >
-              <Text style={styles.expandButtonText}>{isExpanded ? "▲" : "▼"}</Text>
-            </TouchableOpacity>
           </View>
         </TouchableOpacity>
 
         {isExpanded && (
           <View style={styles.expandedContent}>
+            {isButton && !isRejectedTab && currentAction === 'Pending' && (
+              <View style={styles.actionButtons}>
+                <TouchableOpacity style={[styles.actionButton, styles.approveButton]} onPress={() => handleApproveOrder(patient?.id)}><Text style={styles.approveButtonText}>✓ Approve</Text></TouchableOpacity>
+                {shouldShowRejectButton(patient) && <TouchableOpacity style={[styles.actionButton, styles.rejectButton]} onPress={() => setSelectedRejectId(patient?.id)}><Text style={styles.rejectButtonText}>✗ Reject</Text></TouchableOpacity>}
+              </View>
+            )}
+
+            {isBilling && dueAmount > 0 && onProceedToPay && (<View style={styles.paymentActionContainer}><TouchableOpacity style={styles.proceedToPayButton} onPress={() => onProceedToPay(patient)}><Text style={styles.proceedToPayText}>Proceed to Pay - ₹{dueAmount.toFixed(2)}</Text></TouchableOpacity></View>)}
+
             <InnerTable
-              patientID={patient.patientID}
-              patientTimeLineID={patient.timeLineID || patient.id}
-              data={patient.testsList || []}
+              patientID={patient?.patientID}
+              patientTimeLineID={patient?.timeLineID || patient?.id}
+              data={patient?.testsList || []}
               isButton={isButton}
-              department={patient.dept || "Unknown"}
-              pType={patient.ptype}
+              department={departmentName}
+              pType={patient?.ptype}
               labBilling={isBilling}
-              patientOrderPay={patientOrderPay}
-              patientOrderOpd={patientOrderOpd}
-              paidAmount={patient.paidAmount}
+              patientOrderPay={undefined}
+              patientOrderOpd={undefined}
+              paidAmount={patient?.paidAmount}
               dueAmount={dueAmount.toString()}
               isRejected={isRejectedTab}
-              rejectedReason={patient.rejectedReason}
+              rejectedReason={patient?.rejectedReason}
             />
-          </View>
-        )}
-
-        {/* Reject Dialog */}
-        {showRejectDialog === patient.id && (
-          <View style={styles.rejectDialog}>
-            <Text style={styles.dialogTitle}>Rejection Reason</Text>
-            <View style={styles.reasonInputContainer}>
-              <Text style={styles.inputLabel}>Please specify the reason for rejection:</Text>
-              <View style={styles.textInput}>
-                <Text
-                  style={styles.reasonText}
-                  onPress={() => {
-                    // In a real app, you'd use a proper TextInput component
-                    Alert.prompt(
-                      "Rejection Reason",
-                      "Enter rejection reason:",
-                      (text) => {
-                        if (text) {
-                          setRejectReasons(prev => ({ ...prev, [patient.id]: text }));
-                        }
-                      }
-                    );
-                  }}
-                >
-                  {rejectReasons[patient.id] || "Tap to enter reason..."}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.dialogButtons}>
-              <TouchableOpacity
-                style={[styles.dialogButton, styles.cancelButton]}
-                onPress={() => setShowRejectDialog(null)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dialogButton, styles.confirmButton]}
-                onPress={() => handleRejectOrder(patient.id)}
-              >
-                <Text style={styles.confirmButtonText}>Confirm Reject</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         )}
       </View>
     );
   };
 
-  return (
-    <View style={[styles.container, isBilling && styles.billingContainer]}>
-      <View style={styles.header}>
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <View style={styles.headerContent}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>Total: {data.length} orders</Text>
-      </View>
-
-      <ScrollView 
-        style={styles.patientsContainer} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={data.length === 0 ? styles.emptyContainer : undefined}
-      >
-        {data.length > 0 ? (
-          data.map((patient, index) => renderPatientCard(patient, index))
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Text style={styles.noDataText}>No orders found</Text>
-            <Text style={styles.noDataSubtext}>
-              There are no {title.toLowerCase()} at the moment.
-            </Text>
-          </View>
+        {showFilter && onFilterChange && (
+          <TouchableOpacity style={[styles.filterButton, { backgroundColor: COLORS.card, borderColor: filter !== 'All' ? COLORS.brand : COLORS.border }]} onPress={() => setShowFilterModal(true)}>
+            <FilterIcon size={16} color={filter !== 'All' ? COLORS.brand : COLORS.sub} />
+            <Text style={[styles.filterButtonText, { color: filter !== 'All' ? COLORS.brand : COLORS.text }]}>Filter</Text>
+          </TouchableOpacity>
         )}
-      </ScrollView>
+      </View>
+    </View>
+  );
+
+  const renderEmpty = () => (
+    <View style={styles.noDataContainer}><Text style={styles.noDataIcon}>📋</Text><Text style={styles.noDataText}>No Orders Available</Text><Text style={styles.noDataSubtext}>There are no {title?.toLowerCase()} at the moment.</Text></View>
+  );
+
+  const selectedRejectOrder = data.find((d: any) => d?.id === selectedRejectId) || null;
+
+  return (
+    <View style={styles.container}>
+      {renderHeader()}
+
+      <FlatList
+        data={pagedData}
+        keyExtractor={(item) => String(item?.id ?? item?.patientID ?? Math.random().toString())}
+        renderItem={({ item }) => renderPatientCard(item)}
+        ListEmptyComponent={renderEmpty}
+        ListFooterComponent={renderPagination}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+        extraData={[expandedRow, departmentNames, selectedRejectId, internalPageOneBased, externalCurrentPage]}
+        windowSize={21}
+      />
+
+      {/* Single Reject Dialog */}
+      <Modal visible={!!selectedRejectId} transparent animationType="fade" onRequestClose={() => setSelectedRejectId(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.rejectDialog}>
+            <View style={styles.dialogHeader}><Text style={styles.dialogTitle}>Reject Order</Text><Text style={styles.dialogSubtitle}>Please provide a reason for rejection</Text></View>
+            <View style={styles.reasonInputContainer}>
+              <TextInput
+                style={[styles.reasonInput, { borderColor: focusedInput === `reject-${selectedRejectId}` ? COLORS.focus : COLORS.danger, backgroundColor: COLORS.field }]}
+                placeholder="Enter rejection reason..."
+                placeholderTextColor={COLORS.placeholder}
+                value={rejectReasons[selectedRejectId || ''] || ''}
+                onChangeText={(text) => setRejectReasons(prev => ({ ...prev, [selectedRejectId || '']: text }))}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                onFocus={() => handleFocus(`reject-${selectedRejectId}`)}
+                onBlur={handleBlur}
+              />
+            </View>
+            <View style={styles.dialogButtons}><TouchableOpacity style={[styles.dialogButton, styles.cancelButton]} onPress={() => { setSelectedRejectId(null); setRejectReasons(prev => ({ ...prev, [selectedRejectId || '']: '' })); }}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.dialogButton, styles.confirmRejectButton]} onPress={handleRejectOrder}><Text style={styles.confirmRejectButtonText}>Confirm Reject</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Filter Modal */}
+      <Modal transparent visible={showFilterModal} animationType="slide" onRequestClose={() => setShowFilterModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.filterModal}>
+            <View style={styles.filterHeader}><Text style={styles.filterTitle}>Filter By Department</Text><TouchableOpacity onPress={() => setShowFilterModal(false)} style={styles.closeButton}><Text style={styles.closeButtonText}>×</Text></TouchableOpacity></View>
+            <View style={styles.filterOptions}>{filterOptions.map((option) => (<TouchableOpacity key={option.value} style={[styles.filterOption, filter === option.value && styles.filterOptionSelected]} onPress={() => { onFilterChange?.(option.value); setShowFilterModal(false); }}><Text style={[styles.filterOptionText, filter === option.value && styles.filterOptionTextSelected]}>{option.label}</Text>{filter === option.value && <View style={styles.selectedIndicator} />}</TouchableOpacity>))}</View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  billingContainer: {
-    backgroundColor: "#f8fafc",
-  },
-  header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    backgroundColor: "#f8fafc",
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
-  patientsContainer: {
-    maxHeight: 600,
-  },
-  emptyContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
-  patientCard: {
-    margin: 8,
-    borderRadius: 8,
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  patientCardHeader: {
-    padding: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  expandedCardHeader: {
-    backgroundColor: "#f8fafc",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  highlightedCard: {
-    backgroundColor: "#fff3cd",
-    borderLeftWidth: 4,
-    borderLeftColor: "#ffc107",
-  },
-  patientBasicInfo: {
-    flex: 1,
-  },
-  patientIdRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  patientIndex: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginRight: 8,
-  },
-  patientId: {
-    fontSize: 12,
-    color: "#6b7280",
-    fontWeight: "500",
-  },
-  patientName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 4,
-  },
-  patientDepartment: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
-  patientDetails: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  doctorName: {
-    fontSize: 14,
-    color: "#374151",
-    fontWeight: "500",
-    marginBottom: 2,
-  },
-  date: {
-    fontSize: 12,
-    color: "#6b7280",
-    marginBottom: 4,
-  },
-  billingInfo: {
-    alignItems: "flex-end",
-  },
-  dueAmount: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 2,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  cardActions: {
-    alignItems: "flex-end",
-    marginLeft: 8,
-  },
-  actionButtons: {
-    flexDirection: "row",
-    marginBottom: 8,
-    gap: 8,
-  },
-  actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    minWidth: 80,
-    alignItems: "center",
-  },
-  approveButton: {
-    backgroundColor: "#10B981",
-  },
-  rejectButton: {
-    backgroundColor: "#EF4444",
-  },
-  approveButtonText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  rejectButtonText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  expandButton: {
-    padding: 4,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  expandButtonText: {
-    fontSize: 16,
-    color: "#6b7280",
-    fontWeight: "bold",
-  },
-  expandedContent: {
-    backgroundColor: "#f8fafc",
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  rejectDialog: {
-    padding: 16,
-    backgroundColor: "#fef2f2",
-    borderTopWidth: 1,
-    borderTopColor: "#fecaca",
-  },
-  dialogTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#dc2626",
-    marginBottom: 12,
-  },
-  reasonInputContainer: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    color: "#374151",
-    marginBottom: 8,
-  },
-  textInput: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#fca5a5",
-    borderRadius: 6,
-    padding: 12,
-    minHeight: 40,
-    justifyContent: "center",
-  },
-  reasonText: {
-    fontSize: 14,
-    color: "#374151",
-  },
-  dialogButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
-  dialogButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 100,
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: "#6b7280",
-  },
-  confirmButton: {
-    backgroundColor: "#dc2626",
-  },
-  cancelButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  confirmButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  noDataContainer: {
-    padding: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  noDataText: {
-    fontSize: 16,
-    color: "#9ca3af",
-    textAlign: "center",
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  noDataSubtext: {
-    fontSize: 14,
-    color: "#9ca3af",
-    textAlign: "center",
-    fontStyle: "italic",
-  },
+  container: { flex: 1, backgroundColor: COLORS.bg },
+  header: { padding: SPACING.md, backgroundColor: COLORS.bg, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title: { fontSize: isTablet ? FONT_SIZE.lg : FONT_SIZE.md, fontWeight: '700', color: COLORS.text, flex: 1 },
+  filterButton: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: 12, borderWidth: 1.5, height: 44 },
+  filterButtonText: { fontSize: FONT_SIZE.sm, fontWeight: '600' },
+  listContent: { flexGrow: 1, paddingBottom: SPACING.md },
+  modalBackdrop: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'flex-end' },
+  filterModal: { backgroundColor: COLORS.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, maxHeight: Dimensions.get('window').height * 0.6 },
+  filterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  filterTitle: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.text },
+  closeButtonText: { fontSize: 24, color: COLORS.sub },
+  filterOptions: { padding: SPACING.lg },
+  filterOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, paddingHorizontal: SPACING.sm, borderRadius: 8, marginBottom: 4 },
+  filterOptionSelected: { backgroundColor: COLORS.brandLight },
+  filterOptionText: { flex: 1, fontSize: FONT_SIZE.md, color: COLORS.text },
+  filterOptionTextSelected: { color: COLORS.brand, fontWeight: '600' },
+  selectedIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.brand },
+  avatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.bg, alignItems: 'center', justifyContent: 'center', marginRight: SPACING.sm },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 24 },
+  patientCard: { marginHorizontal: SPACING.md, marginVertical: SPACING.xs, borderRadius: 12, backgroundColor: COLORS.card, shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3, overflow: 'hidden' },
+  expandedCardHeader: { backgroundColor: COLORS.card, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  patientCardHeader: { padding: SPACING.md, backgroundColor: COLORS.card },
+  patientMainInfo: { flex: 1 },
+  patientHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.sm },
+  patientIdentity: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  patientInfo: { flex: 1 },
+  patientName: { fontSize: FONT_SIZE.md, fontWeight: '600', color: COLORS.text, marginBottom: 2 },
+  patientId: { fontSize: FONT_SIZE.xs, color: COLORS.sub, fontWeight: '500' },
+  arrowContainer: { padding: 4 },
+  arrow: { fontSize: FONT_SIZE.md, color: COLORS.sub, fontWeight: 'bold' },
+  arrowExpanded: { color: COLORS.brand },
+  patientDetails: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: SPACING.sm, gap: SPACING.sm },
+  detailColumn: { flex: 1 },
+  detailLabel: { fontSize: FONT_SIZE.xs, color: COLORS.sub, fontWeight: '500', marginBottom: 2 },
+  detailValue: { fontSize: FONT_SIZE.xs, color: COLORS.text, fontWeight: '600' },
+  billingInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: SPACING.xs, borderTopWidth: 1, borderTopColor: COLORS.border },
+  amountRow: { flexDirection: 'row', alignItems: 'center' },
+  amountLabel: { fontSize: FONT_SIZE.sm, color: COLORS.sub, fontWeight: '500', marginRight: SPACING.xs },
+  dueAmount: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.success },
+  dueAmountHighlight: { color: COLORS.danger },
+  statusBadge: { paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: FONT_SIZE.xs, fontWeight: '600' },
+  expandedContent: { backgroundColor: COLORS.bg, paddingTop: SPACING.sm },
+  actionButtons: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm, paddingHorizontal: SPACING.md },
+  actionButton: { flex: 1, paddingVertical: SPACING.sm, borderRadius: 10, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  approveButton: { backgroundColor: COLORS.success },
+  rejectButton: { backgroundColor: COLORS.danger },
+  approveButtonText: { color: COLORS.buttonText, fontSize: FONT_SIZE.sm, fontWeight: '600' },
+  rejectButtonText: { color: COLORS.buttonText, fontSize: FONT_SIZE.sm, fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: SPACING.md },
+  rejectDialog: { backgroundColor: COLORS.card, borderRadius: 16, padding: SPACING.lg, width: '100%', maxWidth: 500, shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  dialogHeader: { marginBottom: SPACING.md },
+  dialogTitle: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.danger, marginBottom: SPACING.xs },
+  dialogSubtitle: { fontSize: FONT_SIZE.sm, color: COLORS.text },
+  reasonInputContainer: { marginBottom: SPACING.md },
+  reasonInput: { borderWidth: 2, borderRadius: 8, padding: SPACING.sm, minHeight: 100, fontSize: FONT_SIZE.sm, color: COLORS.text, textAlignVertical: 'top' },
+  dialogButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: SPACING.sm },
+  dialogButton: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, borderRadius: 8, minWidth: 100, alignItems: 'center' },
+  cancelButton: { backgroundColor: COLORS.sub },
+  confirmRejectButton: { backgroundColor: COLORS.danger },
+  cancelButtonText: { color: COLORS.buttonText, fontSize: FONT_SIZE.sm, fontWeight: '600' },
+  confirmRejectButtonText: { color: COLORS.buttonText, fontSize: FONT_SIZE.sm, fontWeight: '600' },
+  noDataContainer: { padding: SPACING.xl, alignItems: 'center', justifyContent: 'center', flex: 1 },
+  noDataIcon: { fontSize: 48, marginBottom: SPACING.md },
+  noDataText: { fontSize: FONT_SIZE.lg, color: COLORS.sub, textAlign: 'center', fontWeight: '600', marginBottom: SPACING.sm },
+  noDataSubtext: { fontSize: FONT_SIZE.sm, color: COLORS.placeholder, textAlign: 'center', fontStyle: 'italic' },
+  paymentActionContainer: { paddingHorizontal: SPACING.md, marginBottom: SPACING.sm },
+  proceedToPayButton: { backgroundColor: COLORS.success, paddingVertical: SPACING.sm, paddingHorizontal: SPACING.lg, borderRadius: 8, alignItems: 'center', shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  proceedToPayText: { color: COLORS.buttonText, fontSize: FONT_SIZE.md, fontWeight: '600' },
+  paginationWrapper: { paddingVertical: SPACING.sm, paddingHorizontal: SPACING.md },
+  paginationBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, paddingHorizontal: SPACING.sm, borderRadius: 999, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border, shadowColor: COLORS.shadow, shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 3 },
+  pageBtn: { paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: 999, backgroundColor: COLORS.pillBg },
+  pageBtnDisabled: { backgroundColor: COLORS.pill },
+  pageInfo: { fontSize: FONT_SIZE.xs, fontWeight: '700', color: COLORS.text },
+  paginationButtonText: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.brand },
 });
 
 export default PatientOuterTable;

@@ -1,4 +1,3 @@
-// screens/PatientDetailsLab.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -9,10 +8,11 @@ import {
   SafeAreaView,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import LinearGradient from 'react-native-linear-gradient';
 
@@ -24,25 +24,19 @@ import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
 import Footer from "../../dashboard/footer";
 
-// Colors
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  gradientStart: "#14b8a6",
-  gradientEnd: "#0d9488",
-  gradientWarningStart: "#f59e0b",
-  gradientWarningEnd: "#ea580c",
-  gradientSuccessStart: "#10b981",
-  gradientSuccessEnd: "#059669",
-  gradientProcessingStart: "#3b82f6",
-  gradientProcessingEnd: "#1d4ed8",
-};
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  FOOTER_HEIGHT,
+  responsiveWidth,
+  responsiveHeight,
+  isTablet 
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { showError } from "../../../store/toast.slice";
 
-const FOOTER_H = 64;
+const FOOTER_H = FOOTER_HEIGHT;
 
 type PatientDetails = {
   id: number;
@@ -94,6 +88,7 @@ type PatientDetails = {
 const PatientDetailsLab: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
   
@@ -108,51 +103,71 @@ const PatientDetailsLab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Check authentication
+  const checkAuth = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        dispatch(showError("Not authorized. Please login again."));
+        navigation.navigate("Login" as never);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      dispatch(showError("Authentication check failed"));
+      return false;
+    }
+  };
+
   const fetchPatientData = async (isRefresh = false) => {
     try {
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) return;
+
       if (!isRefresh) setLoading(true);
       setRefreshing(isRefresh);
       
       const token = await AsyncStorage.getItem("token");
       
       if (!user?.hospitalID || !token || !timeLineID) {
-        console.error("Missing hospitalID, token, or timeLineID");
         setLoading(false);
         setRefreshing(false);
         return;
       }
 
-      // Fetch main patient details - EXACT SAME AS WEB
+      // Fetch main patient details
       let apiEndpoint = prescriptionURL
-        ? `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getWalkinPatientDetails`
-        : `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getPatientDetails`;
+        ? `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getWalkinPatientDetails`
+        : `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getPatientDetails`;
 
       const response = await AuthFetch(apiEndpoint, token);
-      
-      // Handle response structure - EXACT SAME AS WEB
+
+      // Handle response structure
       if (response?.data?.message === "success") {
-        setPatientDetails(response?.data?.patientList || []);
+        setPatientDetails(response?.data?.patientList ?? []);
       } else {
-        console.error("Failed to fetch patient details:", response);
         setPatientDetails([]);
+        dispatch(showError("No patient details found"));
       }
 
-      // Fetch completed patient data for reports tab - EXACT SAME AS WEB
+      // Fetch completed patient data for reports tab
       if (tab === "completed") {
         let completedEndpoint = prescriptionURL
-          ? `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getWalkinReportsCompletedPatientDetails`
-          : `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getReportsCompletedPatientDetails`;
+          ? `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getWalkinReportsCompletedPatientDetails`
+          : `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getReportsCompletedPatientDetails`;
 
         const completedResponse = await AuthFetch(completedEndpoint, token);
-        
+
         if (completedResponse?.data?.message === "success") {
-          setCompletedPatientData(completedResponse?.data?.patientList || []);
+          setCompletedPatientData(completedResponse?.data?.patientList ?? []);
         } else {
           setCompletedPatientData([]);
         }
       }
     } catch (error) {
-      console.error('Error fetching patient data:', error);
+      dispatch(showError("Failed to fetch patient data"));
+      setPatientDetails([]);
+      setCompletedPatientData([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -181,7 +196,7 @@ const PatientDetailsLab: React.FC = () => {
 
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.brand} />
           <Text style={styles.loadingText}>Loading patient details...</Text>
@@ -190,11 +205,11 @@ const PatientDetailsLab: React.FC = () => {
     );
   }
 
-  const currentPatient = patientDetails[0] || completedPatientData[0] || patient;
+  const currentPatient = patientDetails?.[0] ?? completedPatientData?.[0] ?? patient;
 
   if (!currentPatient) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>No patient data found</Text>
           <TouchableOpacity 
@@ -209,12 +224,14 @@ const PatientDetailsLab: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
-
+    <SafeAreaView style={styles.container}>
       <ScrollView 
         style={styles.content}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+        contentContainerStyle={{ 
+          paddingBottom: insets.bottom + SPACING.lg + FOOTER_H,
+          flexGrow: 1 
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -231,31 +248,31 @@ const PatientDetailsLab: React.FC = () => {
           tab={tab}
         />
 
-        {/* Tests Section - EXACT SAME LOGIC AS WEB */}
+        {/* Tests Section */}
         {tab === "normal" && (
           <View style={styles.testsSection}>
             <Text style={styles.sectionTitle}>Tests</Text>
-            {patientDetails.length > 0 ? (
-              patientDetails.map((patient, patientIndex) => {
-                // Handle both testsList array and single test object - EXACT SAME AS WEB
-                const tests = Array.isArray(patient.testsList) 
-                  ? patient.testsList 
-                  : patient.testsList ? [patient.testsList] : [patient];
+            {patientDetails?.length > 0 ? (
+              patientDetails?.map((patient, patientIndex) => {
+                // Handle both testsList array and single test object
+                const tests = Array.isArray(patient?.testsList) 
+                  ? patient?.testsList 
+                  : patient?.testsList ? [patient?.testsList] : [patient];
                 
-                return tests.map((test, testIndex) => (
+                return tests?.map((test, testIndex) => (
                   <TestCard
-                    key={`${test.id || patient.id}-${patientIndex}-${testIndex}`}
-                    testID={patient.id}
-                    testName={test.name || test.test || patient.test || "Unknown Test"}
-                    timeLineID={patient.timeLineID || patient.id}
-                    status={patient.status || test.status || "pending"}
-                    date={patient.addedOn || patient.latestTestTime || ""}
+                    key={`${test?.id ?? patient?.id}-${patientIndex}-${testIndex}`}
+                    testID={patient?.id}
+                    testName={test?.name ?? test?.test ?? patient?.test ?? "Unknown Test"}
+                    timeLineID={patient?.timeLineID ?? patient?.id}
+                    status={patient?.status ?? test?.status ?? "pending"}
+                    date={patient?.addedOn ?? patient?.latestTestTime ?? ""}
                     prescriptionURL={prescriptionURL}
-                    test={test.name || test.test}
-                    loincCode={test.loinc_num_ || test.loincCode}
-                    walkinID={patient.id}
+                    test={test?.name ?? test?.test}
+                    loincCode={test?.loinc_num_ ?? test?.loincCode}
+                    walkinID={patient?.id}
                     patientData={currentPatient}
-                    onStatusChange={() => fetchPatientData(true)} // Refresh when status changes
+                    onStatusChange={() => fetchPatientData(true)}
                   />
                 ));
               })
@@ -271,7 +288,6 @@ const PatientDetailsLab: React.FC = () => {
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
-
     </SafeAreaView>
   );
 };
@@ -285,79 +301,75 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: SPACING.xl,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZE.md,
     color: COLORS.sub,
   },
   errorContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: SPACING.lg,
   },
   errorText: {
-    fontSize: 18,
+    fontSize: FONT_SIZE.lg,
     color: COLORS.text,
-    marginBottom: 20,
+    marginBottom: SPACING.lg,
+    textAlign: "center",
   },
   backButton: {
-    padding: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     backgroundColor: COLORS.brand,
-    borderRadius: 8,
+    borderRadius: 12,
+    minWidth: responsiveWidth(30),
   },
   backButtonText: {
-    fontSize: 16,
-    color: "#fff",
+    fontSize: FONT_SIZE.md,
+    color: COLORS.buttonText,
     fontWeight: "600",
+    textAlign: "center",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  headerRight: {
-    width: 40,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
   },
   content: {
     flex: 1,
   },
   testsSection: {
-    margin: 16,
-    marginTop: 0,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: 16,
+    marginBottom: SPACING.md,
   },
   noTestsContainer: {
     alignItems: "center",
-    padding: 40,
+    padding: SPACING.xl,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    marginTop: SPACING.sm,
+  },
+  noTestsText: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
+    textAlign: "center",
   },
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,
     justifyContent: "center",
-  },
-  noTestsText: {
-    fontSize: 16,
-    color: COLORS.sub,
-    textAlign: "center",
   },
 });
 

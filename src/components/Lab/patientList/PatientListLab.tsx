@@ -1,4 +1,3 @@
-// screens/PatientListLab.tsx
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -15,6 +14,7 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -23,7 +23,6 @@ import { RootState } from "../../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../../auth/auth";
 import { formatDateTime } from "../../../utils/dateTime";
-import { showError, showSuccess } from '../../../store/toast.slice';
 import LinearGradient from 'react-native-linear-gradient';
 
 // Icons
@@ -40,6 +39,20 @@ import {
   CalendarIcon,
 } from "../../../utils/SvgIcons";
 import Footer from "../../dashboard/footer";
+
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  ICON_SIZE, 
+  FOOTER_HEIGHT,
+  responsiveWidth,
+  responsiveHeight,
+  isTablet,
+  isSmallDevice 
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { showError } from "../../../store/toast.slice";
 
 // Types
 type PatientCardData = {
@@ -77,30 +90,13 @@ type PatientCardData = {
   latestTestTime?: string;
   lastModified?: string;
   sortDate?: number;
+  departmentID?: string;
+  ward?: string;
 };
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-const PAGE_SIZE = 10;
-const FOOTER_H = 70;
-
-// Colors
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  placeholder: "#94a3b8",
-  gradientStart: "#14b8a6",
-  gradientEnd: "#0d9488",
-  gradientWarningStart: "#f59e0b",
-  gradientWarningEnd: "#ea580c",
-  gradientSuccessStart: "#10b981",
-  gradientSuccessEnd: "#059669",
-  gradientProcessingStart: "#3b82f6",
-  gradientProcessingEnd: "#1d4ed8",
-};
+const PAGE_SIZE = isTablet ? 15 : 10;
+const FOOTER_H = FOOTER_HEIGHT;
 
 // Gradient Status Badge Component
 const GradientStatusBadge: React.FC<{
@@ -200,7 +196,8 @@ const PatientRow: React.FC<{
   patient: PatientCardData;
   onViewDetails: (patient: PatientCardData) => void;
   tabIndex: number;
-}> = ({ patient, onViewDetails, tabIndex }) => {
+  departmentName: string;
+}> = ({ patient, onViewDetails, tabIndex, departmentName }) => {
   const getStatusText = (status?: string) => {
     return status?.charAt(0)?.toUpperCase() + status?.slice(1) || "Active";
   };
@@ -210,51 +207,38 @@ const PatientRow: React.FC<{
       case 1: return "IPD";
       case 2: return "OPD";
       case 3: return "Walk-In";
-      default: return "Unknown";
+      default: return "--";
     }
   };
 
   const paddedId = String(patient?.id ?? "").padStart(4, "0");
-  const name = patient?.pName?.charAt(0)?.toUpperCase() + patient?.pName?.slice(1) || 
-               patient?.patientName?.charAt(0)?.toUpperCase() + patient?.patientName?.slice(1) || 
-               "Unknown Patient";
-  const phone = patient?.phoneNumber || patient?.phone || "—";
-  const department = patient?.department_name || patient?.departmentName || patient?.dept || "—";
-  const ward = patient?.ward_name || "—";
+  const name = patient?.pName?.charAt(0)?.toUpperCase() + patient?.pName?.slice(1) ?? 
+               patient?.patientName?.charAt(0)?.toUpperCase() + patient?.patientName?.slice(1) ?? 
+               "-- ";
+  const phone = patient?.phoneNumber ?? patient?.phone ?? "—";
+  const ward = patient?.ward_name ?? "—";
 
   return (
     <TouchableOpacity
       activeOpacity={0.8}
-      style={[
-        styles.card,
-        { backgroundColor: COLORS.card, borderColor: COLORS.border },
-      ]}
+      style={styles.card}
       onPress={() => onViewDetails(patient)}
     >
       <View style={styles.cardRow}>
-        <View
-          style={[
-            styles.avatar,
-            { borderColor: COLORS.border, backgroundColor: COLORS.bg },
-          ]}
-        >
+        <View style={styles.avatar}>
           {patient?.photo ? (
             <Image
               source={{ uri: patient?.photo }}
-              style={{
-                width: "100%",
-                height: "100%",
-                borderRadius: 40,
-              }}
+              style={styles.avatarImage}
             />
           ) : (
-            <UserIcon size={28} color={COLORS.sub} />
+            <UserIcon size={ICON_SIZE.md} color={COLORS.sub} />
           )}
         </View>
 
         <View style={styles.meta}>
           <Text
-            style={[styles.name, { color: COLORS.text }]}
+            style={styles.name}
             numberOfLines={1}
           >
             {name}
@@ -262,52 +246,52 @@ const PatientRow: React.FC<{
 
           <View style={styles.infoRow}>
             <Text
-              style={[styles.sub, { color: COLORS.sub }]}
+              style={styles.sub}
               numberOfLines={1}
             >
               ID: {paddedId}
             </Text>
-            <Text style={[styles.dot, { color: COLORS.sub }]}>•</Text>
-            <Text style={[styles.badge, { color: COLORS.brand }]}>
+            <Text style={styles.dot}>•</Text>
+            <Text style={styles.badge}>
               {getPatientTypeText(patient?.ptype)}
             </Text>
           </View>
 
           <View style={styles.detailRow}>
-            <PhoneIcon size={14} color={COLORS.sub} />
-            <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
+            <PhoneIcon size={FONT_SIZE.xs} color={COLORS.sub} />
+            <Text style={styles.sub} numberOfLines={1}>
               {phone}
             </Text>
           </View>
 
           <View style={styles.detailRow}>
-            <DepartmentIcon size={14} color={COLORS.sub} />
-            <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
-              {department}
+            <DepartmentIcon size={FONT_SIZE.xs} color={COLORS.sub} />
+            <Text style={styles.sub} numberOfLines={1}>
+              {departmentName}
             </Text>
           </View>
 
           {ward !== "—" && (
             <View style={styles.detailRow}>
-              <WardIcon size={14} color={COLORS.sub} />
-              <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
+              <WardIcon size={FONT_SIZE.xs} color={COLORS.sub} />
+              <Text style={styles.sub} numberOfLines={1}>
                 {ward}
               </Text>
             </View>
           )}
 
           <View style={styles.detailRow}>
-            <StatusIcon size={14} color={COLORS.sub} />
+            <StatusIcon size={FONT_SIZE.xs} color={COLORS.sub} />
             <GradientStatusBadge
-              status={patient?.status || "active"}
+              status={patient?.status ?? "active"}
               text={getStatusText(patient?.status)}
             />
           </View>
 
           {tabIndex === 1 && patient?._completedTime && (
             <View style={styles.detailRow}>
-              <CalendarIcon size={14} color={COLORS.sub} />
-              <Text style={[styles.sub, { color: COLORS.sub }]}>
+              <CalendarIcon size={FONT_SIZE.xs} color={COLORS.sub} />
+              <Text style={styles.sub}>
                 Completed: {formatDateTime(patient?._completedTime)}
               </Text>
             </View>
@@ -315,14 +299,14 @@ const PatientRow: React.FC<{
         </View>
 
         <TouchableOpacity
-          style={[styles.viewBtn, { borderColor: COLORS.border }]}
+          style={styles.viewBtn}
           onPress={(e) => {
             e.stopPropagation();
             onViewDetails(patient);
           }}
         >
-          <EyeIcon size={18} color={COLORS.text} />
-          <Text style={[styles.viewBtnText, { color: COLORS.text }]}>
+          <EyeIcon size={ICON_SIZE.sm} color={COLORS.text} />
+          <Text style={styles.viewBtnText}>
             View
           </Text>
         </TouchableOpacity>
@@ -349,18 +333,103 @@ const PatientListLab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [departmentNames, setDepartmentNames] = useState<{ [key: string]: string }>({});
 
-  const totalItems = filteredData?.length;
+  // Check authentication
+  const checkAuth = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        dispatch(showError("Not authorized. Please login again."));
+        navigation.navigate("Login" as never);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      dispatch(showError("Authentication check failed"));
+      return false;
+    }
+  }, [navigation, dispatch]);
+
+  const totalItems = filteredData?.length ?? 0;
   const totalPages = Math.ceil(totalItems / PAGE_SIZE);
   
   const pagedData = filteredData?.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
-  );
+  ) ?? [];
 
-  // Fetch patient list - EXACT SAME LOGIC AS WEB
+  // Fetch department names
+  const fetchDepartmentNames = useCallback(async (patients: PatientCardData[]) => {
+    if (!patients || patients?.length === 0) return {};
+
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return {};
+
+    const newDepartmentNames: { [key: string]: string } = {};
+
+    // Process each patient to get department name
+    for (const patient of patients) {
+      const departmentID = patient?.departmentID;
+      
+      if (departmentID && !newDepartmentNames[departmentID]) {
+        try {
+          const departmentData = await AuthFetch(
+            `department/singledpt/${departmentID}`,
+            token
+          );
+          
+          // Handle different response structures
+          let departmentName = "--";
+          
+          if (departmentData?.department?.[0]?.name) {
+            departmentName = departmentData.department[0].name;
+          } else if (departmentData?.data?.department?.[0]?.name) {
+            departmentName = departmentData.data.department[0].name;
+          } else if (departmentData?.name) {
+            departmentName = departmentData.name;
+          } else if (departmentData?.data?.name) {
+            departmentName = departmentData.data.name;
+          }
+          
+          newDepartmentNames[departmentID] = departmentName;
+        } catch (error) {
+          // Use existing department name as fallback
+          newDepartmentNames[departmentID] = patient?.dept ?? patient?.departmentName ?? "--";
+        }
+      } else if (!departmentID) {
+        // Use existing department name if no departmentID
+        const patientKey = patient?.id?.toString();
+        newDepartmentNames[patientKey] = patient?.dept ?? patient?.departmentName ?? "--";
+      }
+    }
+
+    return newDepartmentNames;
+  }, []);
+
+  // Helper function to get department name for a patient
+  const getDepartmentName = (patient: PatientCardData) => {
+    if (!patient) return "--";
+    
+    const departmentID = patient?.departmentID;
+    
+    if (departmentID && departmentNames[departmentID]) {
+      return departmentNames[departmentID];
+    }
+    
+    // Fallback to existing department fields
+    return patient?.dept ?? 
+           patient?.departmentName ?? 
+           patient?.department_name ?? 
+           "--";
+  };
+
+  // Fetch patient list
   const getPatientList = useCallback(async (isRefresh = false) => {
     try {
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) return;
+
       if (!isRefresh) setLoading(true);
       setRefreshing(isRefresh);
       
@@ -370,42 +439,42 @@ const PatientListLab: React.FC = () => {
       let patientList: PatientCardData[] = [];
 
       if (patientType === 3) {
-        // Walk-in patients - EXACT SAME AS WEB
+        // Walk-in patients
         const response = await AuthFetch(
           `test/getWalkinTaxinvoicePatientsData/${user.hospitalID}/${user.roleName}`,
           token
         );
         
         if (response?.data?.status === 200) {
-          patientList = response?.data?.data || [];
+          patientList = response?.data?.data ?? [];
         } else {
           dispatch(showError('Failed to fetch walk-in patients'));
         }
       } else {
-        // Regular patients - EXACT SAME AS WEB
+        // Regular patients
         const response = await AuthFetch(
           `test/${user.roleName}/${user.hospitalID}/${user.id}/getAllPatient`,
           token
         );
         
         if (response?.data?.message === "success") {
-          patientList = response?.data?.patientList || [];
+          patientList = response?.data?.patientList ?? [];
           
-          // Filter by patient type - EXACT SAME AS WEB
+          // Filter by patient type
           if (patientType === 1) { // IPD
-            patientList = patientList.filter((each: any) => each.patientStartStatus !== 1);
+            patientList = patientList?.filter((each: any) => each.patientStartStatus !== 1);
           } else if (patientType === 2) { // OPD
-            patientList = patientList.filter((each: any) => each.patientStartStatus === 1);
+            patientList = patientList?.filter((each: any) => each.patientStartStatus === 1);
           }
 
-          // For "All" type, fetch and merge walk-in patients - EXACT SAME AS WEB
+          // For "All" type, fetch and merge walk-in patients
           if (patientType === 0) {
             const walkinResponse = await AuthFetch(
               `test/getWalkinTaxinvoicePatientsData/${user.hospitalID}/${user.roleName}`,
               token
             );
             if (walkinResponse?.data?.status === 200) {
-              patientList = [...patientList, ...(walkinResponse?.data?.data || [])];
+              patientList = [...patientList, ...(walkinResponse?.data?.data ?? [])];
             }
           }
         } else {
@@ -413,27 +482,34 @@ const PatientListLab: React.FC = () => {
         }
       }
 
-      // Add sortDate and sort by latest first - EXACT SAME AS WEB
-      const processedList = patientList.map((p: any) => ({
+      // Add sortDate and sort by latest first
+      const processedList = patientList?.map((p: any) => ({
         ...p,
-        sortDate: new Date(p.updatedOn || p.addedOn || p.latestTestTime).getTime()
-      }));
+        sortDate: new Date(p.updatedOn ?? p.addedOn ?? p.latestTestTime).getTime()
+      })) ?? [];
 
-      processedList.sort((a: any, b: any) => b.sortDate - a.sortDate);
+      processedList?.sort((a: any, b: any) => b.sortDate - a.sortDate);
       setPatientData(processedList);
 
+      // Fetch department names for the patient list
+      const newDepartmentNames = await fetchDepartmentNames(processedList);
+      setDepartmentNames(prev => ({ ...prev, ...newDepartmentNames }));
+
     } catch (error: any) {
-      dispatch(showError(error?.message || 'Error fetching patients'));
+      dispatch(showError(error?.message ?? 'Error fetching patients'));
       setPatientData([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, patientType, dispatch]);
+  }, [user, patientType, dispatch, fetchDepartmentNames, checkAuth]);
 
-  // Fetch completed reports - EXACT SAME LOGIC AS WEB
+  // Fetch completed reports
   const getReportsCompletedData = useCallback(async (isRefresh = false) => {
     try {
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) return;
+
       if (!isRefresh) setLoading(true);
       setRefreshing(isRefresh);
       
@@ -442,7 +518,7 @@ const PatientListLab: React.FC = () => {
 
       let patientList: PatientCardData[] = [];
 
-      // Fetch Walk-in Patients if needed - EXACT SAME AS WEB
+      // Fetch Walk-in Patients if needed
       if (patientType === 3 || patientType === 0) {
         const walkinResponse = await AuthFetch(
           `test/${user.roleName}/${user.hospitalID}/${user.id}/getAllWalkinReportsCompletedPatients`,
@@ -450,7 +526,7 @@ const PatientListLab: React.FC = () => {
         );
         
         if (walkinResponse?.data?.message === "success") {
-          const walkinPatients = (walkinResponse?.data?.patientList || []).map((p: any) => {
+          const walkinPatients = (walkinResponse?.data?.patientList ?? [])?.map((p: any) => {
             const latestTest = p.testsList?.reduce((latest: any, test: any) => {
               if (test.completedTime && (!latest || new Date(test.completedTime) > new Date(latest))) {
                 return test.completedTime;
@@ -460,14 +536,14 @@ const PatientListLab: React.FC = () => {
             
             return {
               ...p,
-              _completedTime: latestTest || p.addedOn
+              _completedTime: latestTest ?? p.addedOn
             };
           });
           patientList = walkinPatients;
         }
       }
 
-      // Fetch IPD & OPD Patients if needed - EXACT SAME AS WEB
+      // Fetch IPD & OPD Patients if needed
       if (patientType !== 3) {
         const response = await AuthFetch(
           `test/${user.roleName}/${user.hospitalID}/${user.id}/getAllReportsCompletedPatients`,
@@ -475,38 +551,43 @@ const PatientListLab: React.FC = () => {
         );
 
         if (response?.data?.message === "success") {
-          let filteredList = response?.data?.patientList || [];
+          let filteredList = response?.data?.patientList ?? [];
 
-          // Filter by patient type - EXACT SAME AS WEB
+          // Filter by patient type
           if (patientType === 1) {
-            filteredList = filteredList.filter((each: any) => each.patientStartStatus !== 1);
+            filteredList = filteredList?.filter((each: any) => each.patientStartStatus !== 1);
           } else if (patientType === 2) {
-            filteredList = filteredList.filter((each: any) => each.patientStartStatus === 1);
+            filteredList = filteredList?.filter((each: any) => each.patientStartStatus === 1);
           }
 
-          const processedPatients = filteredList.map((p: any) => ({
+          const processedPatients = filteredList?.map((p: any) => ({
             ...p,
-            _completedTime: p.completedTime || p.addedOn
+            _completedTime: p.completedTime ?? p.addedOn
           }));
 
           patientList = patientType === 0 ? [...patientList, ...processedPatients] : processedPatients;
         }
       }
 
-      // Sort by _completedTime descending (latest first) - EXACT SAME AS WEB
-      patientList.sort((a: any, b: any) => 
+      // Sort by _completedTime descending (latest first)
+      patientList?.sort((a: any, b: any) => 
         new Date(b._completedTime).getTime() - new Date(a._completedTime).getTime()
       );
 
       setCompletedPatientData(patientList);
+
+      // Fetch department names for the completed patient list
+      const newDepartmentNames = await fetchDepartmentNames(patientList);
+      setDepartmentNames(prev => ({ ...prev, ...newDepartmentNames }));
+
     } catch (error: any) {
-      dispatch(showError(error?.message || 'Error fetching completed reports'));
+      dispatch(showError(error?.message ?? 'Error fetching completed reports'));
       setCompletedPatientData([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, patientType, dispatch]);
+  }, [user, patientType, dispatch, fetchDepartmentNames, checkAuth]);
 
   // Filter data based on search query
   useEffect(() => {
@@ -522,7 +603,7 @@ const PatientListLab: React.FC = () => {
         patient?.phoneNumber?.includes(searchQuery) ||
         patient?.phone?.includes(searchQuery)
       );
-      setFilteredData(filtered);
+      setFilteredData(filtered ?? []);
     }
     setCurrentPage(1);
   }, [searchQuery, patientData, completedPatientData, tabIndex]);
@@ -570,14 +651,21 @@ const PatientListLab: React.FC = () => {
     };
 
     if (patient?.prescriptionURL || patient?.fileName) {
-      newState.prescriptionURL = patient?.prescriptionURL || patient?.fileName;
+      newState.prescriptionURL = patient?.prescriptionURL ?? patient?.fileName;
     }
 
-    const route = departmentType === 'radiology' 
-      ? "PatientDetailsRadio" 
-      : "PatientDetailsLab";
-    
-    navigation.navigate(route, { state: newState });
+    // Different navigation based on tab index
+    if (tabIndex === 1) {
+      // For "Reports Completed" tab, navigate to ReportsLab
+      navigation.navigate("ReportsLab", { state: newState });
+    } else {
+      // For "Confirmed Patient Care Alerts" tab, use existing navigation
+      const route = departmentType === 'radiology' 
+        ? "PatientDetailsRadio" 
+        : "PatientDetailsLab";
+      
+      navigation.navigate(route, { state: newState });
+    }
   };
 
   const handlePatientTypeChange = (type: number) => {
@@ -598,33 +686,25 @@ const PatientListLab: React.FC = () => {
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.controlsColumn}>
-        {/* Search */}
-        <View
-          style={[
-            styles.searchWrap,
-            { backgroundColor: COLORS.card, borderColor: COLORS.border },
-          ]}
-        >
-          <SearchIcon size={18} color={COLORS.sub} />
+        <View style={styles.searchWrap}>
+          <SearchIcon size={ICON_SIZE.sm} color={COLORS.sub} />
           <TextInput
-            placeholder="Search by name or mobile"
+            style={styles.searchInput}
+            placeholder="Search patients..."
             placeholderTextColor={COLORS.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={[styles.searchInput, { color: COLORS.text }]}
+            returnKeyType="search"
           />
         </View>
 
         {/* Filter Button */}
         <TouchableOpacity
-          style={[
-            styles.filterButton,
-            { backgroundColor: COLORS.card, borderColor: COLORS.border },
-          ]}
+          style={styles.filterButton}
           onPress={() => setShowFilterModal(true)}
         >
-          <FilterIcon size={18} color={COLORS.brand} />
-          <Text style={[styles.filterButtonText, { color: COLORS.text }]}>
+          <FilterIcon size={ICON_SIZE.sm} color={COLORS.brand} />
+          <Text style={styles.filterButtonText}>
             Filter
           </Text>
         </TouchableOpacity>
@@ -634,10 +714,10 @@ const PatientListLab: React.FC = () => {
 
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
-      <Text style={[styles.emptyTitle, { color: COLORS.text }]}>
+      <Text style={styles.emptyTitle}>
         No Patients Found
       </Text>
-      <Text style={[styles.emptySub, { color: COLORS.sub }]}>
+      <Text style={styles.emptySub}>
         Try adjusting filters or search terms.
       </Text>
     </View>
@@ -679,14 +759,14 @@ const PatientListLab: React.FC = () => {
     );
   };
 
-  const bottomPad = FOOTER_H + insets.bottom + 24;
+  const bottomPad = FOOTER_H + insets.bottom + SPACING.lg;
 
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: COLORS.bg }]}>
+      <SafeAreaView style={styles.safe}>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="small" color={COLORS.brand} />
-          <Text style={[styles.loadingText, { color: COLORS.sub }]}>
+          <Text style={styles.loadingText}>
             Loading patients…
           </Text>
         </View>
@@ -698,7 +778,7 @@ const PatientListLab: React.FC = () => {
     <SafeAreaView
       style={[
         styles.safe,
-        { backgroundColor: COLORS.bg, paddingBottom: Math.max(insets.bottom, 12) },
+        { paddingBottom: Math.max(insets.bottom, SPACING.sm) },
       ]}
     >
       <KeyboardAvoidingView
@@ -706,7 +786,7 @@ const PatientListLab: React.FC = () => {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
       
-        {/* Tabs with Gradient - EXACT SAME AS WEB */}
+        {/* Tabs with Gradient */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, tabIndex === 0 && styles.tabActive]}
@@ -769,6 +849,7 @@ const PatientListLab: React.FC = () => {
               patient={item}
               onViewDetails={handleViewDetails}
               tabIndex={tabIndex}
+              departmentName={getDepartmentName(item)}
             />
           )}
           ListEmptyComponent={renderEmpty}
@@ -806,22 +887,25 @@ const PatientListLab: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
+  safe: { 
+    flex: 1, 
+    backgroundColor: COLORS.bg 
+  },
   mainHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#14b8a6",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.brand,
   },
   backButton: {
-    padding: 8,
+    padding: SPACING.xs,
   },
   mainHeaderTitle: {
-    fontSize: 18,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700",
-    color: "#fff",
+    color: COLORS.buttonText,
   },
   headerRight: {
     width: 40,
@@ -829,12 +913,12 @@ const styles = StyleSheet.create({
   // Enhanced Tab Styles with Gradient
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#fff",
-    marginHorizontal: 16,
-    marginTop: 16,
+    backgroundColor: COLORS.card,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.md,
     borderRadius: 12,
     padding: 4,
-    shadowColor: "#000",
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -850,64 +934,73 @@ const styles = StyleSheet.create({
     // Gradient handled by LinearGradient component
   },
   tabGradient: {
-    paddingVertical: 12,
+    paddingVertical: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
   },
   tabText: {
-    fontSize: 12,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: "600",
     textAlign: "center",
   },
   tabTextActive: {
-    color: "#ffffff",
+    color: COLORS.buttonText,
     fontWeight: "700",
   },
   header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.xs,
+    paddingBottom: SPACING.sm,
   },
   controlsColumn: {
-    gap: 10,
+    gap: SPACING.sm,
   },
   searchWrap: {
     height: 48,
     borderWidth: 1.5,
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: SPACING.sm,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: COLORS.card,
+    borderColor: COLORS.border,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 10,
-    fontSize: 15,
+    marginLeft: SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
   },
   filterButton: {
     height: 48,
     borderWidth: 1.5,
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: SPACING.sm,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: SPACING.xs,
+    backgroundColor: COLORS.card,
+    borderColor: COLORS.border,
   },
   filterButtonText: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
+    color: COLORS.text,
   },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.md,
     paddingTop: 4,
+    flexGrow: 1,
   },
   card: {
     borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
     borderWidth: 1,
-    shadowColor: "#000",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
@@ -921,20 +1014,29 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bg,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: SPACING.sm,
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 24,
   },
   meta: {
     flex: 1,
   },
   name: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
+    color: COLORS.text,
   },
   sub: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.sm,
     marginTop: 2,
+    color: COLORS.sub,
   },
   infoRow: {
     flexDirection: "row",
@@ -943,11 +1045,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   dot: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
   },
   badge: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "700",
+    color: COLORS.brand,
   },
   detailRow: {
     flexDirection: "row",
@@ -957,87 +1061,103 @@ const styles = StyleSheet.create({
   },
   // Gradient Status Badge Styles
   gradientStatusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: SPACING.xs,
     paddingVertical: 4,
     borderRadius: 12,
   },
   gradientStatusText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "600",
-    color: "#fff",
+    color: COLORS.buttonText,
   },
   viewBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
     borderRadius: 12,
     borderWidth: 1.5,
+    borderColor: COLORS.border,
     alignSelf: 'flex-start',
     marginTop: 4,
   },
   viewBtnText: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "700",
+    color: COLORS.text,
   },
   emptyWrap: {
     paddingVertical: 60,
     alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
   },
-  emptyTitle: { fontSize: 17, fontWeight: "700" },
-  emptySub: { fontSize: 14, marginTop: 6 },
+  emptyTitle: { 
+    fontSize: FONT_SIZE.lg, 
+    fontWeight: "700",
+    color: COLORS.text 
+  },
+  emptySub: { 
+    fontSize: FONT_SIZE.md, 
+    marginTop: 6,
+    color: COLORS.sub 
+  },
   loadingWrap: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  loadingText: { marginTop: 12, fontSize: 15 },
+  loadingText: { 
+    marginTop: SPACING.sm, 
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub 
+  },
   paginationWrapper: {
-    paddingVertical: 12,
+    paddingVertical: SPACING.sm,
   },
   paginationBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: SPACING.sm,
     borderRadius: 999,
-    backgroundColor: "#ffffff",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    shadowColor: "#000",
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 3,
   },
   pageBtn: {
-    paddingHorizontal: 12,
+    paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "#ecfeff",
+    backgroundColor: COLORS.pillBg,
   },
   pageBtnDisabled: {
-    backgroundColor: "#f1f5f9",
+    backgroundColor: COLORS.pill,
   },
   pageInfo: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "700",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   paginationButtonText: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700",
-    color: "#14b8a6",
+    color: COLORS.brand,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: COLORS.overlay,
     justifyContent: "flex-end",
   },
   filterModal: {
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: Platform.OS === 'ios' ? 40 : 20,
@@ -1047,50 +1167,50 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
+    padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: COLORS.border,
   },
   filterTitle: {
-    fontSize: 18,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700",
-    color: "#0f172a",
+    color: COLORS.text,
   },
   closeButton: {
     padding: 4,
   },
   closeButtonText: {
     fontSize: 24,
-    color: "#64748b",
+    color: COLORS.sub,
   },
   filterOptions: {
-    padding: 20,
+    padding: SPACING.lg,
   },
   filterOption: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
     borderRadius: 8,
     marginBottom: 4,
   },
   filterOptionSelected: {
-    backgroundColor: "#f0fdfa",
+    backgroundColor: COLORS.brandLight,
   },
   filterOptionText: {
     flex: 1,
-    fontSize: 16,
-    color: "#374151",
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
   },
   filterOptionTextSelected: {
-    color: "#14b8a6",
+    color: COLORS.brand,
     fontWeight: "600",
   },
   selectedIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#14b8a6",
+    backgroundColor: COLORS.brand,
   },
   footerWrap: {
     position: "absolute",

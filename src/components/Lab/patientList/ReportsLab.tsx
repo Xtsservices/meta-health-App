@@ -1,4 +1,3 @@
-// screens/ReportsLab.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -13,32 +12,33 @@ import {
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import LinearGradient from 'react-native-linear-gradient';
 
 // Icons
 import {
-  DeleteIcon,
   DownloadIcon,
 } from "../../../utils/SvgIcons";
 import PatientProfileCard from "./PatientProfileCard";
 import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { RootState } from "../../../store/store";
 import Footer from "../../dashboard/footer";
+import { showError, showSuccess } from "../../../store/toast.slice";
 
-// Colors
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  error: "#ef4444",
-  gradientStart: "#14b8a6",
-  gradientEnd: "#0d9488",
-};
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  FOOTER_HEIGHT,
+  responsiveWidth,
+  responsiveHeight,
+  isTablet 
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { formatDate } from "../../../utils/dateTime";
+
+const FOOTER_H = FOOTER_HEIGHT;
 
 type Attachment = {
   id: number;
@@ -100,21 +100,85 @@ type PatientDetails = {
 const ReportsLab: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
   
   const { state } = route.params as any;
-  const { timeLineID, testID, walkinID, loincCode, patientData } = state;
+  const { timeLineID, testID, walkinID, loincCode, patientData, tab } = state;
 
   const [patientDetails, setPatientDetails] = useState<PatientDetails | null>(null);
+  const [completedPatientDetails, setCompletedPatientDetails] = useState<PatientDetails[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Check authentication
+  const checkAuth = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        dispatch(showError("Not authorized. Please login again."));
+        navigation.navigate("Login" as never);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      dispatch(showError("Authentication check failed"));
+      return false;
+    }
+  };
+
+  // Fetch completed patient details
+  const fetchCompletedPatientDetails = async (token: string) => {
+    try {
+      let completedEndpoint;
+      
+      // DETERMINE PATIENT TYPE
+      const isWalkinPatient = (timeLineID && patientData?.pID && !patientData?.patientID);      
+      if (isWalkinPatient) {
+        // Walk-in completed patient details
+        completedEndpoint = `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${patientData?.id}/getWalkinReportsCompletedPatientDetails`;
+      } 
+      else {
+        // Regular completed patient details
+        completedEndpoint = `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getReportsCompletedPatientDetails`;
+      }
+
+      const completedResponse = await AuthFetch(completedEndpoint, token);
+      
+      if (completedResponse?.data?.message === "success") {
+        setCompletedPatientDetails(completedResponse?.data?.patientList ?? []);
+        
+        // Extract attachments from completed patient details
+        const allAttachments = (completedResponse?.data?.patientList ?? [])
+          .flatMap((patient: PatientDetails) => patient?.attachments ?? []);
+        
+        // Sort by date
+        const sortedAttachments = allAttachments?.sort(
+          (a: Attachment, b: Attachment) => 
+            new Date(b.addedOn).valueOf() - new Date(a.addedOn).valueOf()
+        ) ?? [];
+        
+        setAttachments(sortedAttachments);
+      } else {
+        setCompletedPatientDetails([]);
+        setAttachments([]);
+      }
+    } catch (error) {
+      dispatch(showError('Error fetching completed patient details'));
+      setCompletedPatientDetails([]);
+      setAttachments([]);
+    }
+  };
 
   // Fetch patient details and reports
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const isAuthenticated = await checkAuth();
+        if (!isAuthenticated) return;
+
         setLoading(true);
         const token = await AsyncStorage.getItem("token");
         
@@ -126,65 +190,63 @@ const ReportsLab: React.FC = () => {
         } else if (timeLineID || walkinID) {
           let apiEndpoint;
           
-          // DETERMINE PATIENT TYPE - EXACT SAME LOGIC AS UPLOADTEST
-          const isWalkinPatient = walkinID && loincCode && (!timeLineID || timeLineID === walkinID);
-          
+          // DETERMINE PATIENT TYPE
+          const isWalkinPatient = walkinID && (!timeLineID || timeLineID === walkinID);          
           if (isWalkinPatient) {
             // Walk-in patient details
-            apiEndpoint = `test/${user.roleName}/${user.hospitalID}/${user.id}/${walkinID}/getWalkinPatientDetails`;
+            apiEndpoint = `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${walkinID}/getWalkinPatientDetails`;
           } else {
             // Regular patient details
-            apiEndpoint = `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getPatientDetails`;
+            apiEndpoint = `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getPatientDetails`;
           }
 
           const response = await AuthFetch(apiEndpoint, token);
-          console.log("Patient details response:", response);
           
           if (response?.data?.message === "success") {
-            setPatientDetails(response?.data?.patientList?.[0] || null);
+            setPatientDetails(response?.data?.patientList?.[0] ?? null);
           }
         }
 
-        // Fetch attachments - EXACT SAME LOGIC AS WEB
-        let attachmentsResponse;
-        
-        // DETERMINE PATIENT TYPE FOR ATTACHMENTS - EXACT SAME AS UPLOADTEST
-        const isWalkinPatient = walkinID && loincCode && (!timeLineID || timeLineID === walkinID);
-        
-        if (isWalkinPatient) {
-          console.log('Fetching attachments for WALK-IN patient:', walkinID);
-          // For walk-in patients - use walkinID directly
-          attachmentsResponse = await AuthFetch(
-            `attachment/${user.hospitalID}/all/${walkinID}`,
-            token
-          );
+        // For completed tab, fetch completed patient details and reports
+        if (tab === "completed") {
+          await fetchCompletedPatientDetails(token);
         } else {
-          console.log('Fetching attachments for REGULAR patient:', patientData?.patientID);
-          // For regular patients - use patientID
-          const patientIDToUse = patientData?.patientID || patientDetails?.patientID;
-          if (patientIDToUse) {
+          // For normal tab, fetch attachments directly
+          let attachmentsResponse;
+          
+          // DETERMINE PATIENT TYPE FOR ATTACHMENTS
+          const isWalkinPatient = walkinID && loincCode && (!timeLineID || timeLineID === walkinID);
+          
+          if (isWalkinPatient) {
+            // For walk-in patients - use walkinID directly
             attachmentsResponse = await AuthFetch(
-              `attachment/${user.hospitalID}/all/${patientIDToUse}`,
+              `attachment/${user?.hospitalID}/all/${walkinID}`,
               token
             );
+          } else {
+            // For regular patients - use patientID
+            const patientIDToUse = patientData?.patientID ?? patientDetails?.patientID;
+            if (patientIDToUse) {
+              attachmentsResponse = await AuthFetch(
+                `attachment/${user?.hospitalID}/all/${patientIDToUse}`,
+                token
+              );
+            }
+          }
+
+          if (attachmentsResponse?.data?.message === "success") {
+            // Sort by date
+            const sortedAttachments = attachmentsResponse.data.attachments?.sort(
+              (a: Attachment, b: Attachment) => 
+                new Date(b.addedOn).valueOf() - new Date(a.addedOn).valueOf()
+            ) ?? [];
+            setAttachments(sortedAttachments);
+          } else {
+            setAttachments([]);
           }
         }
-        
-        console.log("Attachments response:", attachmentsResponse);
-
-        if (attachmentsResponse?.data?.message === "success") {
-          // Sort by date - EXACT SAME AS WEB
-          const sortedAttachments = attachmentsResponse.data.attachments.sort(
-            (a: Attachment, b: Attachment) => 
-              new Date(b.addedOn).valueOf() - new Date(a.addedOn).valueOf()
-          );
-          setAttachments(sortedAttachments);
-        } else {
-          console.log("No attachments found or error:", attachmentsResponse?.data);
-          setAttachments([]);
-        }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        dispatch(showError("Failed to fetch reports data"));
         setAttachments([]);
       } finally {
         setLoading(false);
@@ -192,26 +254,28 @@ const ReportsLab: React.FC = () => {
     };
 
     fetchData();
-  }, [user, timeLineID, walkinID, patientData, loincCode]);
+  }, [user, timeLineID, walkinID, patientData, loincCode, tab]);
 
-  // EXACT SAME LOGIC AS WEB - Handle done button
+  // Handle done button
   const handleDone = async () => {
     try {
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) return;
+
       setSubmitting(true);
       const token = await AsyncStorage.getItem("token");
       
       let response;
       
-      // EXACT SAME API CALLS AS WEB
       if (walkinID && loincCode) {
-        console.log('Marking WALK-IN test as completed:', { walkinID, loincCode });
+        // Walk-in test status update
         response = await AuthPost(
           `test/${user?.hospitalID}/${loincCode}/${walkinID}/walkinTestStatus`,
           { status: "completed" },
           token
         );
       } else {
-        console.log('Marking REGULAR test as completed:', { testID });
+        // Regular test status update
         response = await AuthPost(
           `test/${user?.roleName}/${user?.hospitalID}/${testID}/testStatus`,
           { status: "completed" },
@@ -219,25 +283,15 @@ const ReportsLab: React.FC = () => {
         );
       }
 
-      console.log("Done response:", response);
-
-      // EXACT SAME SUCCESS HANDLING AS WEB
       if (response?.data?.message === "success") {
-        Alert.alert("Success", "Test marked as completed", [
-          {
-            text: "OK",
-            onPress: () => {
-              // Navigate back to patient list - patient should move to completed tab
-              navigation.navigate("PatientListLab");
-            }
-          }
-        ]);
+        dispatch(showSuccess("Test marked as completed"));
+        // Navigate back to patient list - patient should move to completed tab
+        navigation.navigate("PatientListLab");
       } else {
-        Alert.alert("Error", "Failed to mark test as completed");
+        dispatch(showError("Failed to mark test as completed"));
       }
     } catch (error: any) {
-      console.error('Error completing test:', error);
-      Alert.alert("Error", error?.message || "Failed to complete test");
+      dispatch(showError(error?.message ?? "Failed to complete test"));
     } finally {
       setSubmitting(false);
     }
@@ -245,25 +299,27 @@ const ReportsLab: React.FC = () => {
 
   const handleViewReport = (fileURL: string) => {
     Linking.openURL(fileURL).catch(err => 
-      Alert.alert("Error", "Failed to open file")
+      dispatch(showError("Failed to open file"))
     );
   };
 
   const getFileIcon = (mimeType: string) => {
     if (mimeType === "application/pdf") return "📄";
-    if (mimeType.startsWith('image/')) return "🖼️";
-    if (mimeType.startsWith('audio/')) return "🎵";
-    if (mimeType.startsWith('video/')) return "🎬";
+    if (mimeType?.startsWith('image/')) return "🖼️";
+    if (mimeType?.startsWith('audio/')) return "🎵";
+    if (mimeType?.startsWith('video/')) return "🎬";
     return "📎";
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "2-digit",
-    });
+  // Extract all reports from completed patient details for the reports section
+  const getAllReports = () => {
+    if (tab === "completed") {
+      return completedPatientDetails?.flatMap((patient) => patient?.attachments ?? []) ?? [];
+    }
+    return attachments;
   };
+
+  const allReports = getAllReports();
 
   if (loading) {
     return (
@@ -282,19 +338,23 @@ const ReportsLab: React.FC = () => {
       <ScrollView 
         style={styles.content}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+        contentContainerStyle={{ 
+          paddingBottom: insets.bottom + 80 + FOOTER_H,
+          flexGrow: 1 
+        }}
       >
         {/* Patient Profile Card */}
         {patientDetails && (
           <View style={styles.section}>
             <PatientProfileCard
               patientDetails={patientDetails}
-              tab="completed"
+              completedDetails={completedPatientDetails}
+              tab={tab}
             />
           </View>
         )}
 
-        {/* Reports Section - EXACT SAME STRUCTURE AS WEB */}
+        {/* Reports Section */}
         <View style={styles.section}>
           <View style={styles.reportsHeader}>
             <Text style={styles.sectionTitle}>
@@ -302,14 +362,18 @@ const ReportsLab: React.FC = () => {
             </Text>
           </View>
 
-          {attachments.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {allReports?.length > 0 ? (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.reportsScrollContent}
+            >
               <View style={styles.reportsGrid}>
-                {attachments.map((attachment, index) => (
+                {allReports?.map((attachment, index) => (
                   <View key={`${attachment.id}-${index}`} style={styles.reportCard}>
                     <View style={styles.reportHeader}>
                       <Text style={styles.reportTestName} numberOfLines={1}>
-                        {attachment.test || "Test Report"}
+                        {attachment.test ?? "Test Report"}
                       </Text>
                     </View>
                     
@@ -348,31 +412,34 @@ const ReportsLab: React.FC = () => {
             <View style={styles.noReportsContainer}>
               <Text style={styles.noReportsText}>No reports available</Text>
               <Text style={styles.noReportsSubtext}>
-                {walkinID ? "Walk-in patient" : "Regular patient"} - {walkinID || timeLineID}
+                {walkinID ? "Walk-in patient" : "Regular patient"} - {walkinID ?? timeLineID}
               </Text>
             </View>
           )}
 
-          {/* Done Button - EXACT SAME AS WEB */}
-          <View style={styles.doneButtonContainer}>
-            <TouchableOpacity 
-              onPress={handleDone}
-              disabled={submitting}
-            >
-              <LinearGradient
-                colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-                style={[styles.doneButton, submitting && styles.doneButtonDisabled]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+          {/* Done Button */}
+          {/* Only show Done button for normal tab, not for completed tab */}
+          {tab !== "completed" && (
+            <View style={styles.doneButtonContainer}>
+              <TouchableOpacity 
+                onPress={handleDone}
+                disabled={submitting}
               >
-                {submitting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.doneButtonText}>Done</Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+                <LinearGradient
+                  colors={[COLORS.gradientStart, COLORS.gradientEnd]}
+                  style={[styles.doneButton, submitting && styles.doneButtonDisabled]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  {submitting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.doneButtonText}>Done</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -394,53 +461,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   section: {
-    margin: 16,
+    margin: SPACING.md,
     marginTop: 0,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    padding: SPACING.xl,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZE.md,
     color: COLORS.sub,
   },
   reportsHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: SPACING.md,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg,
     fontWeight: "700",
     color: COLORS.text,
   },
+  reportsScrollContent: {
+    paddingRight: SPACING.md,
+  },
   reportsGrid: {
     flexDirection: "row",
-    gap: 12,
-    paddingVertical: 8,
+    gap: SPACING.md,
   },
   reportCard: {
-    width: 160,
+    width: responsiveWidth(40),
     backgroundColor: COLORS.card,
     borderRadius: 12,
-    padding: 16,
+    padding: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: "#000",
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
   },
   reportHeader: {
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   reportTestName: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     fontWeight: "600",
   },
@@ -451,29 +521,29 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: SPACING.md,
     alignSelf: "center",
   },
   reportIconText: {
     fontSize: 24,
   },
   reportFileName: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
     textAlign: "center",
   },
   reportDate: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
     marginBottom: 4,
     textAlign: "center",
   },
   reportAddedBy: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
-    marginBottom: 12,
+    marginBottom: SPACING.md,
     textAlign: "center",
   },
   viewReportButton: {
@@ -481,40 +551,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.brand,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderRadius: 6,
     gap: 6,
   },
   viewReportButtonText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: "#fff",
   },
   noReportsContainer: {
     alignItems: "center",
-    padding: 40,
+    padding: SPACING.xl,
   },
   noReportsText: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     color: COLORS.sub,
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   noReportsSubtext: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     textAlign: "center",
   },
   doneButtonContainer: {
-    marginTop: 24,
+    marginTop: SPACING.lg,
     alignItems: "center",
   },
   doneButton: {
-    paddingHorizontal: 32,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
     borderRadius: 8,
-    minWidth: 120,
+    minWidth: responsiveWidth(30),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -522,7 +592,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   doneButtonText: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "600",
     color: "#fff",
   },
@@ -530,7 +600,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    height: 64,
+    height: FOOTER_H,
     justifyContent: "center",
   },
 });

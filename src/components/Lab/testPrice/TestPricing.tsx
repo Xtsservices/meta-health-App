@@ -1,4 +1,3 @@
-// TestPricing.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -12,15 +11,41 @@ import {
   Dimensions,
   TextInput,
   ActivityIndicator,
+  RefreshControl,
+  StatusBar,
 } from "react-native";
-import { useSelector } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
+import { useSelector, useDispatch } from "react-redux";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AuthFetch, AuthPost } from "../../../auth/auth";
+import { AuthFetch } from "../../../auth/auth";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width: W, height: H } = Dimensions.get("window");
-const isTablet = W >= 768;
-const isSmallScreen = W < 375;
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  ICON_SIZE,
+  responsiveWidth,
+  responsiveHeight,
+  isTablet,
+  isSmallDevice, 
+  FOOTER_HEIGHT
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import Footer from "../../dashboard/footer";
+
+// Icons
+import { 
+  PlusIcon, 
+  Trash2Icon, 
+  Edit2Icon,
+  MoreVerticalIcon,
+  XIcon
+} from "../../../utils/SvgIcons";
+import { showError, showSuccess } from "../../../store/toast.slice";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const FOOTER_H = FOOTER_HEIGHT;
 
 // Types
 interface TestData {
@@ -37,7 +62,6 @@ interface TestData {
   testType?: string;
 }
 
-// Delete Confirmation Modal
 const DeleteConfirmationModal: React.FC<{
   visible: boolean;
   onCancel: () => void;
@@ -47,16 +71,26 @@ const DeleteConfirmationModal: React.FC<{
     <Modal transparent visible={visible} animationType="fade">
       <View style={styles.modalBackdrop}>
         <View style={styles.deleteModal}>
-          <Text style={styles.deleteWarning}>⚠️</Text>
+          <View style={styles.deleteWarningIcon}>
+            <Text style={styles.deleteWarning}>⚠️</Text>
+          </View>
           <Text style={styles.deleteTitle}>Delete Test</Text>
           <Text style={styles.deleteMessage}>
-            Are you sure you want to delete this data? This action cannot be undone
+            Are you sure you want to delete this test? This action cannot be undone.
           </Text>
           <View style={styles.deleteActions}>
-            <TouchableOpacity style={styles.cancelDeleteButton} onPress={onCancel}>
+            <TouchableOpacity 
+              style={styles.cancelDeleteButton} 
+              onPress={onCancel}
+              activeOpacity={0.7}
+            >
               <Text style={styles.cancelDeleteText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmDeleteButton} onPress={onConfirm}>
+            <TouchableOpacity 
+              style={styles.confirmDeleteButton} 
+              onPress={onConfirm}
+              activeOpacity={0.7}
+            >
               <Text style={styles.confirmDeleteText}>Delete</Text>
             </TouchableOpacity>
           </View>
@@ -66,89 +100,133 @@ const DeleteConfirmationModal: React.FC<{
   );
 };
 
-// Test Row Component
-const TestRow: React.FC<{
+const ActionDropdown: React.FC<{
+  visible: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}> = ({ visible, onEdit, onDelete, onClose }) => {
+  if (!visible) return null;
+
+  return (
+    <View style={styles.dropdownContainer}>
+      <TouchableOpacity 
+        style={styles.dropdownItem}
+        onPress={() => {
+          onEdit();
+          onClose();
+        }}
+        activeOpacity={0.7}
+      >
+        <Edit2Icon size={ICON_SIZE.sm} color={COLORS.text} />
+        <Text style={styles.dropdownEditText}>Edit</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={styles.dropdownItem}
+        onPress={() => {
+          onDelete();
+          onClose();
+        }}
+        activeOpacity={0.7}
+      >
+        <Trash2Icon size={ICON_SIZE.sm} color={COLORS.danger} />
+        <Text style={styles.dropdownDeleteText}>Delete</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const TestCard: React.FC<{
   test: TestData;
   onEdit: (test: TestData) => void;
   onDelete: (id: number) => void;
-}> = ({ test, onEdit, onDelete }) => {
+  isDropdownOpen: boolean;
+  onToggleDropdown: () => void;
+}> = ({ test, onEdit, onDelete, isDropdownOpen, onToggleDropdown }) => {
   const totalPrice = test.testPrice + (test.testPrice * test.gst) / 100;
 
   return (
-    <View style={styles.tableRow}>
-      <View style={[styles.tableCell, styles.idCell]}>
-        <Text style={styles.cellText}>{test.labTestID}</Text>
-      </View>
-      <View style={[styles.tableCell, styles.nameCell]}>
-        <Text style={styles.cellText} numberOfLines={2}>{test.testName}</Text>
-      </View>
-      <View style={[styles.tableCell, styles.hsnCell]}>
-        <Text style={styles.cellText}>{test.hsn}</Text>
-      </View>
-      <View style={[styles.tableCell, styles.gstCell]}>
-        <Text style={styles.cellText}>{test.gst}%</Text>
-      </View>
-      <View style={[styles.tableCell, styles.priceCell]}>
-        <Text style={styles.cellText}>₹{test.testPrice.toFixed(2)}</Text>
-      </View>
-      <View style={[styles.tableCell, styles.totalCell]}>
-        <Text style={[styles.cellText, styles.totalPriceText]}>
-          ₹{totalPrice.toFixed(2)}
-        </Text>
-      </View>
-      <View style={[styles.tableCell, styles.actionCell]}>
+    <View style={styles.testCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.testInfo}>
+          <Text style={styles.testName} numberOfLines={1}>{test.testName}</Text>
+          <Text style={styles.testId}>ID: {test.labTestID}</Text>
+        </View>
         <TouchableOpacity 
-          style={styles.editButton}
-          onPress={() => onEdit(test)}
+          style={styles.actionButton}
+          onPress={onToggleDropdown}
+          activeOpacity={0.7}
         >
-          <Text style={styles.editIcon}>✏️</Text>
+          <MoreVerticalIcon size={ICON_SIZE.sm} color={COLORS.sub} />
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.deleteButton}
-          onPress={() => test.labTestID && onDelete(test.labTestID)}
-        >
-          <Text style={styles.deleteIcon}>🗑️</Text>
-        </TouchableOpacity>
+      </View>
+
+      <ActionDropdown
+        visible={isDropdownOpen}
+        onEdit={() => onEdit(test)}
+        onDelete={() => test.labTestID && onDelete(test.labTestID)}
+        onClose={onToggleDropdown}
+      />
+
+      <View style={styles.testDetails}>
+        <View style={styles.detailRow}>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>LOINC Code</Text>
+            <Text style={styles.detailValue}>{test.lonicCode}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>HSN Code</Text>
+            <Text style={styles.detailValue}>{test.hsn}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.detailRow}>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>GST Rate</Text>
+            <Text style={styles.detailValue}>{test.gst}%</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Base Price</Text>
+            <Text style={styles.detailValue}>₹{test.testPrice.toFixed(2)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.totalPriceContainer}>
+          <Text style={styles.totalLabel}>Total Price (incl. GST)</Text>
+          <Text style={styles.totalPrice}>₹{totalPrice.toFixed(2)}</Text>
+        </View>
       </View>
     </View>
   );
 };
 
-// Main Component
 const TestPricing: React.FC = () => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const user = useSelector((state: any) => state.currentUser);
+  const insets = useSafeAreaInsets();
   
   const [data, setData] = useState<TestData[]>([]);
   const [filteredData, setFilteredData] = useState<TestData[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
 
   const departmentType = user?.roleName === 'radiology' ? 'Radiology' : 'Pathology';
 
-  useEffect(() => {
-    fetchTestPricing();
-  }, [user?.hospitalID]);
-
-  useEffect(() => {
-    const filtered = data.filter((item) => {
-      const query = searchQuery.toLowerCase();
-      return (
-        item.testName.toLowerCase().includes(query) ||
-        item.labTestID?.toString().includes(query) ||
-        item.hsn.toLowerCase().includes(query)
-      );
-    });
-    setFilteredData(filtered);
-  }, [searchQuery, data]);
-
-  const fetchTestPricing = async () => {
+  const fetchTestPricing = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) setLoading(true);
+      setRefreshing(isRefresh);
+      
       const token = await AsyncStorage.getItem("token");
-      if (!user?.hospitalID || !token) return;
+      if (!user?.hospitalID || !token) {
+        dispatch(showError("Authentication failed. Please login again."));
+        return;
+      }
 
       const response = await AuthFetch(
         `test/getlabTestPricing/${user.hospitalID}/${departmentType}`,
@@ -156,24 +234,48 @@ const TestPricing: React.FC = () => {
       );
 
       if (response?.data?.testPricingList?.data?.length > 0) {
-        setData(response?.data?.testPricingList.data);
-        setFilteredData(response?.data?.testPricingList.data);
+        setData(response.data.testPricingList.data);
+        setFilteredData(response.data.testPricingList.data);
       } else {
         setData([]);
         setFilteredData([]);
+        dispatch(showError("No test pricing data found"));
       }
     } catch (error) {
-      console.error("Error fetching test pricing:", error);
+      dispatch(showError("Failed to load test pricing data"));
       setData([]);
       setFilteredData([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  useEffect(() => {
+    fetchTestPricing();
+  }, [user?.hospitalID]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchTestPricing(true);
+    }, [])
+  );
+
+  useEffect(() => {
+    const filtered = data.filter((item) => {
+      const query = searchQuery.toLowerCase();
+      return (
+        item.testName.toLowerCase().includes(query) ||
+        item.labTestID?.toString().includes(query) ||
+        item.hsn.toLowerCase().includes(query) ||
+        item.lonicCode.toLowerCase().includes(query)
+      );
+    });
+    setFilteredData(filtered);
+  }, [searchQuery, data]);
+
   const handleDeleteTest = async () => {
     try {
-      setLoading(true);
       const token = await AsyncStorage.getItem("token");
       if (!user?.hospitalID || !token || !deleteId) return;
 
@@ -183,21 +285,22 @@ const TestPricing: React.FC = () => {
       );
 
       if (response?.data?.status === 200) {
-        Alert.alert("Success", "Test deleted successfully");
+        dispatch(showSuccess("Test deleted successfully"));
         fetchTestPricing();
       } else {
-        Alert.alert("Error", response.message || "Failed to delete test");
+        dispatch(showError(response.message || "Failed to delete test"));
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to delete test");
+      dispatch(showError("Failed to delete test"));
     } finally {
-      setLoading(false);
       setDeleteModalVisible(false);
       setDeleteId(null);
+      setOpenDropdownId(null);
     }
   };
 
   const handleEdit = (test: TestData) => {
+    setOpenDropdownId(null);
     navigation.navigate("AddTestPricing", { 
       editData: test,
       department: departmentType 
@@ -216,10 +319,18 @@ const TestPricing: React.FC = () => {
     setDeleteModalVisible(true);
   };
 
+  const toggleDropdown = (id: number) => {
+    setOpenDropdownId(openDropdownId === id ? null : id);
+  };
+
+  const onRefresh = () => {
+    fetchTestPricing(true);
+  };
+
   if (loading && data.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#14b8a6" />
+        <ActivityIndicator size="large" color={COLORS.brand} />
         <Text style={styles.loadingText}>Loading Test Pricing...</Text>
       </View>
     );
@@ -227,81 +338,107 @@ const TestPricing: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.brand} />
+      
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerSubtitle}>
+            Manage {departmentType.toLowerCase()} test pricing and configurations
+          </Text>
+        </View>
+        <View style={styles.headerStats}>
+          <Text style={styles.statsText}>{filteredData.length} Tests</Text>
+        </View>
+      </View>
 
-      {/* Search and Add Section */}
       <View style={styles.actionsContainer}>
         <View style={styles.searchContainer}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by test name, ID, HSN code..."
+            placeholder="Search tests by name, ID, HSN or LOINC..."
+            placeholderTextColor={COLORS.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-          <Text style={styles.searchIcon}>🔍</Text>
+          {searchQuery.length > 0 && (
+            <TouchableOpacity 
+              style={styles.clearSearchButton}
+              onPress={() => setSearchQuery('')}
+              activeOpacity={0.7}
+            >
+              <XIcon size={ICON_SIZE.sm} color={COLORS.sub} />
+            </TouchableOpacity>
+          )}
         </View>
         
-        <TouchableOpacity style={styles.addButton} onPress={handleAddNew}>
-          <Text style={styles.addIcon}>+</Text>
-          <Text style={styles.addButtonText}>Add Test Price</Text>
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={handleAddNew}
+          activeOpacity={0.8}
+        >
+          <PlusIcon size={ICON_SIZE.md} color={COLORS.buttonText} />
+          <Text style={styles.addButtonText}>Add Test</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Table */}
       {filteredData.length > 0 ? (
-        <ScrollView horizontal style={styles.tableContainer}>
-          <View style={styles.table}>
-            {/* Table Header */}
-            <View style={styles.tableHeader}>
-              <View style={[styles.tableHeaderCell, styles.idCell]}>
-                <Text style={styles.headerText}>Test ID</Text>
-              </View>
-              <View style={[styles.tableHeaderCell, styles.nameCell]}>
-                <Text style={styles.headerText}>Test Name</Text>
-              </View>
-              <View style={[styles.tableHeaderCell, styles.hsnCell]}>
-                <Text style={styles.headerText}>HSN Code</Text>
-              </View>
-              <View style={[styles.tableHeaderCell, styles.gstCell]}>
-                <Text style={styles.headerText}>GST (%)</Text>
-              </View>
-              <View style={[styles.tableHeaderCell, styles.priceCell]}>
-                <Text style={styles.headerText}>Base Price (₹)</Text>
-              </View>
-              <View style={[styles.tableHeaderCell, styles.totalCell]}>
-                <Text style={styles.headerText}>Total Price (₹)</Text>
-              </View>
-              <View style={[styles.tableHeaderCell, styles.actionCell]}>
-                <Text style={styles.headerText}>Actions</Text>
-              </View>
-            </View>
-
-            {/* Table Body */}
-            <FlatList
-              data={filteredData}
-              renderItem={({ item }) => (
-                <TestRow 
-                  test={item} 
-                  onEdit={handleEdit}
-                  onDelete={confirmDelete}
-                />
-              )}
-              keyExtractor={(item, index) => `${item.labTestID}-${index}`}
-              scrollEnabled={false}
+        <FlatList
+          data={filteredData}
+          renderItem={({ item }) => (
+            <TestCard 
+              test={item} 
+              onEdit={handleEdit}
+              onDelete={confirmDelete}
+              isDropdownOpen={openDropdownId === item.labTestID}
+              onToggleDropdown={() => item.labTestID && toggleDropdown(item.labTestID)}
             />
-          </View>
-        </ScrollView>
+          )}
+          keyExtractor={(item, index) => `${item.labTestID}-${index}`}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.brand]}
+              tintColor={COLORS.brand}
+            />
+          }
+        />
       ) : (
         <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>Tests Not Found! Please Add Tests</Text>
+          <Text style={styles.noDataIcon}>💰</Text>
+          <Text style={styles.noDataText}>
+            {searchQuery ? 'No matching tests found' : 'No tests configured yet'}
+          </Text>
+          <Text style={styles.noDataSubtext}>
+            {searchQuery 
+              ? 'Try adjusting your search terms' 
+              : 'Get started by adding your first test pricing'
+            }
+          </Text>
+          {!searchQuery && (
+            <TouchableOpacity 
+              style={styles.addFirstButton} 
+              onPress={handleAddNew}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.addFirstButtonText}>Add Your First Test</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
-      {/* Delete Confirmation Modal */}
       <DeleteConfirmationModal
         visible={deleteModalVisible}
         onCancel={() => setDeleteModalVisible(false)}
         onConfirm={handleDeleteTest}
       />
+
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"settings"} brandColor={COLORS.brand} />
+      </View>
     </View>
   );
 };
@@ -309,220 +446,330 @@ const TestPricing: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    padding: 16,
+    backgroundColor: COLORS.bg,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.bg,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#64748b',
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
   },
   header: {
-    backgroundColor: "#f8fafc",
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: "#14b8a6",
+    backgroundColor: COLORS.brand,
+    padding: SPACING.lg,
+    paddingTop: Platform.OS === 'ios' ? SPACING.xl : SPACING.lg,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#0f172a",
-    textAlign: "center",
+  headerContent: {
+    marginBottom: SPACING.xs,
+  },
+  headerSubtitle: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.buttonText,
+    opacity: 0.9,
+  },
+  headerStats: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: 6,
+  },
+  statsText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "600",
+    color: COLORS.buttonText,
   },
   actionsContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
-    gap: 12,
+    padding: SPACING.lg,
+    gap: SPACING.md,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
   searchContainer: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    backgroundColor: COLORS.bg,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: SPACING.md,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 14,
+    paddingVertical: SPACING.md,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    marginLeft: SPACING.sm,
   },
-  searchIcon: {
-    fontSize: 16,
-    color: "#6b7280",
+  clearSearchButton: {
+    padding: SPACING.xs,
   },
   addButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#14b8a6",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  addIcon: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
+    backgroundColor: COLORS.brand,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    gap: SPACING.xs,
+    shadowColor: COLORS.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   addButtonText: {
-    color: "#fff",
-    fontSize: 14,
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
   },
-  tableContainer: {
+  list: {
     flex: 1,
   },
-  table: {
-    minWidth: isSmallScreen ? 800 : 900,
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    overflow: "hidden",
-    shadowColor: "#000",
+  listContent: {
+    padding: SPACING.lg,
+    paddingTop: SPACING.md,
+  },
+  testCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  tableHeader: {
+  cardHeader: {
     flexDirection: "row",
-    backgroundColor: "#14b8a6",
-    paddingVertical: 16,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: SPACING.md,
   },
-  tableHeaderCell: {
-    paddingHorizontal: 8,
-    justifyContent: "center",
+  testInfo: {
+    flex: 1,
   },
-  headerText: {
-    color: "#fff",
-    fontSize: 14,
+  testName: {
+    fontSize: FONT_SIZE.lg,
     fontWeight: "600",
-    textAlign: "center",
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
   },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    paddingVertical: 12,
+  testId: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    fontWeight: "500",
   },
-  tableCell: {
-    paddingHorizontal: 8,
-    justifyContent: "center",
+  actionButton: {
+    padding: SPACING.xs,
+    marginLeft: SPACING.sm,
   },
-  cellText: {
-    fontSize: 13,
-    color: "#374151",
-    textAlign: "center",
+  dropdownContainer: {
+    position: 'absolute',
+    top: 40,
+    right: 0,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    paddingVertical: SPACING.xs,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    zIndex: 1000,
+    minWidth: 120,
   },
-  // Cell widths
-  idCell: { width: 80 },
-  nameCell: { width: 200 },
-  hsnCell: { width: 100 },
-  gstCell: { width: 80 },
-  priceCell: { width: 120 },
-  totalCell: { width: 120 },
-  actionCell: { width: 100 },
-  totalPriceText: {
-    fontWeight: "600",
-    color: "#059669",
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.sm,
   },
-  editButton: {
-    padding: 6,
-    marginRight: 8,
+  dropdownEditText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    fontWeight: '500',
   },
-  editIcon: {
-    fontSize: 16,
+  dropdownDeleteText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.danger,
+    fontWeight: '500',
   },
-  deleteButton: {
-    padding: 6,
+  testDetails: {
+    marginTop: SPACING.sm,
   },
-  deleteIcon: {
-    fontSize: 16,
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  detailItem: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  detailValue: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  totalPriceContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    marginTop: SPACING.xs,
+  },
+  totalLabel: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    fontWeight: '600',
+  },
+  totalPrice: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+    color: COLORS.success,
   },
   noDataContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 60,
+    padding: SPACING.xl,
+  },
+  noDataIcon: {
+    fontSize: 64,
+    marginBottom: SPACING.lg,
+    opacity: 0.5,
   },
   noDataText: {
-    fontSize: 16,
-    color: "#9ca3af",
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "600",
+    color: COLORS.text,
     textAlign: "center",
+    marginBottom: SPACING.sm,
+  },
+  noDataSubtext: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
+    textAlign: "center",
+    marginBottom: SPACING.xl,
+    lineHeight: 20,
+  },
+  addFirstButton: {
+    backgroundColor: COLORS.brand,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    shadowColor: COLORS.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addFirstButtonText: {
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.md,
+    fontWeight: "600",
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: COLORS.overlay,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: SPACING.lg,
   },
   deleteModal: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 24,
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: SPACING.xl,
     width: "100%",
     maxWidth: 400,
     alignItems: "center",
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  deleteWarningIcon: {
+    marginBottom: SPACING.lg,
   },
   deleteWarning: {
     fontSize: 48,
-    marginBottom: 16,
   },
   deleteTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#0f172a",
-    marginBottom: 8,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+    textAlign: "center",
   },
   deleteMessage: {
-    fontSize: 14,
-    color: "#64748b",
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
     textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 20,
+    marginBottom: SPACING.xl,
+    lineHeight: 22,
   },
   deleteActions: {
     flexDirection: "row",
-    gap: 12,
+    gap: SPACING.md,
     width: "100%",
   },
   cancelDeleteButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#d0d5dd",
-    borderRadius: 8,
+    paddingVertical: SPACING.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 12,
     alignItems: "center",
   },
   cancelDeleteText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
+    fontSize: FONT_SIZE.md,
+    fontWeight: "600",
+    color: COLORS.text,
   },
   confirmDeleteButton: {
     flex: 1,
-    paddingVertical: 12,
-    backgroundColor: "#dc2626",
-    borderRadius: 8,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.danger,
+    borderRadius: 12,
     alignItems: "center",
   },
   confirmDeleteText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#fff",
+    fontSize: FONT_SIZE.md,
+    fontWeight: "600",
+    color: COLORS.buttonText,
+  },
+  footerWrap: {
+    left: 0,
+    right: 0,
+    height: FOOTER_H,
+    justifyContent: "center",
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
 });
 

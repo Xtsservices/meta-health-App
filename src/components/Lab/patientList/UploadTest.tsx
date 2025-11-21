@@ -1,4 +1,3 @@
-// screens/UploadTest.tsx
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -14,7 +13,7 @@ import {
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import DocumentPicker from '@react-native-documents/picker';
 import { launchImageLibrary, launchCamera, Asset } from "react-native-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -31,22 +30,19 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { RootState } from "../../../store/store";
 import Footer from "../../dashboard/footer";
 
-// Colors
-const COLORS = {
-  bg: "#f8fafc",
-  card: "#ffffff",
-  text: "#0f172a",
-  sub: "#475569",
-  border: "#e2e8f0",
-  brand: "#14b8a6",
-  error: "#ef4444",
-  gradientStart: "#14b8a6",
-  gradientEnd: "#0d9488",
-  footerBg: "#ffffff",
-  footerBorder: "#e2e8f0",
-  active: "#14b8a6",
-  inactive: "#64748b",
-};
+// Utils
+import { 
+  SPACING, 
+  FONT_SIZE, 
+  FOOTER_HEIGHT,
+  responsiveWidth,
+  responsiveHeight,
+  isTablet 
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { showError, showSuccess } from "../../../store/toast.slice";
+
+const FOOTER_H = FOOTER_HEIGHT;
 
 type FileType = {
   uri: string;
@@ -122,15 +118,14 @@ const FileUpload: React.FC<{
 
       onFileChange({
         uri: picked.uri,
-        name: picked.name || (picked.uri ? picked.uri.split("/").pop() : "document"),
-        type: picked.mimeType || picked.type || "application/octet-stream",
-        mimeType: picked.mimeType || picked.type || "application/octet-stream",
+        name: picked.name ?? (picked.uri ? picked.uri.split("/").pop() : "document"),
+        type: picked.mimeType ?? picked.type ?? "application/octet-stream",
+        mimeType: picked.mimeType ?? picked.type ?? "application/octet-stream",
         size: picked.size ?? 0,
       });
     } catch (err: any) {
       if (err?.code === "DOCUMENT_PICKER_CANCELED") return;
       Alert.alert("Error", "Failed to pick document");
-      console.error("DocumentPicker error:", err);
     }
   };
 
@@ -144,8 +139,7 @@ const FileUpload: React.FC<{
 
       if (result.didCancel) return;
       if (result.errorCode) {
-        console.error("ImagePicker error", result.errorMessage);
-        Alert.alert("Error", result.errorMessage || "Failed to pick image");
+        Alert.alert("Error", result.errorMessage ?? "Failed to pick image");
         return;
       }
 
@@ -154,14 +148,13 @@ const FileUpload: React.FC<{
 
       onFileChange({
         uri: asset.uri,
-        name: asset.fileName || `photo_${Date.now()}.jpg`,
-        type: asset.type || "image/jpeg",
-        mimeType: asset.type || "image/jpeg",
+        name: asset.fileName ?? `photo_${Date.now()}.jpg`,
+        type: asset.type ?? "image/jpeg",
+        mimeType: asset.type ?? "image/jpeg",
         size: asset.fileSize ?? 0,
       });
     } catch (error) {
       Alert.alert("Error", "Failed to pick image");
-      console.error(error);
     }
   };
 
@@ -174,8 +167,7 @@ const FileUpload: React.FC<{
 
       if (result.didCancel) return;
       if (result.errorCode) {
-        console.error("Camera error", result.errorMessage);
-        Alert.alert("Error", result.errorMessage || "Failed to open camera");
+        Alert.alert("Error", result.errorMessage ?? "Failed to open camera");
         return;
       }
 
@@ -184,14 +176,13 @@ const FileUpload: React.FC<{
 
       onFileChange({
         uri: asset.uri,
-        name: asset.fileName || `camera_${Date.now()}.jpg`,
-        type: asset.type || "image/jpeg",
-        mimeType: asset.type || "image/jpeg",
+        name: asset.fileName ?? `camera_${Date.now()}.jpg`,
+        type: asset.type ?? "image/jpeg",
+        mimeType: asset.type ?? "image/jpeg",
         size: asset.fileSize ?? 0,
       });
     } catch (error) {
       Alert.alert("Error", "Failed to take photo");
-      console.error(error);
     }
   };
 
@@ -219,7 +210,7 @@ const FileUpload: React.FC<{
     <View style={styles.fileUploadContainer}>
       <Text style={styles.sectionTitle}>Upload Patient Test Results</Text>
 
-      {files.length === 0 ? (
+      {files?.length === 0 ? (
         <TouchableOpacity style={styles.uploadArea} onPress={showFilePickerOptions}>
           <CloudUploadIcon size={48} color={COLORS.brand} />
           <Text style={styles.uploadText}>
@@ -246,12 +237,12 @@ const FileUpload: React.FC<{
         </TouchableOpacity>
       ) : (
         <View style={styles.uploadedFilesContainer}>
-          <Text style={styles.uploadedFilesTitle}>Uploaded Documents ({files.length})</Text>
+          <Text style={styles.uploadedFilesTitle}>Uploaded Documents ({files?.length})</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.uploadedFilesList}>
-              {files.map((file, index) => {
-                const isImage = (file?.mimeType || file?.type || "").startsWith("image/");
-                const isPdf = (file?.mimeType || "").includes("pdf") || (file?.name || "").endsWith(".pdf");
+              {files?.map((file, index) => {
+                const isImage = (file?.mimeType ?? file?.type ?? "")?.startsWith("image/");
+                const isPdf = (file?.mimeType ?? "")?.includes("pdf") || (file?.name ?? "")?.endsWith(".pdf");
 
                 return (
                   <View key={index} style={styles.uploadedFile}>
@@ -268,7 +259,7 @@ const FileUpload: React.FC<{
                     )}
 
                     <Text style={styles.fileName} numberOfLines={1}>
-                      {file?.name || "Unknown File"}
+                      {file?.name ?? "Unknown File"}
                     </Text>
 
                     <View style={styles.fileActions}>
@@ -306,22 +297,37 @@ const FileUpload: React.FC<{
   );
 };
 
-
 const UploadTest: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
   
   const { state } = route.params as any;
   const { timeLineID, testID, walkinID, loincCode, testName, patientData } = state;
-  console.log('Route params:', state);
 
   const [files, setFiles] = useState<FileType[]>([]);
   const [uploading, setUploading] = useState(false);
   const [patientDetails, setPatientDetails] = useState<PatientDetails | null>(null);
   const [loadingPatient, setLoadingPatient] = useState(false);
   const [timelineData, setTimelineData] = useState<any>(null);
+
+  // Check authentication
+  const checkAuth = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        dispatch(showError("Not authorized. Please login again."));
+        navigation.navigate("Login" as never);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      dispatch(showError("Authentication check failed"));
+      return false;
+    }
+  };
 
   // Fetch patient details if not passed in navigation
   useEffect(() => {
@@ -339,15 +345,15 @@ const UploadTest: React.FC = () => {
           return;
         }
 
-        let apiEndpoint = `test/${user.roleName}/${user.hospitalID}/${user.id}/${timeLineID}/getPatientDetails`;
+        let apiEndpoint = `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getPatientDetails`;
 
         const response = await AuthFetch(apiEndpoint, token);
         
         if (response?.data?.message === "success") {
-          setPatientDetails(response?.data?.patientList?.[0] || null);
+          setPatientDetails(response?.data?.patientList?.[0] ?? null);
         } 
       } catch (error) {
-        console.error('Error fetching patient details:', error);
+        dispatch(showError("Failed to fetch patient details"));
       } finally {
         setLoadingPatient(false);
       }
@@ -356,7 +362,7 @@ const UploadTest: React.FC = () => {
     fetchPatientDetails();
   }, [patientData, timeLineID, user]);
 
-  // Fetch timeline data for regular patients - EXACT SAME AS WEB
+  // Fetch timeline data for regular patients
   useEffect(() => {
     const fetchTimelineData = async () => {
       if (walkinID) return; // Skip for walk-in patients
@@ -366,7 +372,7 @@ const UploadTest: React.FC = () => {
         if (!user?.hospitalID || !token || !timeLineID) return;
 
         const response = await AuthFetch(
-          `patientTimeLine/${user.hospitalID}/${timeLineID}`,
+          `patientTimeLine/${user?.hospitalID}/${timeLineID}`,
           token
         );
 
@@ -374,7 +380,7 @@ const UploadTest: React.FC = () => {
           setTimelineData(response.data.patientTimeLine);
         }
       } catch (error) {
-        console.error('Error fetching timeline data:', error);
+        // Silent fail - timeline data is optional
       }
     };
 
@@ -388,63 +394,44 @@ const UploadTest: React.FC = () => {
   };
 
   const handleFileRemove = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+    setFiles(prev => prev?.filter((_, i) => i !== index));
   };
 
-  // EXACT SAME LOGIC AS WEB - File upload and status update
+  // File upload and status update
   const handleSubmit = async () => {
-    if (files.length === 0) {
-      Alert.alert("No Files", "Please select at least one file to upload");
-      return;
-    }
-
     try {
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) return;
+
+      if (files?.length === 0) {
+        dispatch(showError("Please select at least one file to upload"));
+        return;
+      }
+
       setUploading(true);
       const token = await AsyncStorage.getItem("token");
       
       const formData = new FormData();
       
-      // Append files to FormData - EXACT SAME AS WEB
-      files.forEach((file, index) => {
+      // Append files to FormData
+      files?.forEach((file, index) => {
         formData.append("files", {
           uri: file.uri,
-          type: file.mimeType || file.type,
+          type: file.mimeType ?? file.type,
           name: file.name,
         } as any);
       });
       
-      formData.append("category", user?.roleName || "");
+      formData.append("category", user?.roleName ?? "");
 
       let response;
       
-      console.log('Upload data:', {
-        walkinID,
-        loincCode,
-        testID,
-        timeLineID,
-        hospitalID: user?.hospitalID,
-        userID: user?.id,
-        hasTimelineData: !!timelineData,
-        patientID: timelineData?.patientID
-      });
-
-      // EXACT SAME PATIENT TYPE DETERMINATION AS WEB
+      // PATIENT TYPE DETERMINATION
       const isWalkinPatient = walkinID && loincCode && (!timeLineID || timeLineID === walkinID);
       
-      console.log('Patient type determination:', {
-        isWalkinPatient,
-        walkinID,
-        loincCode,
-        timeLineID,
-        testID
-      });
-
       if (isWalkinPatient) {
-        console.log('Processing as WALK-IN patient');
-        
-        // EXACT SAME API ENDPOINT AS WEB
-        const hospitalID = String(user?.hospitalID || '');
-        const userID = String(user?.id || '');
+        const hospitalID = String(user?.hospitalID ?? '');
+        const userID = String(user?.id ?? '');
         const walkinIDStr = String(walkinID);
         const loincCodeStr = String(loincCode);
         
@@ -455,15 +442,12 @@ const UploadTest: React.FC = () => {
           true
         );
       } else {
-        console.log('Processing as REGULAR patient');
-        
-        // EXACT SAME API ENDPOINT AS WEB
-        const patientIDToUse = timelineData?.patientID || patientDetails?.patientID || patientDetails?.id;
-        const hospitalID = String(user?.hospitalID || '');
-        const userID = String(user?.id || '');
+        const patientIDToUse = timelineData?.patientID ?? patientDetails?.patientID ?? patientDetails?.id;
+        const hospitalID = String(user?.hospitalID ?? '');
+        const userID = String(user?.id ?? '');
         const timeLineIDStr = String(timeLineID);
-        const patientIDStr = String(patientIDToUse || '');
-        const testIDStr = String(testID || '');
+        const patientIDStr = String(patientIDToUse ?? '');
+        const testIDStr = String(testID ?? '');
         
         response = await AuthPost(
           `attachment/${hospitalID}/${timeLineIDStr}/${patientIDStr}/${userID}?testID=${testIDStr}`,
@@ -473,70 +457,61 @@ const UploadTest: React.FC = () => {
         );
       }
 
-      console.log('Upload response:', response);
-
-      // EXACT SAME SUCCESS HANDLING AS WEB
       if (response?.data?.message === "success") {
-        Alert.alert("Success", "Files uploaded successfully");
+        dispatch(showSuccess("Files uploaded successfully"));
         
-        // EXACT SAME STATUS UPDATE AS WEB
+        // Update test status
         await updateTestStatus();
         
-        // Navigate to Reports screen - EXACT SAME AS WEB
+        // Navigate to Reports screen
         navigation.navigate("ReportsLab", { 
           state: { 
             timeLineID, 
             testID, 
             walkinID, 
             loincCode,
-            patientData: patientDetails || patientData
+            patientData: patientDetails ?? patientData
           } 
         });
       } else {
-        const errorMsg = response?.data?.message || response?.message || "Failed to upload files";
-        Alert.alert("Upload Failed", errorMsg);
+        const errorMsg = response?.data?.message ?? response?.message ?? "Failed to upload files";
+        dispatch(showError(errorMsg));
       }
     } catch (error: any) {
-      console.error('Upload error:', error);
-      const errorMsg = error?.response?.data?.message || error?.message || "Network error occurred";
-      Alert.alert("Upload Error", errorMsg);
+      const errorMsg = error?.response?.data?.message ?? error?.message ?? "Network error occurred";
+      dispatch(showError(errorMsg));
     } finally {
       setUploading(false);
     }
   };
 
-  // EXACT SAME LOGIC AS WEB - Update test status to completed
+  // Update test status to completed
   const updateTestStatus = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
       let response;
       
-      // EXACT SAME API CALLS AS WEB
       if (walkinID && loincCode) {
-        // Update walk-in test status - EXACT SAME AS WEB
+        // Update walk-in test status
         response = await AuthPost(
           `test/${user?.hospitalID}/${loincCode}/${walkinID}/walkinTestStatus`,
           { status: "completed" },
           token
         );
       } else {
-        // Update regular test status - EXACT SAME AS WEB
+        // Update regular test status
         response = await AuthPost(
           `test/${user?.roleName}/${user?.hospitalID}/${testID}/testStatus`,
           { status: "completed" },
           token
         );
       }
-
-      console.log("Status update response:", response);
       
       if (response?.data?.message === "success") {
-        console.log("Test status updated to completed successfully");
-      } else {
-        console.warn("Test status update response:", response?.data);
+        // Success - status updated
       }
     } catch (error) {
-      console.error('Error updating test status:', error);
+      // Silent fail - status update is secondary
     }
   };
 
@@ -546,7 +521,10 @@ const UploadTest: React.FC = () => {
       <ScrollView 
         style={styles.content}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+        contentContainerStyle={{ 
+          paddingBottom: insets.bottom + 80 + FOOTER_H,
+          flexGrow: 1 
+        }}
       >
         {/* Patient Profile Card */}
         {loadingPatient ? (
@@ -571,11 +549,25 @@ const UploadTest: React.FC = () => {
             onFileRemove={handleFileRemove}
           />
           
-          {files.length > 0 && (
+          {files?.length > 0 && (
             <View style={styles.actionsRow}>
               <TouchableOpacity 
                 style={styles.addMoreButton}
                 onPress={() => {
+                  // Reuse the file picker logic
+                  const showFilePickerOptions = () => {
+                    Alert.alert(
+                      "Select File Type",
+                      "Choose how you want to upload the file",
+                      [
+                        { text: "Take Photo", onPress: () => {} },
+                        { text: "Choose from Gallery", onPress: () => {} },
+                        { text: "Choose Document", onPress: () => {} },
+                        { text: "Cancel", style: "cancel" },
+                      ],
+                      { cancelable: true }
+                    );
+                  };
                   showFilePickerOptions();
                 }}
               >
@@ -597,7 +589,7 @@ const UploadTest: React.FC = () => {
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <Text style={styles.submitButtonText}>
-                      Submit {files.length} File{files.length > 1 ? 's' : ''}
+                      Submit {files?.length} File{files?.length > 1 ? 's' : ''}
                     </Text>
                   )}
                 </LinearGradient>
@@ -647,7 +639,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg,
     fontWeight: "700",
     color: COLORS.text,
     marginBottom: 16,
@@ -658,7 +650,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 8,
-    fontSize: 14,
+    fontSize: FONT_SIZE.md,
     color: COLORS.sub,
   },
   fileUploadContainer: {
@@ -674,14 +666,14 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
   },
   uploadText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.md,
     color: COLORS.sub,
     textAlign: "center",
     marginVertical: 16,
     lineHeight: 20,
   },
   uploadSubtext: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.sm,
     color: "#9ca3af",
   },
   addButton: {
@@ -697,7 +689,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addButtonText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     color: "#fff",
   },
@@ -705,7 +697,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   uploadedFilesTitle: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "600",
     color: COLORS.text,
     marginBottom: 12,
@@ -720,7 +712,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
-    minWidth: 120,
+    minWidth: responsiveWidth(30),
     backgroundColor: COLORS.card,
   },
   fileThumbnail: {
@@ -740,7 +732,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
   },
   fileName: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.text,
     marginTop: 8,
     textAlign: "center",
@@ -761,7 +753,7 @@ const styles = StyleSheet.create({
   },
   viewButtonText: {
     color: "#fff",
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "500",
   },
   deleteButton: {
@@ -784,7 +776,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addMoreButtonText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     color: COLORS.brand,
   },
@@ -800,7 +792,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButtonText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     color: "#fff",
     textAlign: "center",
@@ -809,7 +801,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    height: 64,
+    height: FOOTER_H,
     justifyContent: "center",
   },
 });
