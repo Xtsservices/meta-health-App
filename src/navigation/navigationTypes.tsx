@@ -103,6 +103,8 @@ DischargeSummaryDownload: undefined;
   ReceptionPatientsList: undefined;
   DoctorManagement: undefined;
   DoctorSlots: undefined;
+  TaxInvoiceTabs: undefined;
+  Invoicedetails: undefined;
 
 
 

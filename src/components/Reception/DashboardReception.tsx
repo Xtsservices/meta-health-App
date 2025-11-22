@@ -1020,7 +1020,7 @@ const DashboardReception: React.FC = () => {
       key: "taxinvoice", 
       label: "Tax Invoice", 
       icon: Receipt, 
-      onPress: () => go("Appointments") 
+      onPress: () => go("TaxInvoiceTabs") 
     },
     { 
       key: "records", 
