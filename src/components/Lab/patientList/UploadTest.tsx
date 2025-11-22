@@ -14,10 +14,11 @@ import {
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelector, useDispatch } from "react-redux";
-import DocumentPicker from '@react-native-documents/picker';
+import { pick, types } from "@react-native-documents/picker";
 import { launchImageLibrary, launchCamera, Asset } from "react-native-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import LinearGradient from 'react-native-linear-gradient';
+import RNFS from "react-native-fs";
+import LinearGradient from "react-native-linear-gradient";
 
 // Icons
 import {
@@ -48,7 +49,7 @@ type FileType = {
   uri: string;
   name: string;
   type: string;
-  size: number;
+  size?: number;
   mimeType?: string;
 };
 
@@ -99,111 +100,27 @@ type PatientDetails = {
   FollowUp?: string;
 };
 
-// File Upload Component
+// File Upload Component (keeps UI, uses callbacks from parent)
 const FileUpload: React.FC<{
   files: FileType[];
   onFileChange: (file: FileType) => void;
   onFileRemove: (index: number) => void;
-}> = ({ files, onFileChange, onFileRemove }) => {
-  const pickDocument = async () => {
-    try {
-      const res = await DocumentPicker.pick({
-        presentationStyle: "fullScreen",
-        type: ["image/*", "application/pdf"],
-        allowMultiSelection: false,
-      });
-
-      const picked = Array.isArray(res) ? res[0] : res;
-      if (!picked) return;
-
-      onFileChange({
-        uri: picked.uri,
-        name: picked.name ?? (picked.uri ? picked.uri.split("/").pop() : "document"),
-        type: picked.mimeType ?? picked.type ?? "application/octet-stream",
-        mimeType: picked.mimeType ?? picked.type ?? "application/octet-stream",
-        size: picked.size ?? 0,
-      });
-    } catch (err: any) {
-      if (err?.code === "DOCUMENT_PICKER_CANCELED") return;
-      Alert.alert("Error", "Failed to pick document");
-    }
-  };
-
-  const pickImageFromLibrary = async () => {
-    try {
-      const result = await launchImageLibrary({
-        mediaType: "photo",
-        quality: 0.8,
-        selectionLimit: 1,
-      });
-
-      if (result.didCancel) return;
-      if (result.errorCode) {
-        Alert.alert("Error", result.errorMessage ?? "Failed to pick image");
-        return;
-      }
-
-      const asset: Asset | undefined = result.assets && result.assets[0];
-      if (!asset || !asset.uri) return;
-
-      onFileChange({
-        uri: asset.uri,
-        name: asset.fileName ?? `photo_${Date.now()}.jpg`,
-        type: asset.type ?? "image/jpeg",
-        mimeType: asset.type ?? "image/jpeg",
-        size: asset.fileSize ?? 0,
-      });
-    } catch (error) {
-      Alert.alert("Error", "Failed to pick image");
-    }
-  };
-
-  const takePhoto = async () => {
-    try {
-      const result = await launchCamera({
-        mediaType: "photo",
-        quality: 0.8,
-      });
-
-      if (result.didCancel) return;
-      if (result.errorCode) {
-        Alert.alert("Error", result.errorMessage ?? "Failed to open camera");
-        return;
-      }
-
-      const asset: Asset | undefined = result.assets && result.assets[0];
-      if (!asset || !asset.uri) return;
-
-      onFileChange({
-        uri: asset.uri,
-        name: asset.fileName ?? `camera_${Date.now()}.jpg`,
-        type: asset.type ?? "image/jpeg",
-        mimeType: asset.type ?? "image/jpeg",
-        size: asset.fileSize ?? 0,
-      });
-    } catch (error) {
-      Alert.alert("Error", "Failed to take photo");
-    }
-  };
-
+  onPickDocument: (multi?: boolean) => void;
+  onPickImageFromLibrary: () => void;
+  onTakePhoto: () => void;
+}> = ({ files, onFileChange, onFileRemove, onPickDocument, onPickImageFromLibrary, onTakePhoto }) => {
   const showFilePickerOptions = () => {
     Alert.alert(
       "Select File Type",
       "Choose how you want to upload the file",
       [
-        { text: "Take Photo", onPress: takePhoto },
-        { text: "Choose from Gallery", onPress: pickImageFromLibrary },
-        { text: "Choose Document", onPress: pickDocument },
+        { text: "Take Photo", onPress: onTakePhoto },
+        { text: "Choose from Gallery", onPress: onPickImageFromLibrary },
+        { text: "Choose Document", onPress: () => onPickDocument(false) },
         { text: "Cancel", style: "cancel" },
       ],
       { cancelable: true }
     );
-  };
-
-  const getFileIcon = (fileType: string) => {
-    if (fileType === 'application/pdf' || fileType?.includes('pdf')) return '📄';
-    if (fileType?.startsWith('image/')) return '🖼️';
-    return '📎';
   };
 
   return (
@@ -306,6 +223,7 @@ const UploadTest: React.FC = () => {
   
   const { state } = route.params as any;
   const { timeLineID, testID, walkinID, loincCode, testName, patientData } = state;
+  console.log("loincCode")
 
   const [files, setFiles] = useState<FileType[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -319,7 +237,7 @@ const UploadTest: React.FC = () => {
       const token = await AsyncStorage.getItem("token");
       if (!token) {
         dispatch(showError("Not authorized. Please login again."));
-        navigation.navigate("Login" as never);
+        navigation.navigate("Login");
         return false;
       }
       return true;
@@ -360,7 +278,7 @@ const UploadTest: React.FC = () => {
     };
 
     fetchPatientDetails();
-  }, [patientData, timeLineID, user]);
+  }, [patientData, timeLineID, user, dispatch]);
 
   // Fetch timeline data for regular patients
   useEffect(() => {
@@ -387,14 +305,148 @@ const UploadTest: React.FC = () => {
     fetchTimelineData();
   }, [user?.hospitalID, timeLineID, walkinID]);
 
-  const handleFileChange = (file: FileType) => {
-    const normalizedUri = Platform.OS === "ios" && file.uri?.startsWith("file://") ? file.uri.replace("file://", "") : file.uri;
-    const fileObj = { ...file, uri: normalizedUri };
+const normalizeUriForUpload = async (uri: string, name: string) => {
+  try {
+    if (Platform.OS === "android" && uri.startsWith("content://")) {
+      const dest = `${RNFS.DocumentDirectoryPath}/${Date.now()}_${name}`;
+      await RNFS.copyFile(uri, dest);
+      return `file://${dest}`;
+    }
+    // For iOS, ensure it starts with file://
+    if (Platform.OS === "ios" && !uri.startsWith("file://")) {
+      return `file://${uri}`;
+    }
+    return uri;
+  } catch (err) {
+    console.log("URI normalization error:", err);
+    return uri; // Return original URI as fallback
+  }
+};
+  const handleFileChange = async (file: FileType) => {
+    const normalizedUri = Platform.OS === "ios" && file.uri?.startsWith("file://")
+      ? file.uri.replace("file://", "")
+      : file.uri;
+    // If content:// on Android, normalize to file://
+    const finalUri = await normalizeUriForUpload(file.uri, file.name);
+    const fileObj = { ...file, uri: finalUri, mimeType: file.mimeType ?? file.type };
     setFiles(prev => [...prev, fileObj]);
   };
 
   const handleFileRemove = (index: number) => {
     setFiles(prev => prev?.filter((_, i) => i !== index));
+  };
+
+  // Camera
+  const takePhoto = async () => {
+    try {
+      const result = await launchCamera({
+        mediaType: "photo",
+        quality: 0.8,
+      });
+
+      if (result.didCancel) return;
+      if (result.errorCode) {
+        Alert.alert("Error", result.errorMessage ?? "Failed to open camera");
+        return;
+      }
+
+      const asset: Asset | undefined = result.assets && result.assets[0];
+      if (!asset || !asset.uri) return;
+
+      await handleFileChange({
+        uri: asset.uri,
+        name: asset.fileName ?? `camera_${Date.now()}.jpg`,
+        type: asset.type ?? "image/jpeg",
+        mimeType: asset.type ?? "image/jpeg",
+        size: asset.fileSize ?? 0,
+      });
+    } catch (error) {
+      Alert.alert("Error", "Failed to take photo");
+    }
+  };
+
+  // Gallery
+  const pickImageFromLibrary = async () => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: "photo",
+        quality: 0.8,
+        selectionLimit: 5, // allow selecting multiple images
+      });
+
+      if (result.didCancel) return;
+      if (result.errorCode) {
+        Alert.alert("Error", result.errorMessage ?? "Failed to pick image");
+        return;
+      }
+
+      const newAssets = result.assets ?? [];
+      for (const asset of newAssets) {
+        if (!asset || !asset.uri) continue;
+        await handleFileChange({
+          uri: asset.uri,
+          name: asset.fileName ?? `photo_${Date.now()}.jpg`,
+          type: asset.type ?? "image/jpeg",
+          mimeType: asset.type ?? "image/jpeg",
+          size: asset.fileSize ?? 0,
+        });
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  // Document picker using @react-native-documents/picker -> pick()
+  const pickDocuments = async (allowMulti = true) => {
+    try {
+      const results = await pick({
+        allowMultiSelection: allowMulti,
+        type: [types.pdf, types.images, types.plainText, types.allFiles],
+      });
+
+      const mapped = await Promise.all(
+        results.map(async file => {
+          let uri = file.uri;
+          // For Android convert content:// → file:// using RNFS if needed
+          if (Platform.OS === "android" && uri.startsWith("content://")) {
+            const dest = `${RNFS.DocumentDirectoryPath}/${file.name}`;
+            await RNFS.copyFile(uri, dest).catch(() => null);
+            uri = `file://${dest}`;
+          }
+          return {
+            uri,
+            name: file.name,
+            type: file.type || "application/octet-stream",
+            size: file.size,
+            mimeType: file.type,
+          } as FileType;
+        })
+      );
+
+      // append all
+      setFiles(prev => [...prev, ...mapped]);
+    } catch (error: any) {
+      // silence cancellation
+      if (!error?.message?.toLowerCase()?.includes("cancel")) {
+        console.log("Document picking error:", error);
+        Alert.alert("Error", "Failed to pick document(s)");
+      }
+    }
+  };
+
+  // Show add more options (connected properly now)
+  const showAddMoreFilePickerOptions = () => {
+    Alert.alert(
+      "Select File Type",
+      "Choose how you want to upload the file",
+      [
+        { text: "Take Photo", onPress: takePhoto },
+        { text: "Choose from Gallery", onPress: pickImageFromLibrary },
+        { text: "Choose Document", onPress: () => pickDocuments(true) },
+        { text: "Cancel", style: "cancel" },
+      ],
+      { cancelable: true }
+    );
   };
 
   // File upload and status update
@@ -411,18 +463,18 @@ const UploadTest: React.FC = () => {
       setUploading(true);
       const token = await AsyncStorage.getItem("token");
       
-      const formData = new FormData();
-      
-      // Append files to FormData
-      files?.forEach((file, index) => {
-        formData.append("files", {
-          uri: file.uri,
-          type: file.mimeType ?? file.type,
-          name: file.name,
-        } as any);
-      });
-      
-      formData.append("category", user?.roleName ?? "");
+const formData = new FormData();
+
+// Append files to FormData with proper structure
+for (const file of files) {
+  formData.append("files", {
+    uri: file.uri,
+    type: file.mimeType ?? file.type ?? 'application/octet-stream',
+    name: file.name,
+  } as any);
+}
+
+formData.append("category", user?.roleName ?? "");
 
       let response;
       
@@ -464,6 +516,7 @@ const UploadTest: React.FC = () => {
         await updateTestStatus();
         
         // Navigate to Reports screen
+        // @ts-ignore
         navigation.navigate("ReportsLab", { 
           state: { 
             timeLineID, 
@@ -491,7 +544,7 @@ const UploadTest: React.FC = () => {
       const token = await AsyncStorage.getItem("token");
       let response;
       
-      if (walkinID && loincCode) {
+      if (!patientData.loinc_num_ && !patientData.test) {
         // Update walk-in test status
         response = await AuthPost(
           `test/${user?.hospitalID}/${loincCode}/${walkinID}/walkinTestStatus`,
@@ -547,29 +600,16 @@ const UploadTest: React.FC = () => {
             files={files} 
             onFileChange={handleFileChange}
             onFileRemove={handleFileRemove}
+            onPickDocument={pickDocuments}
+            onPickImageFromLibrary={pickImageFromLibrary}
+            onTakePhoto={takePhoto}
           />
           
           {files?.length > 0 && (
             <View style={styles.actionsRow}>
               <TouchableOpacity 
                 style={styles.addMoreButton}
-                onPress={() => {
-                  // Reuse the file picker logic
-                  const showFilePickerOptions = () => {
-                    Alert.alert(
-                      "Select File Type",
-                      "Choose how you want to upload the file",
-                      [
-                        { text: "Take Photo", onPress: () => {} },
-                        { text: "Choose from Gallery", onPress: () => {} },
-                        { text: "Choose Document", onPress: () => {} },
-                        { text: "Cancel", style: "cancel" },
-                      ],
-                      { cancelable: true }
-                    );
-                  };
-                  showFilePickerOptions();
-                }}
+                onPress={showAddMoreFilePickerOptions}
               >
                 <PlusIcon size={16} color={COLORS.brand} />
                 <Text style={styles.addMoreButtonText}>Add More Files</Text>
