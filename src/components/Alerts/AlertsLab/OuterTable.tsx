@@ -209,12 +209,12 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         return;
       }
 
-      const res = await AuthPost(`test/${user?.roleName}/${user?.hospitalID}/approved/${order?.timeLineID || order?.id}`, {}, token);
-      if (res?.message === 'success' || res?.data?.message === 'success') {
+      const res = await AuthPost(`test/${user?.roleName}/${user?.hospitalID}/approved/${order?.patientID || order?.id}`, {}, token);
+      if (res?.status === 'success' || res?.data?.message === 'success') {
         setActionValues(prev => ({ ...prev, [orderId]: 'Accepted' }));
         dispatch(showSuccess("Order approved successfully"));
       } else {
-        dispatch(showError(res?.message || "Failed to approve order"));
+        dispatch(showError(res?.data?.message || "Failed to approve order"));
       }
     } catch (e) {
       dispatch(showError("Failed to approve order"));
@@ -243,8 +243,8 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         return;
       }
 
-      const res = await AuthPost(`test/${user?.roleName}/${user?.hospitalID}/rejected/${order?.timeLineID || order?.id}`, { rejectReason: reason }, token);
-      if (res?.message === 'success' || res?.data?.message === 'success') {
+      const res = await AuthPost(`test/${user?.roleName}/${user?.hospitalID}/rejected/${order?.patientID || order?.id}`, { rejectReason: reason }, token);
+      if (res?.status === 'success' || res?.data?.message === 'success') {
         setActionValues(prev => ({ ...prev, [orderId]: 'Rejected' }));
         setSelectedRejectId(null);
         setRejectReasons(prev => ({ ...prev, [orderId]: '' }));
