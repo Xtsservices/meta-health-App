@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  FlatList,
   Image,
   Platform,
   StatusBar,
@@ -246,14 +245,6 @@ const FileUpload: React.FC<{
                     </Text>
 
                     <View style={styles.fileActions}>
-                      {/* <TouchableOpacity
-                        style={styles.viewButton}
-                        onPress={() => handleViewFile(url)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.viewButtonText}>View</Text>
-                      </TouchableOpacity> */}
-
                       <TouchableOpacity
                         style={styles.deleteButton}
                         onPress={() => onFileRemove(index)}
@@ -481,9 +472,9 @@ const SaleComp: React.FC<{
 
   const handleAddTest = useCallback(() => {
     const addTestToList = (testToAdd: TestType) => {
-      if (!selectedTests.some((t) => t.loinc_num_ === testToAdd.loinc_num_)) {
+      if (!selectedTests.some((t) => t.loinc_num_ === testToAdd.loinc_num_ && t.name === testToAdd.name)) {
         const toAdd = { ...testToAdd, testNotes: noteInput ?? "" };
-        setSelectedTests((prev) => [...prev, toAdd]); // append for predictable display order
+        setSelectedTests((prev) => [...prev, toAdd]); // append for predictable order
         // clear input states
         setSelectedTest(null);
         setSearchQuery("");
@@ -499,8 +490,11 @@ const SaleComp: React.FC<{
     };
 
     if (selectedTest) {
-      addTestToList(selectedTest);
-      return;
+      const hasId = !!selectedTest.loinc_num_;
+      if (hasId && selectedTest.name) {
+        addTestToList(selectedTest);
+        return;
+      }
     }
 
     const q = (searchQuery || "").trim();
@@ -563,6 +557,45 @@ const SaleComp: React.FC<{
   };
 
   const placeholderColor = (COLORS as any).placeholder ?? COLORS.sub;
+  const canAddTest = isSubmitting ? false : (!!selectedTest || (searchQuery && searchQuery.trim().length > 0));
+  const renderSelectedTestRow = (item: TestType, index: number) => {
+    const amount = ((item.testPrice ?? 0) * (1 + (item.gst ?? 0) / 100));
+    return (
+      <View key={`${item.loinc_num_ || item.name}-${index}`}>
+        <View style={[styles.tableRow, index === selectedTests.length - 1 ? { borderBottomWidth: 0 } : {}]}>
+          <View style={{ width: responsiveWidth(220), paddingHorizontal: SPACING.xs }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]} numberOfLines={2}>
+              {item.name || "—"}
+            </Text>
+            {item.testNotes ? <Text style={[styles.tableCellSub, { color: COLORS.sub }]} numberOfLines={1}>{item.testNotes}</Text> : null}
+          </View>
+
+          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]} numberOfLines={1}>{item.loinc_num_ || "—"}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(80), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>{(item.gst ?? 0).toFixed(0)}%</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(100), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{(item.testPrice ?? 0).toFixed(2)}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{amount.toFixed(2)}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(90), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <TouchableOpacity onPress={() => handleRemoveTest(index)}>
+              <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>Remove</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        {index !== selectedTests.length - 1 && <View style={{ height: 1, backgroundColor: COLORS.border }} />}
+      </View>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
@@ -696,11 +729,10 @@ const SaleComp: React.FC<{
 
                 {suggestions?.length > 0 ? (
                   <View style={[styles.suggestionsBox, { borderColor: COLORS.border, backgroundColor: COLORS.card }]}>
-                    <FlatList
-                      data={suggestions}
-                      keyExtractor={(item, index) => `${item.loinc_num_}-${index}`}
-                      renderItem={({ item }) => (
+                    <ScrollView style={{ maxHeight: responsiveHeight(220) }} keyboardShouldPersistTaps="handled">
+                      {suggestions.map((item, idx) => (
                         <TouchableOpacity
+                          key={`${item.loinc_num_ || item.name}-${idx}`}
                           style={styles.suggestionRow}
                           onPress={() => {
                             setSelectedTest(item);
@@ -714,9 +746,8 @@ const SaleComp: React.FC<{
                           </View>
                           <Text style={[styles.suggestionPrice, { color: COLORS.text }]}>₹{item.testPrice}</Text>
                         </TouchableOpacity>
-                      )}
-                      style={{ maxHeight: responsiveHeight(220) }}
-                    />
+                      ))}
+                    </ScrollView>
                   </View>
                 ) : (
                   searchQuery.trim().length > 0 &&
@@ -737,9 +768,10 @@ const SaleComp: React.FC<{
                 />
 
                 <TouchableOpacity
-                  style={[styles.primaryButton, (!selectedTest && !searchQuery) && styles.disabledButton, { marginTop: SPACING.md }]}
+                  style={[styles.primaryButton, !canAddTest && styles.disabledButton, { marginTop: SPACING.md }]}
                   onPress={handleAddTest}
                   activeOpacity={0.8}
+                  disabled={!canAddTest}
                 >
                   <Text style={styles.primaryButtonText}>Add Test</Text>
                 </TouchableOpacity>
@@ -754,26 +786,28 @@ const SaleComp: React.FC<{
                     <Text style={{ color: COLORS.sub, marginTop: SPACING.xs, textAlign: "center" }}>Use the search above to add tests</Text>
                   </View>
                 ) : (
-                  <View style={styles.listBox}>
-                    {selectedTests.map((test, index) => (
-                      <View key={test.loinc_num_ + "-" + index} style={[styles.listRow, index === selectedTests.length - 1 ? { borderBottomWidth: 0 } : {}]}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.suggestionText, { color: COLORS.text }]} numberOfLines={1}>
-                            {test.name}
-                          </Text>
-                          <Text style={[styles.suggestionMeta, { color: COLORS.sub }]}>{test.loinc_num_}</Text>
-                          {test.testNotes && <Text style={[styles.noteText, { color: COLORS.sub }]}>Note: {test.testNotes}</Text>}
-                        </View>
-
-                        <View style={{ width: responsiveWidth(120), alignItems: "flex-end" }}>
-                          <Text style={[styles.amountValue, { color: COLORS.text }]}>₹{test.testPrice?.toFixed(2)}</Text>
-                          <TouchableOpacity onPress={() => handleRemoveTest(index)} style={{ marginTop: SPACING.sm }}>
-                            <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>Remove</Text>
-                          </TouchableOpacity>
-                        </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ minWidth: Math.max(SCREEN_WIDTH - SPACING.lg * 2, 700) }}
+                  >
+                    <View style={[styles.tableContainer, { backgroundColor: COLORS.card, borderColor: COLORS.border, minWidth: 700 }]}>
+                      {/* Header */}
+                      <View style={[styles.tableHeader]}>
+                        <Text style={[styles.headerText, { width: responsiveWidth(220) }]}>Test Name</Text>
+                        <Text style={[styles.headerText, { width: responsiveWidth(120) }]}>LOINC</Text>
+                        <Text style={[styles.headerText, { width: responsiveWidth(80), textAlign: "right" }]}>GST</Text>
+                        <Text style={[styles.headerText, { width: responsiveWidth(100), textAlign: "right" }]}>Price</Text>
+                        <Text style={[styles.headerText, { width: responsiveWidth(120), textAlign: "right" }]}>Amount</Text>
+                        <Text style={[styles.headerText, { width: responsiveWidth(90), textAlign: "right" }]}>Action</Text>
                       </View>
-                    ))}
-                  </View>
+
+                      {/* Rows */}
+                      <View>
+                        {selectedTests.map((item, index) => renderSelectedTestRow(item, index))}
+                      </View>
+                    </View>
+                  </ScrollView>
                 )}
               </View>
 
@@ -1100,6 +1134,44 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
     color: COLORS.sub,
     fontSize: FONT_SIZE.sm,
+  },
+
+  /* Table styles */
+  tableContainer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    padding: SPACING.sm,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+  },
+  headerText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "700",
+    color: COLORS.sub,
+  },
+  tableRow: {
+    flexDirection: "row",
+    padding: SPACING.sm,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+  },
+  tableCell: {
+    paddingHorizontal: SPACING.xs,
+  },
+  tableCellText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+  tableCellSub: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs / 2,
   },
 });
 
