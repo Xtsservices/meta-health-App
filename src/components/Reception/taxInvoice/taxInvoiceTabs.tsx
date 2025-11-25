@@ -188,6 +188,7 @@ const BillingTaxInvoiceMobile: React.FC = () => {
 
     const url = `reception/${user?.hospitalID}/approved/${deptNum}/getReceptionBillingList`;
     const response = await AuthFetch(url, token);
+    console.log(response, "billing response");
 if (response?.status === "success" && "data" in response) {
     const rawData = Array.isArray(response?.data?.data)
       ? response.data?.data
@@ -199,13 +200,14 @@ if (response?.status === "success" && "data" in response) {
   // 🔹 1. Start with raw lists
   let tests = Array.isArray(item.testsList) ? [...item.testsList] : [];
   const meds = Array.isArray(item.medicinesList) ? [...item.medicinesList] : [];
-
+console.log(item.ptype,item, "getitam details")
   // 🔹 2. Helpers to match OPD / IPD based on ptype
   const getPtype = (obj: any) =>
     Number(obj?.ptype ?? obj?.pType ?? obj?.visitType ?? item?.ptype ?? 0);
 
   const matchOPD = (pt: number) => pt === 1 || pt === 21;
   const matchIPD = (pt: number) => pt === 2 || pt === 3;
+console.log(item.ptype,item, "getitam detailsqwe")
 
   // 🔹 3. 👉 Only filter TESTS by selected departmentType (deptNum)
   //     Medicines are NOT filtered – they are always shown.
@@ -216,23 +218,25 @@ if (response?.status === "success" && "data" in response) {
     // IPD + Emergency
     tests = tests.filter((t: any) => matchIPD(getPtype(t)));
   }
+console.log(item.ptype,item, "getitam detailsdfgg")
 
   const hasTests = tests.length > 0;   // filtered tests
   const hasMeds  = meds.length > 0;    // all medicines (unfiltered)
 
   // ❗ If there are no tests (after filter) AND no medicines at all, skip
   if (!hasTests && !hasMeds) return;
+console.log(item.ptype,item, "getitam detailsghjtyu")
 
   // 🔹 4. Decide final dept type for label (OPD vs IPD/Emergency)
   let ptypeSource =
     item?.ptype ??
     (hasTests ? getPtype(tests[0]) : undefined) ??
     (hasMeds ? getPtype(meds[0]) : undefined);
-
+console.log(ptypeSource, item.ptype,item, "ptype source");
   const isOPD = matchOPD(Number(ptypeSource));
   const isIPD = matchIPD(Number(ptypeSource));
   const finalDeptType = isOPD ? 1 : 2;
-
+console.log(finalDeptType, ptypeSource, item.ptype,item, "final dept type");
   // 🔹 5. Universal timeline extractor (unchanged)
   const extractTimelineId = (obj: any): string => {
     return (
@@ -319,7 +323,7 @@ if (response?.status === "success" && "data" in response) {
 });
 
 
-
+console.log(processed, "processed billing data");
     const sorted = processed.sort((a, b) => {
       const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
       const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;

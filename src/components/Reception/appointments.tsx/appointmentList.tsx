@@ -30,6 +30,7 @@ import { AuthFetch, AuthPost, AuthPut } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { Role_NAME } from "../../../utils/role";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { FONT_SIZE, responsiveHeight, responsiveWidth, SPACING } from "../../../utils/responsive";
 
 
 
@@ -470,6 +471,10 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
     setAvailableSlots([]);
     setNoSlotsMessage(null);
   };
+
+  function formatGender(gender: string | number | undefined) {
+    throw new Error("Function not implemented.");
+  }
 
   // ------------------- Render -------------------
 

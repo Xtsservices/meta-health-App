@@ -297,7 +297,6 @@ const PaymentMethodScreen: React.FC = () => {
 
   // Local UI theme toggle (light/dark)
   const [isDarkMode, setIsDarkMode] = useState(true);
-
   // raw string input (keeps intermediate typing like ".")
   const [enteredAmountStr, setEnteredAmountStr] =
     useState<PaymentAmountsStr>({
@@ -325,6 +324,7 @@ const PaymentMethodScreen: React.FC = () => {
 
   const isBillingOrder = !!orderData;
   const isReceptionPayment = !!receptionData; // 👈 NEW flag
+  const ptype =isReceptionPayment ? receptionData?.pType === "Outpatient" ? 1 : 2 : undefined;
 
   useEffect(() => {
     // default: full amount via cash
@@ -388,13 +388,12 @@ const PaymentMethodScreen: React.FC = () => {
       orderData?.ptype || orderData?.orderType || ""
     );
     // treat 'opd' or 'outpatient' same
-    if (dept === "opd" || dept === "outpatient") return true;
+    if (dept === "opd" || dept === "outpatient" || receptionData?.pType === "Outpatient") return true;
     if (fptype === "opd" || fptype === "outpatient") return true;
     if (orderptype === "opd" || orderptype === "outpatient")
       return true;
     return false;
-  }, [department, formData, orderData]);
-
+  }, [department, formData, orderData, receptionData]);
   // stabilize handlers
   const handleCheckboxChange = useCallback(
     (method: PaymentMethod) => {
@@ -476,7 +475,6 @@ const PaymentMethodScreen: React.FC = () => {
     },
     [totalDue]
   );
-
   // isSubmitEnabled now respects OPD (requires full payment) vs IPD (allow partial)
   const isSubmitEnabled = useCallback(() => {
     const totalEntered = Object.values(
@@ -1001,6 +999,7 @@ const PaymentMethodScreen: React.FC = () => {
     enteredAmountNum
   ).reduce((s, v) => s + v, 0);
 
+
   return (
     <SafeAreaView
       style={[styles.safe, { backgroundColor: bgMain }]}
@@ -1438,7 +1437,8 @@ const PaymentMethodScreen: React.FC = () => {
               >
                 <TouchableOpacity
                   onPress={handleSubmit}
-                  disabled={!submitEnabled || isSubmitting}
+                  
+                  disabled={!submitEnabled || isSubmitting || requiresFullPayment}
                   style={[
                     styles.payInner,
                     {

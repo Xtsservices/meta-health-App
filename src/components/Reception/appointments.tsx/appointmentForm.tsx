@@ -23,7 +23,7 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { Role_NAME } from "../../../utils/role";
 import { COLORS } from "../../../utils/colour";
-import { FONT_SIZE, SCREEN_WIDTH, responsiveHeight, responsiveWidth, SCREEN_WIDTH, SPACING } from "../../../utils/responsive";
+import { FONT_SIZE,  responsiveHeight, responsiveWidth, SCREEN_WIDTH, SPACING } from "../../../utils/responsive";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 
