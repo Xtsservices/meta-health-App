@@ -542,8 +542,10 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
       {showDatePicker && (
         <DateTimePicker
           value={filterDate ? new Date(filterDate) : new Date()}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
+           mode="date"
+                           display={Platform.OS === "android" ? "spinner" : "default"}
+                            maximumDate={new Date()}
+                           minimumDate={new Date(1900, 0, 1)}
           onChange={onFilterDatePick}
         />
       )}

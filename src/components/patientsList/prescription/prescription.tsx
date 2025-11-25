@@ -97,7 +97,7 @@ export default function PrescriptionScreen() {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     const url = `prescription/${user.hospitalID}/${timelineID}/${patientID}`;
     const res = await AuthFetch(url, token);
-    if (res?.status === "success") {
+    if (res?.status === "success" && "data" in res) {
       setList(res?.data?.prescriptions ?? []);
     } else {
       setList([]);

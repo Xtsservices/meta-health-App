@@ -120,9 +120,10 @@ const AppointmentTabsMobile: React.FC = () => {
         </ScrollView>
 
         {/* Footer */}
-        <View style={[styles.footerWrap, { paddingBottom: insets.bottom }]}>
-          <Footer active={"appointments"} brandColor={COLORS.brand} />
-        </View>
+       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+  <Footer active={"appointments"} brandColor={COLORS.brand} />
+</View>
+
       </KeyboardAvoidingView>
     </View>
   );
@@ -170,9 +171,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 4,
   },
-  footerWrap: {
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    backgroundColor: "#ffffff",
-  },
+ footerWrap: {
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: 0,              // actual bottom, shifted up with insets.bottom in JSX
+  borderTopWidth: 1,
+  borderTopColor: "#e2e8f0",
+  backgroundColor: "#ffffff",
+  zIndex: 10,
+  elevation: 6,
+},
+
 });

@@ -752,7 +752,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Operations Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Operations</Text>
-            {items?.filter(item => ["taxinvoice", "Ward", "doctor"].includes(item.key)).map((item) => (
+            {items?.filter(item => ["taxinvoice", "Ward", "doctor", "billing"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -908,7 +908,7 @@ const DashboardReception: React.FC = () => {
       const monthlyData = await fetchData(1, String(currentYear), String(currentMonth).padStart(2, '0'));
       const yearlyData = await fetchData(1, String(currentYear));
       
-      const monthlyCounts = monthlyData?.data ? extractCounts(monthlyData) : [];
+      const monthlyCounts =  monthlyData?.data ? extractCounts(monthlyData) : [];
       const yearlyCounts = yearlyData?.data ? extractCounts(yearlyData) : [];
       
       const thisMonthTotal = monthlyCounts.reduce((sum, item) => sum + item.count, 0);
@@ -1014,14 +1014,21 @@ const DashboardReception: React.FC = () => {
       key: "alerts", 
       label: "Alerts", 
       icon: BellRing, 
-      onPress: () => go("alerts") 
+      onPress: () => go("AlertsLab") 
     },
-    { 
-      key: "taxinvoice", 
-      label: "Tax Invoice", 
-      icon: Receipt, 
-      onPress: () => go("TaxInvoiceTabs") 
-    },
+    {
+  key: "taxinvoice",
+  label: "Tax Invoice",
+  icon: Receipt,
+  onPress: () => navigation.navigate("TaxInvoiceTabs", { mode: "allTax" }),
+},
+{
+  key: "billing",
+  label: "Billing",
+  icon: Receipt,
+  onPress: () => navigation.navigate("TaxInvoiceTabs", { mode: "billing" }),
+},
+
     { 
       key: "records", 
       label: "Patient List", 

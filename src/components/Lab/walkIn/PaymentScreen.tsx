@@ -27,16 +27,12 @@ import {
   SPACING,
   FONT_SIZE,
   ICON_SIZE,
-  responsiveWidth,
-  responsiveHeight,
-  isTablet,
   isSmallDevice,
-  FOOTER_HEIGHT,
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
 
 // Icons
-import { ArrowLeftIcon, CheckIcon } from "../../../utils/SvgIcons";
+import { CheckIcon } from "../../../utils/SvgIcons";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -95,7 +91,9 @@ const PaymentMethodRow: React.FC<PMProps> = ({
   const isActive = activeInputs.has(method);
 
   const bg = isSelected
-    ? isDarkMode ? "rgba(20,184,166,0.12)" : "rgba(0,168,107,0.08)"
+    ? isDarkMode
+      ? "rgba(20,184,166,0.12)"
+      : "rgba(0,168,107,0.08)"
     : isDarkMode
     ? "rgba(255,255,255,0.03)"
     : "#ffffff";
@@ -126,42 +124,85 @@ const PaymentMethodRow: React.FC<PMProps> = ({
         >
           <View style={[
             styles.checkbox,
-            isSelected ? { backgroundColor: COLORS.brand, borderColor: COLORS.brand } : { borderColor: isDarkMode ? "#9ea3ad" : "#9ca3af", backgroundColor: isSelected ? COLORS.brand : "transparent" }
-          ]}>
+            isSelected ? { backgroundColor: COLORS.brand,
+                    borderColor: COLORS.brand,
+                  }
+                : {
+                    borderColor: isDarkMode ? "#9ea3ad" : "#9ca3af",
+                    backgroundColor: isSelected ? COLORS.brand : "transparent",
+                  },
+            ]}
+          >
             {isSelected && (
-              <CheckIcon size={ICON_SIZE.sm} color={isDarkMode ? "#fff" : "#fff"} />
+              <CheckIcon size={ICON_SIZE.sm} color="#fff" />
             )}
           </View>
 
           <View style={styles.paymentMethodInfo}>
-            <Text style={[styles.paymentMethodLabel, { color: labelColor }]}>{label}</Text>
-            <Text style={[styles.paymentMethodDescription, { color: descColor }]}>{description}</Text>
+            <Text
+              style={[styles.paymentMethodLabel, { color: labelColor }]}
+            >
+              {label}
+            </Text>
+            <Text
+              style={[
+                styles.paymentMethodDescription,
+                { color: descColor },
+              ]}
+            >
+              {description}
+            </Text>
           </View>
         </TouchableOpacity>
 
-        <Text style={[styles.paymentIcon, { color: isDarkMode ? "#fff" : "#0f1722" }]}>{icon}</Text>
+        <Text
+          style={[
+            styles.paymentIcon,
+            { color: isDarkMode ? "#fff" : "#0f1722" },
+          ]}
+        >
+          {icon}
+        </Text>
       </View>
 
       {isSelected && (
         <View style={styles.amountSection}>
           <View style={styles.amountInputRow}>
             <View style={styles.amountInputContainer}>
-              <Text style={[styles.amountLabel, { color: labelColor }]}>Enter Amount (₹)</Text>
+              <Text
+                style={[styles.amountLabel, { color: labelColor }]}
+              >
+                Enter Amount (₹)
+              </Text>
               <TextInput
                 value={enteredAmountStr[method]}
-                onChangeText={(value) => handleAmountChange(method, value)}
+                onChangeText={(value) =>
+                  handleAmountChange(method, value)
+                }
                 onFocus={() => handleInputFocus(method)}
                 onBlur={() => handleInputBlur(method)}
-                keyboardType={Platform.OS === "ios" ? "decimal-pad" : "numeric"}
+                keyboardType={
+                  Platform.OS === "ios" ? "decimal-pad" : "numeric"
+                }
                 placeholder="0.00"
-                placeholderTextColor={isDarkMode ? "#9ea3ad" : "#9ca3af"}
+                placeholderTextColor={
+                  isDarkMode ? "#9ea3ad" : "#9ca3af"
+                }
                 blurOnSubmit={false}
                 returnKeyType="done"
                 onSubmitEditing={() => Keyboard.dismiss()}
                 style={[
                   styles.amountInput,
-                  { backgroundColor: inputBg, color: inputText, borderColor: isActive ? COLORS.brand : (isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)") },
-                  isActive && styles.amountInputFocused
+                  {
+                    backgroundColor: inputBg,
+                    color: inputText,
+                    borderColor: isActive
+                      ? COLORS.brand
+                      : isDarkMode
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(0,0,0,0.06)",
+                  },
+                  isActive && styles.amountInputFocused,
                 ]}
               />
             </View>
@@ -169,12 +210,26 @@ const PaymentMethodRow: React.FC<PMProps> = ({
             <TouchableOpacity
               style={[
                 styles.setRemainingButton,
-                { backgroundColor: isDarkMode ? "rgba(255,255,255,0.03)" : "#e6f4ea", borderColor: isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }
+                {
+                  backgroundColor: isDarkMode
+                    ? "rgba(255,255,255,0.03)"
+                    : "#e6f4ea",
+                  borderColor: isDarkMode
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.06)",
+                },
               ]}
               onPress={() => setRemainingAmount(method)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.setRemainingText, { color: setRemainText }]}>Set Remaining</Text>
+              <Text
+                style={[
+                  styles.setRemainingText,
+                  { color: setRemainText },
+                ]}
+              >
+                Set Remaining
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -192,15 +247,32 @@ const PaymentMethodRow: React.FC<PMProps> = ({
 // Only re-render the row when props that affect rendering change:
 const propsEqual = (prev: PMProps, next: PMProps) => {
   const method = prev.method;
-  const selectionChanged = prev.selectedMethods.has(method) !== next.selectedMethods.has(method);
-  const strChanged = prev.enteredAmountStr[method] !== next.enteredAmountStr[method];
-  const numChanged = prev.enteredAmountNum[method] !== next.enteredAmountNum[method];
-  const activeChanged = prev.activeInputs.has(method) !== next.activeInputs.has(method);
+  const selectionChanged =
+    prev.selectedMethods.has(method) !==
+    next.selectedMethods.has(method);
+  const strChanged =
+    prev.enteredAmountStr[method] !==
+    next.enteredAmountStr[method];
+  const numChanged =
+    prev.enteredAmountNum[method] !==
+    next.enteredAmountNum[method];
+  const activeChanged =
+    prev.activeInputs.has(method) !==
+    next.activeInputs.has(method);
   const themeChanged = prev.isDarkMode !== next.isDarkMode;
-  return !(selectionChanged || strChanged || numChanged || activeChanged || themeChanged);
+  return !(
+    selectionChanged ||
+    strChanged ||
+    numChanged ||
+    activeChanged ||
+    themeChanged
+  );
 };
 
-const MemoPaymentMethodRow = React.memo(PaymentMethodRow, propsEqual);
+const MemoPaymentMethodRow = React.memo(
+  PaymentMethodRow,
+  propsEqual
+);
 
 const PaymentMethodScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -219,57 +291,73 @@ const PaymentMethodScreen: React.FC = () => {
     user,
     orderData,
     onPaymentSuccess,
+    // 👇 NEW: invoice data from Reception/Billing
+    receptionData,
   } = (route.params as any) || {};
 
   // Local UI theme toggle (light/dark)
   const [isDarkMode, setIsDarkMode] = useState(true);
 
   // raw string input (keeps intermediate typing like ".")
-  const [enteredAmountStr, setEnteredAmountStr] = useState<PaymentAmountsStr>({
-    cards: "",
-    online: "",
-    cash: "",
-  });
+  const [enteredAmountStr, setEnteredAmountStr] =
+    useState<PaymentAmountsStr>({
+      cards: "",
+      online: "",
+      cash: "",
+    });
 
   // derived numeric values for calculation/submission
-  const [enteredAmountNum, setEnteredAmountNum] = useState<PaymentAmountsNum>({
-    cards: 0,
-    online: 0,
-    cash: 0,
-  });
+  const [enteredAmountNum, setEnteredAmountNum] =
+    useState<PaymentAmountsNum>({
+      cards: 0,
+      online: 0,
+      cash: 0,
+    });
 
-  const [selectedMethods, setSelectedMethods] = useState<Set<PaymentMethod>>(new Set());
-  const [activeInputs, setActiveInputs] = useState<Set<PaymentMethod>>(new Set());
+  const [selectedMethods, setSelectedMethods] =
+    useState<Set<PaymentMethod>>(new Set());
+  const [activeInputs, setActiveInputs] =
+    useState<Set<PaymentMethod>>(new Set());
   const [dueAmount, setDueAmount] = useState(amount);
   const [paidAmount, setPaidAmount] = useState(0);
   const [totalDue, setTotalDue] = useState(amount);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isBillingOrder = !!orderData;
+  const isReceptionPayment = !!receptionData; // 👈 NEW flag
 
-useEffect(() => {
-  setSelectedMethods(new Set(['cash'])); 
-  setEnteredAmountStr({ 
-    cards: "", 
-    online: "", 
-    cash: amount > 0 ? amount.toFixed(2) : "" 
-  });
-  setEnteredAmountNum({ 
-    cards: 0, 
-    online: 0, 
-    cash: amount
-  });
-  setActiveInputs(new Set(['cash'])); 
-  setDueAmount(amount);
-  setPaidAmount(amount); 
-  setTotalDue(0); 
-}, [amount]);
+  useEffect(() => {
+    // default: full amount via cash
+    setSelectedMethods(new Set(["cash"]));
+    setEnteredAmountStr({
+      cards: "",
+      online: "",
+      cash: amount > 0 ? amount.toFixed(2) : "",
+    });
+    setEnteredAmountNum({
+      cards: 0,
+      online: 0,
+      cash: amount,
+    });
+    setActiveInputs(new Set(["cash"]));
+    setDueAmount(amount);
+    setPaidAmount(amount);
+    setTotalDue(0);
+  }, [amount]);
 
   // derive numeric totals whenever enteredAmountNum changes
   useEffect(() => {
-    const totalPaid = Object.values(enteredAmountNum).reduce((s, v) => s + v, 0);
+    const totalPaid = Object.values(enteredAmountNum).reduce(
+      (s, v) => s + v,
+      0
+    );
     setPaidAmount(totalPaid);
-    setTotalDue(Math.max(0, parseFloat((amount - totalPaid).toFixed(2))));
+    setTotalDue(
+      Math.max(
+        0,
+        parseFloat((amount - totalPaid).toFixed(2))
+      )
+    );
   }, [enteredAmountNum, amount]);
 
   // keep numeric derived state in sync with string inputs
@@ -288,96 +376,136 @@ useEffect(() => {
 
   // Helper: determine whether this transaction requires full payment (OPD)
   const requiresFullPayment = useMemo(() => {
-    const normalize = (v: any) => (v === undefined || v === null) ? "" : String(v).toLowerCase();
+    const normalize = (v: any) =>
+      v === undefined || v === null
+        ? ""
+        : String(v).toLowerCase();
     const dept = normalize(department);
-    const fptype = normalize(formData?.ptype || formData?.visitType || "");
-    const orderptype = normalize(orderData?.ptype || orderData?.orderType || "");
+    const fptype = normalize(
+      formData?.ptype || formData?.visitType || ""
+    );
+    const orderptype = normalize(
+      orderData?.ptype || orderData?.orderType || ""
+    );
     // treat 'opd' or 'outpatient' same
     if (dept === "opd" || dept === "outpatient") return true;
     if (fptype === "opd" || fptype === "outpatient") return true;
-    if (orderptype === "opd" || orderptype === "outpatient") return true;
+    if (orderptype === "opd" || orderptype === "outpatient")
+      return true;
     return false;
   }, [department, formData, orderData]);
 
-  // stabilize handlers with useCallback so TextInput doesn't lose focus due to changing refs
-  const handleCheckboxChange = useCallback((method: PaymentMethod) => {
-    setSelectedMethods(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(method)) {
-        newSet.delete(method);
-        setEnteredAmountStr(prevStr => ({ ...prevStr, [method]: "" }));
-        setActiveInputs(prevAct => {
-          const ns = new Set(prevAct);
-          ns.delete(method);
+  // stabilize handlers
+  const handleCheckboxChange = useCallback(
+    (method: PaymentMethod) => {
+      setSelectedMethods((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(method)) {
+          newSet.delete(method);
+          setEnteredAmountStr((prevStr) => ({
+            ...prevStr,
+            [method]: "",
+          }));
+          setActiveInputs((prevAct) => {
+            const ns = new Set(prevAct);
+            ns.delete(method);
+            return ns;
+          });
+        } else {
+          newSet.add(method);
+          setActiveInputs((prevAct) => {
+            const ns = new Set(prevAct);
+            ns.add(method);
+            return ns;
+          });
+        }
+        return newSet;
+      });
+    },
+    []
+  );
+
+  // sanitized input but allow intermediate '.' and leading zeros
+  const handleAmountChange = useCallback(
+    (method: PaymentMethod, value: string) => {
+      let cleaned = value.replace(/[^\d.]/g, "");
+      const firstDot = cleaned.indexOf(".");
+      if (firstDot >= 0) {
+        const before = cleaned.slice(0, firstDot + 1);
+        const after = cleaned
+          .slice(firstDot + 1)
+          .replace(/\./g, "");
+        cleaned = before + after;
+      }
+      if (firstDot >= 0) {
+        const parts = cleaned.split(".");
+        if (parts[1] && parts[1].length > 2) {
+          cleaned = `${parts[0]}.${parts[1].slice(0, 2)}`;
+        }
+      }
+      if (/^0{2,}/.test(cleaned) && cleaned.indexOf(".") === -1) {
+        cleaned = cleaned.replace(/^0+/, "0");
+      }
+      setEnteredAmountStr((prev) => ({
+        ...prev,
+        [method]: cleaned,
+      }));
+    },
+    []
+  );
+
+  const setRemainingAmount = useCallback(
+    (method: PaymentMethod) => {
+      const remaining = totalDue;
+      if (remaining > 0) {
+        setEnteredAmountStr((prev) => ({
+          ...prev,
+          [method]: remaining.toFixed(2),
+        }));
+        setSelectedMethods((prev) => {
+          const ns = new Set(prev);
+          ns.add(method);
           return ns;
         });
-      } else {
-        newSet.add(method);
-        setActiveInputs(prevAct => {
-          const ns = new Set(prevAct);
+        setActiveInputs((prev) => {
+          const ns = new Set(prev);
           ns.add(method);
           return ns;
         });
       }
-      return newSet;
-    });
-  }, []);
-
-  // sanitized input but allow intermediate '.' and leading zeros
-  const handleAmountChange = useCallback((method: PaymentMethod, value: string) => {
-    // strip non-digit/non-dot
-    let cleaned = value.replace(/[^\d.]/g, "");
-    const firstDot = cleaned.indexOf(".");
-    if (firstDot >= 0) {
-      const before = cleaned.slice(0, firstDot + 1);
-      const after = cleaned.slice(firstDot + 1).replace(/\./g, "");
-      cleaned = before + after;
-    }
-    // limit decimals to two
-    if (firstDot >= 0) {
-      const parts = cleaned.split(".");
-      if (parts[1] && parts[1].length > 2) {
-        cleaned = `${parts[0]}.${parts[1].slice(0, 2)}`;
-      }
-    }
-    // avoid "00" (unless decimal follows)
-    if (/^0{2,}/.test(cleaned) && cleaned.indexOf(".") === -1) {
-      cleaned = cleaned.replace(/^0+/, "0");
-    }
-    setEnteredAmountStr(prev => ({ ...prev, [method]: cleaned }));
-  }, []);
-
-  const setRemainingAmount = useCallback((method: PaymentMethod) => {
-    const remaining = totalDue;
-    if (remaining > 0) {
-      setEnteredAmountStr(prev => ({ ...prev, [method]: remaining.toFixed(2) }));
-      setSelectedMethods(prev => {
-        const ns = new Set(prev);
-        ns.add(method);
-        return ns;
-      });
-      setActiveInputs(prev => {
-        const ns = new Set(prev);
-        ns.add(method);
-        return ns;
-      });
-    }
-  }, [totalDue]);
+    },
+    [totalDue]
+  );
 
   // isSubmitEnabled now respects OPD (requires full payment) vs IPD (allow partial)
   const isSubmitEnabled = useCallback(() => {
-    const totalEntered = Object.values(enteredAmountNum).reduce((s, v) => s + v, 0);
+    const totalEntered = Object.values(
+      enteredAmountNum
+    ).reduce((s, v) => s + v, 0);
     if (requiresFullPayment) {
       // OPD — must pay full amount
-      return selectedMethods.size > 0 && totalEntered > 0 && Math.abs(totalEntered - amount) < 0.01;
+      return (
+        selectedMethods.size > 0 &&
+        totalEntered > 0 &&
+        Math.abs(totalEntered - amount) < 0.01
+      );
     } else {
       // IPD / others — allow partial (entered must be >0 and <= amount)
-      return selectedMethods.size > 0 && totalEntered > 0 && totalEntered <= amount + 0.001;
+      return (
+        selectedMethods.size > 0 &&
+        totalEntered > 0 &&
+        totalEntered <= amount + 0.001
+      );
     }
-  }, [enteredAmountNum, selectedMethods, amount, requiresFullPayment]);
+  }, [
+    enteredAmountNum,
+    selectedMethods,
+    amount,
+    requiresFullPayment,
+  ]);
 
   const handleInputFocus = useCallback((method: PaymentMethod) => {
-    setActiveInputs(prev => {
+    setActiveInputs((prev) => {
       const ns = new Set(prev);
       ns.add(method);
       return ns;
@@ -385,89 +513,335 @@ useEffect(() => {
   }, []);
 
   const handleInputBlur = useCallback((method: PaymentMethod) => {
-    setActiveInputs(prev => {
+    setActiveInputs((prev) => {
       const ns = new Set(prev);
       ns.delete(method);
       return ns;
     });
 
-    setEnteredAmountStr(prev => {
+    setEnteredAmountStr((prev) => {
       const cur = prev[method];
-      if (!cur || cur.trim() === "") return { ...prev, [method]: "" };
-      if (cur === ".") return { ...prev, [method]: "0.00" };
+      if (!cur || cur.trim() === "")
+        return { ...prev, [method]: "" };
+      if (cur === ".")
+        return { ...prev, [method]: "0.00" };
       const n = parseFloat(cur);
       if (isNaN(n)) return { ...prev, [method]: "" };
       return { ...prev, [method]: n.toFixed(2) };
     });
   }, []);
 
-  // API handlers (unchanged in signature), with small change: sales sends actual paid amount
-  const handleSalesPayment = useCallback(async (paymentDetails: any, token: string) => {
-    const labsPath = `tests/walkinPatients/${department}`;
-    const formDataToSend = new FormData();
+  // ------------------- SALES PAYMENT (EXISTING) -------------------
+  const handleSalesPayment = useCallback(
+    async (paymentDetails: any, token: string) => {
+      const labsPath = `tests/walkinPatients/${department}`;
+      const formDataToSend = new FormData();
 
-    if (files?.length > 0) {
-      const file = files[0];
-      const uploadUri = Platform.OS === "ios" && file?.uri?.startsWith("file://")
-        ? file?.uri?.replace("file://", "")
-        : file?.uri;
+      if (files?.length > 0) {
+        const file = files[0];
+        const uploadUri =
+          Platform.OS === "ios" &&
+          file?.uri?.startsWith("file://")
+            ? file?.uri?.replace("file://", "")
+            : file?.uri;
 
-      formDataToSend.append("files", {
-        uri: uploadUri,
-        type: file?.mimeType || file?.type || "application/octet-stream",
-        name: file?.name || `file_${Date.now()}`,
-      } as any);
-    }
+        formDataToSend.append("files", {
+          uri: uploadUri,
+          type:
+            file?.mimeType ||
+            file?.type ||
+            "application/octet-stream",
+          name: file?.name || `file_${Date.now()}`,
+        } as any);
+      }
 
-    formDataToSend.append("testsList", JSON.stringify(selectedTests));
-    formDataToSend.append("patientData", JSON.stringify(formData));
-    formDataToSend.append("userID", user?.id?.toString() ?? "");
-    formDataToSend.append("department", department);
-    formDataToSend.append("paymentMethod", JSON.stringify(paymentDetails));
-    // IMPORTANT: send actual paid amount (supports partial for IPD)
-    formDataToSend.append("paymentAmount", String(paymentDetails ? Object.values(paymentDetails).reduce((s: any, v: any) => s + (Number(v) || 0), 0) : 0));
-    formDataToSend.append("discount", JSON.stringify({ discount, discountReason, discountReasonID }));
+      formDataToSend.append(
+        "testsList",
+        JSON.stringify(selectedTests)
+      );
+      formDataToSend.append(
+        "patientData",
+        JSON.stringify(formData)
+      );
+      formDataToSend.append(
+        "userID",
+        user?.id?.toString() ?? ""
+      );
+      formDataToSend.append("department", department);
+      formDataToSend.append(
+        "paymentMethod",
+        JSON.stringify(paymentDetails)
+      );
+      formDataToSend.append(
+        "paymentAmount",
+        String(
+          paymentDetails
+            ? Object.values(paymentDetails).reduce(
+                (s: any, v: any) =>
+                  s + (Number(v) || 0),
+                0
+              )
+            : 0
+        )
+      );
+      formDataToSend.append(
+        "discount",
+        JSON.stringify({
+          discount,
+          discountReason,
+          discountReasonID,
+        })
+      );
 
-    const response = await AuthPost(
-      `medicineInventoryPatients/${user?.hospitalID}/${labsPath}`,
-      formDataToSend,
-      token
-    );
+      const response = await AuthPost(
+        `medicineInventoryPatients/${user?.hospitalID}/${labsPath}`,
+        formDataToSend,
+        token
+      );
+      return response;
+    },
+    [
+      department,
+      files,
+      selectedTests,
+      formData,
+      user,
+      discount,
+      discountReason,
+      discountReasonID,
+    ]
+  );
 
-    return response;
-  }, [department, files, selectedTests, formData, user, discount, discountReason, discountReasonID]);
+  // ------------------- LAB BILLING PAYMENT (EXISTING) -------------------
+  const handleBillingPayment = useCallback(
+    async (paymentDetails: any, token: string) => {
+      const payload = {
+        paymentMethod: paymentDetails,
+        discount: {
+          discount: discount || 0,
+          discountReason: discountReason || "",
+          discountReasonID: discountReasonID || "",
+        },
+        dueAmount: totalDue,
+        paidAmount: paidAmount,
+        totalAmount: amount.toFixed(2),
+      };
 
-  const handleBillingPayment = useCallback(async (paymentDetails: any, token: string) => {
-    const payload = {
-      paymentMethod: paymentDetails,
-      discount: {
-        discount: discount || 0,
-        discountReason: discountReason || "",
-        discountReasonID: discountReasonID || "",
-      },
-      dueAmount: totalDue,
-      paidAmount: paidAmount,
-      totalAmount: amount.toFixed(2),
-    };
+      const response = await AuthPost(
+        `test/${user?.roleName}/${user?.hospitalID}/${orderData?.patientID}/updateTestPaymentDetails`,
+        payload,
+        token
+      );
 
-    const response = await AuthPost(
-      `test/${user?.roleName}/${user?.hospitalID}/${orderData?.patientID}/updateTestPaymentDetails`,
-      payload,
-      token
-    );
+      return response;
+    },
+    [
+      discount,
+      discountReason,
+      discountReasonID,
+      totalDue,
+      paidAmount,
+      amount,
+      user,
+      orderData,
+    ]
+  );
 
-    return response;
-  }, [discount, discountReason, discountReasonID, totalDue, paidAmount, amount, user, orderData]);
+  // ------------------- NEW: RECEPTION PAYMENT (payFromReception) -------------------
+  const handleReceptionPayment = useCallback(
+    async (paymentDetails: any, token: string) => {
+      if (!receptionData || !user?.hospitalID) {
+        throw new Error("Missing reception data or hospital details");
+      }
 
+      const meds = Array.isArray(receptionData.medicinesList)
+        ? receptionData.medicinesList
+        : [];
+      const tests = Array.isArray(receptionData.testList)
+        ? receptionData.testList
+        : [];
+
+      let medicinesTotal = 0;
+      let pathologyTotal = 0;
+      let radiologyTotal = 0;
+
+      // Medicines: qty * price * (1 + gst%)
+      meds.forEach((m: any) => {
+        const qty = Number(m.qty ?? 1);
+        const price = Number(m.price ?? 0);
+        const gst = Number(m.gst ?? 0);
+        const line = price * qty;
+        medicinesTotal += line * (1 + gst / 100);
+      });
+
+      // Tests: split into pathology / radiology
+      tests.forEach((t: any) => {
+        const baseAmount =
+          Number(t.amount ?? 0) ||
+          Number(t.price ?? 0) *
+            (1 + (Number(t.gst ?? 0) / 100));
+        const categoryString = (
+          t.category || t.testName || ""
+        )
+          .toString()
+          .toLowerCase();
+        if (categoryString.includes("radio")) {
+          radiologyTotal += baseAmount;
+        } else {
+          pathologyTotal += baseAmount;
+        }
+      });
+
+      const splitBaseTotal =
+        medicinesTotal + pathologyTotal + radiologyTotal;
+      const totalAmountForSplit =
+        splitBaseTotal > 0 ? splitBaseTotal : amount;
+
+      // Total actually entered by user
+      const payableAmount = Object.values(paymentDetails).reduce(
+        (s: number, v: any) =>
+          typeof v === "number" ? s + v : s,
+        0
+      );
+
+      const paidProportion =
+        totalAmountForSplit > 0
+          ? payableAmount / totalAmountForSplit
+          : 0;
+
+      const payload = {
+        paymentMethod: {
+          cash: paymentDetails.cash || 0,
+          cards: paymentDetails.cards || 0,
+          online: paymentDetails.online || 0,
+          timestamp:
+            paymentDetails.timestamp ||
+            new Date().toISOString(),
+        },
+        discount: {
+          discount: discount || 0,
+          discountReason: discountReason || "",
+          discountReasonID: discountReasonID || "",
+        },
+        split: {
+          medicines: {
+            paidAmount: Number(
+              (medicinesTotal * paidProportion).toFixed(2)
+            ),
+            totalAmount: Number(
+              medicinesTotal.toFixed(2)
+            ),
+            dueAmount: Number(
+              (
+                medicinesTotal -
+                medicinesTotal * paidProportion
+              ).toFixed(2)
+            ),
+          },
+          pathology: {
+            paidAmount: Number(
+              (pathologyTotal * paidProportion).toFixed(2)
+            ),
+            totalAmount: Number(
+              pathologyTotal.toFixed(2)
+            ),
+            dueAmount: Number(
+              (
+                pathologyTotal -
+                pathologyTotal * paidProportion
+              ).toFixed(2)
+            ),
+          },
+          radiology: {
+            paidAmount: Number(
+              (radiologyTotal * paidProportion).toFixed(2)
+            ),
+            totalAmount: Number(
+              radiologyTotal.toFixed(2)
+            ),
+            dueAmount: Number(
+              (
+                radiologyTotal -
+                radiologyTotal * paidProportion
+              ).toFixed(2)
+            ),
+          },
+        },
+      };
+
+      // Smart ID extractors (similar to web)
+      const getPatientId = (d: any): string =>
+        (
+          d.patientID ??
+          d.pID ??
+          d.patientId ??
+          ""
+        )
+          .toString()
+          .trim();
+
+      const getTimelineId = (d: any): string =>
+        (
+          d.patientTimeLineID ??
+          d.timelineID ??
+          d.timeLineID ??
+          d.patienttimelineID ??
+          d.patient_timeLine_id ??
+          d.visitID ??
+          d.orderID ??
+          ""
+        )
+          .toString()
+          .trim();
+
+      const patientId = getPatientId(receptionData);
+      const timelineId = getTimelineId(receptionData);
+
+      if (!patientId || patientId === "0") {
+        throw new Error("Invalid patient ID");
+      }
+      if (!timelineId || timelineId === "0") {
+        throw new Error(
+          "Visit information missing. Please try again."
+        );
+      }
+
+      // Endpoint: /reception/{hospitalID}/{patientId}/{timelineId}/payFromReception
+      const url = `reception/${user.hospitalID}/${patientId}/${timelineId}/payFromReception`;
+      const response = await AuthPost(url, payload, token);
+     
+      return response;
+    },
+    [
+      receptionData,
+      user,
+      discount,
+      discountReason,
+      discountReasonID,
+      amount,
+    ]
+  );
+
+  // ------------------- SUBMIT HANDLER -------------------
   const handleSubmit = useCallback(async () => {
-    const totalEntered = Object.values(enteredAmountNum).reduce((s, v) => s + v, 0);
+    const totalEntered = Object.values(
+      enteredAmountNum
+    ).reduce((s, v) => s + v, 0);
 
     // validate according to mode
     if (requiresFullPayment) {
-      if (!(selectedMethods.size > 0 && totalEntered > 0 && Math.abs(totalEntered - amount) < 0.01)) {
+      if (
+        !(
+          selectedMethods.size > 0 &&
+          totalEntered > 0 &&
+          Math.abs(totalEntered - amount) < 0.01
+        )
+      ) {
         Alert.alert(
           "Amount Mismatch",
-          `OPD orders require full payment. Please ensure the paid amount matches the total amount ₹${amount.toFixed(2)}.`,
+          `OPD orders require full payment. Please ensure the paid amount matches the total amount ₹${amount.toFixed(
+            2
+          )}.`,
           [{ text: "OK" }]
         );
         return;
@@ -477,12 +851,21 @@ useEffect(() => {
       if (totalEntered > amount + 0.001) {
         Alert.alert(
           "Amount Error",
-          `Entered amount (₹${totalEntered.toFixed(2)}) cannot exceed total amount (₹${amount.toFixed(2)}).`,
+          `Entered amount (₹${totalEntered.toFixed(
+            2
+          )}) cannot exceed total amount (₹${amount.toFixed(
+            2
+          )}).`,
           [{ text: "OK" }]
         );
         return;
       }
-      if (!(selectedMethods.size > 0 && totalEntered > 0)) {
+      if (
+        !(
+          selectedMethods.size > 0 &&
+          totalEntered > 0
+        )
+      ) {
         Alert.alert(
           "Enter Amount",
           `Please enter an amount greater than 0.`,
@@ -494,10 +877,13 @@ useEffect(() => {
 
     setIsSubmitting(true);
 
-    const paymentDetails = Array.from(selectedMethods).reduce((acc, method) => {
-      acc[method] = enteredAmountNum[method];
-      return acc;
-    }, {} as Record<PaymentMethod, number>);
+    const paymentDetails = Array.from(selectedMethods).reduce(
+      (acc, method) => {
+        acc[method] = enteredAmountNum[method];
+        return acc;
+      },
+      {} as Record<PaymentMethod, number>
+    );
 
     const paymentDataWithTime = {
       ...paymentDetails,
@@ -514,95 +900,166 @@ useEffect(() => {
 
       let response;
 
-      if (isBillingOrder) {
-        response = await handleBillingPayment(paymentDataWithTime, token);
+      if (isReceptionPayment) {
+        response = await handleReceptionPayment(
+          paymentDataWithTime,
+          token
+        );
+      } else if (isBillingOrder) {
+        response = await handleBillingPayment(
+          paymentDataWithTime,
+          token
+        );
       } else {
-        response = await handleSalesPayment(paymentDataWithTime, token);
+        response = await handleSalesPayment(
+          paymentDataWithTime,
+          token
+        );
       }
 
-      if (response?.data?.status === 200 || response?.message === "success") {
-        const successMessage = isBillingOrder
+      if (
+        response?.data?.status === 200 ||
+        response?.status === "success"
+      ) {
+        const successMessage = isReceptionPayment
+          ? "Payment completed successfully!"
+          : isBillingOrder
           ? "Payment completed successfully!"
           : "Patient and test order added successfully!";
 
-        Alert.alert(
-          "Success ✅",
-          successMessage,
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                if (isBillingOrder && onPaymentSuccess) {
-                  onPaymentSuccess();
-                }
-
-                if (isBillingOrder) {
-                  navigation.goBack();
-                } else {
-                  navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'Dashboard' as never }],
-                  });
-                }
+        Alert.alert("Success ✅", successMessage, [
+          {
+            text: "OK",
+            onPress: () => {
+              if (
+                (isBillingOrder || isReceptionPayment) &&
+                onPaymentSuccess
+              ) {
+                onPaymentSuccess();
               }
-            }
-          ]
-        );
+
+              if (isReceptionPayment || isBillingOrder) {
+                navigation.goBack();
+              } else {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: "Dashboard" as never }],
+                });
+              }
+            },
+          },
+        ]);
       } else {
-        Alert.alert("Error", response?.message || "Failed to process payment");
+        Alert.alert(
+          "Error",
+          response?.message ||
+            "Failed to process payment"
+        );
       }
     } catch (error: any) {
       Alert.alert(
         "Error",
-        error?.response?.data?.message || "Failed to process payment. Please try again."
+        error?.response?.data?.message ||
+          "Failed to process payment. Please try again."
       );
     } finally {
       setIsSubmitting(false);
     }
-  }, [requiresFullPayment, isSubmitEnabled, paidAmount, amount, selectedMethods, enteredAmountNum, isBillingOrder, handleBillingPayment, handleSalesPayment, user, onPaymentSuccess, navigation]);
+  }, [
+    requiresFullPayment,
+    amount,
+    enteredAmountNum,
+    selectedMethods,
+    isBillingOrder,
+    isReceptionPayment,
+    handleBillingPayment,
+    handleSalesPayment,
+    handleReceptionPayment,
+    user,
+    onPaymentSuccess,
+    navigation,
+  ]);
 
   // UI values derived
-  const totalEntered = Object.values(enteredAmountNum).reduce((s, v) => s + v, 0);
   const submitEnabled = isSubmitEnabled();
 
   // Dynamic minor theme overrides for top bar and CTA based on isDarkMode
   const topBarBg = isDarkMode ? "transparent" : "#ffffff";
-  const topTitleColor = isDarkMode ? "#fff" : "#0f1722";
-  const payGradient = isDarkMode ? [COLORS.brand, COLORS.brandDark] : ["#00A86B", "#00796B"];
-  // colors used throughout
+  const payGradient = isDarkMode
+    ? [COLORS.brand, COLORS.brandDark]
+    : ["#00A86B", "#00796B"];
   const bgMain = isDarkMode ? "#0f1722" : "#f6f7f9";
   const cardBg = isDarkMode ? "#0b1220" : "#ffffff";
-  const cardBorder = isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.06)";
+  const cardBorder = isDarkMode
+    ? "rgba(255,255,255,0.04)"
+    : "rgba(0,0,0,0.06)";
   const textPrimary = isDarkMode ? "#fff" : "#0f1722";
   const textMuted = isDarkMode ? "#9ea3ad" : "#6b7280";
   const brandIconTint = isDarkMode ? "#fff" : "#0f1722";
 
-  // Render
-  return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: bgMain }]}>
-      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={topBarBg} />
+  const totalEntered = Object.values(
+    enteredAmountNum
+  ).reduce((s, v) => s + v, 0);
 
-      <View style={[styles.topBar, { backgroundColor: topBarBg }]}>
+  return (
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: bgMain }]}
+    >
+      <StatusBar
+        barStyle={
+          isDarkMode ? "light-content" : "dark-content"
+        }
+        backgroundColor={topBarBg}
+      />
+
+      <View
+        style={[styles.topBar, { backgroundColor: topBarBg }]}
+      >
         <TouchableOpacity
-        
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
-        >
-        </TouchableOpacity>
-      
+        />
 
         {/* Right-side toggle switch */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={[styles.themeToggleWrap, { borderColor: isDarkMode ? "rgba(255,255,255,0.06)" : "rgba(15,23,34,0.06)", backgroundColor: isDarkMode ? "rgba(255,255,255,0.03)" : "#fff" }]}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={[
+              styles.themeToggleWrap,
+              {
+                borderColor: isDarkMode
+                  ? "rgba(255,255,255,0.06)"
+                  : "rgba(15,23,34,0.06)",
+                backgroundColor: isDarkMode
+                  ? "rgba(255,255,255,0.03)"
+                  : "#fff",
+              },
+            ]}
+          >
             <TouchableOpacity
               onPress={() => setIsDarkMode(true)}
               activeOpacity={0.85}
               style={[
                 styles.toggleOption,
-                isDarkMode ? styles.toggleOptionActive : null
+                isDarkMode
+                  ? styles.toggleOptionActive
+                  : null,
               ]}
             >
-              <Text style={[styles.toggleText, { color: isDarkMode ? "#fff" : "#0f1722" }]}>Dark</Text>
+              <Text
+                style={[
+                  styles.toggleText,
+                  {
+                    color: isDarkMode ? "#fff" : "#0f1722",
+                  },
+                ]}
+              >
+                Dark
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -610,10 +1067,23 @@ useEffect(() => {
               activeOpacity={0.85}
               style={[
                 styles.toggleOption,
-                !isDarkMode ? styles.toggleOptionActiveLight : null
+                !isDarkMode
+                  ? styles.toggleOptionActiveLight
+                  : null,
               ]}
             >
-              <Text style={[styles.toggleText, { color: !isDarkMode ? "#0f1722" : "#9ea3ad" }]}>Light</Text>
+              <Text
+                style={[
+                  styles.toggleText,
+                  {
+                    color: !isDarkMode
+                      ? "#0f1722"
+                      : "#9ea3ad",
+                  },
+                ]}
+              >
+                Light
+              </Text>
             </TouchableOpacity>
           </View>
           <View style={styles.headerSpacer} />
@@ -622,57 +1092,152 @@ useEffect(() => {
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        behavior={
+          Platform.OS === "ios" ? "padding" : "height"
+        }
+        keyboardVerticalOffset={
+          Platform.OS === "ios" ? 0 : 20
+        }
       >
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + SPACING.xl }
+            {
+              paddingBottom:
+                insets.bottom + SPACING.xl,
+            },
           ]}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="on-drag"
         >
           <View style={styles.gatewayCardWrap}>
-            <View style={[styles.gatewayCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View
+              style={[
+                styles.gatewayCard,
+                {
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
+                },
+              ]}
+            >
               <View style={styles.gatewayTop}>
                 <View>
-                  <Text style={[styles.payLabel, { color: isDarkMode ? "#9fb1c9" : "#5b6b7a" }]}>Pay</Text>
-                  <Text style={[styles.payAmount, { color: textPrimary }]}>₹{amount.toFixed(2)}</Text>
+                  <Text
+                    style={[
+                      styles.payLabel,
+                      {
+                        color: isDarkMode
+                          ? "#9fb1c9"
+                          : "#5b6b7a",
+                      },
+                    ]}
+                  >
+                    Pay
+                  </Text>
+                  <Text
+                    style={[
+                      styles.payAmount,
+                      { color: textPrimary },
+                    ]}
+                  >
+                    ₹{amount.toFixed(2)}
+                  </Text>
                 </View>
                 <View style={styles.brandRow}>
                   <Image
-                    source={{ uri: "https://img.icons8.com/ios-filled/50/000000/visa.png" }}
-                    style={[styles.brandIcon, { tintColor: brandIconTint }]}
+                    source={{
+                      uri: "https://img.icons8.com/ios-filled/50/000000/visa.png",
+                    }}
+                    style={[
+                      styles.brandIcon,
+                      { tintColor: brandIconTint },
+                    ]}
                   />
                   <Image
-                    source={{ uri: "https://img.icons8.com/ios-filled/50/000000/mastercard.png" }}
-                    style={[styles.brandIcon, { tintColor: brandIconTint }]}
+                    source={{
+                      uri: "https://img.icons8.com/ios-filled/50/000000/mastercard.png",
+                    }}
+                    style={[
+                      styles.brandIcon,
+                      { tintColor: brandIconTint },
+                    ]}
                   />
                   <Image
-                    source={{ uri: "https://img.icons8.com/ios-filled/50/000000/upi.png" }}
-                    style={[styles.brandIcon, { tintColor: brandIconTint }]}
+                    source={{
+                      uri: "https://img.icons8.com/ios-filled/50/000000/upi.png",
+                    }}
+                    style={[
+                      styles.brandIcon,
+                      { tintColor: brandIconTint },
+                    ]}
                   />
                 </View>
               </View>
 
-              <Text style={[styles.cardSubtitle, { color: textMuted }]}>
-                {isBillingOrder ? 'Complete payment for existing order' : 'Choose a secure payment method'}
+              <Text
+                style={[
+                  styles.cardSubtitle,
+                  { color: textMuted },
+                ]}
+              >
+                {isReceptionPayment
+                  ? "Complete payment from Reception"
+                  : isBillingOrder
+                  ? "Complete payment for existing order"
+                  : "Choose a secure payment method"}
               </Text>
 
-              <View style={[styles.orderTypeBadge, { backgroundColor: isDarkMode ? "rgba(20,184,166,0.12)" : "rgba(0,168,107,0.08)", borderColor: isDarkMode ? "rgba(20,184,166,0.25)" : "rgba(0,168,107,0.12)" }]}>
-                <Text style={[styles.orderTypeText, { color: isDarkMode ? COLORS.brand : "#00796B" }]}>
-                  {isBillingOrder ? '📋 Billing Order' : '🆕 New Patient'}
+              <View
+                style={[
+                  styles.orderTypeBadge,
+                  {
+                    backgroundColor: isDarkMode
+                      ? "rgba(20,184,166,0.12)"
+                      : "rgba(0,168,107,0.08)",
+                    borderColor: isDarkMode
+                      ? "rgba(20,184,166,0.25)"
+                      : "rgba(0,168,107,0.12)",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.orderTypeText,
+                    {
+                      color: isDarkMode
+                        ? COLORS.brand
+                        : "#00796B",
+                    },
+                  ]}
+                >
+                  {isReceptionPayment
+                    ? "🏥 Reception Billing"
+                    : isBillingOrder
+                    ? "📋 Billing Order"
+                    : "🆕 New Patient"}
                 </Text>
               </View>
 
               <View style={styles.paymentMethodsSection}>
-                <Text style={[styles.sectionTitle, { color: textPrimary }]}>Select Payment Method</Text>
-                <Text style={[styles.sectionSubtitle, { color: textMuted }]}>You can select multiple payment methods</Text>
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { color: textPrimary },
+                  ]}
+                >
+                  Select Payment Method
+                </Text>
+                <Text
+                  style={[
+                    styles.sectionSubtitle,
+                    { color: textMuted },
+                  ]}
+                >
+                  You can select multiple payment methods
+                </Text>
 
-                {/* Use stable MemoPaymentMethodRow component */}
                 <MemoPaymentMethodRow
                   method="cards"
                   label="Credit/Debit Cards"
@@ -725,48 +1290,140 @@ useEffect(() => {
                 />
               </View>
 
-              <View style={[styles.amountSummary, { backgroundColor: isDarkMode ? "rgba(255,255,255,0.03)" : "#f8faf8", borderColor: isDarkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.06)" }]}>
-                <Text style={[styles.summaryTitle, { color: textPrimary }]}>Payment Summary</Text>
+              <View
+                style={[
+                  styles.amountSummary,
+                  {
+                    backgroundColor: isDarkMode
+                      ? "rgba(255,255,255,0.03)"
+                      : "#f8faf8",
+                    borderColor: isDarkMode
+                      ? "rgba(255,255,255,0.04)"
+                      : "rgba(0,0,0,0.06)",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.summaryTitle,
+                    { color: textPrimary },
+                  ]}
+                >
+                  Payment Summary
+                </Text>
 
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: textMuted }]}>Due Amount:</Text>
-                  <Text style={[styles.summaryValue, { color: textPrimary }]}>₹{dueAmount.toFixed(2)}</Text>
+                  <Text
+                    style={[
+                      styles.summaryLabel,
+                      { color: textMuted },
+                    ]}
+                  >
+                    Due Amount:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.summaryValue,
+                      { color: textPrimary },
+                    ]}
+                  >
+                    ₹{dueAmount.toFixed(2)}
+                  </Text>
                 </View>
 
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: textMuted }]}>Paid Amount:</Text>
-                  <Text style={[
-                    styles.summaryValue,
-                    paidAmount > 0 ? styles.paidAmount : styles.zeroAmount,
-                    { color: paidAmount > 0 ? COLORS.success : textMuted }
-                  ]}>
-                    ₹{paidAmount.toFixed(2)}
+                  <Text
+                    style={[
+                      styles.summaryLabel,
+                      { color: textMuted },
+                    ]}
+                  >
+                    Paid Amount:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.summaryValue,
+                      totalEntered > 0
+                        ? styles.paidAmount
+                        : styles.zeroAmount,
+                      {
+                        color:
+                          totalEntered > 0
+                            ? COLORS.success
+                            : textMuted,
+                      },
+                    ]}
+                  >
+                    ₹{totalEntered.toFixed(2)}
                   </Text>
                 </View>
 
                 <View style={styles.divider} />
 
                 <View style={styles.summaryRow}>
-                  <Text style={[styles.finalAmountLabel, { color: textPrimary }]}>Remaining Due:</Text>
-                  <Text style={[
-                    styles.finalAmountValue,
-                    totalDue > 0 ? styles.amountDue : styles.amountPaid,
-                    { color: totalDue > 0 ? COLORS.danger : COLORS.success }
-                  ]}>
+                  <Text
+                    style={[
+                      styles.finalAmountLabel,
+                      { color: textPrimary },
+                    ]}
+                  >
+                    Remaining Due:
+                  </Text>
+                  <Text
+                    style={[
+                      styles.finalAmountValue,
+                      totalDue > 0
+                        ? styles.amountDue
+                        : styles.amountPaid,
+                      {
+                        color:
+                          totalDue > 0
+                            ? COLORS.danger
+                            : COLORS.success,
+                      },
+                    ]}
+                  >
                     ₹{totalDue.toFixed(2)}
                   </Text>
                 </View>
 
                 {totalDue === 0 && (
-                  <View style={[styles.successBadge, { backgroundColor: isDarkMode ? "rgba(34,197,94,0.12)" : "rgba(34,197,94,0.08)", borderColor: isDarkMode ? "rgba(34,197,94,0.25)" : "rgba(34,197,94,0.12)" }]}>
-                    <Text style={[styles.successText, { color: COLORS.success }]}>✅ Full Amount Paid</Text>
+                  <View
+                    style={[
+                      styles.successBadge,
+                      {
+                        backgroundColor: isDarkMode
+                          ? "rgba(34,197,94,0.12)"
+                          : "rgba(34,197,94,0.08)",
+                        borderColor: isDarkMode
+                          ? "rgba(34,197,94,0.25)"
+                          : "rgba(34,197,94,0.12)",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.successText,
+                        { color: COLORS.success },
+                      ]}
+                    >
+                      ✅ Full Amount Paid
+                    </Text>
                   </View>
                 )}
 
-                {/* Small helper text about OPD / IPD */}
-                <View style={{ marginTop: SPACING.sm }}>
-                  <Text style={{ color: textMuted, fontSize: FONT_SIZE.xs }}>
-                    {requiresFullPayment ? "OPD orders require full payment." : "Partial payments allowed."}
+                <View
+                  style={{ marginTop: SPACING.sm }}
+                >
+                  <Text
+                    style={{
+                      color: textMuted,
+                      fontSize: FONT_SIZE.xs,
+                    }}
+                  >
+                    {requiresFullPayment
+                      ? "OPD orders require full payment."
+                      : "Partial payments allowed."}
                   </Text>
                 </View>
               </View>
@@ -784,23 +1441,33 @@ useEffect(() => {
                   disabled={!submitEnabled || isSubmitting}
                   style={[
                     styles.payInner,
-                    { opacity: (!submitEnabled || isSubmitting) ? 0.6 : 1 }
+                    {
+                      opacity:
+                        !submitEnabled || isSubmitting
+                          ? 0.6
+                          : 1,
+                    },
                   ]}
                   activeOpacity={0.9}
                 >
                   {isSubmitting ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <>
-                      <Text style={styles.payText}>
-                        {isBillingOrder ? 'Complete Payment' : 'Complete Order'}
-                      </Text>
-                    </>
+                    <Text style={styles.payText}>
+                      {isReceptionPayment || isBillingOrder
+                        ? "Complete Payment"
+                        : "Complete Order"}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </LinearGradient>
 
-              <Text style={[styles.secureNote, { color: textMuted }]}>
+              <Text
+                style={[
+                  styles.secureNote,
+                  { color: textMuted },
+                ]}
+              >
                 Securely processed • PCI DSS compliant
               </Text>
             </View>
@@ -811,46 +1478,23 @@ useEffect(() => {
   );
 };
 
-// styles unchanged for layout but few additions for toggle and theme
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-  },
-  keyboardAvoid: {
-    flex: 1,
-  },
+  safe: { flex: 1 },
+  keyboardAvoid: { flex: 1 },
   topBar: {
     height: 68,
     paddingHorizontal: SPACING.lg,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "transparent"
+    backgroundColor: "transparent",
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  topTitle: {
-    color: "#fff",
-    fontSize: FONT_SIZE.lg,
-    fontWeight: "700"
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: SPACING.lg
-  },
+  headerSpacer: { width: 40 },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: SPACING.lg },
   gatewayCardWrap: {
     alignItems: "center",
-    marginTop: 20
+    marginTop: 20,
   },
   gatewayCard: {
     width: Math.min(820, SCREEN_WIDTH - 32),
@@ -865,31 +1509,29 @@ const styles = StyleSheet.create({
   gatewayTop: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "center",
   },
   payLabel: {
     fontSize: FONT_SIZE.sm,
-    fontWeight: "600"
+    fontWeight: "600",
   },
   payAmount: {
     fontSize: FONT_SIZE.xxl,
-    fontWeight: "900"
+    fontWeight: "900",
   },
-  brandRow: {
-    flexDirection: "row"
-  },
+  brandRow: { flexDirection: "row" },
   brandIcon: {
     width: 28,
     height: 18,
     marginLeft: 8,
-    resizeMode: "contain"
+    resizeMode: "contain",
   },
   cardSubtitle: {
     marginTop: SPACING.md,
-    marginBottom: SPACING.sm
+    marginBottom: SPACING.sm,
   },
   orderTypeBadge: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: 16,
@@ -918,9 +1560,6 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     borderWidth: 2,
   },
-  paymentMethodCardSelected: {
-    borderColor: COLORS.brand,
-  },
   paymentMethodHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -942,9 +1581,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "transparent",
   },
-  paymentMethodInfo: {
-    flex: 1,
-  },
+  paymentMethodInfo: { flex: 1 },
   paymentMethodLabel: {
     fontSize: FONT_SIZE.md,
     fontWeight: "600",
@@ -983,9 +1620,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: "500",
   },
-  amountInputFocused: {
-    // nothing style-specific here; dynamic borderColor is applied inline
-  },
+  amountInputFocused: {},
   setRemainingButton: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
@@ -1029,12 +1664,6 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
   },
-  paidAmount: {
-    // color set inline where used
-  },
-  zeroAmount: {
-    // color set inline where used
-  },
   divider: {
     height: 1,
     backgroundColor: "rgba(0,0,0,0.06)",
@@ -1048,12 +1677,6 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: "700",
   },
-  amountDue: {
-    // color applied inline
-  },
-  amountPaid: {
-    // color applied inline
-  },
   successBadge: {
     padding: SPACING.sm,
     borderRadius: 8,
@@ -1065,38 +1688,33 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
   },
+  amountDue: {},
+  amountPaid: {},
   payCtaWrap: {
     marginTop: SPACING.lg,
-    alignItems: "center"
+    alignItems: "center",
   },
   payButton: {
     width: Math.min(760, SCREEN_WIDTH - 64),
     borderRadius: 12,
-    overflow: "hidden"
+    overflow: "hidden",
   },
   payInner: {
     paddingVertical: SPACING.lg,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 12
+    gap: 12,
   },
   payText: {
     color: "#fff",
     fontSize: FONT_SIZE.md,
-    fontWeight: "800"
-  },
-  payAmountCta: {
-    color: "#fff",
-    fontSize: FONT_SIZE.lg,
-    fontWeight: "900"
+    fontWeight: "800",
   },
   secureNote: {
     marginTop: SPACING.sm,
-    fontSize: FONT_SIZE.xs
+    fontSize: FONT_SIZE.xs,
   },
-
-  /* Toggle styles */
   themeToggleWrap: {
     flexDirection: "row",
     borderRadius: 999,

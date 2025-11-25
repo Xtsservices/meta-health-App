@@ -198,6 +198,8 @@ const EmptyTreatmentPlan = ({
   onAddMedicine: () => void;
   readOnly: boolean;
 }) => {
+  const user = useSelector((s: RootState) => s.currentUser);
+
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>

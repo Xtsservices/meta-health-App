@@ -67,6 +67,7 @@ interface TestAlertsProps {
   onPageChange: (page: number) => void;
   onPatientExpand: (id: string | null) => void;
   onFilterChange: (filter: string) => void;
+   alertFrom?: "lab" | "reception";
 }
 
 interface RejectedAlertsProps {
@@ -83,6 +84,7 @@ interface AlertsTabsProps {
   onFilterChange: (filter: string) => void;
   onPageChange: (page: number) => void;
   onPatientExpand: (id: string | null) => void;
+  alertFrom?: "lab" | "reception";
 }
 
 // Sidebar Component
@@ -181,15 +183,19 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
   expandedPatientId, 
   onPageChange, 
   onPatientExpand,
-  onFilterChange
+  onFilterChange,
+  alertFrom = "lab",
 }) => {
+  const isReception = alertFrom === "reception";
+  const titlePrefix = isReception ? "Reception Alerts" : "Lab Test Alerts";
+
   return (
     <View style={styles.tabContent}>
       <PatientOuterTable
-        title={`Lab Test Alerts - ${filter}`}
+         title={`${titlePrefix} - ${filter}`}
         data={currentAlerts ?? []}
         isButton={true}
-        alertFrom="Lab"
+         alertFrom={isReception ? "Reception" : "Lab"}
         expandedPatientId={expandedPatientId}
         onPatientExpand={onPatientExpand}
         filter={filter}
@@ -239,11 +245,12 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
   expandedPatientId, 
   onFilterChange, 
   onPageChange, 
-  onPatientExpand 
+  onPatientExpand,
+  alertFrom = "lab",
 }) => {
   const [activeTab, setActiveTab] = useState("test-alerts");
   const rowsPerPage = 10;
-
+ const isReception = alertFrom === "reception";
   const indexOfFirstRow = currentPage * rowsPerPage;
   const indexOfLastRow = indexOfFirstRow + rowsPerPage;
   const currentAlerts = filteredAlerts?.slice(indexOfFirstRow, indexOfLastRow) ?? [];
@@ -264,6 +271,7 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
               onPageChange={onPageChange}
               onPatientExpand={onPatientExpand}
               onFilterChange={onFilterChange}
+               alertFrom={alertFrom}
             />
           </View>
         );
@@ -278,9 +286,9 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
     }
   };
 
-  const tabs = [
-    { key: "test-alerts", label: "Test Alerts" },
-    { key: "rejected-alerts", label: "Rejected Alerts" },
+ const tabs = [
+    { key: "test-alerts", label: isReception ? "Alerts" : "Test Alerts" },
+    { key: "rejected-alerts", label: isReception ? "Rejected" : "Rejected Alerts" },
   ];
 
   return (
@@ -342,6 +350,7 @@ const AlertsLab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const isReceptionAlerts = user?.roleName === "reception";
 
   const navigationState = route?.params?.state || {};
 
@@ -398,21 +407,37 @@ const AlertsLab: React.FC = () => {
         navigation.navigate("Login" as never);
         return;
       }
-
-      const response = await AuthFetch(
-        `test/${user?.roleName}/${user?.hospitalID}/getAlerts`,
-        token
-      );
-
-      const alertsData = response?.data?.alerts || response?.alerts;
+   let alertsData: any[] = [];
+     if (isReceptionAlerts) {
+        // 👇 Reception pending alerts
+        const response = await AuthFetch(
+          `reception/${user?.hospitalID}/pending/getReceptionAlertsData`,
+          token
+        );
+        console.log(response, "response for reception alerts");
+        alertsData = response?.data?.data?.data || response?.data || [];
+      } else {
+        // 👇 Existing lab alerts
+        const response = await AuthFetch(
+          `test/${user?.roleName}/${user?.hospitalID}/getAlerts`,
+          token
+        );
+        alertsData = response?.data?.alerts || response?.alerts || [];
+      }
+console.log(alertsData, "complete alerts data from receptio23456n")
       
-      if ((response?.data?.message === "success" || response?.message === "success") && Array.isArray(alertsData)) {
+      if (Array.isArray(alertsData)) {
         setAllAlerts(alertsData);
         setFilteredAlerts(alertsData);
+        if (!alertsData.length && !isReceptionAlerts) {
+          dispatch(showError("No alerts found"));
+        }
       } else {
         setAllAlerts([]);
         setFilteredAlerts([]);
-        dispatch(showError("No alerts found"));
+        if (!isReceptionAlerts) {
+          dispatch(showError("No alerts found"));
+        }
       }
     } catch (error) {
       dispatch(showError("Failed to load alerts"));
@@ -444,18 +469,30 @@ const AlertsLab: React.FC = () => {
           return;
         }
 
-        const response = await AuthFetch(
-          `test/${user?.roleName}/${user?.hospitalID}/rejected/getBillingData`,
-          token
-        );
+                let rejectedData: any[] = [];
 
-        const billingData = response?.data?.billingData || response?.billingData;
-        
-        if ((response?.data?.message === "success" || response?.message === "success") && Array.isArray(billingData)) {
-          setRejectedOrders(billingData);
+        if (isReceptionAlerts) {
+          // 👇 Reception rejected list
+          const response = await AuthFetch(
+            `reception/${user?.hospitalID}/rejected/getReceptionRejectedList`,
+            token
+          );
+          rejectedData = response?.data?.data || response?.data || [];
+        } else {
+          // 👇 Existing lab rejected billing
+          const response = await AuthFetch(
+            `test/${user?.roleName}/${user?.hospitalID}/rejected/getBillingData`,
+            token
+          );
+          rejectedData = response?.data?.billingData || response?.billingData || [];
+        }
+console.log(rejectedData, "rejected data from reception1234");
+        if (Array.isArray(rejectedData)) {
+          setRejectedOrders(rejectedData);
         } else {
           setRejectedOrders([]);
         }
+
       } catch (error) {
         dispatch(showError("Failed to load rejected orders"));
         setRejectedOrders([]);
@@ -468,7 +505,9 @@ const AlertsLab: React.FC = () => {
   // Apply department filter for Test Alerts
   useEffect(() => {
     let filtered = [...allAlerts];
+    console.log(filtered,allAlerts, "all alerts in useEffect");
     if (filter === "OPD") {
+      
       filtered = allAlerts?.filter((order) => order?.ptype === 21) ?? [];
     } else if (filter === "IPD") {
       filtered = allAlerts?.filter((order) => order?.ptype === 2) ?? [];
@@ -531,6 +570,8 @@ const AlertsLab: React.FC = () => {
             onFilterChange={handleFilterChange}
             onPageChange={handlePageChange}
             onPatientExpand={handlePatientExpand}
+            alertFrom={isReceptionAlerts ? "reception" : "lab"}
+
           />
         </View>
       </KeyboardAvoidingView>

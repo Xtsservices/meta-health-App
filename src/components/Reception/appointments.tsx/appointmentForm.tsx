@@ -23,7 +23,7 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { Role_NAME } from "../../../utils/role";
 import { COLORS } from "../../../utils/colour";
-import { FONT_SIZE, SPACING } from "../../../utils/responsive";
+import { FONT_SIZE, SCREEN_WIDTH, SPACING } from "../../../utils/responsive";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 
@@ -89,6 +89,10 @@ const BookAppointment: React.FC = () => {
 
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+
+ const isSmallScreen = SCREEN_WIDTH < 600;           // phone vs bigger devices
+  const slotChipWidth = isSmallScreen ? "48%" : "30%"; 
 
   const [appointmentFormData, setAppointmentFormData] =
     useState<doctorAppointmentDetailType>({
@@ -436,9 +440,9 @@ const debouncedSubmit = useMemo(
 
       {/* Card */}
       <View style={styles.card}>
-        {/* Patient Name / Age */}
-        <View style={styles.row}>
-          <View style={styles.col}>
+        {/* Patient Name */}
+        
+          <View style={styles.block}>
             <Text style={styles.label}>Patient Name *</Text>
             <TextInput
               style={styles.input}
@@ -448,20 +452,10 @@ const debouncedSubmit = useMemo(
               onChangeText={(text) => handleTextChange("pName", text)}
             />
           </View>
-          <View style={styles.col}>
-            <Text style={styles.label}>Age *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter age"
-              placeholderTextColor={COLORS.placeholder}
-              value={String(appointmentFormData.age.value || "")}
-              keyboardType="numeric"
-              onChangeText={(text) => handleTextChange("age", text)}
-            />
-          </View>
-        </View>
+         
+       
 
-        {/* Mobile / Email */}
+        {/* Mobile / Age */}
         <View style={styles.row}>
           <View style={styles.col}>
             <Text style={styles.label}>Mobile Number *</Text>
@@ -475,7 +469,20 @@ const debouncedSubmit = useMemo(
               onChangeText={(text) => handleTextChange("mobileNumber", text)}
             />
           </View>
-          <View style={styles.col}>
+           <View style={styles.col}>
+            <Text style={styles.label}>Age *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter age"
+              placeholderTextColor={COLORS.placeholder}
+              value={String(appointmentFormData.age.value || "")}
+              keyboardType="numeric"
+              onChangeText={(text) => handleTextChange("age", text)}
+            />
+          </View>
+        </View>
+          {/* Email ID */}
+        <View style={styles.block}>
             <Text style={styles.label}>Email ID *</Text>
             <TextInput
               style={styles.input}
@@ -486,7 +493,6 @@ const debouncedSubmit = useMemo(
               onChangeText={(text) => handleTextChange("email", text)}
             />
           </View>
-        </View>
 
         {/* Gender chips */}
         <View style={styles.block}>
@@ -537,8 +543,8 @@ const debouncedSubmit = useMemo(
         </View>
 
         {/* Department & Doctor */}
-        <View style={styles.row}>
-          <View style={styles.col}>
+        
+          <View style={styles.block}>
             <Text style={styles.label}>Department *</Text>
             <View style={styles.pickerContainer}>
               <Picker
@@ -561,7 +567,7 @@ const debouncedSubmit = useMemo(
             </View>
           </View>
 
-          <View style={styles.col}>
+          <View style={styles.block}>
             <Text style={styles.label}>Doctor *</Text>
             <View style={styles.pickerContainer}>
               <Picker
@@ -594,7 +600,7 @@ const debouncedSubmit = useMemo(
               </Picker>
             </View>
           </View>
-        </View>
+        
 
         {/* Date Picker */}
         {selectedDoctorID && (
@@ -613,11 +619,12 @@ const debouncedSubmit = useMemo(
             </TouchableOpacity>
             {showDatePicker && (
               <DateTimePicker
-                value={selectedDate || new Date()}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                minimumDate={new Date()}
-                onChange={handleDateChange}
+                 value={selectedDate || new Date()}
+                 mode="date"
+                 display={Platform.OS === "android" ? "spinner" : "default"}
+                  maximumDate={new Date()}
+                 minimumDate={new Date(1900, 0, 1)}
+                  onChange={handleDateChange}
               />
             )}
           </View>
@@ -659,15 +666,17 @@ const debouncedSubmit = useMemo(
 
                 return (
                   <TouchableOpacity
-                    key={slot.id}
-                    style={[
-                      styles.slotChip,
-                      isSelected && styles.slotChipActive,
-                      remaining <= 0 && styles.slotChipDisabled,
-                    ]}
-                    activeOpacity={remaining > 0 ? 0.8 : 1}
-                    onPress={() => handleSlotSelect(slot)}
-                  >
+  key={slot.id}
+  style={[
+    styles.slotChip,
+    { width: slotChipWidth },               // ⬅️ dynamic width per screen size
+    isSelected && styles.slotChipActive,
+    remaining <= 0 && styles.slotChipDisabled,
+  ]}
+  activeOpacity={remaining > 0 ? 0.8 : 1}
+  onPress={() => handleSlotSelect(slot)}
+>
+
                     <Text
                       style={[
                         styles.slotText,
@@ -880,16 +889,15 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   slotChip: {
-    width: "48%",
-    marginHorizontal: SPACING.xs,
-    marginBottom: SPACING.xs,
-    borderRadius: 24,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderWidth: 1.5,
-    borderColor: "#cbd5f5",
-    backgroundColor: "#eef2ff",
-  },
+  marginHorizontal: SPACING.xs,
+  marginBottom: SPACING.xs,
+  borderRadius: 24,
+  paddingVertical: 8,
+  paddingHorizontal: 8,
+  borderWidth: 1.5,
+  borderColor: "#cbd5f5",
+  backgroundColor: "#eef2ff",
+},
   slotChipActive: {
     backgroundColor: "#22c55e",
     borderColor: "#16a34a",
