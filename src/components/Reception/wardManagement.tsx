@@ -529,9 +529,9 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: SPACING.xs * 0.4 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowRadius: SPACING.xs,
     elevation: 2,
   },
   groupHeader: {
@@ -807,3 +807,4 @@ const styles = StyleSheet.create({
     right: 0,
   },
 });
+

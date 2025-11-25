@@ -23,23 +23,9 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { Role_NAME } from "../../../utils/role";
 import { COLORS } from "../../../utils/colour";
-import { FONT_SIZE, SCREEN_WIDTH, SPACING } from "../../../utils/responsive";
+import { FONT_SIZE, SCREEN_WIDTH, responsiveHeight, responsiveWidth, SCREEN_WIDTH, SPACING } from "../../../utils/responsive";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
-
-// import { RootState } from "../../store/store";
-// import { AuthFetch, AuthPost } from "../../auth/auth";
-// import { Role_NAME } from "../../utils/role";
-// import {
-//   departmentType,
-//   staffType,
-//   doctorAppointmentDetailType,
-// } from "../../utils/types";
-// import { selectCurrAppointmentData } from "../../store/appointment/currentAppointment.selector";
-// import { selectCurrentUser } from "../../store/user/user.selector";
-// import { showError, showSuccess } from "../../store/toast.slice";
-// import { COLORS } from "../../utils/colour";
-// import { SPACING, FONT_SIZE } from "../../utils/responsive";
 
 interface SlotInfo {
   id: number;
@@ -762,20 +748,20 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   subtitle: {
-    marginTop: 4,
+    marginTop: SPACING.xs,
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
   },
 
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: SPACING.lg,
     padding: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: "#000",
     shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowRadius: SPACING.xs,
     elevation: 3,
   },
 
@@ -797,15 +783,15 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.sub,
-    marginBottom: 6,
+    marginBottom: SPACING.xs,
   },
 
   input: {
     borderWidth: 1.5,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
     fontSize: FONT_SIZE.md,
     color: COLORS.text,
     backgroundColor: "#f9fafb",
@@ -813,30 +799,30 @@ const styles = StyleSheet.create({
 
   pickerContainer: {
     borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: SPACING.sm,
     borderColor: COLORS.border,
     overflow: "hidden",
     backgroundColor: "#f9fafb",
   },
   picker: {
-    height: 50,
+    height: responsiveHeight(6),
     width: "100%",
-    color: "black"
+    color: "black",
   },
 
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 4,
+    marginTop: SPACING.xs,
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: SPACING.lg,
     borderWidth: 1.5,
     borderColor: COLORS.border,
-    marginRight: 8,
-    marginBottom: 8,
+    marginRight: SPACING.xs,
+    marginBottom: SPACING.xs,
     backgroundColor: "#e5e7eb",
   },
   chipActive: {
@@ -853,12 +839,12 @@ const styles = StyleSheet.create({
   },
 
   dateButton: {
-    height: 48,
+    height: responsiveHeight(6),
     borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: SPACING.sm,
     borderColor: COLORS.brand,
     justifyContent: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: SPACING.sm,
     backgroundColor: "#ecfeff",
   },
   dateText: {
@@ -872,12 +858,12 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   loadingText: {
-    marginLeft: 8,
+    marginLeft: SPACING.xs,
     color: COLORS.sub,
     fontSize: FONT_SIZE.sm,
   },
   helperText: {
-    marginTop: 4,
+    marginTop: SPACING.xs,
     color: COLORS.sub,
     fontSize: FONT_SIZE.sm,
   },
@@ -889,15 +875,16 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   slotChip: {
-  marginHorizontal: SPACING.xs,
-  marginBottom: SPACING.xs,
-  borderRadius: 24,
-  paddingVertical: 8,
-  paddingHorizontal: 8,
-  borderWidth: 1.5,
-  borderColor: "#cbd5f5",
-  backgroundColor: "#eef2ff",
-},
+    width: responsiveWidth(48),
+    marginHorizontal: SPACING.xs,
+    marginBottom: SPACING.xs,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.xs,
+    borderWidth: 1.5,
+    borderColor: "#cbd5f5",
+    backgroundColor: "#eef2ff",
+  },
   slotChipActive: {
     backgroundColor: "#22c55e",
     borderColor: "#16a34a",
@@ -918,7 +905,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     color: "#16a34a",
     textAlign: "center",
-    marginTop: 2,
+    marginTop: SPACING.xs * 0.5,
   },
   slotSubActive: {
     color: "#dcfce7",
@@ -926,13 +913,13 @@ const styles = StyleSheet.create({
 
   submitButton: {
     marginTop: SPACING.md,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
     alignItems: "center",
     backgroundColor: COLORS.brand,
     shadowColor: "#000",
     shadowOpacity: 0.12,
-    shadowRadius: 8,
+    shadowRadius: SPACING.xs,
     elevation: 4,
   },
   submitText: {
@@ -948,9 +935,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalCard: {
-    width: "82%",
+    width: SCREEN_WIDTH * 0.82,
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: SPACING.lg,
     padding: SPACING.md,
     alignItems: "center",
   },
@@ -958,7 +945,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: SPACING.xs,
   },
   modalBody: {
     fontSize: FONT_SIZE.sm,
@@ -968,12 +955,13 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     backgroundColor: COLORS.brand,
-    borderRadius: 999,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
+    borderRadius: responsiveWidth(50),
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
   },
   modalButtonText: {
     color: "#ffffff",
     fontWeight: "700",
   },
 });
+
