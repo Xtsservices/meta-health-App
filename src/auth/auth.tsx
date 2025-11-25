@@ -180,8 +180,8 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://65.2.126.190:3000/api/v1';
-// const BASE_URL = 'http://192.168.1.3:3000/api/v1';
+// const BASE_URL = 'http://65.2.126.190:3000/api/v1';
+const BASE_URL = 'http://192.168.1.3:3000/api/v1';
 
 // --- helpers ---
 const handleError = (err: any) => {
@@ -447,7 +447,12 @@ export async function UploadFiles(url: string, body: any, token?: string | null)
 }
 
 export async function AuthPut(url: string, body: any, token?: string | null) {
-  return apiRequest({ url, method: 'put', data: body, token });
+  return apiRequest({ url,
+    method: 'put',
+    data: body,
+    token,
+    authStyle: 'raw', // same as your web authPost
+    contentType: 'application/json', });
 }
 
 export async function AuthPatch(url: string, body: any, token?: string | null) {
