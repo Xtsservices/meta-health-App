@@ -27,20 +27,6 @@ import { FONT_SIZE, SPACING } from "../../../utils/responsive";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 
-// import { RootState } from "../../store/store";
-// import { AuthFetch, AuthPost } from "../../auth/auth";
-// import { Role_NAME } from "../../utils/role";
-// import {
-//   departmentType,
-//   staffType,
-//   doctorAppointmentDetailType,
-// } from "../../utils/types";
-// import { selectCurrAppointmentData } from "../../store/appointment/currentAppointment.selector";
-// import { selectCurrentUser } from "../../store/user/user.selector";
-// import { showError, showSuccess } from "../../store/toast.slice";
-// import { COLORS } from "../../utils/colour";
-// import { SPACING, FONT_SIZE } from "../../utils/responsive";
-
 interface SlotInfo {
   id: number;
   fromTime: string;
