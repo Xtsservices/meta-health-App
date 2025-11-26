@@ -135,7 +135,6 @@ useEffect(() => {
       for (const ep of endpoints) {
         try {
           const res: any = await AuthFetch(ep.url, token);
-          console.log(res, "tax invoice ")
           const arr = Array.isArray(res?.data?.data) ? res.data?.data : [];
           arr.forEach((item: any) =>
             allRawItems.push({ ...item, deptType: ep.deptType })
