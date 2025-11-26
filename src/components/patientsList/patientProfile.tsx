@@ -184,6 +184,7 @@ const PatientProfileOPD: React.FC = () => {
   const staffRole = route.params?.staffRole ?? "";
   const isReceptionView = !!route.params?.reception;
   const fromDischargeList = !!route.params?.fromDischargeList;
+  
 
   // Get patient start status
   const startStatus = currentPatient?.patientStartStatus ?? 0;

@@ -447,7 +447,12 @@ export async function UploadFiles(url: string, body: any, token?: string | null)
 }
 
 export async function AuthPut(url: string, body: any, token?: string | null) {
-  return apiRequest({ url, method: 'put', data: body, token });
+  return apiRequest({ url,
+    method: 'put',
+    data: body,
+    token,
+    authStyle: 'raw', // same as your web authPost
+    contentType: 'application/json', });
 }
 
 export async function AuthPatch(url: string, body: any, token?: string | null) {

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
 } from "react-native";
 
 // Utils
@@ -29,30 +28,27 @@ interface TestItem {
 }
 
 interface MedicineItem {
-  id: string;
-  medicineName?: string;
+  id: string | number;
   name?: string;
-  takenFromInventoryID?: string;
-  medicineType?: number;
-  category?: string;
-  updatedQuantity?: number;
-  quantity?: number;
+  medicineName?: string;
+  medicineType?: string;
   hsn?: string;
-  sellingPrice?: number;
   price?: number;
+  sellingPrice?: number;
   gst?: number;
-  datetime?: string;
-  userID?: number;
-  reason?: string;
-  Frequency?: number;
-  daysCount?: number;
-  medId?: number;
+  qty?: number;
+  updatedQuantity?: number;
+  addedOn?: string;
 }
 
 interface InnerTableProps {
   patientID: string;
   patientTimeLineID: string;
-  data: TestItem[] | MedicineItem[];
+  /** existing tests array (backward compat) */
+  data: TestItem[];
+  /** explicit lists from outer table (reception / billing) */
+  testsList?: TestItem[];
+  medicinesList?: MedicineItem[];
   isButton: boolean;
   department: string;
   pType: number;
@@ -87,6 +83,8 @@ const InnerTable: React.FC<InnerTableProps> = ({
   patientID,
   patientTimeLineID,
   data = [],
+  testsList,
+  medicinesList,
   isButton,
   department,
   pType,
@@ -107,81 +105,100 @@ const InnerTable: React.FC<InnerTableProps> = ({
   patientData,
   nurseID,
 }) => {
-  const isPharmacy = isPharmacyOrder || department?.includes("Pharmacy") || alertFrom === "Pharmacy";
+  // 🔹 Normalized arrays
+  const tests: TestItem[] = testsList ?? data ?? [];
+  const meds: MedicineItem[] = medicinesList ?? [];
 
-  // Group medicines by datetime for pharmacy orders
-  const groupMedicinesByDateTime = (medicines: MedicineItem[]) => {
-    const grouped: Record<string, MedicineItem[]> = {};
-    
-    medicines.forEach((medicine) => {
-      if (!medicine.datetime) return;
-      
-      const key = medicine.datetime.substring(0, 19);
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
-      grouped[key].push(medicine);
-    });
-    
-    return grouped;
-  };
-
-  const groupedMedicines = isPharmacy ? groupMedicinesByDateTime(data as MedicineItem[]) : {};
+  /* ------------------------------------------------------------------------ */
+  /*                               Calculations                               */
+  /* ------------------------------------------------------------------------ */
 
   const calculateTestTotal = (test: TestItem) => {
-    const price = test?.testPrice || 0;
-    const gst = test?.gst ?? 18;
-    return price + (price * gst) / 100;
+    const price = Number(test?.testPrice || 0);
+    const gst = test?.gst !== undefined && test?.gst !== null
+      ? Number(test.gst)
+      : 18;
+    const base = isNaN(price) ? 0 : price;
+    const gstVal = isNaN(gst) ? 0 : gst;
+    return base + (base * gstVal) / 100;
   };
 
-  const calculateMedicineTotal = (medicine: MedicineItem) => {
-    const price = medicine?.sellingPrice || medicine?.price || 0;
-    const quantity = medicine?.updatedQuantity || medicine?.quantity || 1;
-    const gst = medicine?.gst ?? 18;
-    const baseAmount = price * quantity;
-    return baseAmount + (baseAmount * gst) / 100;
+  const calculateMedicineTotal = (med: MedicineItem) => {
+    const unitPrice = Number(med.price ?? med.sellingPrice ?? 0);
+    const gst = Number(med.gst ?? 0);
+    const qty = Number(med.qty ?? med.updatedQuantity ?? 1);
+
+    const safeUnit = isNaN(unitPrice) ? 0 : unitPrice;
+    const safeQty = isNaN(qty) ? 1 : qty;
+    const safeGst = isNaN(gst) ? 0 : gst;
+
+    const baseTotal = safeUnit * safeQty;
+    return baseTotal + (baseTotal * safeGst) / 100;
   };
+
+  const calculateTestsGrandTotal = () => {
+    return tests?.reduce((total, test) => total + calculateTestTotal(test), 0);
+  };
+
+  const calculateMedicinesGrandTotal = () => {
+    return meds?.reduce(
+      (total, med) => total + calculateMedicineTotal(med),
+      0
+    );
+  };
+
+  const calculateGrandTotal = () => {
+    return calculateTestsGrandTotal() + calculateMedicinesGrandTotal();
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /*                            Billing Summary View                          */
+  /* ------------------------------------------------------------------------ */
 
   const renderBillingSummary = () => {
-    const gross = parseFloat(grossAmount || "0");
-    const gst = parseFloat(gstAmount || "0");
-    const total = parseFloat(totalAmount || "0");
-    const paid = parseFloat(paidAmount || "0");
-    const due = parseFloat(dueAmount || "0");
+    const testsTotal = calculateTestsGrandTotal();
+    const medsTotal = calculateMedicinesGrandTotal();
+    const grandTotal = testsTotal + medsTotal;
+    const paid = parseFloat(paidAmount || "0") || 0;
+    const due = parseFloat(dueAmount || "0") || 0;
 
     return (
       <View style={styles.billingSummary}>
-        <View style={styles.summaryHeader}>
-        
-        <Text style={styles.summaryTitle}>Payment</Text>
-        <View style={[styles.statusPill, due > 0 ? styles.pendingPill : styles.paidPill]}>
-          <Text style={styles.statusPillText}>
-            {due > 0 ? 'DUE' : 'PAID'}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.compactGrid}>
-        <View style={styles.compactRow}>
-          <Text style={styles.compactLabel}>Gross</Text>
-          <Text style={styles.compactValue}>₹{gross.toFixed(2)}</Text>
-        </View>
-        <View style={styles.compactRow}>
-          <Text style={styles.compactLabel}>GST</Text>
-          <Text style={styles.compactValue}>₹{gst.toFixed(2)}</Text>
-        </View>
-        <View style={styles.compactRow}>
-          <Text style={styles.compactLabel}>Total</Text>
-          <Text style={styles.compactValue}>₹{total.toFixed(2)}</Text>
-        </View>
-        <View style={styles.compactRow}>
-          <Text style={styles.compactLabel}>Paid</Text>
-            <Text style={styles.compactValue}>₹{paid.toFixed(2)}</Text>
+        <Text style={styles.summaryTitle}>Payment Summary</Text>
+
+        <View style={styles.summaryGrid}>
+          {testsTotal > 0 && (
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Tests Total</Text>
+              <Text style={styles.summaryValue}>₹{testsTotal.toFixed(2)}</Text>
+            </View>
+          )}
+
+          {medsTotal > 0 && (
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Medicines Total</Text>
+              <Text style={styles.summaryValue}>₹{medsTotal.toFixed(2)}</Text>
+            </View>
+          )}
+
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Gross Amount</Text>
+            <Text style={styles.summaryValue}>₹{grandTotal.toFixed(2)}</Text>
           </View>
 
-          <View style={[styles.compactRow, styles.dueRow]}>
-            <Text style={styles.compactLabel}>Due</Text>
-            <Text style={[styles.compactValue, due > 0 ? styles.dueHighlight : styles.paidHighlight]}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Paid Amount</Text>
+            <Text style={styles.summaryValue}>₹{paid.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Due Amount</Text>
+            <Text
+              style={[
+                styles.summaryValue,
+                due > 0 ? styles.dueAmount : styles.paidAmount,
+              ]}
+            >
               ₹{due.toFixed(2)}
             </Text>
           </View>
@@ -213,55 +230,67 @@ const InnerTable: React.FC<InnerTableProps> = ({
     );
   };
 
+  /* ------------------------------------------------------------------------ */
+  /*                             Render Test Card                             */
+  /* ------------------------------------------------------------------------ */
+
   const renderTestCard = (test: TestItem, index: number) => (
-    <View key={test?.id} style={styles.testCard}>
+    <View key={test?.id || `test-${index}`} style={styles.testCard}>
       <View style={styles.testHeader}>
         <View style={styles.testBadge}>
           <Text style={styles.testBadgeText}>Test {index + 1}</Text>
         </View>
         <Text style={styles.testId}>ID: {test?.id}</Text>
       </View>
-      
+
       <View style={styles.testContent}>
         <Text style={styles.testName}>
           {test?.test || test?.testName || "Unnamed Test"}
         </Text>
-        
+
         <View style={styles.testDetails}>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>HSN Code:</Text>
             <Text style={styles.detailValue}>{test?.hsn || "1236"}</Text>
           </View>
-          
+
           {test?.loinc_num_ && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>LOINC Code:</Text>
               <Text style={styles.detailValue}>{test?.loinc_num_}</Text>
             </View>
           )}
-          
+
           {labBilling && (
             <>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>GST:</Text>
-                <Text style={styles.detailValue}>{test?.gst ?? 18}%</Text>
+                <Text style={styles.detailValue}>
+                  {test?.gst ?? 18}%
+                </Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Base Price:</Text>
-                <Text style={styles.detailValue}>₹{test?.testPrice || 0}</Text>
+                <Text style={styles.detailValue}>
+                  ₹{test?.testPrice || 0}
+                </Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Total with GST:</Text>
-                <Text style={styles.detailValue}>₹{calculateTestTotal(test).toFixed(2)}</Text>
+                <Text style={styles.detailValue}>
+                  ₹{calculateTestTotal(test).toFixed(2)}
+                </Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Order Date:</Text>
-                <Text style={styles.detailValue}>{formatDateTime(test?.addedOn || "")}</Text>
+                <Text style={styles.detailValue}>
+                  {formatDateTime(test?.addedOn || "")}
+                </Text>
               </View>
             </>
           )}
         </View>
-        
+
         {isRejected && test?.reason && (
           <View style={styles.rejectionSection}>
             <Text style={styles.rejectionLabel}>Rejection Reason</Text>
@@ -272,134 +301,150 @@ const InnerTable: React.FC<InnerTableProps> = ({
     </View>
   );
 
-  const renderMedicineCard = (medicine: MedicineItem, index: number) => (
-    <View key={medicine?.id} style={styles.medicineCard}>
-      <View style={styles.medicineHeader}>
-        <View style={styles.medicineBadge}>
-          <Text style={styles.medicineBadgeText}>Med {index + 1}</Text>
-        </View>
-        <Text style={styles.medicineId}>ID: {medicine?.takenFromInventoryID || medicine?.id}</Text>
-      </View>
-      
-      <View style={styles.medicineContent}>
-        <Text style={styles.medicineName}>
-          {medicine?.medicineName || medicine?.name || "Unnamed Medicine"}
-        </Text>
-        
-        <View style={styles.medicineDetails}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Category:</Text>
-            <Text style={styles.detailValue}>
-              {medicine?.medicineType ? medicineCategoryReverse[medicine.medicineType] : medicine?.category || "Unknown"}
+  /* ------------------------------------------------------------------------ */
+  /*                          Render Medicine Card                            */
+  /* ------------------------------------------------------------------------ */
+
+  const renderMedicineCard = (med: MedicineItem, index: number) => {
+    const name = med.name || med.medicineName || "Unnamed Medicine";
+    const qty = med.qty ?? med.updatedQuantity ?? 1;
+    const unitPrice = med.price ?? med.sellingPrice ?? 0;
+    const gst = med.gst ?? 0;
+    const lineTotal = calculateMedicineTotal(med);
+
+    return (
+      <View key={med?.id || `med-${index}`} style={styles.testCard}>
+        <View style={styles.testHeader}>
+          <View style={styles.medicineBadge}>
+            <Text style={styles.medicineBadgeText}>
+              Medicine {index + 1}
             </Text>
           </View>
-          
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Quantity:</Text>
-            <Text style={styles.detailValue}>{medicine?.updatedQuantity || medicine?.quantity || 1}</Text>
-          </View>
-          
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>HSN Code:</Text>
-            <Text style={styles.detailValue}>{medicine?.hsn || "N/A"}</Text>
-          </View>
-          
-          {labBilling && (
-            <>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Price:</Text>
-                <Text style={styles.detailValue}>₹{medicine?.sellingPrice || medicine?.price || 0}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>GST:</Text>
-                <Text style={styles.detailValue}>{medicine?.gst || 18}%</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Total Amount:</Text>
-                <Text style={styles.detailValue}>₹{calculateMedicineTotal(medicine).toFixed(2)}</Text>
-              </View>
-              {medicine?.datetime && (
+          <Text style={styles.testId}>ID: {med?.id}</Text>
+        </View>
+
+        <View style={styles.testContent}>
+          <Text style={styles.testName}>{name}</Text>
+
+          <View style={styles.testDetails}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Type:</Text>
+              <Text style={styles.detailValue}>
+                {med.medicineType || "N/A"}
+              </Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>HSN Code:</Text>
+              <Text style={styles.detailValue}>{med.hsn || "N/A"}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Quantity:</Text>
+              <Text style={styles.detailValue}>{qty}</Text>
+            </View>
+
+            {labBilling && (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Unit Price:</Text>
+                  <Text style={styles.detailValue}>₹{unitPrice}</Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>GST:</Text>
+                  <Text style={styles.detailValue}>{gst}%</Text>
+                </View>
+
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Total with GST:</Text>
+                  <Text style={styles.detailValue}>
+                    ₹{lineTotal.toFixed(2)}
+                  </Text>
+                </View>
+
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Order Date:</Text>
-                  <Text style={styles.detailValue}>{formatDateTime(medicine.datetime)}</Text>
+                  <Text style={styles.detailValue}>
+                    {formatDateTime(med?.addedOn || "")}
+                  </Text>
                 </View>
-              )}
-            </>
-          )}
-        </View>
-        
-        {isRejected && medicine?.reason && (
-          <View style={styles.rejectionSection}>
-            <Text style={styles.rejectionLabel}>Rejection Reason</Text>
-            <Text style={styles.rejectionReason}>{medicine?.reason}</Text>
+              </>
+            )}
           </View>
-        )}
-      </View>
-    </View>
-  );
-
-  const renderGroupedMedicines = () => {
-    return Object.entries(groupedMedicines).map(([datetime, medicines]) => (
-      <View key={datetime} style={styles.medicineGroup}>
-        <View style={styles.groupHeader}>
-          <Text style={styles.groupTitle}>
-            Order Date: {formatDateTime(datetime)}
-          </Text>
         </View>
-        
-        {medicines.map((medicine, index) => renderMedicineCard(medicine, index))}
-        
-        {/* Show medicine taken by for IPD pharmacy orders */}
-        {(pType === 2) && renderMedicineTakenBy(nurseID, datetime)}
       </View>
-    ));
+    );
   };
+
+  /* ------------------------------------------------------------------------ */
+  /*                                  Render                                  */
+  /* ------------------------------------------------------------------------ */
+
+  const hasTests = tests?.length > 0;
+  const hasMeds = meds?.length > 0;
 
   return (
     <View>
       <View style={styles.header}>
         <View style={styles.headerMain}>
-          <Text style={styles.headerTitle}>
-            {isPharmacy ? "Medicine Details" : "Test Details"}
-          </Text>
+          <Text style={styles.headerTitle}>Order Details</Text>
+          <View style={styles.departmentBadge}>
+            <Text style={styles.departmentText}>{department}</Text>
+          </View>
         </View>
+
         {isRejected && rejectedReason && (
           <View style={styles.overallRejection}>
-            <Text style={styles.overallRejectionLabel}>Overall Rejection:</Text>
-            <Text style={styles.overallRejectionReason}>{rejectedReason}</Text>
+            <Text style={styles.overallRejectionLabel}>
+              Overall Rejection:
+            </Text>
+            <Text style={styles.overallRejectionReason}>
+              {rejectedReason}
+            </Text>
           </View>
         )}
       </View>
 
-      <ScrollView 
-        style={styles.contentContainer} 
+      <ScrollView
+        style={styles.testsContainer}
         showsVerticalScrollIndicator={true}
         nestedScrollEnabled={true}
-        contentContainerStyle={[styles.scrollContent, data?.length === 0 && styles.emptyContent]}
+        contentContainerStyle={[
+          styles.testsContentContainer,
+          !hasTests && !hasMeds && styles.emptyContent,
+        ]}
         keyboardShouldPersistTaps="handled"
       >
-        {isPharmacy ? (
-          Object.keys(groupedMedicines).length > 0 ? (
-            renderGroupedMedicines()
-          ) : data?.length > 0 ? (
-            (data as MedicineItem[]).map((medicine, index) => renderMedicineCard(medicine, index))
-          ) : (
-            <View style={styles.noDataContainer}>
-              <Text style={styles.noDataIcon}>🔍</Text>
-              <Text style={styles.noDataText}>No medicine details available</Text>
-              <Text style={styles.noDataSubtext}>
-                There are no medicines associated with this order.
-              </Text>
-            </View>
-          )
-        ) : data?.length > 0 ? (
-          (data as TestItem[]).map((test, index) => renderTestCard(test, index))
-        ) : (
+        {/* Tests Section */}
+        {hasTests && (
+          <View>
+            <Text style={styles.sectionHeader}>Test Details</Text>
+            {tests.map((test, index) =>
+              renderTestCard(test, index)
+            )}
+          </View>
+        )}
+
+        {/* Medicines Section */}
+        {hasMeds && (
+          <View>
+            <Text style={styles.sectionHeader}>Medicine Details</Text>
+            {meds.map((med, index) =>
+              renderMedicineCard(med, index)
+            )}
+          </View>
+        )}
+
+        {/* Empty State */}
+        {!hasTests && !hasMeds && (
           <View style={styles.noDataContainer}>
             <Text style={styles.noDataIcon}>🔍</Text>
-            <Text style={styles.noDataText}>No test details available</Text>
+            <Text style={styles.noDataText}>
+              No test or medicine details available
+            </Text>
             <Text style={styles.noDataSubtext}>
-              There are no tests associated with this order.
+              There are no records associated with this order.
             </Text>
           </View>
         )}
@@ -411,17 +456,9 @@ const InnerTable: React.FC<InnerTableProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // container: {
-  //   backgroundColor: COLORS.card,
-  //   borderRadius: 16,
-  //   margin: SPACING.xs,
-  //   shadowColor: COLORS.shadow,
-  //   shadowOffset: { width: 0, height: 4 },
-  //   shadowOpacity: 0.1,
-  //   shadowRadius: 12,
-  //   elevation: 5,
-  //   overflow: 'hidden',
-  // },
+  container: {
+    // keep parent styling controlled by OuterTable
+  },
   header: {
     padding: SPACING.lg,
     backgroundColor: COLORS.bg,
@@ -429,9 +466,9 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   headerMain: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: SPACING.xs,
   },
   headerTitle: {
@@ -469,23 +506,29 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Scroll area for tests
+  sectionHeader: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "700",
+    color: COLORS.sub,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+  },
+
+  // Scroll area
   testsContainer: {
     maxHeight: 400,
   },
-  // ensures scroll content grows and allows scrolling even with few items
   testsContentContainer: {
     paddingBottom: SPACING.lg,
     flexGrow: 1,
   },
-
   emptyContent: {
     flexGrow: 1,
   },
 
-  // TEST CARD: made transparent / borderless so it doesn't create a second "box" visual
+  // Card style shared for tests & medicines
   testCard: {
-    backgroundColor: 'transparent', // removed inner card background to avoid double-box look
+    backgroundColor: "transparent",
     margin: SPACING.sm,
     borderRadius: 12,
     padding: SPACING.md,
@@ -509,6 +552,17 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     fontWeight: "700",
     color: COLORS.buttonText,
+  },
+  medicineBadge: {
+    backgroundColor: COLORS.chipRR,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  medicineBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "700",
+    color: COLORS.text,
   },
   testId: {
     fontSize: FONT_SIZE.xs,
@@ -644,55 +698,8 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     fontWeight: "700",
     color: COLORS.text,
-  },
-  statusPill: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  pendingPill: {
-    backgroundColor: COLORS.chipBP,
-  },
-  paidPill: {
-    backgroundColor: COLORS.chipRR,
-  },
-  statusPillText: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: "700",
-    color: COLORS.buttonText,
-  },
-  compactGrid: {
-    gap: 2,
-  },
-  compactRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 1,
-  },
-  compactLabel: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.sub,
-    fontWeight: "500",
-  },
-  compactValue: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: "600",
-    color: COLORS.text,
-  },
-  dueRow: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 4,
-    marginTop: 2,
-  },
-  dueHighlight: {
-    color: COLORS.danger,
-    fontWeight: '700',
-  },
-  paidHighlight: {
-    color: COLORS.success,
-    fontWeight: '700',
+    marginBottom: SPACING.md,
+    textAlign: "center",
   },
   summaryGrid: {
     gap: SPACING.xs,

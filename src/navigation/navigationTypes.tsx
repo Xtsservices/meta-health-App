@@ -96,6 +96,15 @@ DischargeSummaryDownload: undefined;
   Monitors:undefined;
   ConsentForm:undefined;
   PostOpRecordNotes:undefined;
+  WardManagement: undefined;
+  AppointmentTab: undefined;
+  AppointmentForm: undefined;
+  Appointmentlist: undefined;
+  ReceptionPatientsList: undefined;
+  DoctorManagement: undefined;
+  DoctorSlots: undefined;
+  TaxInvoiceTabs: undefined;
+  Invoicedetails: undefined;
 
 
 

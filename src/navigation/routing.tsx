@@ -95,6 +95,13 @@ import triageZone from "../components/Triage/triageZone";
 
 import consentForm from "../components/OT/consentForm";
 import postOpNotes from "../components/OT/postOpNotes";
+import wardManagement from "../components/Reception/wardManagement";
+import AppointmentTabsMobile from "../components/Reception/appointments.tsx/appointmentTabs";
+import appointmentForm from "../components/Reception/appointments.tsx/appointmentForm";
+import appointmentList from "../components/Reception/appointments.tsx/appointmentList";
+import receptionPatientsList from "../components/Reception/receptionPatientsList";
+import DoctorManagementMobile from "../components/Reception/doctorManagement/doctorManagement";
+import DoctorSlotsScreen from "../components/Reception/doctorManagement/doctorSlots";
 import PatientDetailsLab from "../components/Lab/patientList/PatientDetailsLab";
 import PatientListLab from "../components/Lab/patientList/PatientListLab";
 import UploadTest from "../components/Lab/patientList/UploadTest";
@@ -109,6 +116,8 @@ import TaxInvoiceTabs from "../components/Lab/taxInvoice/TaxInvoiceTabs";
 import TaxInvoiceInPatient from "../components/Lab/taxInvoice/TaxInvoiceInPatient";
 import TaxInvoiceWalkIn from "../components/Lab/taxInvoice/TaxInvoiceWalkIn";
 import ReportsLab from "../components/Lab/patientList/ReportsLab";
+import taxInvoiceTabs from "../components/Reception/taxInvoice/taxInvoiceTabs";
+import invoiceDetails from "../components/Reception/taxInvoice/invoiceDetails";
 import PharmacyExpenses from "../components/Pharmacy/orderPlacement/PharmacyExpenses";
 import InStock from "../components/Pharmacy/InStock/InStock";
 import BillingDetails from "../components/Lab/billing/BillingDetails";
@@ -299,6 +308,13 @@ const Routing = () => {
           component={AddPhysicalExaminationScreen}
           options={{ title: "Add Physical Examination", headerTitleAlign: "center", headerShown: true }}
         />
+        <Stack.Screen name="WardManagement" component={wardManagement} options={{ title: "Ward Management", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="AppointmentTab" component={AppointmentTabsMobile} options={{ title: "Appointments", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="AppointmentForm" component={appointmentForm} options={{ title: "Appointments", headerTitleAlign: "center", headerShown: false }}  />
+        <Stack.Screen name="AppointmentList" component={appointmentList} options={{headerShown: false} }  />
+        <Stack.Screen name="ReceptionPatientsList" component={receptionPatientsList} options={{ title: "Patients List", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="DoctorManagement" component={DoctorManagementMobile} options={{ title: "Doctor management", headerTitleAlign: "center", headerShown: true }}  />
+        <Stack.Screen name="DoctorSlots" component={DoctorSlotsScreen} options={{ title: "Doctor slots", headerTitleAlign: "center", headerShown: true }}  />
 
         <Stack.Screen name="DashboardTriage" component={dashboard} options={{ headerShown: false }} />
         <Stack.Screen name="AddTriageIssue" component={addTriageIssue} options={{ headerShown: false }} />
@@ -392,6 +408,14 @@ const Routing = () => {
           <Stack.Screen name="ReportsLab" 
           component={ReportsLab}
           options={{ title: 'Reports', headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen name="TaxInvoiceTabs" 
+          component={taxInvoiceTabs}
+          options={{ title: 'Tax-Invoice', headerTitleAlign: "center", headerShown: true }}
+          />
+           <Stack.Screen name="InvoiceDetails" 
+          component={invoiceDetails}
+          options={{ title: 'Invoice Details', headerTitleAlign: "center", headerShown: true }}
           />
 
           {/* pharmacy */}

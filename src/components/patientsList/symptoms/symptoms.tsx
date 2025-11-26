@@ -146,7 +146,7 @@ export default function SymptomsScreen() {
       ) : empty ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No symptoms recorded yet</Text>
-          {!isOt && currentpatient.ptype != 21 && (
+          {!isOt && user?.roleName !== "reception" && currentpatient.ptype != 21 && (
 
             <Pressable
               style={[styles.cta, { backgroundColor: COLORS.button }]}
@@ -166,7 +166,7 @@ export default function SymptomsScreen() {
             contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           />
-          {currentpatient.ptype != 21 && !isOt && (
+          {currentpatient.ptype != 21 && !isOt && user?.roleName !== "reception" && (
             <Pressable
               style={[styles.fab,
               {

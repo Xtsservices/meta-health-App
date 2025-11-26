@@ -46,7 +46,10 @@ const Footer: React.FC<Props> = ({
         navigation.navigate("DashboardIpd");
     }else if (user?.patientStatus === 2) {
       navigation.navigate("TriageDashboard");
-      } else {
+      }else if (user?.roleName === "reception") {
+      navigation.navigate("DashboardReception");
+      }
+       else {
         navigation.navigate("EmergencyDashboard");
       }
     } else if (k === "addPatient") {
@@ -60,7 +63,10 @@ const Footer: React.FC<Props> = ({
       // For pathology and radiology roles, navigate to PatientListLab
       if (user?.roleName === "pathology" || user?.roleName === "radiology") {
         navigation.navigate("PatientListLab");
-      } else {
+      }else if (user?.roleName === "reception") {
+        navigation.navigate("ReceptionPatientsList");
+      }
+       else {
         navigation.navigate("PatientList");
       }
     } else if (k === "management") {

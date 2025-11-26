@@ -284,24 +284,25 @@ export default function PocusScreen() {
               <Text style={[styles.emptyText, { color: COLORS.sub }]}>
                 No POCUS records found
               </Text>
+              {user?.roleName !== "reception" && 
               <Pressable
                 style={styles.cta}
                 onPress={() => navigation.navigate("AddPocus" as never)}
               >
                 <Plus size={RESPONSIVE.icon.sm} color={COLORS.buttonText} />
                 <Text style={styles.ctaText}>Add POCUS Record</Text>
-              </Pressable>
+              </Pressable> }
             </View>
           }
         />
       )}
-
+{user?.roleName !== "reception" && 
       <Pressable
         style={styles.fab}
         onPress={() => navigation.navigate("AddPocus" as never)}
       >
         <Plus size={RESPONSIVE.icon.md} color={COLORS.buttonText} />
-      </Pressable>
+      </Pressable>}
       
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
