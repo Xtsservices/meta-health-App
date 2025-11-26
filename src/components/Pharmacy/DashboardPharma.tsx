@@ -330,7 +330,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Overview Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Overview</Text>
-            {items?.filter(item => ["dash", "alerts", "orders"].includes(item.key)).map((item) => (
+            {items?.filter(item => ["dash", "alerts"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -342,25 +342,10 @@ const Sidebar: React.FC<SidebarProps> = ({
             ))}
           </View>
 
-          {/* Inventory Management Section */}
+          {/* Pharmacy Management Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Inventory Management</Text>
-            {items?.filter(item => ["stock", "add", "orderplacement"].includes(item.key)).map((item) => (
-              <SidebarButton
-                key={item.key}
-                item={item}
-                onPress={() => {
-                  onClose();
-                  item.onPress();
-                }}
-              />
-            ))}
-          </View>
-
-          {/* Sales & Billing Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sales & Billing</Text>
-            {items?.filter(item => ["sale", "tax"].includes(item.key)).map((item) => (
+            <Text style={styles.sectionTitle}>Pharmacy Management</Text>
+            {items?.filter(item => ["sale", "orders", "tax", "stock", "add", "orderplacement"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -709,34 +694,43 @@ const DashboardPharma: React.FC = () => {
 
   // Sidebar items for Pharmacy with SVG icons
   const sidebarItems: SidebarItem[] = [
+    // Overview Section
     {
       key: "dash",
       label: "Dashboard",
       icon: LayoutDashboardIcon,
       onPress: () => go("DashboardPharma")
     },
-    {
-      key: "sale",
-      label: "Sale",
-      icon: ShoppingCartIcon,
-      onPress: () => go("PharmacySale")
-    },
-    {
-      key: "alerts",
-      label: "Alerts",
-      icon: BellIcon,
-      onPress: () => go("PharmacyAlerts")
-    },
+    
+    // Pharmacy Management Section
+// In the sidebar items, update the sale navigation:
+{
+  key: "sale",
+  label: "Sale",
+  icon: ShoppingCartIcon,
+  onPress: () => navigation.navigate("SaleComp", { 
+    type: "medicine" 
+    // department is not needed for medicine type
+  })
+},
+  {
+    key: "alerts",
+    label: "Alerts",
+    icon: BellIcon, // Using BellIcon for alerts
+    onPress: () => go("AlertsPharmacy"), // Navigate to pharmacy alerts
+    isAlert: true, // Optional: to show alert badge
+    alertCount: 5 // Optional: number of pending alerts
+  },
     {
       key: "orders",
       label: "Patient Orders",
       icon: FileTextIcon,
-      onPress: () => go("PatientOrders")
+      onPress: () => go(`BillingLab`)
     },
     {
       key: "tax",
       label: "Tax Invoice",
-      icon: DollarSignIcon,
+      icon: ReceiptIcon,
       onPress: () => go("TaxInvoice")
     },
     {
@@ -755,8 +749,10 @@ const DashboardPharma: React.FC = () => {
       key: "orderplacement",
       label: "Order Placement",
       icon: ShoppingCartIcon,
-      onPress: () => go("OrderPlacement")
+      onPress: () => go("PharmacyExpenses")
     },
+    
+    // Support Section
     {
       key: "help",
       label: "Help",
@@ -1301,15 +1297,12 @@ const styles = StyleSheet.create({
   },
 
   section: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    // backgroundColor: COLORS.card,
+    // padding: SPACING.md,
+    // shadowColor: COLORS.shadow,
+    // // shadowOpacity: 0.08,
+    // shadowRadius: 6,
+    // // elevation: 2,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -1453,7 +1446,7 @@ const styles = StyleSheet.create({
     zIndex: 9,
   },
 
-  // Sidebar Styles
+  // Sidebar Styles - NO BORDERS
   sidebarContainer: {
     position: "absolute",
     left: 0,
@@ -1470,8 +1463,6 @@ const styles = StyleSheet.create({
   },
   sidebarHeader: {
     paddingBottom: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
     marginBottom: SPACING.md,
   },
   closeButton: {
@@ -1556,8 +1547,6 @@ const styles = StyleSheet.create({
   },
   bottomActions: {
     paddingTop: SPACING.lg,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
     gap: SPACING.sm,
   },
   bottomButton: {

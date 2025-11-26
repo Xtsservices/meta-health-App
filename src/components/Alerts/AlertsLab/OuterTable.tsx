@@ -53,6 +53,8 @@ interface PatientOuterTableProps {
   currentPage?: number;
   totalPages?: number;
   onPageChange?: (page: number) => void;
+  sale?: string;
+  isRejectReason?: string;
 }
 
 const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
@@ -70,6 +72,8 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   currentPage: externalCurrentPage,
   totalPages: externalTotalPages,
   onPageChange,
+  sale,
+  isRejectReason,
 }) => {
   const dispatch = useDispatch();
   const [internalPageOneBased, setInternalPageOneBased] = useState(1);
@@ -99,6 +103,23 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
     { label: "Inpatient Services", value: "IPD" },
     { label: "Emergency", value: "Emergency" },
   ];
+
+  // Check if this is a pharmacy order
+  const isPharmacyOrder = (order: any) => {
+    return order?.medicinesList !== undefined || 
+           order?.location !== undefined || 
+           order?.departmemtType !== undefined ||
+           user?.roleName === 'pharmacy';
+  };
+
+  // Get the appropriate data for InnerTable
+  const getInnerTableData = (order: any) => {
+    if (isPharmacyOrder(order)) {
+      return order?.medicinesList || [];
+    } else {
+      return order?.testsList || [];
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -140,8 +161,16 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
     return () => { mounted = false; };
   }, [data]);
 
-  const getDepartmentName = (patient: any) => {
-    if (!patient) return 'Unknown Department';
+const getDepartmentName = (patient: any) => {
+  if (!patient) return 'Unknown Department';
+    if (isPharmacyOrder(patient)) {
+    // Check pharmacy-specific department fields
+    return patient?.department || 
+          //  patient?.departmemtType || // Note: typo in API response
+           patient?.location || 
+           'Pharmacy Department';
+  }
+  
     const departmentID = patient?.departmentID;
     if (departmentID && departmentNames[departmentID]) return departmentNames[departmentID];
     const key = patient?.id || patient?.patientID;
@@ -175,16 +204,50 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
     }
   };
 
-  const calculateDueAmount = (order: any) => {
-    if (!order?.testsList || order?.testsList?.length === 0) return 0;
-    let total = 0;
-    order.testsList.forEach((t: any) => {
-      const price = Number(t?.testPrice) || 0;
-      const gst = Number(t?.gst) || 18;
-      total += price + (price * gst) / 100;
-    });
-    const paid = parseFloat(order?.paidAmount || '0') || 0;
-    return Math.max(0, total - paid);
+  const calculatePaymentDetails = (order: any) => {
+    let grossAmount = 0;
+    let gstAmount = 0;
+    let totalAmount = 0;
+
+    if (isPharmacyOrder(order)) {
+      // Pharmacy order calculation
+      if (order?.medicinesList && order.medicinesList.length > 0) {
+        order.medicinesList.forEach((medicine: any) => {
+          const price = medicine?.sellingPrice || 0;
+          const quantity = medicine?.updatedQuantity || medicine?.quantity || 1;
+          const gst = medicine?.gst || 18;
+          const itemTotal = price * quantity;
+          const itemGst = (itemTotal * gst) / 100;
+          
+          grossAmount += itemTotal;
+          gstAmount += itemGst;
+        });
+      }
+    } else {
+      // Lab test order calculation
+      if (order?.testsList && order.testsList.length > 0) {
+        order.testsList.forEach((test: any) => {
+          const price = test?.testPrice || 0;
+          const gst = test?.gst || 18;
+          const itemGst = (price * gst) / 100;
+          
+          grossAmount += price;
+          gstAmount += itemGst;
+        });
+      }
+    }
+
+    totalAmount = grossAmount + gstAmount;
+    const paidAmount = parseFloat(order?.paidAmount || "0");
+    const dueAmount = Math.max(0, totalAmount - paidAmount);
+
+    return {
+      grossAmount,
+      gstAmount,
+      totalAmount,
+      paidAmount,
+      dueAmount
+    };
   };
 
   const getStatusColor = (status: string) => {
@@ -299,10 +362,11 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
 
   const renderPatientCard = (patient: any) => {
     const isExpanded = expandedRow === patient?.id || expandedRow === (patient?.patientID ?? patient?.pID);
-    const dueAmount = calculateDueAmount(patient);
+    const paymentDetails = calculatePaymentDetails(patient);
     const currentAction = actionValues[patient?.id] || 'Pending';
     const statusStyle = getStatusColor(currentAction);
     const departmentName = getDepartmentName(patient);
+    const isPharmacy = isPharmacyOrder(patient);
 
     return (
       <View key={patient?.id ?? patient?.patientID} style={[styles.patientCard]}>
@@ -315,22 +379,72 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
                 </View>
                 <View style={styles.patientInfo}>
                   <Text style={styles.patientName}>{patient?.pName || patient?.patientName || 'Unknown Patient'}</Text>
-                  <Text style={styles.patientId}>ID: {patient?.patientID || patient?.pID || '-'}</Text>
+                  <Text style={styles.patientId}>ID: {patient?.patientID || patient?.pID || patient?.pIdNew || '-'}</Text>
                 </View>
               </View>
               <View style={styles.arrowContainer}><Text style={[styles.arrow, isExpanded && styles.arrowExpanded]}>{isExpanded ? '▲' : '▼'}</Text></View>
             </View>
 
             <View style={styles.patientDetails}>
-              <View style={styles.detailColumn}><Text style={styles.detailLabel}>Department</Text><Text style={styles.detailValue}>{departmentName}</Text></View>
-              <View style={styles.detailColumn}><Text style={styles.detailLabel}>Doctor</Text><Text style={styles.detailValue} numberOfLines={1}>{patient?.doctor_firstName && patient?.doctor_lastName ? `${patient?.doctor_firstName} ${patient?.doctor_lastName}` : patient?.firstName && patient?.lastName ? `${patient?.firstName} ${patient?.lastName}` : 'Not Assigned'}</Text></View>
-              <View style={styles.detailColumn}><Text style={styles.detailLabel}>Order Date</Text><Text style={styles.detailValue}>{formatDateTime(patient?.addedOn)}</Text></View>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Department</Text>
+                <Text style={styles.detailValue}>{departmentName}</Text>
+              </View>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Doctor</Text>
+                <Text style={styles.detailValue} numberOfLines={1}>
+                  {patient?.doctor_firstName && patient?.doctor_lastName ? 
+                    `${patient?.doctor_firstName} ${patient?.doctor_lastName}` : 
+                    patient?.firstName && patient?.lastName ? 
+                    `${patient?.firstName} ${patient?.lastName}` : 
+                    'Not Assigned'}
+                </Text>
+              </View>
+              <View style={styles.detailColumn}>
+                <Text style={styles.detailLabel}>Order Date</Text>
+                <Text style={styles.detailValue}>{formatDateTime(patient?.addedOn)}</Text>
+              </View>
             </View>
 
             {isBilling && (
               <View style={styles.billingInfo}>
-                <View style={styles.amountRow}><Text style={styles.amountLabel}>Due Amount:</Text><Text style={[styles.dueAmount, dueAmount > 0 && styles.dueAmountHighlight]}>₹{dueAmount.toFixed(2)}</Text></View>
-                <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}><Text style={[styles.statusText, { color: statusStyle.color }]}>{dueAmount === 0 ? 'Paid' : 'Pending'}</Text></View>
+                <View style={styles.paymentDetails}>
+                  {/* <View style={styles.paymentRow}>
+                    <Text style={styles.paymentLabel}>Gross:</Text>
+                    <Text style={styles.paymentValue}>₹{paymentDetails.grossAmount.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.paymentRow}>
+                    <Text style={styles.paymentLabel}>GST:</Text>
+                    <Text style={styles.paymentValue}>₹{paymentDetails.gstAmount.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.paymentRow}>
+                    <Text style={styles.paymentLabel}>Total:</Text>
+                    <Text style={styles.paymentValue}>₹{paymentDetails.totalAmount.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.paymentRow}>
+                    <Text style={styles.paymentLabel}>Paid:</Text>
+                    <Text style={styles.paymentValue}>₹{paymentDetails.paidAmount.toFixed(2)}</Text>
+                  </View> */}
+                  <View style={styles.paymentRow}>
+                    <Text style={styles.paymentLabel}>Due:</Text>
+                    <Text style={[styles.paymentValue, paymentDetails.dueAmount > 0 ? styles.dueAmountHighlight : styles.paidAmount]}>
+                      ₹{paymentDetails.dueAmount.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}>
+                  <Text style={[styles.statusText, { color: statusStyle.color }]}>
+                    {paymentDetails.dueAmount === 0 ? 'Paid' : 'Pending'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Show phone number for pharmacy sale orders */}
+            {sale && patient?.phoneNumber && (
+              <View style={styles.phoneInfo}>
+                <Text style={styles.phoneLabel}>Phone: </Text>
+                <Text style={styles.phoneValue}>{patient.phoneNumber}</Text>
               </View>
             )}
           </View>
@@ -340,27 +454,46 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
           <View style={styles.expandedContent}>
             {isButton && !isRejectedTab && currentAction === 'Pending' && (
               <View style={styles.actionButtons}>
-                <TouchableOpacity style={[styles.actionButton, styles.approveButton]} onPress={() => handleApproveOrder(patient?.id)}><Text style={styles.approveButtonText}>✓ Approve</Text></TouchableOpacity>
-                {shouldShowRejectButton(patient) && <TouchableOpacity style={[styles.actionButton, styles.rejectButton]} onPress={() => setSelectedRejectId(patient?.id)}><Text style={styles.rejectButtonText}>✗ Reject</Text></TouchableOpacity>}
+                <TouchableOpacity style={[styles.actionButton, styles.approveButton]} onPress={() => handleApproveOrder(patient?.id)}>
+                  <Text style={styles.approveButtonText}>✓ Approve</Text>
+                </TouchableOpacity>
+                {shouldShowRejectButton(patient) && (
+                  <TouchableOpacity style={[styles.actionButton, styles.rejectButton]} onPress={() => setSelectedRejectId(patient?.id)}>
+                    <Text style={styles.rejectButtonText}>✗ Reject</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
-            {isBilling && dueAmount > 0 && onProceedToPay && (<View style={styles.paymentActionContainer}><TouchableOpacity style={styles.proceedToPayButton} onPress={() => onProceedToPay(patient)}><Text style={styles.proceedToPayText}>Proceed to Pay - ₹{dueAmount.toFixed(2)}</Text></TouchableOpacity></View>)}
+            {isBilling && paymentDetails.dueAmount > 0 && onProceedToPay && (
+              <View style={styles.paymentActionContainer}>
+                <TouchableOpacity style={styles.proceedToPayButton} onPress={() => onProceedToPay(patient)}>
+                  <Text style={styles.proceedToPayText}>Proceed to Pay - ₹{paymentDetails.dueAmount.toFixed(2)}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <InnerTable
               patientID={patient?.patientID}
               patientTimeLineID={patient?.timeLineID || patient?.id}
-              data={patient?.testsList || []}
+              data={getInnerTableData(patient)}
               isButton={isButton}
               department={departmentName}
-              pType={patient?.ptype}
+              pType={patient?.ptype || patient?.departmemtType}
               labBilling={isBilling}
-              patientOrderPay={undefined}
-              patientOrderOpd={undefined}
               paidAmount={patient?.paidAmount}
-              dueAmount={dueAmount.toString()}
+              dueAmount={paymentDetails.dueAmount.toString()}
+              grossAmount={paymentDetails.grossAmount.toString()}
+              gstAmount={paymentDetails.gstAmount.toString()}
+              totalAmount={paymentDetails.totalAmount.toString()}
               isRejected={isRejectedTab}
               rejectedReason={patient?.rejectedReason}
+              sale={sale}
+              isRejectReason={isRejectReason}
+              isPharmacyOrder={isPharmacy}
+              alertFrom={isPharmacy ? "Pharmacy" : undefined}
+              patientData={patient}
+              nurseID={patient?.nurseID}
             />
           </View>
         )}
@@ -383,7 +516,11 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   );
 
   const renderEmpty = () => (
-    <View style={styles.noDataContainer}><Text style={styles.noDataIcon}>📋</Text><Text style={styles.noDataText}>No Orders Available</Text><Text style={styles.noDataSubtext}>There are no {title?.toLowerCase()} at the moment.</Text></View>
+    <View style={styles.noDataContainer}>
+      <Text style={styles.noDataIcon}>📋</Text>
+      <Text style={styles.noDataText}>No Orders Available</Text>
+      <Text style={styles.noDataSubtext}>There are no {title?.toLowerCase()} at the moment.</Text>
+    </View>
   );
 
   const selectedRejectOrder = data.find((d: any) => d?.id === selectedRejectId) || null;
@@ -409,7 +546,10 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
       <Modal visible={!!selectedRejectId} transparent animationType="fade" onRequestClose={() => setSelectedRejectId(null)}>
         <View style={styles.modalOverlay}>
           <View style={styles.rejectDialog}>
-            <View style={styles.dialogHeader}><Text style={styles.dialogTitle}>Reject Order</Text><Text style={styles.dialogSubtitle}>Please provide a reason for rejection</Text></View>
+            <View style={styles.dialogHeader}>
+              <Text style={styles.dialogTitle}>Reject Order</Text>
+              <Text style={styles.dialogSubtitle}>Please provide a reason for rejection</Text>
+            </View>
             <View style={styles.reasonInputContainer}>
               <TextInput
                 style={[styles.reasonInput, { borderColor: focusedInput === `reject-${selectedRejectId}` ? COLORS.focus : COLORS.danger, backgroundColor: COLORS.field }]}
@@ -424,8 +564,13 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
                 onBlur={handleBlur}
               />
             </View>
-            <View style={styles.dialogButtons}><TouchableOpacity style={[styles.dialogButton, styles.cancelButton]} onPress={() => { setSelectedRejectId(null); setRejectReasons(prev => ({ ...prev, [selectedRejectId || '']: '' })); }}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.dialogButton, styles.confirmRejectButton]} onPress={handleRejectOrder}><Text style={styles.confirmRejectButtonText}>Confirm Reject</Text></TouchableOpacity>
+            <View style={styles.dialogButtons}>
+              <TouchableOpacity style={[styles.dialogButton, styles.cancelButton]} onPress={() => { setSelectedRejectId(null); setRejectReasons(prev => ({ ...prev, [selectedRejectId || '']: '' })); }}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.dialogButton, styles.confirmRejectButton]} onPress={handleRejectOrder}>
+                <Text style={styles.confirmRejectButtonText}>Confirm Reject</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -435,8 +580,26 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
       <Modal transparent visible={showFilterModal} animationType="slide" onRequestClose={() => setShowFilterModal(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.filterModal}>
-            <View style={styles.filterHeader}><Text style={styles.filterTitle}>Filter By Department</Text><TouchableOpacity onPress={() => setShowFilterModal(false)} style={styles.closeButton}><Text style={styles.closeButtonText}>×</Text></TouchableOpacity></View>
-            <View style={styles.filterOptions}>{filterOptions.map((option) => (<TouchableOpacity key={option.value} style={[styles.filterOption, filter === option.value && styles.filterOptionSelected]} onPress={() => { onFilterChange?.(option.value); setShowFilterModal(false); }}><Text style={[styles.filterOptionText, filter === option.value && styles.filterOptionTextSelected]}>{option.label}</Text>{filter === option.value && <View style={styles.selectedIndicator} />}</TouchableOpacity>))}</View>
+            <View style={styles.filterHeader}>
+              <Text style={styles.filterTitle}>Filter By Department</Text>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.filterOptions}>
+              {filterOptions.map((option) => (
+                <TouchableOpacity 
+                  key={option.value} 
+                  style={[styles.filterOption, filter === option.value && styles.filterOptionSelected]} 
+                  onPress={() => { onFilterChange?.(option.value); setShowFilterModal(false); }}
+                >
+                  <Text style={[styles.filterOptionText, filter === option.value && styles.filterOptionTextSelected]}>
+                    {option.label}
+                  </Text>
+                  {filter === option.value && <View style={styles.selectedIndicator} />}
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </View>
       </Modal>
@@ -481,12 +644,15 @@ const styles = StyleSheet.create({
   detailColumn: { flex: 1 },
   detailLabel: { fontSize: FONT_SIZE.xs, color: COLORS.sub, fontWeight: '500', marginBottom: 2 },
   detailValue: { fontSize: FONT_SIZE.xs, color: COLORS.text, fontWeight: '600' },
-  billingInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: SPACING.xs, borderTopWidth: 1, borderTopColor: COLORS.border },
-  amountRow: { flexDirection: 'row', alignItems: 'center' },
-  amountLabel: { fontSize: FONT_SIZE.sm, color: COLORS.sub, fontWeight: '500', marginRight: SPACING.xs },
-  dueAmount: { fontSize: FONT_SIZE.md, fontWeight: '700', color: COLORS.success },
-  dueAmountHighlight: { color: COLORS.danger },
-  statusBadge: { paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: 8 },
+  phoneInfo: { flexDirection: 'row', marginTop: SPACING.xs },
+  phoneLabel: { fontSize: FONT_SIZE.xs, color: COLORS.sub, fontWeight: '500' },
+  phoneValue: { fontSize: FONT_SIZE.xs, color: COLORS.text, fontWeight: '600' },
+  billingInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: SPACING.xs, borderTopWidth: 1, borderTopColor: COLORS.border },
+  paymentDetails: { flex: 1 },
+  paymentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  paymentLabel: { fontSize: FONT_SIZE.xs, color: COLORS.sub, fontWeight: '500' },
+  paymentValue: { fontSize: FONT_SIZE.xs, fontWeight: '600', color: COLORS.text },
+  statusBadge: { paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: 8, marginLeft: SPACING.sm },
   statusText: { fontSize: FONT_SIZE.xs, fontWeight: '600' },
   expandedContent: { backgroundColor: COLORS.bg, paddingTop: SPACING.sm },
   actionButtons: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.sm, paddingHorizontal: SPACING.md },
@@ -521,6 +687,8 @@ const styles = StyleSheet.create({
   pageBtnDisabled: { backgroundColor: COLORS.pill },
   pageInfo: { fontSize: FONT_SIZE.xs, fontWeight: '700', color: COLORS.text },
   paginationButtonText: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.brand },
+  dueAmountHighlight: { color: COLORS.danger },
+  paidAmount: { color: COLORS.success },
 });
 
 export default PatientOuterTable;

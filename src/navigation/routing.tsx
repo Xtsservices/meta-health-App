@@ -109,6 +109,9 @@ import TaxInvoiceTabs from "../components/Lab/taxInvoice/TaxInvoiceTabs";
 import TaxInvoiceInPatient from "../components/Lab/taxInvoice/TaxInvoiceInPatient";
 import TaxInvoiceWalkIn from "../components/Lab/taxInvoice/TaxInvoiceWalkIn";
 import ReportsLab from "../components/Lab/patientList/ReportsLab";
+import PharmacyExpenses from "../components/Pharmacy/orderPlacement/PharmacyExpenses";
+import InStock from "../components/Pharmacy/InStock/InStock";
+import BillingDetails from "../components/Lab/billing/BillingDetails";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -390,6 +393,18 @@ const Routing = () => {
           component={ReportsLab}
           options={{ title: 'Reports', headerTitleAlign: "center", headerShown: true }}
           />
+
+          {/* pharmacy */}
+          <Stack.Screen name="PharmacyExpenses" 
+          component={PharmacyExpenses} 
+          options={{ title: 'Order Placement', headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen name="InStock" 
+          component={InStock} 
+          options={{ title: 'In-Stock', headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen name="BillingDetails" component={BillingDetails} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

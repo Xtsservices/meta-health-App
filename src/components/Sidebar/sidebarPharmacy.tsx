@@ -114,18 +114,29 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
 
+            {/* Overview Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Overview</Text>
+              {items?.filter(item => ["dash", "alerts"].includes(item.key)).map((item, index) => renderSidebarItem(item, index))}
+            </View>
+
+            {/* Pharmacy Management Section */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Pharmacy Management</Text>
-              {items?.map((item, index) => renderSidebarItem(item, index))}
+              {items?.filter(item => ["sale", "orders", "tax", "stock", "add", "orderplacement"].includes(item.key)).map((item, index) => renderSidebarItem(item, index))}
             </View>
 
-            <View style={styles.divider} />
-
+            {/* Support Section */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Support</Text>
-              {bottomItems?.map((item, index) => renderSidebarItem(item, index))}
+              {items?.filter(item => item.key === "help").map((item, index) => renderSidebarItem(item, index))}
             </View>
           </ScrollView>
+
+          {/* Bottom Actions */}
+          <View style={styles.bottomSection}>
+            {bottomItems?.map((item, index) => renderSidebarItem(item, index))}
+          </View>
         </View>
         <TouchableOpacity
           style={styles.backdrop}
@@ -149,8 +160,6 @@ const styles = StyleSheet.create({
   sidebarContainer: {
     width: isSmallPhone ? W * 0.8 : isTablet ? 400 : W * 0.85,
     backgroundColor: "#ffffff",
-    borderRightWidth: 1,
-    borderRightColor: "#e5e7eb",
   },
   sidebarHeader: {
     flexDirection: "row",
@@ -158,8 +167,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: isSmallPhone ? 16 : 20,
     paddingVertical: isSmallPhone ? 16 : 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
     backgroundColor: "#fafafa",
   },
   userInfo: {
@@ -206,27 +213,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: isSmallPhone ? 12 : 16,
   },
-  profileButton: {
-    paddingHorizontal: isSmallPhone ? 16 : 20,
-    paddingVertical: isSmallPhone ? 12 : 16,
-    marginHorizontal: isSmallPhone ? 12 : 16,
-    marginBottom: isSmallPhone ? 12 : 16,
-    backgroundColor: "#f0fdfa",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#ccfbf1",
-  },
-  profileButtonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  profileButtonText: {
-    fontSize: isSmallPhone ? 14 : 16,
-    fontWeight: "500",
-    color: "#0f766e",
-    textAlign: "center",
-    flex: 1,
-  },
   section: {
     marginBottom: isSmallPhone ? 16 : 20,
   },
@@ -257,11 +243,9 @@ const styles = StyleSheet.create({
   sidebarItemTextDanger: {
     color: "#ef4444",
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#f1f5f9",
-    marginHorizontal: isSmallPhone ? 16 : 20,
-    marginVertical: isSmallPhone ? 16 : 20,
+  bottomSection: {
+    paddingHorizontal: isSmallPhone ? 16 : 20,
+    paddingVertical: isSmallPhone ? 16 : 20,
   },
 });
 
