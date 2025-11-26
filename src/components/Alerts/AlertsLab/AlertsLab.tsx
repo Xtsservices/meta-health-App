@@ -414,7 +414,6 @@ const AlertsLab: React.FC = () => {
           `reception/${user?.hospitalID}/pending/getReceptionAlertsData`,
           token
         );
-        console.log(response, "response for reception alerts");
         alertsData = response?.data?.data?.data || response?.data || [];
       } else {
         // 👇 Existing lab alerts
@@ -424,7 +423,6 @@ const AlertsLab: React.FC = () => {
         );
         alertsData = response?.data?.alerts || response?.alerts || [];
       }
-console.log(alertsData, "complete alerts data from receptio23456n")
       
       if (Array.isArray(alertsData)) {
         setAllAlerts(alertsData);
@@ -486,7 +484,6 @@ console.log(alertsData, "complete alerts data from receptio23456n")
           );
           rejectedData = response?.data?.billingData || response?.billingData || [];
         }
-console.log(rejectedData, "rejected data from reception1234");
         if (Array.isArray(rejectedData)) {
           setRejectedOrders(rejectedData);
         } else {
@@ -505,7 +502,6 @@ console.log(rejectedData, "rejected data from reception1234");
   // Apply department filter for Test Alerts
   useEffect(() => {
     let filtered = [...allAlerts];
-    console.log(filtered,allAlerts, "all alerts in useEffect");
     if (filter === "OPD") {
       
       filtered = allAlerts?.filter((order) => order?.ptype === 21) ?? [];
