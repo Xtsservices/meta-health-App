@@ -153,7 +153,7 @@ const DashboardTriage: React.FC = () => {
         token
       );
 
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         const c = res?.data?.count?.[0] ?? {};
         setAppointmentsToday(c?.appointment_count_today ?? 0);
         setTodayCount(c?.patient_count_today ?? 0);
@@ -183,7 +183,7 @@ const DashboardTriage: React.FC = () => {
 
       const res = await AuthFetch(url, token);
 
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         const rows: any[] = Array.isArray(res?.data?.counts) ? res.data?.counts : [];
         const arr = rows.map((it: any) => ({
           day: it?.week ? `W${it.week}` : it?.label ?? "",
@@ -215,7 +215,7 @@ const DashboardTriage: React.FC = () => {
 
         const res = await AuthFetch(url, token);
 
-        if (res?.status === "success" && Array.isArray(res?.data?.counts)) {
+        if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.counts) ) {
           const actual: XY[] = res?.data?.counts?.map((c: any) => ({
             x: c.filter_value,
             y: Number(c.actual_visits) || 0,
@@ -255,7 +255,7 @@ const DashboardTriage: React.FC = () => {
         );
         // Web version had: response.message === "success" & response.count
         // Mobile wrapper usually normalizes to: status + data.count
-        const success = res?.status === "success" || res?.message === "success";
+        const success = res?.status === "success" && ("data" in res) 
         if (!success) {
           setZoneData([]);
           dispatch(showError("Failed to fetch zone data"));
@@ -265,8 +265,8 @@ const DashboardTriage: React.FC = () => {
         const rows: Array<{ zone: number; patient_count: number }> =
           Array.isArray(res?.data?.count)
             ? res.data.count
-            : Array.isArray(res?.count)
-            ? res.count
+            : Array.isArray((res as any)?.count)
+            ? (res as any).count
             : [];
 
         if (!rows.length) {
@@ -313,7 +313,7 @@ const DashboardTriage: React.FC = () => {
         `patient/${user?.hospitalID}/patients/recent/3?userID=${user?.id}&role=${user?.role}&category=triage`,
         token
       );
-      if (res?.status === "success" && Array.isArray(res?.data?.patients)) {
+      if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.patients)) {
         const rows: PatientRow[] = res?.data?.patients?.map((p: any, i: number) => ({
           id: p?.id ?? i,
           name: p?.name ?? "Unknown",

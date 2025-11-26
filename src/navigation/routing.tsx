@@ -116,6 +116,8 @@ import TaxInvoiceTabs from "../components/Lab/taxInvoice/TaxInvoiceTabs";
 import TaxInvoiceInPatient from "../components/Lab/taxInvoice/TaxInvoiceInPatient";
 import TaxInvoiceWalkIn from "../components/Lab/taxInvoice/TaxInvoiceWalkIn";
 import ReportsLab from "../components/Lab/patientList/ReportsLab";
+import taxInvoiceTabs from "../components/Reception/taxInvoice/taxInvoiceTabs";
+import invoiceDetails from "../components/Reception/taxInvoice/invoiceDetails";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -403,6 +405,14 @@ const Routing = () => {
           <Stack.Screen name="ReportsLab" 
           component={ReportsLab}
           options={{ title: 'Reports', headerTitleAlign: "center", headerShown: true }}
+          />
+          <Stack.Screen name="TaxInvoiceTabs" 
+          component={taxInvoiceTabs}
+          options={{ title: 'Tax-Invoice', headerTitleAlign: "center", headerShown: true }}
+          />
+           <Stack.Screen name="InvoiceDetails" 
+          component={invoiceDetails}
+          options={{ title: 'Invoice Details', headerTitleAlign: "center", headerShown: true }}
           />
       </Stack.Navigator>
     </NavigationContainer>

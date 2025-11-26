@@ -819,26 +819,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
                 </>
               )}
 
-              {filter === 4 && dischargeLabel && (
-                <>
-                  <Text
-                    style={[
-                      styles.dot,
-                      { color: COLORS.sub },
-                    ]}
-                  >
-                    •
-                  </Text>
-                  <Text
-                    style={[
-                      styles.badge,
-                      { color: COLORS.brand },
-                    ]}
-                  >
-                    {dischargeLabel}
-                  </Text>
-                </>
-              )}
+             
             </View>
 
             {/* Doctor */}

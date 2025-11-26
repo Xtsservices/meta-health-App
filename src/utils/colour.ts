@@ -20,6 +20,7 @@ export const COLORS = {
   chipBg: "#e0f7f4",
   chipActiveBg: "#14b8a6",
   chipActiveText: "#ffffff",
+  placeholderText: "#94a3b8",
   
   // Semantic colors
   success: "#10b981",

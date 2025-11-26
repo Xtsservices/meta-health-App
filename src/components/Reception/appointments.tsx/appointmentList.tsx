@@ -30,6 +30,7 @@ import { AuthFetch, AuthPost, AuthPut } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { Role_NAME } from "../../../utils/role";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { FONT_SIZE, responsiveHeight, responsiveWidth, SPACING } from "../../../utils/responsive";
 
 
 
@@ -471,6 +472,10 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
     setNoSlotsMessage(null);
   };
 
+  function formatGender(gender: string | number | undefined) {
+    throw new Error("Function not implemented.");
+  }
+
   // ------------------- Render -------------------
 
   return (
@@ -542,8 +547,10 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
       {showDatePicker && (
         <DateTimePicker
           value={filterDate ? new Date(filterDate) : new Date()}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
+           mode="date"
+                           display={Platform.OS === "android" ? "spinner" : "default"}
+                            maximumDate={new Date()}
+                           minimumDate={new Date(1900, 0, 1)}
           onChange={onFilterDatePick}
         />
       )}
