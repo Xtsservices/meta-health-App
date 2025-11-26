@@ -325,7 +325,6 @@ const PaymentMethodScreen: React.FC = () => {
   const isBillingOrder = !!orderData;
   const isReceptionPayment = !!receptionData; // 👈 NEW flag
   const ptype =isReceptionPayment ? receptionData?.pType === "Outpatient" ? 1 : 2 : undefined;
-
   useEffect(() => {
     // default: full amount via cash
     setSelectedMethods(new Set(["cash"]));
@@ -1438,7 +1437,7 @@ const PaymentMethodScreen: React.FC = () => {
                 <TouchableOpacity
                   onPress={handleSubmit}
                   
-                  disabled={!submitEnabled || isSubmitting || requiresFullPayment}
+                  disabled={!submitEnabled || isSubmitting }
                   style={[
                     styles.payInner,
                     {

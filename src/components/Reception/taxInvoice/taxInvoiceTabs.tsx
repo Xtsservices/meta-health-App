@@ -271,7 +271,7 @@ console.log(finalDeptType, ptypeSource, item.ptype,item, "final dept type");
 
   const firstMed = hasMeds ? meds[0] : null;
   const firstTest = hasTests ? tests[0] : null;
-  const addedOn = firstMed?.addedOn || firstTest?.addedOn || "";
+  const addedOn = firstMed?.addedOn || firstTest?.addedOn || firstMed?.datetime
   const timelineIDNum = Number(timelineID);
 
   const patient: PatientData = {
