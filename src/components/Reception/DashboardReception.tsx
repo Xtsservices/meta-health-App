@@ -55,9 +55,12 @@ import {
   isSmallDevice,
   isExtraSmallDevice,
   responsiveWidth,
-  responsiveHeight 
+  responsiveHeight,
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT
 } from "../../utils/responsive";
 import { COLORS } from "../../utils/colour";
+import MyTasks from '../../pages/nurseDashboard/MyTasks';
 
 interface DeptCount {
   department: string;
@@ -145,8 +148,8 @@ const StatCard: React.FC<{
   color: string;
 }> = ({ title, value, icon: Icon, color }) => {
   const cardWidth = isTablet 
-    ? (responsiveWidth(100) - SPACING.md * 2 - SPACING.xs) / 2
-    : responsiveWidth(100) - SPACING.md * 2;
+    ? (responsiveWidth(100) - SPACING.md * 3) / 2
+    : (responsiveWidth(100) - SPACING.md * 3) / 2;
 
   return (
     <View style={[styles.card, { backgroundColor: COLORS.card, width: cardWidth }]}>
@@ -154,7 +157,7 @@ const StatCard: React.FC<{
         <Text style={styles.cardTitle}>{title}</Text>
         <Text style={styles.cardValue}>{value}</Text>
       </View>
-      <View style={styles.iconWrap}>
+      <View style={[styles.iconWrap, { backgroundColor: `${color}15` }]}>
         <Icon size={ICON_SIZE.md} color={color} />
       </View>
     </View>
@@ -166,29 +169,60 @@ const FilterSelect: React.FC<{
   value: string;
   options: Array<{ value: string; label: string }>;
   onValueChange: (value: string) => void;
-}> = ({ value, options, onValueChange }) => {
+  compact?: boolean;
+}> = ({ value, options, onValueChange, compact = false }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<View>(null);
 
   const selectedOption = options.find(opt => opt.value === value) || options[0];
 
+  useEffect(() => {
+    const closeDropdown = () => setIsOpen(false);
+    if (isOpen) {
+      // Add a small delay to ensure the dropdown is rendered
+      setTimeout(() => {
+        dropdownRef.current?.measure((x, y, width, height, pageX, pageY) => {
+          // This ensures the dropdown stays within screen bounds
+        });
+      }, 100);
+    }
+  }, [isOpen]);
+
   return (
-    <View style={styles.filterSelectContainer}>
+    <View style={styles.filterSelectContainer} ref={dropdownRef}>
       <TouchableOpacity 
-        style={styles.filterSelect}
+        style={[styles.filterSelect,compact && styles.filterSelectCompact]}
         onPress={() => setIsOpen(!isOpen)}
+        activeOpacity={0.7}
       >
-        <Text style={styles.filterSelectText}>{selectedOption.label}</Text>
-        <ChevronDown size={isSmallDevice ? 14 : 16} color={COLORS.sub} />
+        <Text style={[
+          styles.filterSelectText,
+          compact && styles.filterSelectTextCompact
+        ]} numberOfLines={1}>
+          {selectedOption.label}
+        </Text>
+        <ChevronDown 
+          size={compact ? 12 : (isSmallDevice ? 14 : 16)} 
+          color={COLORS.sub} 
+        />
       </TouchableOpacity>
 
       {isOpen && (
-        <View style={styles.filterDropdown}>
-          <ScrollView style={styles.filterDropdownScroll} nestedScrollEnabled>
+        <View style={[
+          styles.filterDropdown,
+          compact && styles.filterDropdownCompact
+        ]}>
+          <ScrollView 
+            style={compact ? styles.filterDropdownScrollCompact : styles.filterDropdownScroll} 
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={true}
+          >
             {options.map((option, index) => (
               <TouchableOpacity
                 key={option.value}
                 style={[
                   styles.filterOption,
+                  compact && styles.filterOptionCompact,
                   index === options.length - 1 && styles.filterOptionLast
                 ]}
                 onPress={() => {
@@ -198,8 +232,9 @@ const FilterSelect: React.FC<{
               >
                 <Text style={[
                   styles.filterOptionText,
+                  compact && styles.filterOptionTextCompact,
                   value === option.value && styles.filterOptionTextSelected
-                ]}>
+                ]} numberOfLines={1}>
                   {option.label}
                 </Text>
               </TouchableOpacity>
@@ -241,30 +276,43 @@ const ChartCard: React.FC<{
   }, []);
 
   const monthOptions = useMemo(() => [
-    { value: '', label: 'All Months' },
+    { value: '', label: 'All' },
     ...Array.from({ length: 12 }, (_, i) => ({
       value: String(i + 1).padStart(2, '0'),
-      label: new Date(2000, i, 1).toLocaleString('en', { month: 'long' }),
+      label: new Date(2000, i, 1).toLocaleString('en', { month: 'short' }),
     })),
   ], []);
 
+  const showFilters = onYearChange || onMonthChange;
+  const isCompactMode = SCREEN_WIDTH < 375;
+
   return (
     <View style={styles.chartCard}>
-      <View style={styles.chartHeader}>
+      <View style={[
+        styles.chartHeader,
+        isCompactMode && styles.chartHeaderCompact
+      ]}>
         <View style={styles.chartTitleContainer}>
           <View style={[styles.chartIcon, { backgroundColor: `${iconColor}20` }]}>
             <Icon size={isSmallDevice ? 18 : 20} color={iconColor} />
           </View>
-          <Text style={styles.chartTitle}>{title}</Text>
+          <Text style={[
+            styles.chartTitle,
+            isCompactMode && styles.chartTitleCompact
+          ]}>{title}</Text>
         </View>
         
-        {(onYearChange || onMonthChange) && (
-          <View style={styles.filterGroup}>
+        {showFilters && (
+          <View style={[
+            styles.filterGroup,
+            isCompactMode && styles.filterGroupCompact
+          ]}>
             {onYearChange && (
               <FilterSelect
                 value={selectedYear || new Date().getFullYear().toString()}
                 options={yearOptions}
                 onValueChange={onYearChange}
+                compact={isCompactMode}
               />
             )}
             {onMonthChange && (
@@ -272,6 +320,7 @@ const ChartCard: React.FC<{
                 value={selectedMonth || ''}
                 options={monthOptions}
                 onValueChange={onMonthChange}
+                compact={isCompactMode}
               />
             )}
           </View>
@@ -314,23 +363,33 @@ const BarChartComponent: React.FC<{
     );
   }
 
+  // Calculate optimal bar spacing and width
+  const availableWidth = SCREEN_WIDTH - SPACING.md * 4 - 40; // Account for padding and y-axis
+  const barCount = Math.min(data.length, 6); // Show max 6 bars
+  const barSpacing = SPACING.xs;
+  const barWidth = Math.max(12, (availableWidth - (barSpacing * (barCount - 1))) / barCount);
+  const chartHeight = isSmallDevice ? 140 : 160;
+
   return (
     <View style={styles.barChartCard}>
       <View style={styles.barChartContainer}>
-        <View style={styles.yAxis}>
+        <View style={[styles.yAxis, { height: chartHeight }]}>
           {yAxisLabels.map((label, i) => (
             <Text key={i} style={styles.yAxisLabel}>{label}</Text>
           ))}
         </View>
 
         <View style={styles.chartArea}>
-          <View style={styles.weekRow}>
+          <View style={[styles.barsContainer, { height: chartHeight }]}>
             {data.slice(0, 6).map((d, i) => {
               const val = Number(d.patientCount);
-              const h = Math.max(2, (val / max) * (isSmallDevice ? 100 : 130));
+              const barHeight = Math.max(8, (val / max) * (chartHeight - 40));
               return (
-                <View key={i} style={styles.weekCol}>
-                  <View style={[styles.weekBar, { height: h, backgroundColor: color }]} />
+                <View key={i} style={[styles.barColumn, { width: barWidth }]}>
+                  <View style={[styles.bar, { 
+                    height: barHeight, 
+                    backgroundColor: color,
+                  }]} />
                   <Text style={styles.barValueText}>{val}</Text>
                 </View>
               );
@@ -341,9 +400,12 @@ const BarChartComponent: React.FC<{
 
           <View style={styles.xAxisLabels}>
             {data.slice(0, 6).map((d, i) => (
-              <Text key={i} numberOfLines={1} style={styles.xAxisLabel}>
-                {d.department.length > (isSmallDevice ? 6 : 8) ? 
-                  d.department.substring(0, isSmallDevice ? 6 : 8) + '...' : d.department}
+              <Text key={i} numberOfLines={1} style={[
+                styles.xAxisLabel,
+                { width: barWidth }
+              ]}>
+                {d.department.length > (isSmallDevice ? 4 : 6) ? 
+                  d.department.substring(0, isSmallDevice ? 4 : 6) + '...' : d.department}
               </Text>
             ))}
           </View>
@@ -421,6 +483,8 @@ const PieChartComponent: React.FC<{
   }
 
   const displayedLegends = data.slice(0, 5);
+  const pieChartSize = isSmallDevice ? 160 : 180;
+  const centerSize = isSmallDevice ? 60 : 80;
 
   return (
     <Animated.View 
@@ -432,21 +496,27 @@ const PieChartComponent: React.FC<{
         }
       ]}
     >
+      <View style={[styles.pieChartWrapper, { height: pieChartSize }]}>
       <View style={styles.pieChartContainer}>
         <PieChart
           data={chartData}
           width={responsiveWidth(90)}
-          height={isSmallDevice ? 160 : 180}
+          height={pieChartSize}
           chartConfig={chartConfig}
           accessor="population"
           backgroundColor="transparent"
           paddingLeft="15"
-          center={[isSmallDevice ? 60 : 65, 0]} 
+          center={[pieChartSize / 2, 0]} 
           absolute={false}
           hasLegend={false}
         />
-        <View style={styles.pieCenterCircle}>
-          <Text style={styles.pieCenterText}></Text>
+          {/* <View style={[styles.pieCenterCircle, { 
+            width: centerSize, 
+            height: centerSize, 
+            borderRadius: centerSize / 2 
+          }]}>
+            <Text style={styles.pieCenterText}></Text>
+          </View> */}
         </View>
       </View>
 
@@ -534,16 +604,19 @@ const SpiderChartComponent: React.FC<{
     );
   }
 
+  const containerSize = isSmallDevice ? 160 : 200;
+  const baseRadius = isSmallDevice ? 50 : 60;
+
   return (
     <View style={styles.spiderContainer}>
       <View style={styles.spiderContent}>
-        <View style={styles.spiderGrid}>
+        <View style={[styles.spiderGrid, { width: containerSize, height: containerSize }]}>
           {data.slice(0, 8).map((item, index) => {
             const angle = (index * 2 * Math.PI) / Math.max(data.length, 1);
-            const radius = isSmallDevice ? 60 : 70;
-            const valueRadius = (item.wardPatients / maxValue) * radius;
-            const x = 100 + Math.cos(angle) * valueRadius;
-            const y = 100 + Math.sin(angle) * valueRadius;
+            const valueRadius = (item.wardPatients / maxValue) * baseRadius;
+            const center = containerSize / 2;
+            const x = center + Math.cos(angle) * valueRadius;
+            const y = center + Math.sin(angle) * valueRadius;
             
             return (
               <View key={index}>
@@ -553,10 +626,10 @@ const SpiderChartComponent: React.FC<{
                     {
                       transform: [
                         { rotate: `${angle}rad` },
-                        { scaleX: valueRadius / radius }
+                        { scaleX: valueRadius / baseRadius }
                       ],
-                      left: 100,
-                      top: 100,
+                      left: center,
+                      top: center,
                     }
                   ]} 
                 />
@@ -570,13 +643,13 @@ const SpiderChartComponent: React.FC<{
                   style={[
                     styles.spiderLabel,
                     { 
-                      left: 100 + Math.cos(angle) * (radius + 25),
-                      top: 100 + Math.sin(angle) * (radius + 25)
+                      left: center + Math.cos(angle) * (baseRadius + 20),
+                      top: center + Math.sin(angle) * (baseRadius + 20)
                     }
                   ]}
                 >
                   <Text style={styles.spiderLabelText} numberOfLines={1}>
-                    {item.department}
+                    {item.department.substring(0, isSmallDevice ? 3 : 5)}
                   </Text>
                   <Text style={styles.spiderValueText}>{item.wardPatients}</Text>
                 </View>
@@ -584,10 +657,20 @@ const SpiderChartComponent: React.FC<{
             );
           })}
           
-          <View style={[styles.spiderCircle, { width: 40, height: 40, top: 80, left: 80 }]} />
-          <View style={[styles.spiderCircle, { width: 80, height: 80, top: 60, left: 60 }]} />
-          <View style={[styles.spiderCircle, { width: 120, height: 120, top: 40, left: 40 }]} />
-          <View style={[styles.spiderCircle, { width: 160, height: 160, top: 20, left: 20 }]} />
+          {[20, 40, 60, 80].map((size, index) => (
+            <View 
+              key={index}
+              style={[
+                styles.spiderCircle, 
+                { 
+                  width: (baseRadius * 2 * size) / 100, 
+                  height: (baseRadius * 2 * size) / 100,
+                  top: (containerSize - (baseRadius * 2 * size) / 100) / 2,
+                  left: (containerSize - (baseRadius * 2 * size) / 100) / 2
+                }
+              ]} 
+            />
+          ))}
         </View>
       </View>
       
@@ -1131,7 +1214,7 @@ const DashboardReception: React.FC = () => {
         </ChartCard>
 
         <View style={styles.notesSection}>
-          <Notes />
+          <MyTasks />
         </View>
 
         <ChartCard 
@@ -1269,7 +1352,6 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   card: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1291,7 +1373,6 @@ const styles = StyleSheet.create({
     borderRadius: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.brandLight,
     marginLeft: SPACING.xs,
   },
   cardTitle: { 
@@ -1319,18 +1400,23 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
+    overflow: 'hidden',
   },
   chartHeader: {
-    flexDirection: responsiveWidth(100) < 375 ? "column" : "row",
+    flexDirection: SCREEN_WIDTH < 375 ? "column" : "row",
     justifyContent: "space-between",
-    alignItems: responsiveWidth(100) < 375 ? "flex-start" : "center",
+    alignItems: SCREEN_WIDTH < 375 ? "flex-start" : "center",
     marginBottom: SPACING.sm,
-    gap: responsiveWidth(100) < 375 ? SPACING.xs : 0,
+    gap: SCREEN_WIDTH < 375 ? SPACING.xs : 0,
+  },
+  chartHeaderCompact: {
+    gap: SPACING.xs,
   },
   chartTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
+    flex: 1,
   },
   chartIcon: {
     width: isSmallDevice ? 28 : 32,
@@ -1343,6 +1429,10 @@ const styles = StyleSheet.create({
     fontSize: isSmallDevice ? FONT_SIZE.md : FONT_SIZE.lg,
     fontWeight: "600",
     color: COLORS.text,
+    flexShrink: 1,
+  },
+  chartTitleCompact: {
+    fontSize: FONT_SIZE.md,
   },
   chartContainer: {
     minHeight: isSmallDevice ? 150 : 200,
@@ -1356,9 +1446,15 @@ const styles = StyleSheet.create({
     borderRadius: SPACING.xs,
     padding: 4,
     gap: SPACING.xs,
+    alignSelf: SCREEN_WIDTH < 375 ? 'stretch' : 'flex-start',
+  },
+  filterGroupCompact: {
+    alignSelf: 'stretch',
+    justifyContent: 'space-between',
   },
   filterSelectContainer: {
     position: 'relative',
+    zIndex: 100,
   },
   filterSelect: {
     flexDirection: 'row',
@@ -1371,11 +1467,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     minWidth: isSmallDevice ? 80 : 90,
+    maxWidth: SCREEN_WIDTH < 375 ? responsiveWidth(40) : 120,
+  },
+  filterSelectCompact: {
+    minWidth: 70,
+    maxWidth: SCREEN_WIDTH < 375 ? responsiveWidth(42) : 90,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 4,
   },
   filterSelectText: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.text,
     fontWeight: '500',
+    flex: 1,
+  },
+  filterSelectTextCompact: {
+    fontSize: FONT_SIZE.xs - 1,
   },
   filterDropdown: {
     position: 'absolute',
@@ -1395,14 +1502,26 @@ const styles = StyleSheet.create({
     maxHeight: 150,
     minWidth: 120,
   },
+  filterDropdownCompact: {
+    minWidth: 100,
+    right: 0,
+    left: 'auto',
+  },
   filterDropdownScroll: {
     maxHeight: 150,
+  },
+  filterDropdownScrollCompact: {
+    maxHeight: 120,
   },
   filterOption: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  filterOptionCompact: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: SPACING.xs,
   },
   filterOptionLast: {
     borderBottomWidth: 0,
@@ -1411,11 +1530,15 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     color: COLORS.text,
   },
+  filterOptionTextCompact: {
+    fontSize: FONT_SIZE.xs - 1,
+  },
   filterOptionTextSelected: {
     color: COLORS.brand,
     fontWeight: '600',
   },
 
+  // Improved Bar Chart Styles
   barChartCard: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
@@ -1424,11 +1547,10 @@ const styles = StyleSheet.create({
   },
   barChartContainer: { 
     flexDirection: "row", 
-    gap: SPACING.xs 
+    gap: SPACING.sm 
   },
   yAxis: { 
     justifyContent: "space-between", 
-    height: isSmallDevice ? 120 : 150, 
     paddingVertical: 2 
   },
   yAxisLabel: { 
@@ -1440,27 +1562,25 @@ const styles = StyleSheet.create({
   chartArea: { 
     flex: 1 
   },
-  weekRow: { 
+  barsContainer: { 
     flexDirection: "row", 
     alignItems: "flex-end", 
-    justifyContent: "space-between", 
-    height: isSmallDevice ? 100 : 130, 
-    paddingHorizontal: SPACING.xs 
+    justifyContent: "space-between",
+    paddingHorizontal: SPACING.xs,
   },
-  weekCol: { 
+  barColumn: { 
     alignItems: "center", 
-    justifyContent: "flex-end", 
-    flex: 1, 
-    maxWidth: isSmallDevice ? 40 : 50 
+    justifyContent: "flex-end",
   },
-  weekBar: { 
-    width: "60%", 
-    borderTopLeftRadius: 8, 
-    borderTopRightRadius: 8, 
-    minHeight: 2 
+  bar: { 
+    borderTopLeftRadius: 6, 
+    borderTopRightRadius: 6, 
+    minHeight: 8,
+    width: '80%',
+    alignSelf: 'center',
   },
   barValueText: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: FONT_SIZE.xs - 1,
     color: COLORS.text,
     marginTop: SPACING.xs,
     fontWeight: '600',
@@ -1468,7 +1588,8 @@ const styles = StyleSheet.create({
   xAxisLine: { 
     height: 1, 
     backgroundColor: COLORS.border, 
-    marginHorizontal: SPACING.xs 
+    marginHorizontal: SPACING.xs,
+    marginTop: SPACING.sm,
   },
   xAxisLabels: { 
     flexDirection: "row", 
@@ -1478,12 +1599,12 @@ const styles = StyleSheet.create({
   },
   xAxisLabel: { 
     color: COLORS.sub, 
-    fontSize: FONT_SIZE.xs, 
-    flex: 1, 
-    textAlign: "center", 
-    maxWidth: isSmallDevice ? 40 : 50 
+    fontSize: FONT_SIZE.xs - 1, 
+    textAlign: "center",
+    flexShrink: 1,
   },
 
+  // Improved Pie Chart Styles
   pieChartCard: {
     backgroundColor: COLORS.card,
     borderRadius: 16,
@@ -1497,18 +1618,18 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-  pieChartContainer: {
+  pieChartWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.md,
-    height: isSmallDevice ? 160 : 180,
+  },
+  pieChartContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
   },
   pieCenterCircle: {
     position: 'absolute',
-    width: isSmallDevice ? 60 : 80,
-    height: isSmallDevice ? 60 : 80,
-    borderRadius: isSmallDevice ? 30 : 40,
     backgroundColor: COLORS.card,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1612,8 +1733,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   spiderGrid: {
-    width: isSmallDevice ? 160 : 200,
-    height: isSmallDevice ? 160 : 200,
     position: 'relative',
   },
   spiderCircle: {
@@ -1625,7 +1744,6 @@ const styles = StyleSheet.create({
   },
   spiderLine: {
     position: 'absolute',
-    width: isSmallDevice ? 60 : 70,
     height: 1,
     backgroundColor: COLORS.success,
     opacity: 0.6,
@@ -1642,7 +1760,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     transform: [{ translateX: -25 }, { translateY: -10 }],
-    minWidth: isSmallDevice ? 50 : 60,
+    minWidth: isSmallDevice ? 40 : 50,
   },
   spiderLabelText: {
     fontSize: FONT_SIZE.xs,
@@ -1725,7 +1843,6 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
   },
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,

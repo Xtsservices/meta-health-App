@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  FlatList,
   Image,
   Platform,
   StatusBar,
@@ -18,11 +17,13 @@ import {
   Keyboard,
   Dimensions,
   Linking,
+  FlatList,
+  Pressable,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useFocusEffect, useRoute } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AuthPost } from "../../../auth/auth";
+import { AuthPost, AuthFetch } from "../../../auth/auth";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Utils
@@ -59,6 +60,22 @@ interface TestType {
   testPrice: number;
   gst: number;
   testNotes?: string;
+}
+
+interface MedicineType {
+  id: number | null;
+  name: string;
+  category: string;
+  hsn: string;
+  quantity: number | null;
+  costPrice: number | null;
+  sellingPrice: number | null;
+  manufacturer: string;
+  location: string;
+  expiryDate: string;
+  addedOn?: string;
+  gst?: number | string;
+  isActive?: number;
 }
 
 interface FormDataType {
@@ -99,7 +116,8 @@ const FileUpload: React.FC<{
   fileURLs: string[];
   onFileChange: (file: FileItem) => void;
   onFileRemove: (index: number) => void;
-}> = ({ files, fileURLs, onFileChange, onFileRemove }) => {
+  type: "medicine" | "test";
+}> = ({ files, fileURLs, onFileChange, onFileRemove, type }) => {
   const dispatch = useDispatch();
 
   const openGallery = async () => {
@@ -186,7 +204,6 @@ const FileUpload: React.FC<{
     } catch (error: any) {
       // If user cancelled — many libs throw; ignore
       if (!error?.message?.toLowerCase()?.includes("cancel")) {
-        console.log("Document picking error:", error);
         dispatch(showError("Failed to pick document"));
       }
     }
@@ -215,7 +232,7 @@ const FileUpload: React.FC<{
 
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { marginBottom: SPACING.sm }]}>Upload Prescription</Text>
+      <Text style={[styles.sectionTitle, { marginBottom: SPACING.sm }]}>{type === "medicine" ? "Upload Patient Prescription" : "Upload Patient Test Prescription"}</Text>
 
       {fileURLs?.length === 0 ? (
         <TouchableOpacity style={styles.uploadArea} onPress={showFilePickerOptions} activeOpacity={0.7}>
@@ -246,14 +263,6 @@ const FileUpload: React.FC<{
                     </Text>
 
                     <View style={styles.fileActions}>
-                      {/* <TouchableOpacity
-                        style={styles.viewButton}
-                        onPress={() => handleViewFile(url)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.viewButtonText}>View</Text>
-                      </TouchableOpacity> */}
-
                       <TouchableOpacity
                         style={styles.deleteButton}
                         onPress={() => onFileRemove(index)}
@@ -273,18 +282,24 @@ const FileUpload: React.FC<{
   );
 };
 
-const SaleComp: React.FC<{
-  department: "Radiology" | "Pathology";
-}> = ({ department = "Pathology" }) => {
+const SaleComp: React.FC = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const dispatch = useDispatch();
   const user = useSelector((state: any) => state.currentUser);
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const inputRefs = useRef<{ [key: string]: TextInput | null }>({});
 
+  // Get type from route params or user role
+  const routeParams = route.params as { type?: "medicine" | "test"; department?: string } || {};
+  const type = routeParams.type || (user?.roleName === 'pharmacy' ? 'medicine' : 'test');
+  const department = routeParams.department || "Pathology";
+  const [medicineList, setMedicineList] = useState<MedicineType[]>([]);
   const [testList, setTestList] = useState<TestType[]>([]);
+  const [selectedMedicine, setSelectedMedicine] = useState<MedicineType | null>(null);
   const [selectedTest, setSelectedTest] = useState<TestType | null>(null);
+  const [selectedMedicines, setSelectedMedicines] = useState<MedicineType[]>([]);
   const [selectedTests, setSelectedTests] = useState<TestType[]>([]);
   const [noteInput, setNoteInput] = useState<string>("");
   const [formData, setFormData] = useState<FormDataType>({
@@ -296,10 +311,12 @@ const SaleComp: React.FC<{
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [discount, setDiscount] = useState<number>(0);
+  const [discountReason, setDiscountReason] = useState<string>("");
+  const [discountReasonID, setDiscountReasonID] = useState<string>("");
   const [files, setFiles] = useState<FileItem[]>([]);
   const [fileURLs, setFileURLs] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [suggestions, setSuggestions] = useState<TestType[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -348,14 +365,19 @@ const SaleComp: React.FC<{
           patientID: generateID(),
           quantity: 0,
         });
+        setSelectedMedicines([]);
         setSelectedTests([]);
         setFiles([]);
         setFileURLs([]);
         setSearchQuery("");
         setDiscount(0);
+        setDiscountReason("");
+        setDiscountReasonID("");
         setFormErrors({});
+        setSelectedMedicine(null);
         setSelectedTest(null);
         setSuggestions([]);
+        setMedicineList([]);
         setTestList([]);
       };
 
@@ -367,11 +389,55 @@ const SaleComp: React.FC<{
     }, [checkAuth])
   );
 
+  // Fetch medicine data
+  const fetchMedicineData = useCallback(async () => {
+    if (!user?.hospitalID) return;
+
+    setIsLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const response = await AuthFetch(
+        `pharmacy/${user.hospitalID}/getMedicineInventory`,
+        token
+      );
+
+      if (response?.data?.status === 200) {
+        const data = response?.data?.medicines;
+        const filteredMedicineStock = data
+          .map((medicine: any) => ({
+            ...medicine,
+            quantity: Number(medicine.totalQuantity),
+            hsn: medicine.hsn || "N/A",
+            manufacturer: medicine.manufacturer || "Unknown",
+            location: medicine.location || "Unknown",
+            isActive: medicine.isActive !== undefined ? medicine.isActive : 1,
+          }))
+          .filter((medicine: MedicineType) => {
+            const currentDate = new Date();
+            const expiryDate = new Date(medicine.expiryDate);
+            return (
+              medicine.quantity !== null &&
+              medicine.quantity > 0 &&
+              expiryDate > currentDate &&
+              medicine.isActive === 1
+            );
+          });
+        setMedicineList(filteredMedicineStock);
+      }
+    } catch (error) {
+      dispatch(showError("Failed to load medicine data"));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, dispatch]);
+
+  // Fetch test data with debouncing
   useEffect(() => {
     let cancelled = false;
+ 
     const handleSearch = async () => {
-      if (!searchQuery || searchQuery.trim().length < 1) {
-        setSuggestions([]);
+      if (!user?.hospitalID || !searchQuery || searchQuery.trim().length < 1) {
+        if (!cancelled) setSuggestions([]);
         return;
       }
 
@@ -426,6 +492,12 @@ const SaleComp: React.FC<{
     };
   }, [searchQuery, user?.hospitalID, department]);
 
+  useEffect(() => {
+    if (type === "medicine") {
+      fetchMedicineData();
+    }
+  }, [type, fetchMedicineData]);
+
   const handleFileChange = (file: FileItem) => {
     setFiles((prev) => [...prev, file]);
     setFileURLs((prev) => [...prev, file.uri]);
@@ -452,13 +524,30 @@ const SaleComp: React.FC<{
     }
 
     if (files?.length === 0) {
-      dispatch(showError("Please upload the test prescription"));
+      dispatch(showError("Please upload the prescription"));
       return false;
     }
 
-    if (selectedTests?.length === 0) {
-      dispatch(showError("Please add at least one test"));
+    // STRICT validation - don't allow empty arrays
+    if (type === "medicine" && (!selectedMedicines || selectedMedicines.length === 0)) {
+      dispatch(showError("Please add at least one medicine before proceeding"));
       return false;
+    }
+
+    if (type === "test" && (!selectedTests || selectedTests.length === 0)) {
+      dispatch(showError("Please add at least one test before proceeding"));
+      return false;
+    }
+
+    // Additional check: ensure selected items have valid data
+    if (type === "test") {
+      const validTests = selectedTests.filter(test => 
+        test && test.loinc_num_ && test.name
+      );
+      if (validTests.length === 0) {
+        dispatch(showError("Please add valid tests before proceeding"));
+        return false;
+      }
     }
 
     setFormErrors({});
@@ -470,6 +559,13 @@ const SaleComp: React.FC<{
     const lower = q.trim().toLowerCase();
     if (!lower) return null;
 
+    if (type === "medicine") {
+      const combined = [...medicineList];
+      let match =
+        combined.find((m) => (m.name || "").toLowerCase() === lower) ||
+        combined.find((m) => (m.name || "").toLowerCase().includes(lower));
+      return match || null;
+    } else {
     const combined = [...testList, ...suggestions];
     let match =
       combined.find((t) => (t.name || "").toLowerCase() === lower) ||
@@ -477,13 +573,29 @@ const SaleComp: React.FC<{
       combined.find((t) => (t.name || "").toLowerCase().includes(lower));
 
     return match || null;
+    }
   };
 
-  const handleAddTest = useCallback(() => {
-    const addTestToList = (testToAdd: TestType) => {
-      if (!selectedTests.some((t) => t.loinc_num_ === testToAdd.loinc_num_)) {
-        const toAdd = { ...testToAdd, testNotes: noteInput ?? "" };
-        setSelectedTests((prev) => [...prev, toAdd]); // append for predictable display order
+  const handleAddItem = useCallback(() => {
+    const addItemToList = (itemToAdd: any) => {
+      if (type === "medicine") {
+        if (!selectedMedicines.some((m) => m.id === itemToAdd.id)) {
+          const toAdd = { ...itemToAdd, quantity: 1 };
+          setSelectedMedicines((prev) => [...prev, toAdd]);
+          setSelectedMedicine(null);
+          setSearchQuery("");
+          setSuggestions([]);
+          
+          setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }, 120);
+        } else {
+          dispatch(showError("Medicine already added"));
+        }
+      } else {
+        if (!selectedTests.some((t) => t.loinc_num_ === itemToAdd.loinc_num_)) {
+        const toAdd = { ...itemToAdd, testNotes: noteInput ?? "" };
+        setSelectedTests((prev) => [...prev, toAdd]);
         // clear input states
         setSelectedTest(null);
         setSearchQuery("");
@@ -495,11 +607,17 @@ const SaleComp: React.FC<{
         }, 120);
       } else {
         dispatch(showError("Test already added"));
+        }
       }
     };
 
-    if (selectedTest) {
-      addTestToList(selectedTest);
+    if (type === "medicine" && selectedMedicine) {
+      addItemToList(selectedMedicine);
+      return;
+    }
+
+    if (type === "test" && selectedTest) {
+      addItemToList(selectedTest);
       return;
     }
 
@@ -508,25 +626,29 @@ const SaleComp: React.FC<{
       const match = findMatchForQuery(q);
 
       if (match) {
-        addTestToList(match);
+        addItemToList(match);
         return;
       }
     }
 
-    dispatch(showError("Please select a test first"));
-  }, [selectedTest, searchQuery, testList, suggestions, noteInput, selectedTests, dispatch]);
+    dispatch(showError(`Please select a valid ${type} from the list.`));
+  }, [type, selectedMedicine, selectedTest, searchQuery, medicineList, testList, suggestions, noteInput, selectedMedicines, selectedTests, dispatch]);
 
-  const handleRemoveTest = (index: number) => {
+  const handleRemoveItem = (index: number) => {
+    if (type === "medicine") {
+      setSelectedMedicines((prev) => prev.filter((_, i) => i !== index));
+    } else {
     setSelectedTests((prev) => prev.filter((_, i) => i !== index));
+    }
   };
 
-  const grossAmount =
-    selectedTests?.reduce((acc, test) => acc + (test.testPrice ?? 0), 0) || 0;
-  const gstAmount =
-    selectedTests?.reduce(
-      (acc, test) => acc + (test.testPrice ?? 0) * ((test.gst ?? 0) / 100),
-      0
-    ) || 0;
+  const grossAmount = type === "medicine"
+    ? selectedMedicines.reduce((acc, item) => acc + (item?.sellingPrice ?? 0) * (item?.quantity ?? 0), 0)
+    : selectedTests.reduce((acc, item) => acc + (item.testPrice ?? 0), 0);
+
+  const gstAmount = type === "medicine"
+    ? (grossAmount * 18) / 100
+    : selectedTests.reduce((acc, item) => acc + (item.testPrice ?? 0) * ((item.gst ?? 0) / 100), 0);
   const totalAmount = grossAmount + gstAmount;
   const discountedAmount = totalAmount - (totalAmount * discount) / 100;
 
@@ -540,10 +662,15 @@ const SaleComp: React.FC<{
         // @ts-ignore
         await navigation.navigate("PaymentScreen", {
           amount: discountedAmount,
-          selectedTests,
+          selectedItems: type === "medicine" ? selectedMedicines : selectedTests,
+          selectedTests: selectedTests,
+          selectedMedicines: selectedMedicines,
           formData,
           files,
           discount,
+          discountReason: discountReason || "",
+          discountReasonID: discountReasonID || "",               
+          type,
           department,
           user,
         });
@@ -563,6 +690,423 @@ const SaleComp: React.FC<{
   };
 
   const placeholderColor = (COLORS as any).placeholder ?? COLORS.sub;
+
+  const renderMedicineItem = ({ item, index }: { item: MedicineType; index: number }) => {
+    const amount = ((item.sellingPrice ?? 0) * (item.quantity ?? 0)) * 1.18; // 18% GST for medicines
+    return (
+      <View key={`${item.id}-${index}`}>
+        <View style={[styles.tableRow, index === selectedMedicines.length - 1 ? { borderBottomWidth: 0 } : {}]}>
+          <View style={{ width: responsiveWidth(220), paddingHorizontal: SPACING.xs }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]} numberOfLines={2}>
+              {item.name || "—"}
+            </Text>
+            <Text style={[styles.tableCellSub, { color: COLORS.sub }]}>HSN: {item.hsn || "N/A"}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>
+              {new Date(item.expiryDate).toLocaleDateString()}
+            </Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(80), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{(item.sellingPrice ?? 0).toFixed(2)}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(100), paddingHorizontal: SPACING.xs, alignItems: "center" }}>
+            <TextInput
+              style={[styles.quantityInput, { color: COLORS.text }]}
+              value={item.quantity?.toString() || "1"}
+              keyboardType="numeric"
+              onChangeText={(text) => {
+                const newQuantity = Number(text) || 1;
+                if (newQuantity >= 1 && newQuantity <= (item.quantity ?? 1)) {
+                  setSelectedMedicines(prev =>
+                    prev.map((med, idx) =>
+                      idx === index ? { ...med, quantity: newQuantity } : med
+                    )
+                  );
+                }
+              }}
+            />
+          </View>
+
+          <View style={{ width: responsiveWidth(80), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>18%</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{amount.toFixed(2)}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(90), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <TouchableOpacity onPress={() => handleRemoveItem(index)}>
+              <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>Remove</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        {index !== selectedMedicines.length - 1 && <View style={{ height: 1, backgroundColor: COLORS.border }} />}
+      </View>
+    );
+  };
+
+  // Render test item for the list
+  const renderTestItem = ({ item, index }: { item: TestType; index: number }) => {
+    const amount = ((item.testPrice ?? 0) * (1 + (item.gst ?? 0) / 100));
+    return (
+      <View key={`${item.loinc_num_ || item.name}-${index}`}>
+        <View style={[styles.tableRow, index === selectedTests.length - 1 ? { borderBottomWidth: 0 } : {}]}>
+          <View style={{ width: responsiveWidth(220), paddingHorizontal: SPACING.xs }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]} numberOfLines={2}>
+              {item.name || "—"}
+            </Text>
+            {item.testNotes ? <Text style={[styles.tableCellSub, { color: COLORS.sub }]} numberOfLines={1}>{item.testNotes}</Text> : null}
+          </View>
+
+          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]} numberOfLines={1}>{item.loinc_num_ || "—"}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(80), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>{(item.gst ?? 0).toFixed(0)}%</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(100), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{(item.testPrice ?? 0).toFixed(2)}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{amount.toFixed(2)}</Text>
+          </View>
+
+          <View style={{ width: responsiveWidth(90), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
+            <TouchableOpacity onPress={() => handleRemoveItem(index)}>
+              <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>Remove</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        {index !== selectedTests.length - 1 && <View style={{ height: 1, backgroundColor: COLORS.border }} />}
+      </View>
+    );
+  };
+
+  const renderMedicineSelection = () => {
+    const filteredMedicines = searchQuery.trim() === '' 
+      ? [] 
+      : medicineList.filter(medicine =>
+          medicine.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+    return (
+      <>
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputContainer}>
+            <Text style={[styles.label, { color: COLORS.sub }]}>Medicine</Text>
+            <View style={{ position: "relative" }}>
+              <TextInput
+                placeholder="Type to search medicines..."
+                placeholderTextColor={placeholderColor}
+                style={[
+                  styles.input, 
+                  { 
+                    backgroundColor: COLORS.inputBg, 
+                    borderColor: COLORS.border, 
+                    color: COLORS.text,
+                  }
+                ]}
+                value={searchQuery}
+                onChangeText={(text) => {
+                  setSearchQuery(text);
+                  setSelectedMedicine(null);
+                }}
+              />
+              
+              {/* Suggestions dropdown */}
+              {(isLoading || filteredMedicines.length > 0) && searchQuery && searchQuery.trim().length >= 1 && (
+                <View style={[
+                  styles.suggBox, 
+                  { 
+                    borderColor: COLORS.border, 
+                    backgroundColor: COLORS.card 
+                  }
+                ]}>
+                  {isLoading ? (
+                    <View style={styles.suggRowCenter}>
+                      <ActivityIndicator size="small" color={COLORS.brand} />
+                    </View>
+                  ) : (
+                    <FlatList
+                      data={filteredMedicines}
+                      keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                      keyboardShouldPersistTaps="handled"
+                      renderItem={({ item }) => (
+                        <Pressable 
+                          style={[
+                            styles.suggRow,
+                            selectedMedicine?.id === item.id && { backgroundColor: COLORS.brand + '20' }
+                          ]} 
+                          onPress={() => {
+                            setSelectedMedicine(item);
+                            setSearchQuery(item.name);
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.suggestionText, { color: COLORS.text }]}>{item.name}</Text>
+                            <View style={styles.suggDetails}>
+                              <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                                Qty: {item.quantity} | HSN: {item.hsn}
+                              </Text>
+                              <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                                Expiry: {new Date(item.expiryDate).toLocaleDateString()}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={[styles.suggestionPrice, { color: COLORS.text }]}>₹{item.sellingPrice}</Text>
+                        </Pressable>
+                      )}
+                      ListEmptyComponent={
+                        <View style={styles.suggRowCenter}>
+                          <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                            No matching medicines found
+                          </Text>
+                        </View>
+                      }
+                      nestedScrollEnabled
+                      style={{ maxHeight: 200 }}
+                    />
+                  )}
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Add Button - 25% width */}
+          <View style={styles.addButtonContainer}>
+            <Text style={[styles.label, { color: COLORS.sub, opacity: 0 }]}>
+              Add
+            </Text>
+            <Pressable
+              onPress={handleAddItem}
+              style={[
+                styles.addButton, 
+                { 
+                  backgroundColor: COLORS.brand,
+                  opacity: (!selectedMedicine && !searchQuery) ? 0.6 : 1
+                }
+              ]}
+              disabled={!selectedMedicine && !searchQuery}
+            >
+              <Text style={[styles.addButtonText, { color: COLORS.buttonText }]}>
+                Add
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Show selected medicine info */}
+        {selectedMedicine && (
+          <View style={[styles.selectedItemBox, { 
+            backgroundColor: COLORS.brand + '10', 
+            borderColor: COLORS.brand,
+            marginTop: SPACING.sm
+          }]}>
+            <Text style={[styles.selectedItemText, { color: COLORS.text }]}>
+              Selected: <Text style={{ fontWeight: '700' }}>{selectedMedicine.name}</Text>
+            </Text>
+            <Text style={[styles.selectedItemMeta, { color: COLORS.sub }]}>
+              Price: ₹{selectedMedicine.sellingPrice} | Stock: {selectedMedicine.quantity}
+            </Text>
+          </View>
+        )}
+
+        {/* Show no results message */}
+        {searchQuery.trim().length > 0 && 
+         filteredMedicines.length === 0 && 
+         !isLoading && (
+          <View style={[styles.emptyStateSimple, { marginTop: SPACING.sm }]}>
+            <Text style={{ color: COLORS.sub }}>No medicines found</Text>
+            <Text style={{ color: COLORS.sub, marginTop: SPACING.xs }}>Try a different keyword</Text>
+          </View>
+        )}
+      </>
+    );
+  };
+
+  // Test selection UI - IMPROVED VERSION
+  const renderTestSelection = () => (
+    <>
+      {/* Search Row - 75% input + 25% button */}
+      <View style={styles.searchRow}>
+        {/* Search Input - 75% width */}
+        <View style={styles.searchInputContainer}>
+          <Text style={[styles.label, { color: COLORS.sub }]}>Test</Text>
+          <View style={{ position: "relative" }}>
+            <TextInput
+              placeholder="Type to search tests..."
+              placeholderTextColor={placeholderColor}
+              style={[
+                styles.input, 
+                { 
+                  backgroundColor: COLORS.inputBg, 
+                  borderColor: COLORS.border, 
+                  color: COLORS.text,
+                }
+              ]}
+              value={searchQuery}
+              onChangeText={(t) => {
+                setSearchQuery(t);
+                setSelectedTest(null);
+              }}
+            />
+            
+            {/* Suggestions dropdown */}
+            {(isLoading || suggestions.length > 0) && searchQuery && searchQuery.trim().length >= 1 && (
+              <View style={[
+                styles.suggBox, 
+                { 
+                  borderColor: COLORS.border, 
+                  backgroundColor: COLORS.card 
+                }
+              ]}>
+                {isLoading ? (
+                  <View style={styles.suggRowCenter}>
+                    <ActivityIndicator size="small" color={COLORS.brand} />
+                  </View>
+                ) : (
+                  <FlatList
+                    data={suggestions}
+                    keyExtractor={(item) => item.loinc_num_ || Math.random().toString()}
+                    keyboardShouldPersistTaps="handled"
+                    renderItem={({ item }) => (
+                      <Pressable 
+                        style={[
+                          styles.suggRow,
+                          selectedTest?.loinc_num_ === item.loinc_num_ && { backgroundColor: COLORS.brand + '20' }
+                        ]} 
+                        onPress={() => {
+                          setSelectedTest(item);
+                          setSearchQuery(item.name);
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.suggestionText, { color: COLORS.text }]}>{item.name}</Text>
+                          <View style={styles.suggDetails}>
+                            <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                              LOINC: {item.loinc_num_}
+                            </Text>
+                            <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                              Dept: {item.department}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.suggestionPrice, { color: COLORS.text }]}>₹{item.testPrice}</Text>
+                      </Pressable>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.suggRowCenter}>
+                        <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                          No matching tests found
+                        </Text>
+                      </View>
+                    }
+                    nestedScrollEnabled
+                    style={{ maxHeight: 200 }}
+                  />
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Add Button - 25% width */}
+        <View style={styles.addButtonContainer}>
+          <Text style={[styles.label, { color: COLORS.sub, opacity: 0 }]}>
+            Add
+          </Text>
+          <Pressable
+            onPress={handleAddItem}
+            style={[
+              styles.addButton, 
+              { 
+                backgroundColor: COLORS.brand,
+                opacity: (!selectedTest && !searchQuery) ? 0.6 : 1
+              }
+            ]}
+            disabled={!selectedTest && !searchQuery}
+          >
+            <Text style={[styles.addButtonText, { color: COLORS.buttonText }]}>
+              Add
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Note Input */}
+      <View style={styles.noteContainer}>
+        <Text style={[styles.label, { color: COLORS.sub }]}>Note</Text>
+        <TextInput
+          placeholder="Notes (optional)"
+          placeholderTextColor={placeholderColor}
+          style={[
+            styles.noteInput,
+            {
+              backgroundColor: COLORS.inputBg,
+              borderColor: COLORS.border,
+              color: COLORS.text,
+            },
+          ]}
+          value={noteInput}
+          onChangeText={setNoteInput}
+          multiline
+          numberOfLines={3}
+        />
+      </View>
+
+      {/* Show selected test info */}
+      {selectedTest && (
+        <View style={[styles.selectedItemBox, { 
+          backgroundColor: COLORS.brand + '10', 
+          borderColor: COLORS.brand,
+          marginTop: SPACING.sm
+        }]}>
+          <Text style={[styles.selectedItemText, { color: COLORS.text }]}>
+            Selected: <Text style={{ fontWeight: '700' }}>{selectedTest.name}</Text>
+          </Text>
+          <Text style={[styles.selectedItemMeta, { color: COLORS.sub }]}>
+            Price: ₹{selectedTest.testPrice} | LOINC: {selectedTest.loinc_num_}
+          </Text>
+        </View>
+      )}
+
+      {/* Show no results message */}
+      {searchQuery.trim().length > 0 && 
+       suggestions.length === 0 && 
+       !isLoading && (
+        <View style={[styles.emptyStateSimple, { marginTop: SPACING.sm }]}>
+          <Text style={{ color: COLORS.sub }}>No tests found</Text>
+          <Text style={{ color: COLORS.sub, marginTop: SPACING.xs }}>Try a different keyword</Text>
+        </View>
+      )}
+    </>
+  );
+
+  const renderTableHeaders = () => (
+    <View style={[styles.tableHeader]}>
+      <Text style={[styles.headerText, { width: responsiveWidth(220) }]}>
+        {type === "medicine" ? "Medicine Name" : "Test Name"}
+      </Text>
+      <Text style={[styles.headerText, { width: responsiveWidth(120) }]}>
+        {type === "medicine" ? "Expiry Date" : "LOINC"}
+      </Text>
+      <Text style={[styles.headerText, { width: responsiveWidth(80), textAlign: "right" }]}>Price</Text>
+      {type === "medicine" && (
+        <Text style={[styles.headerText, { width: responsiveWidth(100), textAlign: "center" }]}>Quantity</Text>
+      )}
+      <Text style={[styles.headerText, { width: responsiveWidth(80), textAlign: "right" }]}>GST</Text>
+      <Text style={[styles.headerText, { width: responsiveWidth(120), textAlign: "right" }]}>Amount</Text>
+      <Text style={[styles.headerText, { width: responsiveWidth(90), textAlign: "right" }]}>Action</Text>
+    </View>
+  );
 
   return (
     <KeyboardAvoidingView
@@ -671,113 +1215,45 @@ const SaleComp: React.FC<{
                 />
               </View>
 
-              <FileUpload files={files} fileURLs={fileURLs} onFileChange={handleFileChange} onFileRemove={handleFileRemove} />
+              <FileUpload files={files} fileURLs={fileURLs} onFileChange={handleFileChange} onFileRemove={handleFileRemove} type={type} />
 
               <View style={styles.formGroup}>
-                <Text style={[styles.sectionTitle, { color: COLORS.text }]}>Select Tests</Text>
-
-                <TextInput
-                  style={[styles.input, { backgroundColor: COLORS.inputBg, borderColor: COLORS.border, color: COLORS.text, marginTop: SPACING.sm }]}
-                  placeholder="Type to search tests..."
-                  placeholderTextColor={placeholderColor}
-                  value={searchQuery}
-                  onChangeText={(t) => {
-                    setSearchQuery(t);
-                    setSelectedTest(null);
-                  }}
-                />
-
-                {isLoading && (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={COLORS.brand} />
-                    <Text style={styles.loadingText}>Searching tests...</Text>
-                  </View>
-                )}
-
-                {suggestions?.length > 0 ? (
-                  <View style={[styles.suggestionsBox, { borderColor: COLORS.border, backgroundColor: COLORS.card }]}>
-                    <FlatList
-                      data={suggestions}
-                      keyExtractor={(item, index) => `${item.loinc_num_}-${index}`}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={styles.suggestionRow}
-                          onPress={() => {
-                            setSelectedTest(item);
-                            setSearchQuery(item.name);
-                            setSuggestions([]);
-                          }}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.suggestionText, { color: COLORS.text }]}>{item.name}</Text>
-                            <Text style={[styles.suggestionMeta, { color: COLORS.sub }]}>{item.loinc_num_}</Text>
-                          </View>
-                          <Text style={[styles.suggestionPrice, { color: COLORS.text }]}>₹{item.testPrice}</Text>
-                        </TouchableOpacity>
-                      )}
-                      style={{ maxHeight: responsiveHeight(220) }}
-                    />
-                  </View>
-                ) : (
-                  searchQuery.trim().length > 0 &&
-                  !isLoading && (
-                    <View style={[styles.emptyStateSimple, { marginTop: SPACING.sm }]}>
-                      <Text style={{ color: COLORS.sub }}>No tests found</Text>
-                      <Text style={{ color: COLORS.sub, marginTop: SPACING.xs }}>Try a different keyword</Text>
-                    </View>
-                  )
-                )}
-
-                <TextInput
-                  style={[styles.input, { backgroundColor: COLORS.inputBg, borderColor: COLORS.border, color: COLORS.text, marginTop: SPACING.sm }]}
-                  placeholder="Notes (optional)"
-                  placeholderTextColor={placeholderColor}
-                  value={noteInput}
-                  onChangeText={setNoteInput}
-                />
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, (!selectedTest && !searchQuery) && styles.disabledButton, { marginTop: SPACING.md }]}
-                  onPress={handleAddTest}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.primaryButtonText}>Add Test</Text>
-                </TouchableOpacity>
+                <Text style={[styles.sectionTitle, { color: COLORS.text }]}>Select {type === "medicine" ? "Medicines" : "Tests"} </Text>
+                {type === "medicine" ? renderMedicineSelection() : renderTestSelection()}
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.sectionTitle, { color: COLORS.text }]}>Tests Prescribed</Text>
+                <Text style={[styles.sectionTitle, { color: COLORS.text }]}>
+                  {type === "medicine" ? "Medicines Prescribed" : "Tests Prescribed"}
+                </Text>
 
-                {selectedTests?.length === 0 ? (
+                {((type === "medicine" && selectedMedicines.length === 0) || (type === "test" && selectedTests.length === 0)) ? (
                   <View style={styles.emptyStateSimple}>
-                    <Text style={{ color: COLORS.sub, textAlign: "center" }}>No tests selected</Text>
-                    <Text style={{ color: COLORS.sub, marginTop: SPACING.xs, textAlign: "center" }}>Use the search above to add tests</Text>
+                    <Text style={{ color: COLORS.sub, textAlign: "center" }}>No {type === "medicine" ? "medicines" : "tests"} selected</Text>
+                    <Text style={{ color: COLORS.sub, marginTop: SPACING.xs, textAlign: "center" }}>
+                      Use the {type === "medicine" ? "selector" : "search"} above to add {type === "medicine" ? "medicines" : "tests"}
+                    </Text>
                   </View>
                 ) : (
-                  <View style={styles.listBox}>
-                    {selectedTests.map((test, index) => (
-                      <View key={test.loinc_num_ + "-" + index} style={[styles.listRow, index === selectedTests.length - 1 ? { borderBottomWidth: 0 } : {}]}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.suggestionText, { color: COLORS.text }]} numberOfLines={1}>
-                            {test.name}
-                          </Text>
-                          <Text style={[styles.suggestionMeta, { color: COLORS.sub }]}>{test.loinc_num_}</Text>
-                          {test.testNotes && <Text style={[styles.noteText, { color: COLORS.sub }]}>Note: {test.testNotes}</Text>}
-                        </View>
-
-                        <View style={{ width: responsiveWidth(120), alignItems: "flex-end" }}>
-                          <Text style={[styles.amountValue, { color: COLORS.text }]}>₹{test.testPrice?.toFixed(2)}</Text>
-                          <TouchableOpacity onPress={() => handleRemoveTest(index)} style={{ marginTop: SPACING.sm }}>
-                            <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>Remove</Text>
-                          </TouchableOpacity>
-                        </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ minWidth: Math.max(SCREEN_WIDTH - SPACING.lg * 2, 700) }}
+                  >
+                    <View style={[styles.tableContainer, { backgroundColor: COLORS.card, borderColor: COLORS.border, minWidth: 700 }]}>
+                      {renderTableHeaders()}
+                      <View>
+                        {type === "medicine" 
+                          ? selectedMedicines.map((item, index) => renderMedicineItem({ item, index }))
+                          : selectedTests.map((item, index) => renderTestItem({ item, index }))
+                        }
                       </View>
-                    ))}
-                  </View>
+                    </View>
+                  </ScrollView>
                 )}
               </View>
 
-              {selectedTests?.length > 0 && (
+              {((type === "medicine" && selectedMedicines.length > 0) || (type === "test" && selectedTests.length > 0)) && (
                 <View style={styles.formGroup}>
                   <Text style={[styles.sectionTitle, { color: COLORS.text }]}>Payment Details</Text>
 
@@ -873,8 +1349,11 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderRadius: 8,
-    padding: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     fontSize: FONT_SIZE.md,
+    minHeight: isTablet ? 50 : 44,
+    textAlignVertical: 'center',
   },
   disabledInput: {
     opacity: 0.9,
@@ -948,42 +1427,88 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     gap: SPACING.xs,
   },
-  viewButton: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: 6,
-    backgroundColor: COLORS.info,
-  },
-  viewButtonText: {
-    color: COLORS.buttonText,
-    fontSize: FONT_SIZE.xs,
-  },
   deleteButton: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: 6,
     backgroundColor: COLORS.danger,
   },
-  suggestionsBox: {
-    marginTop: SPACING.sm,
-    borderRadius: 8,
-    overflow: "hidden",
-    borderWidth: 1,
+  searchRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
   },
-  suggestionRow: {
-    padding: SPACING.md,
+  searchInputContainer: {
+    flex: 0.75,
+  },
+  addButtonContainer: {
+    flex: 0.25,
+    justifyContent: "flex-end",
+  },
+  addButton: {
     flexDirection: "row",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
+    justifyContent: "center",
+    gap: SPACING.xs,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    minHeight: isTablet ? 50 : 44,
+  },
+  addButtonText: {
+    fontWeight: "700",
+    fontSize: FONT_SIZE.sm,
+  },
+  // Note container
+  noteContainer: {
+    marginTop: SPACING.sm,
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    textAlignVertical: "top",
+    minHeight: 80,
+  },
+  suggBox: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "100%",
+    marginTop: SPACING.xs,
+    borderWidth: 1,
+    borderRadius: SPACING.sm,
+    maxHeight: 200,
+    overflow: "hidden",
+    zIndex: 10,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  suggRow: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  suggDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 2,
+  },
+  suggRowCenter: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    alignItems: "center",
+    justifyContent: "center",
   },
   suggestionText: {
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
-  },
-  suggestionMeta: {
-    fontSize: FONT_SIZE.xs,
-    marginTop: SPACING.xs,
   },
   suggestionPrice: {
     fontSize: FONT_SIZE.md,
@@ -1012,28 +1537,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: COLORS.card,
   },
-  listBox: {
+  quantityInput: {
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 8,
-    padding: SPACING.sm,
-    backgroundColor: COLORS.card,
-  },
-  listRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: SPACING.sm,
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-  },
-  amountValue: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: "700",
-  },
-  noteText: {
-    fontSize: FONT_SIZE.xs,
-    marginTop: SPACING.xs,
-    fontStyle: "italic",
+    borderRadius: 4,
+    padding: SPACING.xs,
+    textAlign: 'center',
+    fontSize: FONT_SIZE.sm,
+    minWidth: 50,
   },
   rowSimple: {
     flexDirection: "row",
@@ -1076,7 +1587,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,
@@ -1100,6 +1610,54 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
     color: COLORS.sub,
     fontSize: FONT_SIZE.sm,
+  },
+  selectedItemBox: {
+    padding: SPACING.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  selectedItemText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+  selectedItemMeta: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs / 2,
+  },
+
+  /* Table styles */
+  tableContainer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    padding: SPACING.sm,
+    backgroundColor: COLORS.card,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+  },
+  headerText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "700",
+    color: COLORS.sub,
+  },
+  tableRow: {
+    flexDirection: "row",
+    padding: SPACING.sm,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+  },
+  tableCellText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+  tableCellSub: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs / 2,
   },
 });
 

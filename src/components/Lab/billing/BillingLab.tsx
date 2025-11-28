@@ -31,7 +31,7 @@ import {
   ShoppingBagIcon,
   XIcon,
 } from "../../../utils/SvgIcons";
-import { AuthFetch } from "../../../auth/auth";
+import { AuthFetch, AuthPost } from "../../../auth/auth";
 import PatientOuterTable from "../../Alerts/AlertsLab/OuterTable";
 import Footer from "../../dashboard/footer";
 
@@ -70,6 +70,32 @@ type LabTestOrder = {
   testsList: any[];
   totalAmount?: string;
   timeLineID?: number;
+};
+
+type PharmacyOrder = {
+  id: number;
+  patientID: string;
+  pID?: string;
+  pName: string;
+  patientName?: string;
+  dept?: string;
+  departmentID?: number;
+  doctor_firstName?: string;
+  doctor_lastName?: string;
+  firstName?: string;
+  lastName?: string;
+  addedOn: string;
+  paidAmount?: string;
+  dueAmount?: string;
+  ptype: number;
+  medicinesList: any[];
+  totalAmount?: string;
+  timeLineID?: number;
+  location?: string;
+  departmemtType?: number;
+  phoneNumber?: string;
+  pIdNew?: string;
+  nurseID?: number;
 };
 
 interface SidebarItem {
@@ -161,7 +187,7 @@ const IpdOrders: React.FC = () => {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
   const user = useSelector((s: any) => s.currentUser);
-  const [ipdOrders, setIpdOrders] = useState<LabTestOrder[]>([]);
+  const [ipdOrders, setIpdOrders] = useState<(LabTestOrder | PharmacyOrder)[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const rowsPerPage = 10;
@@ -174,6 +200,27 @@ const IpdOrders: React.FC = () => {
         return [];
       }
 
+      // For Pharmacy
+      if (user?.roleName === 'pharmacy') {
+        const response = await AuthFetch(
+          `medicineInventoryPatientsOrder/${user.hospitalID}/completed/2/getMedicineInventoryPatientsOrderWithType`,
+          token
+        );
+
+        if (response?.data?.status === 200 && Array.isArray(response?.data?.data)) {
+          const sortedData = response?.data?.data.sort((a: PharmacyOrder, b: PharmacyOrder) => {
+            const dateA = new Date(a.addedOn || 0).getTime();
+            const dateB = new Date(b.addedOn || 0).getTime();
+            return dateB - dateA;
+          });
+          return sortedData;
+        } else {
+          dispatch(showError("No IPD pharmacy orders found"));
+          return [];
+        }
+      } 
+      // For Radiology/Pathology
+      else {
       const response = await AuthFetch(
         `test/${user?.roleName}/${user?.hospitalID}/approved/getBillingData`,
         token
@@ -182,20 +229,21 @@ const IpdOrders: React.FC = () => {
       const billingData = response?.data?.billingData || response?.billingData;
       
       if ((response?.data?.message === "success" || response?.message === "success") && Array.isArray(billingData)) {
-        const filterData: LabTestOrder[] = billingData?.filter(
+        const filterData: LabTestOrder[] = billingData.filter(
           (each: LabTestOrder) => each?.ptype === 2 || each?.ptype === 3
         );
 
-        const sortedData = filterData?.sort((a: LabTestOrder, b: LabTestOrder) => {
-          const dateA = new Date(a?.completed_status || ((a?.testsList?.[0] as any)?.approved_status) || a?.addedOn || 0).getTime();
-          const dateB = new Date(b?.completed_status || ((b?.testsList?.[0] as any)?.approved_status) || b?.addedOn || 0).getTime();
-          return dateB - dateA;
+        const sortedData = filterData.sort((a: LabTestOrder, b: LabTestOrder) => {
+          const dateA = new Date(a.addedOn || 0).getTime();
+          const dateB = new Date(b.addedOn || 0).getTime();
+          return dateB - dateA; // Latest first
         });
 
         return sortedData;
       } else {
         dispatch(showError("No IPD orders found"));
         return [];
+        }
       }
     } catch (error) {
       dispatch(showError("Failed to load IPD orders"));
@@ -211,7 +259,7 @@ const IpdOrders: React.FC = () => {
   const indexOfLastRow = indexOfFirstRow + rowsPerPage;
   const pagedData = ipdOrders?.slice(indexOfFirstRow, indexOfLastRow) ?? [];
 
-  const handleProceedToPay = (order: LabTestOrder) => {
+  const handleProceedToPay = (order: LabTestOrder | PharmacyOrder) => {
     const dueAmount = calculateDueAmount(order);
 
     navigation.navigate("PaymentScreen", {
@@ -234,18 +282,36 @@ const IpdOrders: React.FC = () => {
     }
   };
 
-  const calculateDueAmount = (order: LabTestOrder) => {
-    if (!order?.testsList || order?.testsList?.length === 0) return 0;
+  const calculateDueAmount = (order: LabTestOrder | PharmacyOrder) => {
+    if (user?.roleName === 'pharmacy') {
+    const pharmacyOrder = order as PharmacyOrder;
+    if (!pharmacyOrder?.medicinesList || pharmacyOrder?.medicinesList?.length === 0) return 0;
     
     let totalAmount = 0;
-    order?.testsList?.forEach((test: any) => {
+    pharmacyOrder.medicinesList.forEach((medicine: any) => {
+        const price = medicine?.sellingPrice || 0;
+        const quantity = medicine?.updatedQuantity || 1;
+        const gst = medicine?.gst || 18;
+        totalAmount += (price * quantity) + ((price * quantity) * gst) / 100;
+      });
+      
+      const paidAmount = parseFloat(pharmacyOrder?.paidAmount || "0");
+      return Math.max(0, totalAmount - paidAmount);
+    } else {
+      // Lab test order calculation
+      const labOrder = order as LabTestOrder;
+      if (!labOrder?.testsList || labOrder?.testsList?.length === 0) return 0;
+      
+      let totalAmount = 0;
+    labOrder.testsList.forEach((test: any) => {
       const price = test?.testPrice || 0;
       const gst = test?.gst || 18;
       totalAmount += price + (price * gst) / 100;
     });
     
-    const paidAmount = parseFloat(order?.paidAmount || "0");
+    const paidAmount = parseFloat(labOrder?.paidAmount || "0");
     return Math.max(0, totalAmount - paidAmount);
+    }
   };
 
   // Pagination navigation function
@@ -304,7 +370,7 @@ const OpdOrders: React.FC = () => {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
   const user = useSelector((s: any) => s.currentUser);
-  const [opdOrders, setOpdOrders] = useState<LabTestOrder[]>([]);
+  const [opdOrders, setOpdOrders] = useState<(LabTestOrder | PharmacyOrder)[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const rowsPerPage = 10;
@@ -317,6 +383,27 @@ const OpdOrders: React.FC = () => {
         return [];
       }
 
+      // For Pharmacy
+      if (user?.roleName === 'pharmacy') {
+        const response = await AuthFetch(
+          `medicineInventoryPatientsOrder/${user.hospitalID}/completed/1/getMedicineInventoryPatientsOrderWithType`,
+          token
+        );
+
+        if (response?.data?.status === 200 && Array.isArray(response?.data?.data)) {
+          const sortedData = response?.data?.data.sort((a: PharmacyOrder, b: PharmacyOrder) => {
+            const dateA = new Date(a.addedOn || 0).getTime();
+            const dateB = new Date(b.addedOn || 0).getTime();
+            return dateB - dateA;
+          });
+          return sortedData;
+        } else {
+          dispatch(showError("No OPD pharmacy orders found"));
+          return [];
+        }
+      } 
+      // For Radiology/Pathology
+      else {
       const response = await AuthFetch(
         `test/${user?.roleName}/${user?.hospitalID}/approved/getBillingData`,
         token
@@ -325,20 +412,21 @@ const OpdOrders: React.FC = () => {
       const billingData = response?.data?.billingData || response?.billingData;
       
       if ((response?.data?.message === "success" || response?.message === "success") && Array.isArray(billingData)) {
-        const filterData = billingData?.filter(
+        const filterData = billingData.filter(
           (each: LabTestOrder) => each?.ptype === 21
         );
 
-        const sortedData = filterData?.sort((a: LabTestOrder, b: LabTestOrder) => {
-          const dateA = new Date(a?.completed_status || ((a?.testsList?.[0] as any)?.approved_status) || a?.addedOn || 0).getTime();
-          const dateB = new Date(b?.completed_status || ((b?.testsList?.[0] as any)?.approved_status) || b?.addedOn || 0).getTime();
-          return dateB - dateA;
+        const sortedData = filterData.sort((a: LabTestOrder, b: LabTestOrder) => {
+          const dateA = new Date(a.addedOn || 0).getTime();
+          const dateB = new Date(b.addedOn || 0).getTime();
+          return dateB - dateA; // Latest first
         });
 
         return sortedData;
       } else {
         dispatch(showError("No OPD orders found"));
         return [];
+        }
       }
     } catch (error) {
       dispatch(showError("Failed to load OPD orders"));
@@ -354,7 +442,7 @@ const OpdOrders: React.FC = () => {
   const indexOfLastRow = indexOfFirstRow + rowsPerPage;
   const pagedData = opdOrders?.slice(indexOfFirstRow, indexOfLastRow) ?? [];
 
-  const handleProceedToPay = (order: LabTestOrder) => {
+  const handleProceedToPay = (order: LabTestOrder | PharmacyOrder) => {
     const dueAmount = calculateDueAmount(order);
 
     navigation.navigate("PaymentScreen", {
@@ -377,18 +465,37 @@ const OpdOrders: React.FC = () => {
     }
   };
 
-  const calculateDueAmount = (order: LabTestOrder) => {
-    if (!order?.testsList || order?.testsList?.length === 0) return 0;
-    
-    let totalAmount = 0;
-    order?.testsList?.forEach((test: any) => {
+  const calculateDueAmount = (order: LabTestOrder | PharmacyOrder) => {
+    if (user?.roleName === 'pharmacy') {
+      // Pharmacy order calculation
+      const pharmacyOrder = order as PharmacyOrder;
+      if (!pharmacyOrder?.medicinesList || pharmacyOrder?.medicinesList?.length === 0) return 0;
+      
+      let totalAmount = 0;
+      pharmacyOrder.medicinesList.forEach((medicine: any) => {
+        const price = medicine?.sellingPrice || 0;
+        const quantity = medicine?.updatedQuantity || 1;
+        const gst = medicine?.gst || 18;
+        totalAmount += (price * quantity) + ((price * quantity) * gst) / 100;
+      });
+      
+      const paidAmount = parseFloat(pharmacyOrder?.paidAmount || "0");
+      return Math.max(0, totalAmount - paidAmount);
+    } else {
+      // Lab test order calculation
+      const labOrder = order as LabTestOrder;
+      if (!labOrder?.testsList || labOrder?.testsList?.length === 0) return 0;
+      
+      let totalAmount = 0;
+      labOrder.testsList.forEach((test: any) => {
       const price = test?.testPrice || 0;
       const gst = test?.gst || 18;
       totalAmount += price + (price * gst) / 100;
     });
     
-    const paidAmount = parseFloat(order?.paidAmount || "0");
+    const paidAmount = parseFloat(labOrder?.paidAmount || "0");
     return Math.max(0, totalAmount - paidAmount);
+    }
   };
 
   // Pagination navigation function
@@ -442,39 +549,262 @@ const OpdOrders: React.FC = () => {
   );
 };
 
+// Rejected Orders Component (Pharmacy Only)
+const RejectedOrders: React.FC = () => {
+  const dispatch = useDispatch();
+  const user = useSelector((s: any) => s.currentUser);
+  const [rejectedOrders, setRejectedOrders] = useState<PharmacyOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const rowsPerPage = 10;
+
+  const getRejectedOrders = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!user?.hospitalID || !token) {
+        dispatch(showError("Not authorized. Please login again."));
+        return [];
+      }
+
+      const response = await AuthFetch(
+        `medicineInventoryPatientsOrder/${user.hospitalID}/rejected/getMedicineInventoryPatientsOrder`,
+        token
+      );
+
+      if (response?.data?.status === 200 && Array.isArray(response?.data?.data)) {
+        const sortedData = response?.data?.data.sort((a: PharmacyOrder, b: PharmacyOrder) => {
+          const dateA = new Date(a.addedOn || 0).getTime();
+          const dateB = new Date(b.addedOn || 0).getTime();
+          return dateB - dateA;
+        });
+        return sortedData;
+      } else {
+        dispatch(showError("No rejected orders found"));
+        return [];
+      }
+    } catch (error) {
+      dispatch(showError("Failed to load rejected orders"));
+      return [];
+    }
+  }, [user?.hospitalID]);
+
+  // Pagination calculations
+  const totalItems = rejectedOrders?.length ?? 0;
+  const totalPages = Math.ceil(totalItems / rowsPerPage);
+  
+  const indexOfFirstRow = currentPage * rowsPerPage;
+  const indexOfLastRow = indexOfFirstRow + rowsPerPage;
+  const pagedData = rejectedOrders?.slice(indexOfFirstRow, indexOfLastRow) ?? [];
+
+  // Pagination navigation function
+  const goToPage = (page: number) => {
+    if (page >= 0 && page < totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const data = await getRejectedOrders();
+        setRejectedOrders(data);
+      } catch (error) {
+        dispatch(showError("Failed to load rejected orders"));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user?.hospitalID) {
+      loadData();
+    }
+  }, [user?.hospitalID, getRejectedOrders]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={brandColor} />
+        <Text style={styles.loadingText}>Loading Rejected Orders...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <PatientOuterTable
+        title="Rejected Orders"
+        data={pagedData}
+        isButton={false}
+        isRejectedTab={true}
+        isRejectReason="rejectReason"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={goToPage}
+      />
+    </View>
+  );
+};
+
+// Walk-In Orders Component (Pharmacy Only)
+const WalkInOrders: React.FC = () => {
+  const dispatch = useDispatch();
+  const user = useSelector((s: any) => s.currentUser);
+  const [walkInOrders, setWalkInOrders] = useState<PharmacyOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const rowsPerPage = 10;
+
+  const getWalkInOrders = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!user?.hospitalID || !token) {
+        dispatch(showError("Not authorized. Please login again."));
+        return [];
+      }
+
+      const response = await AuthFetch(
+        `medicineInventoryPatientsOrder/${user.hospitalID}/getMedicineInventoryPatientsOrderCompletedWithoutReg`,
+        token
+      );
+
+      if (response?.data?.status === 200 && Array.isArray(response?.data?.data)) {
+        const sortedData = response?.data?.data.sort((a: PharmacyOrder, b: PharmacyOrder) => {
+          const dateA = new Date(a.addedOn || 0).getTime();
+          const dateB = new Date(b.addedOn || 0).getTime();
+          return dateB - dateA;
+        });
+        return sortedData;
+      } else {
+        dispatch(showError("No walk-in orders found"));
+        return [];
+      }
+    } catch (error) {
+      dispatch(showError("Failed to load walk-in orders"));
+      return [];
+    }
+  }, [user?.hospitalID]);
+
+  // Pagination calculations
+  const totalItems = walkInOrders?.length ?? 0;
+  const totalPages = Math.ceil(totalItems / rowsPerPage);
+  
+  const indexOfFirstRow = currentPage * rowsPerPage;
+  const indexOfLastRow = indexOfFirstRow + rowsPerPage;
+  const pagedData = walkInOrders?.slice(indexOfFirstRow, indexOfLastRow) ?? [];
+
+  // Pagination navigation function
+  const goToPage = (page: number) => {
+    if (page >= 0 && page < totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const data = await getWalkInOrders();
+        setWalkInOrders(data);
+      } catch (error) {
+        dispatch(showError("Failed to load walk-in orders"));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user?.hospitalID) {
+      loadData();
+    }
+  }, [user?.hospitalID, getWalkInOrders]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={brandColor} />
+        <Text style={styles.loadingText}>Loading Walk-In Orders...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <PatientOuterTable
+        title="Walk-In Orders"
+        data={pagedData}
+        isButton={false}
+        sale="sale"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={goToPage}
+      />
+    </View>
+  );
+};
+
 // Orders Tabs Component
 const OrdersTabs: React.FC = () => {
-  const [activeTab, setActiveTab] = useState("IPD");
+  const user = useSelector((s: any) => s.currentUser);
+  const isPharmacy = user?.roleName === 'pharmacy';
+  const [activeTab, setActiveTab] = useState(isPharmacy ? "IPD" : "IPD");
+
+  const getTabs = () => {
+    if (isPharmacy) {
+      return [
+        { key: "ipd", label: "IPD" },
+        { key: "opd", label: "OPD" },
+        { key: "rejected", label: "Rejected" },
+        { key: "walkin", label: "Walk-In" },
+      ];
+    } else {
+      return [
+        { key: "ipd", label: "IPD" },
+        { key: "opd", label: "OPD" },
+      ];
+    }
+  };
 
   const renderContent = () => {
+    if (isPharmacy) {
     switch (activeTab) {
       case "IPD":
         return <IpdOrders />;
       case "OPD":
         return <OpdOrders />;
-      default:
-        return null;
+        case "Rejected":
+          return <RejectedOrders />;
+        case "Walk-In":
+          return <WalkInOrders />;
+        default:
+          return <IpdOrders />;
+      }
+    } else {
+      switch (activeTab) {
+        case "IPD":
+          return <IpdOrders />;
+        case "OPD":
+          return <OpdOrders />;
+        default:
+          return <IpdOrders />;
+      }
     }
   };
 
-  const tabs = [
-    { key: "ipd", label: "IPD" },
-    { key: "opd", label: "OPD" },
-  ];
+  const tabs = getTabs();
 
   return (
     <View style={styles.tabsMainContainer}>
       {/* Enhanced Tab Headers with Gradient */}
       <View style={styles.tabContainer}>
-        {tabs?.map((tab) => (
+        {tabs.map((tab) => (
           <TouchableOpacity
-            key={tab?.key}
-            style={[styles.tab, activeTab === tab?.label && styles.tabActive]}
+            key={tab.key}
+            style={[styles.tab, activeTab === tab.label && styles.tabActive]}
             onPress={() => {
-              setActiveTab(tab?.label);
+              setActiveTab(tab.label);
             }}
           >
-            {activeTab === tab?.label ? (
+            {activeTab === tab.label ? (
               <LinearGradient
                 colors={[COLORS.gradientStart, COLORS.gradientEnd]}
                 style={styles.tabGradient}
@@ -482,12 +812,12 @@ const OrdersTabs: React.FC = () => {
                 end={{ x: 1, y: 0 }}
               >
                 <Text style={[styles.tabText, styles.tabTextActive]}>
-                  {tab?.label}
+                  {tab.label}
                 </Text>
               </LinearGradient>
             ) : (
               <Text style={[styles.tabText, { color: COLORS.sub }]}>
-                {tab?.label}
+                {tab.label}
               </Text>
             )}
           </TouchableOpacity>
@@ -508,8 +838,11 @@ const BillingLab: React.FC = () => {
   const user = useSelector((s: any) => s.currentUser);
   const insets = useSafeAreaInsets();
 
-  const departmentType = user?.roleName === 'radiology' ? 'radiology' : 'pathology';
-  const departmentName = departmentType === 'radiology' ? 'Radiology' : 'Laboratory';
+  const departmentType = user?.roleName;
+  const departmentName = 
+    departmentType === 'radiology' ? 'Radiology' : 
+    departmentType === 'pathology' ? 'Laboratory' : 
+    departmentType === 'pharmacy' ? 'Pharmacy' : 'Department';
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -553,7 +886,8 @@ const BillingLab: React.FC = () => {
         onPress: () => go(`Billing${basePath}`)
       },
     ];
-  };
+  }
+
 
   const bottomItems: SidebarItem[] = [
     {

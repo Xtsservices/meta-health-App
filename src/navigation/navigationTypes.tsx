@@ -126,4 +126,14 @@ DischargeSummaryDownload: undefined;
   TaxInvoiceInPatient: undefined;
   TaxInvoiceWalkIn: undefined;
   ReportsLab:undefined;
+
+  // pharmacy
+  PharmacyExpenses:undefined;
+  InStock:undefined;
+  BillingDetails:undefined;
+  AddInventory:undefined;
+  InventoryDetail:undefined;
+  AddInventoryItem:undefined;
+  InvoiceDetailsLab:undefined;
+  PharmacyOrderDetails:undefined
 };

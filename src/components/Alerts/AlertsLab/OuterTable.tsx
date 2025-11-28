@@ -12,12 +12,12 @@ import {
   Platform,
   FlatList,
   SafeAreaView,
-  Alert,
 } from "react-native";
 import InnerTable from "./InnerTable";
 import { AuthPost, AuthFetch } from "../../../auth/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSelector, useDispatch } from "react-redux";
+import { useNavigation } from "@react-navigation/native";
 
 // Utils
 import {
@@ -54,6 +54,9 @@ interface PatientOuterTableProps {
   currentPage?: number;
   totalPages?: number;
   onPageChange?: (page: number) => void;
+  sale?: string;
+  isRejectReason?: string;
+  onRefresh?: () => void;
 }
 
 const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
@@ -72,8 +75,10 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   totalPages: externalTotalPages,
   onPageChange,
   alertFrom,
+  onRefresh,
 }) => {
   const dispatch = useDispatch();
+  const navigation = useNavigation<any>();
   const [internalPageOneBased, setInternalPageOneBased] = useState(1);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [actionValues, setActionValues] = useState<{ [key: string]: string }>(
@@ -90,6 +95,7 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const user = useSelector((state: any) => state.currentUser);
 
+  const isPharmacy = alertFrom === "pharmacy";
 
   const isExternalPagination =
     typeof externalCurrentPage === "number" &&
@@ -133,6 +139,31 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
     { label: "Inpatient Services", value: "IPD" },
     { label: "Emergency", value: "Emergency" },
   ];
+
+  // Check if this is a pharmacy order
+  const isPharmacyOrder = (order: any) => {
+    return order?.medicinesList !== undefined || 
+           order?.location !== undefined || 
+           order?.departmemtType !== undefined ||
+           user?.roleName === 'pharmacy';
+  };
+
+  // Get the appropriate data for InnerTable
+  const getInnerTableData = (order: any) => {
+    if (isPharmacyOrder(order)) {
+      return order?.medicinesList || [];
+    } else {
+      return order?.testsList || [];
+    }
+  };
+
+  const navigateToPharmacyOrderDetails = (order: any) => {
+    navigation.navigate("PharmacyOrderDetails", {
+      orderData: order,
+      patientID: getPatientId(order),
+      patientTimeLineID: getTimelineId(order),
+    });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -202,6 +233,15 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   };
 
   const handleRowClick = (id: string) => {
+    // For pharmacy, navigate instead of expanding
+    if (isPharmacy) {
+      const order = data.find((d: any) => d?.id === id || d?.patientID === id);
+      if (order) {
+        navigateToPharmacyOrderDetails(order);
+        return;
+      }
+    }
+    
     const next = expandedRow === id ? null : id;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedRow(next);
@@ -322,6 +362,13 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
           payload,
           token
         );
+      } else if (isPharmacy) {
+        // 👇 Pharmacy approve API
+        res = await AuthPost(
+          `medicineInventoryPatientsOrder/${user?.hospitalID}/completed/${patientTimeLineID}/updatePatientOrderStatus`,
+          {},
+          token
+        );
       } else {
         // 👇 Existing Lab approve API
         res = await AuthPost(
@@ -333,9 +380,12 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         );
       }
 
-      if (res?.status === "success") {
+      if (res?.data?.status === "success" || res?.status === 200) {
         setActionValues((prev) => ({ ...prev, [orderId]: "Accepted" }));
         dispatch(showSuccess("Order approved successfully"));
+        if (onRefresh) {
+          onRefresh();
+        }
       } else {
         dispatch(
           showError(
@@ -401,6 +451,13 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
           payload,
           token
         );
+      } else if (isPharmacy) {
+        // 👇 Pharmacy reject API
+        res = await AuthPost(
+          `medicineInventoryPatientsOrder/${user?.hospitalID}/rejected/${patientTimeLineID}/updatePatientOrderStatus`,
+          { rejectReason: reason },
+          token
+        );
       } else {
         // 👇 Existing Lab reject API
         res = await AuthPost(
@@ -410,11 +467,14 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         );
       }
 
-      if ( res?.status === "success" ) {
+      if ( res?.data?.status === "success" || res?.status === 200 ) {
         setActionValues((prev) => ({ ...prev, [orderId]: "Rejected" }));
         setSelectedRejectId(null);
         setRejectReasons((prev) => ({ ...prev, [orderId]: "" }));
         dispatch(showSuccess("Order rejected successfully"));
+         if (onRefresh) {
+          onRefresh();
+        }
       } else {
         dispatch(
           showError(res?.message || res?.data?.message || "Failed to reject order")
@@ -540,6 +600,11 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
                   </Text>
                 </View>
               </View>
+              {isPharmacy ? (
+                <View style={styles.viewDetailsContainer}>
+                  <Text style={styles.viewDetailsText}>View Details</Text>
+                </View>
+              ) : (
               <View style={styles.arrowContainer}>
                 <Text
                   style={[styles.arrow, isExpanded && styles.arrowExpanded]}
@@ -547,6 +612,7 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
                   {isExpanded ? "▲" : "▼"}
                 </Text>
               </View>
+              )}
             </View>
 
             <View style={styles.patientDetails}>
@@ -627,7 +693,7 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
           </View>
         </TouchableOpacity>
 
-        {isExpanded && (
+        {isExpanded && !isPharmacy && (
           <View style={styles.expandedContent}>
             {/* 🔹 Summary row visible in expanded view as well */}
             {(testsAmount > 0 || medicinesAmount > 0) && (
@@ -688,14 +754,21 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
               medicinesList={patient?.medicinesList || []}
               isButton={isButton}
               department={departmentName}
-              pType={patient?.ptype}
+              pType={patient?.ptype || patient?.departmemtType}
               labBilling={isBilling}
-              patientOrderPay={undefined}
-              patientOrderOpd={undefined}
               paidAmount={patient?.paidAmount}
               dueAmount={dueAmount.toString()}
+              grossAmount={(testsAmount + medicinesAmount).toString()}
+              gstAmount={"0"} // You'll need to calculate this properly
+              totalAmount={(testsAmount + medicinesAmount).toString()}
               isRejected={isRejectedTab}
               rejectedReason={patient?.rejectedReason}
+              // sale={sale}
+              // isRejectReason={isRejectReason}
+              isPharmacyOrder={isPharmacy}
+              alertFrom={isPharmacy ? "Pharmacy" : undefined}
+              patientData={patient}
+              nurseID={patient?.nurseID}
             />
           </View>
         )}
@@ -1037,6 +1110,17 @@ const styles = StyleSheet.create({
   arrowContainer: { padding: 4 },
   arrow: { fontSize: FONT_SIZE.md, color: COLORS.sub, fontWeight: "bold" },
   arrowExpanded: { color: COLORS.brand },
+  viewDetailsContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: COLORS.brand,
+    borderRadius: 8,
+  },
+  viewDetailsText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.buttonText,
+    fontWeight: "600",
+  },
   patientDetails: {
     flexDirection: "row",
     justifyContent: "space-between",

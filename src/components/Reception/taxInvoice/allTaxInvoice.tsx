@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useSelector } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
 import { COLORS } from "../../../utils/colour";
@@ -63,13 +63,10 @@ export type PatientData = {
   procedures: any[];
   patientTimeLineID?: string;
   pType?: string;
+  type?: string; // 'medicine' | 'lab'
+  paidAmount?: number;
+  dueAmount?: number;
 };
-
-const DEPARTMENT_OPTIONS = [
-  { value: "all", label: "All Departments" },
-  { value: "1", label: "OPD" },
-  { value: "2", label: "IPD / Emergency" },
-];
 
 const AllTaxInvoiceMobile: React.FC<AllTaxInvoiceProps> = ({
   startDate,
@@ -77,39 +74,260 @@ const AllTaxInvoiceMobile: React.FC<AllTaxInvoiceProps> = ({
 }) => {
   const user = useSelector((s: RootState) => s.currentUser);
   const navigation = useNavigation<any>();
+  const route = useRoute();
+
+  // Get department from route params or user role
+  const department = route.params?.department || user?.roleName?.toLowerCase();
+  const isPharmacy = department === 'pharmacy';
+  const isLab = department === 'pathology';
+  const isRadiology = department === 'radiology';
+  const isReception = !isPharmacy && !isLab && !isRadiology;
 
   const [departmentType, setDepartmentType] = useState<string>("all");
   const [invoiceData, setInvoiceData] = useState<PatientData[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getDepartmentLabel = (deptType: string): string => {
-    return deptType === "1" ? "OPD" : "IPD / Emergency";
+  // Get department options based on user department
+  const getDepartmentOptions = () => {
+    if (isReception) {
+      return [
+        { value: "all", label: "All Departments" },
+        { value: "1", label: "OPD" },
+        { value: "2", label: "IPD / Emergency" },
+      ];
+    } else if (isPharmacy) {
+      return [
+        { value: "2", label: "IPD" },
+        { value: "1", label: "OPD" },
+        { value: "3", label: "Walk-in" },
+      ];
+    } else {
+      // Labs and Radiology
+      return [
+        { value: "2", label: "IPD" },
+        { value: "1", label: "OPD" },
+        { value: "3", label: "Walk-in" },
+      ];
+    }
   };
-useEffect(() => {
-  const fetchInvoices = async () => {
-    if (!user?.hospitalID) {
-      setError("User authentication details missing");
-      setInvoiceData([]);
-      return;
+
+  const DEPARTMENT_OPTIONS = getDepartmentOptions();
+
+  const getDepartmentLabel = (deptType: string): string => {
+    if (deptType === "1") return "OPD";
+    if (deptType === "2") return "IPD / Emergency";
+    if (deptType === "3") return "Walk-in";
+    return "Unknown";
+  };
+
+  // Fetch pharmacy tax invoices
+  const fetchPharmacyTaxInvoices = async (token: string) => {
+    if (!user?.hospitalID) return [];
+
+    let endpoints: { url: string; deptType: string }[] = [];
+
+    if (departmentType === "all") {
+      endpoints = [
+        {
+          url: `medicineInventoryPatientsOrder/${user.hospitalID}/1/getMedicineInventoryPatientsOrderCompletedWithRegPatient?startDate=&endDate=`,
+          deptType: "1",
+        },
+        {
+          url: `medicineInventoryPatientsOrder/${user.hospitalID}/2/getMedicineInventoryPatientsOrderCompletedWithRegPatient?startDate=&endDate=`,
+          deptType: "2",
+        },
+        {
+          url: `medicineInventoryPatientsOrder/${user.hospitalID}/getMedicineInventoryPatientsOrderCompletedWithoutReg?startDate=&endDate=`,
+          deptType: "3",
+        },
+      ];
+    } else {
+      if (departmentType === "1") {
+        endpoints = [{
+          url: `medicineInventoryPatientsOrder/${user.hospitalID}/1/getMedicineInventoryPatientsOrderCompletedWithRegPatient?startDate=&endDate=`,
+          deptType: "1",
+        }];
+      } else if (departmentType === "2") {
+        endpoints = [{
+          url: `medicineInventoryPatientsOrder/${user.hospitalID}/2/getMedicineInventoryPatientsOrderCompletedWithRegPatient?startDate=&endDate=`,
+          deptType: "2",
+        }];
+      } else if (departmentType === "3") {
+        endpoints = [{
+          url: `medicineInventoryPatientsOrder/${user.hospitalID}/getMedicineInventoryPatientsOrderCompletedWithoutReg?startDate=&endDate=`,
+          deptType: "3",
+        }];
+      }
     }
 
-    setLoading(true);
-    setError(null);
+    const allRawItems: any[] = [];
 
-    try {
-      // 👉 Get token from AsyncStorage first, fallback to redux user
-      const storedToken = await AsyncStorage.getItem("token");
-      const token = storedToken || user?.token;
+    for (const ep of endpoints) {
+      try {
+        const res: any = await AuthFetch(ep.url, token);
+        const data = res?.data?.data || res?.data || res || [];
+        const arr = Array.isArray(data) ? data : [data];
+        
+        arr.forEach((item: any) =>
+          allRawItems.push({ ...item, deptType: ep.deptType })
+        );
+      } catch {
+        // ignore one endpoint failure and continue
+      }
+    }
 
-      if (!token) {
-        setError("User token missing");
-        setInvoiceData([]);
-        setLoading(false);
-        return;
+    return allRawItems.map((item: any, index: number) => {
+      const deptType = item.deptType || "1";
+
+      const medicinesList: MedicineItem[] = Array.isArray(item.medicinesList) 
+        ? item.medicinesList.map((m: any) => {
+            const price = Number(m.sellingPrice) || 0;
+            const gst = Number(m.gst) || 0;
+            const quantity = Number(m.updatedQuantity) || 1;
+            const amount = price * quantity * (1 + gst / 100);
+
+            return {
+              id: m.id,
+              name: m.medicineName || "Unknown Medicine",
+              category: m.medicineType || "",
+              qty: quantity,
+              hsn: m.hsn || "",
+              price,
+              gst,
+              amount,
+            };
+          })
+        : [];
+
+      return {
+        id: index + 1,
+        patientID: item.patientID || item.pID || `INV${index + 1}`,
+        pName: item.pName || "Unknown Patient",
+        dept: getDepartmentLabel(deptType),
+        firstName: item.firstName || "",
+        lastName: item.lastName || "",
+        date: item.addedOn || item.datetime || "",
+        addedOn: item.addedOn || item.datetime || "",
+        admissionDate: item.admissionDate || "",
+        category: item.category || "",
+        testList: [],
+        medicinesList,
+        procedures: [],
+        patientTimeLineID: item.patientTimeLineID || "",
+        pType: deptType === "1" ? "Outpatient" : "Inpatient",
+        type: "medicine",
+      };
+    });
+  };
+
+  // Fetch lab/radiology tax invoices
+  const fetchLabRadiologyTaxInvoices = async (token: string) => {
+    if (!user?.hospitalID) return [];
+
+    const deptName = isRadiology ? 'Radiology' : 'Pathology';
+    let endpoints: { url: string; deptType: string }[] = [];
+
+    if (departmentType === "all") {
+      endpoints = [
+        {
+          url: `test/getOpdIpdTaxInvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`,
+          deptType: "1", // Will filter by departmemtType in data
+        },
+        {
+          url: `test/getWalkinTaxinvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`,
+          deptType: "3",
+        },
+      ];
+    } else if (departmentType === "3") {
+      // Walk-in
+      endpoints = [{
+        url: `test/getWalkinTaxinvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`,
+        deptType: "3",
+      }];
+    } else {
+      // OPD or IPD
+      endpoints = [{
+        url: `test/getOpdIpdTaxInvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`,
+        deptType: departmentType,
+      }];
+    }
+
+    const allRawItems: any[] = [];
+
+    for (const ep of endpoints) {
+      try {
+        const res: any = await AuthFetch(ep.url, token);
+        const data = res?.data?.data || res?.data || res || [];
+        const arr = Array.isArray(data) ? data : [data];
+        
+        // Filter by department type for OPD/IPD data
+        let filteredData = arr;
+        if (ep.deptType !== "3" && departmentType !== "all") {
+          filteredData = arr.filter((item: any) => 
+            String(item.departmemtType) === departmentType
+          );
+        }
+        
+        filteredData.forEach((item: any) =>
+          allRawItems.push({ ...item, deptType: ep.deptType })
+        );
+      } catch {
+        // ignore one endpoint failure and continue
+      }
+    }
+
+    return allRawItems.map((item: any, index: number) => {
+      let deptType = item.deptType;
+      
+      // Determine department type from data for OPD/IPD
+      if (deptType !== "3") {
+        deptType = String(item.departmemtType || "1");
       }
 
-      // 1) Build endpoints list
+      const testList: TestItem[] = Array.isArray(item.testsList) || Array.isArray(item.labTests)
+        ? (item.testsList || item.labTests).map((t: any) => {
+            const price = Number(t.testPrice) || 0;
+            const gst = Number(t.gst) || 0;
+            const amount = price * (1 + gst / 100);
+
+            return {
+              testID: t.testID || t.id,
+              testName: t.testName || t.test || "Unknown Test",
+              loinc_num_: t.loinc_num_ || "N/A",
+              category: t.category || "Uncategorized",
+              price,
+              gst,
+              amount,
+            };
+          })
+        : [];
+
+      return {
+        id: index + 1,
+        patientID: item.patientID || item.pID || `INV${index + 1}`,
+        pName: item.pName || "Unknown Patient",
+        dept: getDepartmentLabel(deptType),
+        firstName: item.firstName || "",
+        lastName: item.lastName || "",
+        date: item.addedOn || item.datetime || "",
+        addedOn: item.addedOn || item.datetime || "",
+        admissionDate: item.admissionDate || "",
+        category: item.category || "",
+        testList,
+        medicinesList: [],
+        procedures: [],
+        patientTimeLineID: item.patientTimeLineID || "",
+        pType: deptType === "1" ? "Outpatient" : deptType === "3" ? "Walk-in" : "Inpatient",
+        type: "lab",
+      };
+    });
+  };
+
+  // Original reception tax invoices (your existing code)
+  const fetchReceptionTaxInvoices = async (token: string) => {
+    if (!user?.hospitalID) return [];
+
       const endpoints: { url: string; deptType: string }[] =
         departmentType === "all"
           ? [
@@ -129,7 +347,6 @@ useEffect(() => {
               },
             ];
 
-      // 2) Fetch all endpoints
       const allRawItems: any[] = [];
 
       for (const ep of endpoints) {
@@ -144,10 +361,7 @@ useEffect(() => {
         }
       }
 
-      // 3) Normalize items into PatientData[]
-      const normalized: PatientData[] = allRawItems.map(
-        (item: any, index: number) => {
-          // decide department type
+    return allRawItems?.map((item: any, index: number) => {
           const deptType =
             item.pType?.toString() ||
             item.deptType?.toString() ||
@@ -225,10 +439,50 @@ useEffect(() => {
             patientTimeLineID: item.patientTimeLineID || "",
             pType: deptType === "1" ? "Outpatient" : "Inpatient",
           };
-        }
-      );
+        });
+      };
 
-      setInvoiceData(normalized);
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      if (!user?.hospitalID) {
+        setError("User authentication details missing");
+        setInvoiceData([]);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const storedToken = await AsyncStorage.getItem("token");
+        const token = storedToken || user?.token;
+
+        if (!token) {
+          setError("User token missing");
+          setInvoiceData([]);
+          setLoading(false);
+          return;
+        }
+
+        let normalized: PatientData[] = [];
+
+        if (isPharmacy) {
+          normalized = await fetchPharmacyTaxInvoices(token);
+        } else if (isLab || isRadiology) {
+          normalized = await fetchLabRadiologyTaxInvoices(token);
+        } else {
+          // Reception - original functionality
+          normalized = await fetchReceptionTaxInvoices(token);
+        }
+
+        // Sort by date (newest first)
+        const sortedData = normalized.sort((a: PatientData, b: PatientData) => {
+          const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
+          const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
+          return dateB - dateA;
+        });
+
+        setInvoiceData(sortedData);
     } catch (err) {
       setInvoiceData([]);
       setError("Failed to load data. Please try again.");
@@ -238,7 +492,7 @@ useEffect(() => {
   };
 
   fetchInvoices();
-}, [user?.hospitalID, departmentType]);
+}, [user?.hospitalID, departmentType, department]);
 
 
   const filteredData = useMemo(() => {
@@ -270,6 +524,18 @@ useEffect(() => {
   const renderCard = ({ item, index }: { item: PatientData; index: number }) => {
     const totalTests = item.testList?.length ?? 0;
     const totalMeds = item.medicinesList?.length ?? 0;
+    const isPharmacyItem = item.type === 'medicine';
+
+    // Calculate total amount
+    const calculateTotalAmount = () => {
+      if (isPharmacyItem) {
+        return item.medicinesList?.reduce((sum, medicine) => sum + medicine.amount, 0) || 0;
+      } else {
+        return item.testList?.reduce((sum, test) => sum + test.amount, 0) || 0;
+      }
+    };
+
+    const totalAmount = calculateTotalAmount();
 
     return (
       <TouchableOpacity
@@ -279,6 +545,7 @@ useEffect(() => {
           navigation.navigate("InvoiceDetails", {
             invoice: item,
             source: "allTax",
+            department: department,
           })
         }
       >
@@ -306,10 +573,18 @@ useEffect(() => {
         </View>
 
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Invoices</Text>
+          <Text style={styles.metaLabel}>Items</Text>
           <Text style={styles.metaValue}>
-            {totalTests} tests • {totalMeds} medicines
+            {isPharmacyItem 
+              ? `${totalMeds} medicines` 
+              : `${totalTests} tests`
+            }
           </Text>
+        </View>
+
+        <View style={styles.metaRow}>
+          <Text style={styles.metaLabel}>Total Amount</Text>
+          <Text style={styles.totalAmount}>₹{totalAmount.toFixed(2)}</Text>
         </View>
 
         <View style={styles.viewDetailsRow}>
@@ -334,6 +609,7 @@ useEffect(() => {
             selectedValue={departmentType}
             onValueChange={(v) => setDepartmentType(v)}
             style={styles.picker}
+            dropdownIconColor={COLORS.text}
           >
             {DEPARTMENT_OPTIONS.map((opt) => (
               <Picker.Item
@@ -372,7 +648,7 @@ useEffect(() => {
               <Text style={styles.emptyTitle}>No Records Found</Text>
               {startDate && endDate && (
                 <Text style={styles.emptySub}>
-                  Try adjusting your date range
+                  Try adjusting your date range or department filter
                 </Text>
               )}
             </View>
@@ -402,15 +678,17 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   pickerWrap: {
-    width: responsiveWidth(46),
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 999,
+    width: responsiveWidth(90),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#fff",
+    backgroundColor: "#f9fafb",
   },
   picker: {
-    height: 36,
+    height: 55,
+    width: "100%",
+    color: "black"
   },
   loadingBox: {
     flex: 1,
@@ -479,11 +757,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#064E3B",
   },
-  indexText: {
-    fontSize: FONT_SIZE.xs,
-    color: "#6B7280",
-    marginTop: 4,
-  },
   metaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -497,6 +770,11 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     color: COLORS.text,
     textAlign: "right",
+  },
+  totalAmount: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+    color: COLORS.success,
   },
   viewDetailsRow: {
     marginTop: 10,
