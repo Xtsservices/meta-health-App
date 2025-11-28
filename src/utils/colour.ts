@@ -21,6 +21,7 @@ export const COLORS = {
   chipActiveBg: "#14b8a6",
   chipActiveText: "#ffffff",
   placeholderText: "#94a3b8",
+  fieldText: "#0f172a",
   
   // Semantic colors
   success: "#10b981",

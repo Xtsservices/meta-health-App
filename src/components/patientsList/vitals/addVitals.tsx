@@ -271,18 +271,28 @@ export default function AddVitalsScreen() {
   }, [applyAll, givenTime]);
 
   const onChange = (name: keyof VitalsForm, value: string) => {
-    if (["oxygen", "temperature", "pulse", "hrv", "respiratoryRate"].includes(name)) {
-      if (value && !/^\d+(\.\d+)?$/.test(value)) return;
-    }
-    if (name === "oxygen" && Number(value) > 100) return;
-    if (name === "temperature" && Number(value) > 45) return;
-    if (name === "pulse" && Number(value) > 200) return;
-    if (name === "hrv" && Number(value) > 200) return;
-    if (name === "bpH" && Number(value) > 200) return;
-    if (name === "bpL" && Number(value) > 200) return;
+  // Temperature → allow decimals (including "36." while typing)
+  if (name === "temperature") {
+    if (value !== "" && !/^(\d*\.?\d*)$/.test(value)) return;
+  }
+  
+  // All other numeric fields → integers only
+  else if (["oxygen", "pulse", "hrv", "respiratoryRate", "bpH", "bpL"].includes(name)) {
+    if (value !== "" && !/^\d*$/.test(value)) return;
+  }
 
-    setForm((p) => ({ ...p, [name]: value }));
-  };
+ 
+
+  // Upper limits (unchanged)
+  if (name === "oxygen" && Number(value) > 100) return;
+  if (name === "temperature" && Number(value) > 45) return;
+  if (name === "pulse" && Number(value) > 200) return;
+  if (name === "hrv" && Number(value) > 200) return;
+  if (name === "bpH" && Number(value) > 200) return;
+  if (name === "bpL" && Number(value) > 200) return;
+
+  setForm((p) => ({ ...p, [name]: value }));
+};
 
   const createTimeISO = (hhmm: string) => {
     if (!hhmm) return "";
@@ -421,29 +431,29 @@ export default function AddVitalsScreen() {
             )}
 
             {/* Temperature */}
-            <FieldTwo
-              left={{
-                title: "Temperature (°C)",
-                value: form.temperature ?? "",
-                onChange: (v) => onChange("temperature", v),
-                placeholder: "e.g., 36.6",
-                bg: fieldBg.temp,
-                keyboardType: "numeric",
-                onFocus: () => handleFocus("temperature"),
-                onBlur: handleBlur,
-                isFocused: focusedInput === "temperature",
-              }}
-              right={
-                !applyAll
-                  ? {
-                      title: "Time",
-                      value: form.temperatureTime ?? "",
-                      onChange: (v) => onChange("temperatureTime", v),
-                      asTime: true,
-                    }
-                  : undefined
-              }
-            />
+           <FieldTwo
+  left={{
+    title: "Temperature (°C)",
+    value: form.temperature ?? "",
+    onChange: (v) => onChange("temperature", v),
+    placeholder: "e.g., 36.6",
+    bg: fieldBg.temp,
+    keyboardType: "decimal-pad", // ← This is the key change
+    onFocus: () => handleFocus("temperature"),
+    onBlur: handleBlur,
+    isFocused: focusedInput === "temperature",
+  }}
+  right={
+    !applyAll
+      ? {
+          title: "Time",
+          value: form.temperatureTime ?? "",
+          onChange: (v) => onChange("temperatureTime", v),
+          asTime: true,
+        }
+      : undefined
+  }
+/>
 
             {/* Heart Rate */}
             <FieldTwo

@@ -14,7 +14,10 @@ import {
   TextInput,
   Alert,
   Linking,
+  PermissionsAndroid,
 } from "react-native";
+import ReactNativeBlobUtil from "react-native-blob-util"; // ⬅️ add this
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -41,6 +44,10 @@ import DischargeSummaryDownload from "./dischargeSummaryDownload";
 import AddTriageIssue from "../Triage/addTriageIssue";
 import { Edit2Icon } from "../../utils/SvgIcons";
 import { COLORS } from "../../utils/colour";
+import { PatientType } from "../../utils/types";
+import { ageFromDOB } from "../../utils/age";
+import { formatDate } from "../../utils/dateTime";
+import { showError, showSuccess } from "../../store/toast.slice";
 // ---- types ----
 type RootState = any;
 type testType = {
@@ -52,23 +59,7 @@ type testType = {
   mimeType?: string;
 };
 type Reminder = { dosageTime: string };
-type PatientType = {
-  id: number;
-  pUHID?: string;
-  pName?: string;
-  imageURL?: string;
-  gender?: number;
-  dob?: string;
-  doctorName?: string;
-  firstName?: string;
-  lastName?: string;
-  department?: string;
-  followUpStatus?: number;
-  followUpDate?: string;
-  ptype?: number;
-  patientStartStatus?: number;
-  patientEndStatus?: number;
-};
+
 type TimelineType = { id: number; patientID: number; patientEndStatus?: number };
 type RouteParams = { 
   id: string; 
@@ -104,36 +95,84 @@ function usePrintInPatientStore() {
 }
 
 // ---- helpers ----
-function getAge(dobStr?: string) {
-  if (!dobStr) return "";
-  const d = new Date(dobStr);
-  if (isNaN(d.getTime())) return "";
-  const now = new Date();
-  let y = now.getFullYear() - d.getFullYear();
-  const m = now.getMonth() - d.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) y--;
-  if (y >= 2) return `${y}y`;
-  let months = y * 12 + (now.getMonth() - d.getMonth());
-  if (now.getDate() < d.getDate()) months--;
-  if (months <= 0) {
-    const days = Math.max(0, Math.floor((now.getTime() - d.getTime()) / 86400000));
-    return `${days}d`;
-  }
-  return `${months}m`;
-}
-function formatDOB(dob?: string) {
-  if (!dob) return "—";
-  const date = new Date(dob);
-  if (isNaN(date.getTime())) return "—";
-  const day = date.getDate();
-  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const month = monthNames[date.getMonth()];
-  const year = date.getFullYear();
-  return `${day} ${month} ${year}`;
-}
+
+
 function compareDates(a: Reminder, b: Reminder) {
   return new Date(a.dosageTime).valueOf() - new Date(b.dosageTime).valueOf();
 }
+
+// Ask for storage permission on older Android devices
+const ensureStoragePermission = async (): Promise<boolean> => {
+  if (Platform.OS !== "android") return true;
+
+  // For Android 13+ (API 33+), using DownloadManager usually doesn't need WRITE permission
+  if (typeof Platform.Version === "number" && Platform.Version >= 33) {
+    return true;
+  }
+
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+      {
+        title: "Storage Permission",
+        message: "Storage access is required to download and save test reports.",
+        buttonPositive: "OK",
+      }
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch (e) {
+    return false;
+  }
+};
+
+type DownloadItem = {
+  fileURL: string;
+  fileName?: string;
+  mimeType?: string;
+};
+
+const downloadReportFile = async (item: DownloadItem) => {
+  const { fileURL, fileName, mimeType } = item;
+  if (!fileURL) return;
+
+  const isImage = mimeType?.startsWith("image/");
+  const extFromMime =
+    mimeType?.split("/")[1] ||
+    fileURL.split("?")[0].split(".").pop() ||
+    (isImage ? "jpg" : "pdf");
+
+  const name =
+    fileName ||
+    `report_${Date.now()}_${Math.floor(Math.random() * 1000)}.${extFromMime}`;
+
+  const dirs = ReactNativeBlobUtil.fs.dirs;
+  // Images → Pictures folder, otherwise Downloads
+  const baseDir = isImage ? dirs.PictureDir : dirs.DownloadDir;
+  const path = `${baseDir}/${name}`;
+
+  // Use Android DownloadManager (shows notification, appears in Downloads app)
+  return ReactNativeBlobUtil.config({
+    fileCache: true,
+    addAndroidDownloads: {
+      useDownloadManager: true,
+      notification: true,
+      path,
+      mime: mimeType || (isImage ? "image/*" : "application/pdf"),
+      title: name,
+      description: "Downloading test report",
+      mediaScannable: true,
+    },
+    path,
+  })
+    .fetch("GET", fileURL)
+    .then((res) => {
+      return res.path();
+    })
+    .catch((err) => {
+      throw err;
+    });
+};
+
 
 const FOOTER_HEIGHT = 64; // visual height of Footer area
 
@@ -188,6 +227,19 @@ const PatientProfileOPD: React.FC = () => {
 
   // Get patient start status
   const startStatus = currentPatient?.patientStartStatus ?? 0;
+let startStatusText = "";
+
+if (startStatus === 1) {
+  startStatusText = "Outpatient";
+} else if (startStatus === 2) {
+  startStatusText = "Inpatient";
+} else if (startStatus === 3) {
+  startStatusText = "Emergency";
+} else {
+  startStatusText = "Unknown";
+}
+
+
   const endStatus = currentPatient?.patientEndStatus ?? 0;
 
   // Check if patient is discharged
@@ -200,11 +252,11 @@ const PatientProfileOPD: React.FC = () => {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       const resp = await AuthFetch(`patient/${user?.hospitalID}/patients/single/${id}`, token);
-      if (resp?.status === "success" && resp?.data?.patient) {
+      if (resp?.status === "success" && "data" in resp && resp?.data?.patient) {
          dispatch(setCurrentPatientAction(resp.data.patient));
         setCurrentPatient(resp?.data?.patient);
         const timeLine = await AuthFetch(`patientTimeLine/${resp?.data?.patient.id}`, token);
-        if (timeLine?.status === "success" && timeLine?.data?.patientTimeLine) {
+        if (timeLine?.status === "success" && "data" in timeLine && timeLine?.data?.patientTimeLine) {
           setTimeline(timeLine?.data?.patientTimeLine);
         }
       }
@@ -219,7 +271,7 @@ const PatientProfileOPD: React.FC = () => {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       const res = await AuthFetch(`attachment/${user?.hospitalID}/all/${timeline.patientID}`, token);
-      if (res?.status === "success" && res?.data?.attachments) {
+      if (res?.status === "success" && "data" in res && res?.data?.attachments) {
         setReports(res?.data?.attachments);
       }
     } finally {
@@ -237,7 +289,7 @@ const PatientProfileOPD: React.FC = () => {
       `medicine/${timeline.id}/reminders/all`,
       token
     );
-    if (remindersRes?.status === "success") {
+    if (remindersRes?.status === "success" && "data" in remindersRes) {
       setReminder((remindersRes?.data?.reminders || []).sort(compareDates));
     }
 
@@ -245,7 +297,7 @@ const PatientProfileOPD: React.FC = () => {
       `alerts/hospital/${user?.hospitalID}/vitalAlerts/${currentPatient?.id}`,
       token
     );
-    if (alertsRes?.status === "success") {
+    if (alertsRes?.status === "success" && "data" in alertsRes) {
       setVitalAlert(alertsRes?.data?.alerts || []);
     }
 
@@ -253,7 +305,7 @@ const PatientProfileOPD: React.FC = () => {
       `symptom/${currentPatient.id}`,
       token
     );
-    if (symptomsRes?.status === "success") {
+    if (symptomsRes?.status === "success" && "data" in symptomsRes) {
       setSymptoms(symptomsRes?.data?.symptoms || []);
     }
 
@@ -261,7 +313,7 @@ const PatientProfileOPD: React.FC = () => {
       `medicine/${timeline.id}/previous/allmedlist`,
       token
     );
-    if (prevMedRes?.status === "success") {
+    if (prevMedRes?.status === "success" && "data" in prevMedRes) {
       setPreviousMedHistoryList(prevMedRes?.data?.previousMedList || []);
     }
 
@@ -269,7 +321,7 @@ const PatientProfileOPD: React.FC = () => {
       `test/${currentPatient.id}`,
       token
     );
-    if (testsRes?.status === "success") {
+    if (testsRes?.status === "success" && "data" in testsRes) {
       setSelectedTestList(testsRes.data?.tests || []);
     }
 
@@ -277,7 +329,7 @@ const PatientProfileOPD: React.FC = () => {
       `history/${user?.hospitalID}/patient/${currentPatient.id}`,
       token
     );
-    if (medHistRes?.status === "success") {
+    if (medHistRes?.status === "success" && "data" in medHistRes) {
       setMedicineHistory(medHistRes.data?.medicalHistory || []);
     }
 
@@ -285,7 +337,7 @@ const PatientProfileOPD: React.FC = () => {
       `vitals/${user?.hospitalID}/functions/${currentPatient.id}`,
       token
     );
-    if (vitFuncRes?.status === "success") {
+    if (vitFuncRes?.status === "success" && "data" in vitFuncRes) {
       setVitalFunction(vitFuncRes?.data || {});
     }
 
@@ -310,35 +362,56 @@ const PatientProfileOPD: React.FC = () => {
 };
 
 
-  const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolean) => {
-    setPrintSelectOptions(opts);
-    if (shouldPrint) {
-      const filtered = (reports || []).filter((r: any) => {
-        if (opts.includes("Radiology") && (r.category === "radiology" || r.category === "1")) return true;
-        if (opts.includes("Pathology") && (r.category === "pathology" || r.category === "2")) return true;
-        return false;
-      });
-      if (filtered.length === 0) {
-        Alert.alert("No reports", "No matching reports found.");
-        setPrintOpen(false);
-        setPrintSelectOptions([]);
-        return;
-      }
-      try {
-         filtered.forEach((item: any) => {
-      if (item.fileURL) {
-        Linking.openURL(item.fileURL).catch((err) => {
-        });
-      }
-    });
+const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolean) => {
+  setPrintSelectOptions(opts);
 
-        // Alert.alert("Downloads", `Queued ${filtered.length} report(s) for download.`);
-      } finally {
-        setPrintOpen(false);
-        setPrintSelectOptions([]);
-      }
-    }
-  };
+  if (!shouldPrint) return;
+
+  const filtered = (reports || []).filter((r: any) => {
+    if (opts.includes("Radiology") && (r.category === "radiology" || r.category === "1"))
+      return true;
+    if (opts.includes("Pathology") && (r.category === "pathology" || r.category === "2"))
+      return true;
+    return false;
+  });
+
+  if (filtered.length === 0) {
+    dispatch(showError("No matching reports found."));
+    setPrintOpen(false);
+    setPrintSelectOptions([]);
+    return;
+  }
+
+  // ✅ Ask for permission on Android (older versions)
+  const hasPermission = await ensureStoragePermission();
+  if (!hasPermission) {
+    dispatch(showError("Storage permission is needed to download reports."));
+    return;
+  }
+
+  try {
+    setIsPrintingReports(true);
+
+    await Promise.all(
+      filtered.map((item: any, index: number) =>
+        downloadReportFile({
+          fileURL: item.fileURL,
+          fileName: item.fileName || `report_${index + 1}`,
+          mimeType: item.mimeType,
+        })
+      )
+    );
+
+    dispatch(showSuccess(`${filtered.length} report(s) saved to your device.`));
+  } catch (err) {
+    dispatch(showError("Some reports could not be downloaded. Please try again."));
+  } finally {
+    setIsPrintingReports(false);
+    setPrintOpen(false);
+    setPrintSelectOptions([]);
+  }
+};
+
 
   const openReportFromMenu = async (type: "generalInfo" | "tests") => {
     setPrintSelectOptions([type]);
@@ -367,7 +440,7 @@ const PatientProfileOPD: React.FC = () => {
       : "";
 
   const genderText = currentPatient?.gender === 1 ? "Male" : "Female";
-  const ageText = currentPatient?.dob ? getAge(currentPatient?.dob) : "";
+  const ageText = currentPatient?.age ?  currentPatient?.age: ageFromDOB(currentPatient?.dob) ;
   const doctorText = (() => {
     if (currentPatient?.doctorName) {
       const d = currentPatient.doctorName;
@@ -585,7 +658,7 @@ const PatientProfileOPD: React.FC = () => {
                   {!isDischargedPatient && startStatus > 0 && (
                     <View style={[styles.badge, { backgroundColor: COLORS.brand + "22", borderColor: COLORS.brand }]}>
                       <Text style={[styles.badgeText, { color: COLORS.brand }]}>
-                        Status: {startStatus}
+                        Status: {startStatusText}
                       </Text>
                     </View>
                   )}
@@ -599,9 +672,8 @@ const PatientProfileOPD: React.FC = () => {
                 <Text style={[styles.fieldValue, { color: COLORS.text }]}>
                   {genderText}{ageText ? `, ${ageText}` : ""}
                 </Text>
-                <Text style={[styles.fieldHint, { color: COLORS.sub }]}>DOB: {formatDOB(currentPatient?.dob)}</Text>
+<Text style={[styles.fieldHint, { color: COLORS.sub }]}>DOB: {formatDate(currentPatient?.dob)}</Text>
               </View>
-
               <View style={styles.infoItem}>
                 <Text style={[styles.fieldValue, { color: COLORS.text }]}>{doctorText}</Text>
                 <Text style={[styles.fieldHint, { color: COLORS.sub }]}>{currentPatient?.department || "—"}</Text>
@@ -758,13 +830,32 @@ const PatientProfileOPD: React.FC = () => {
           <Pressable onPress={() => setPrintOpen(false)} style={[styles.sheetBtn, { backgroundColor: COLORS.pill }]}>
             <Text style={{ color: COLORS.text, fontWeight: "700" }}>Close</Text>
           </Pressable>
-          <Pressable
-            onPress={() => updateTheSelectedPrintOptions(printSelectOptions, true)}
-            style={[styles.sheetBtn, { backgroundColor: COLORS.button, opacity: printSelectOptions.length ? 1 : 0.5 }]}
-            disabled={!printSelectOptions.length}
-          >
-            <Text style={{ color: COLORS.buttonText, fontWeight: "700" }}>Download</Text>
-          </Pressable>
+         <Pressable
+  onPress={() => updateTheSelectedPrintOptions(printSelectOptions, true)}
+  style={[
+    styles.sheetBtn,
+    {
+      backgroundColor: COLORS.button,
+      opacity:
+        !printSelectOptions.length || isPrintingReports ? 0.5 : 1,
+    },
+  ]}
+  disabled={!printSelectOptions.length || isPrintingReports}
+>
+  {isPrintingReports ? (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <ActivityIndicator size="small" color={COLORS.buttonText} />
+      <Text style={{ color: COLORS.buttonText, fontWeight: "700" }}>
+        Downloading...
+      </Text>
+    </View>
+  ) : (
+    <Text style={{ color: COLORS.buttonText, fontWeight: "700" }}>
+      Download
+    </Text>
+  )}
+</Pressable>
+
         </View>
       </ActionSheet>
     </View>

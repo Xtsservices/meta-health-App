@@ -18,7 +18,7 @@ import {
   Modal,
   useColorScheme,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
@@ -338,7 +338,8 @@ if (user?.patientStatus === 1) {
   }, [user?.hospitalID]);
 
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     if (filterValue === 1) {
       // Follow-up filter – use followup API
       fetchFollowupPatients();
@@ -349,7 +350,7 @@ if (user?.patientStatus === 1) {
     if (user?.patientStatus === 2 || user?.patientStatus === 3) {
       fetchWards();
     }
-  }, [fetchPatients, fetchWards, user?.patientStatus, fetchFollowupPatients, filterValue]);
+  }, [fetchPatients, fetchWards, user?.patientStatus, fetchFollowupPatients, filterValue]))
 
   const filteredAndSearched = useMemo(() => {
     let base: PatientType[] = allPatients;
@@ -646,11 +647,11 @@ const patientStatusKey =
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
     const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—").toString();
-    const age = getAgeLabel(item?.dob);
+    const age =item?.age || getAgeLabel(item?.dob);
     const hasNotification = item.notificationCount && item.notificationCount > 0;
     const wardName = (user?.patientStatus === 2 || user?.patientStatus === 3) ? wardList.find(w => w.id === item.wardID)?.name || "—" : "—";
 const approvedDate = formatDate(item?.approvedTime)
-    const patientSurgeries = surgeryData[item.id] || [];
+    const patientSurgeries = surgeryData[item?.id] || [];
     const hasRejectedSurgery = patientSurgeries.some(surgery =>
       surgery.status?.toLowerCase() === "rejected"
     );

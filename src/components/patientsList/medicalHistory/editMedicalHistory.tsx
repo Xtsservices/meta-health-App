@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
-import { useRoute, useNavigation } from "@react-navigation/native";
+import { useRoute, useNavigation, useFocusEffect } from "@react-navigation/native";
 import { RootState } from "../../../store/store";
 import { AuthFetch, AuthPatch, AuthPut } from "../../../auth/auth";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
@@ -101,9 +101,10 @@ const EditMedicalHistoryScreen: React.FC = () => {
     }
   }, [user?.token, user?.hospitalID, patientId, dispatch]);
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     getMedicalHistory();
-  }, [getMedicalHistory]);
+  }, [getMedicalHistory]))
 
   const canSave =
     !!medicalHistory?.givenName &&

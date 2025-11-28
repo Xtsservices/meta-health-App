@@ -31,9 +31,7 @@ import { showError, showSuccess } from "../../../store/toast.slice";
 import { Role_NAME } from "../../../utils/role";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FONT_SIZE, responsiveHeight, responsiveWidth, SPACING } from "../../../utils/responsive";
-
-
-
+import { useFocusEffect } from "@react-navigation/native";
 
 type StatusType = "scheduled" | "completed" | "canceled";
 
@@ -185,7 +183,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
         token
       );
 
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         setDoctors(res.data?.users || []);
       }
     } catch (err) {
@@ -201,7 +199,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
         `department/${user.hospitalID}`,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         setDepartments(res.data?.departments || []);
       }
     } catch (err) {
@@ -223,11 +221,10 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
 
       const url = filterDate ? `${base}&date=${filterDate}` : base;
       const res = await AuthFetch(url, token);
-
-      if (res?.status && res.data?.data) {
-        setAppointments(res.data?.data || []);
-      } else if (res?.status === "success" && res?.data?.appointments) {
-        setAppointments(res.data?.appointments || []);
+      if (res?.status === "success" && "data" in res && res?.data?.data) {
+        setAppointments(res?.data?.data || []);
+      } else if (res?.status === "success" && "data" in res && res?.data?.appointments) {
+        setAppointments(res?.data?.appointments || []);
       } else if (Array.isArray(res)) {
         setAppointments(res as AppointmentType[]);
       } else {
@@ -260,9 +257,11 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
     }
   }, [fetchDepartments, user?.token]);
 
-  useEffect(() => {
+ useFocusEffect(
+  useCallback(() => {
     fetchAppointments();
-  }, [fetchAppointments]);
+  }, [fetchAppointments])
+);
 
   // ------------------- Actions (Scheduled only) -------------------
 
@@ -285,9 +284,9 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
       if (res.status === "success") {
         updateLocalStatus(id, "completed");
         await fetchAppointments();
-        dispatch(showSuccess(res?.message || "Appointment marked completed"));
+        dispatch(showSuccess(("message" in res ? res.message : null) || "Appointment marked completed"));
       } else {
-        dispatch(showError(res?.message || "Failed to complete appointment"));
+        dispatch(showError(("message" in res ? res.message : null) || "Failed to complete appointment"));
       }
     } catch (err: any) {
       dispatch(
@@ -313,9 +312,9 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
       if (!isError) {
         updateLocalStatus(id, "canceled");
         await fetchAppointments();
-        dispatch(showSuccess(res?.message || "Appointment canceled"));
+        dispatch(showSuccess(("message" in res ? res.message : null) || "Appointment canceled"));
       } else {
-        dispatch(showError(res?.message || "Failed to cancel appointment"));
+        dispatch(showError(("message" in res ? res.message : null) || "Failed to cancel appointment"));
       }
     } catch (err: any) {
       dispatch(
@@ -343,7 +342,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
         `doctor/${user.hospitalID}/${doctorId}/${dateStr}/getDoctorAppointmentsSlotsByDate`,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         const slots: SlotResp[] = (res.data.data || []).map((s: SlotResp) => ({
           id: s.id,
           fromTime: s.fromTime,
@@ -393,7 +392,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
       const isError = res?.status === "error";
       if (!isError) {
         dispatch(
-          showSuccess(res?.message || "Appointment rescheduled successfully")
+          showSuccess(("message" in res ? res.message : null) || "Appointment rescheduled successfully")
         );
         setRescheduleModalVisible(false);
         setRescheduleRow(null);
@@ -405,7 +404,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
         await fetchAppointments();
       } else {
         dispatch(
-          showError(res?.message || "Requested slot is not available")
+          showError(("message" in res ? res.message : null) || "Requested slot is not available")
         );
       }
     } catch (err: any) {
@@ -472,9 +471,9 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
     setNoSlotsMessage(null);
   };
 
-  function formatGender(gender: string | number | undefined) {
-    throw new Error("Function not implemented.");
-  }
+  // function formatGender(gender: string | number | undefined) {
+  //   // throw new Error("Function not implemented.");
+  // }
 
   // ------------------- Render -------------------
 
@@ -662,7 +661,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
                         "-",
                     ],
                     ["Age", row.age ?? "-"],
-                    ["Gender", formatGender(row.gender)],
+                    ["Gender", row.gender === "1" ? "Male" : row.gender === "2" ? "Female" : "Others"],
                     ["Mobile", row.mobileNumber ?? "-"],
                     ["Email", row.email ?? "-"],
                     ...(status === "completed"

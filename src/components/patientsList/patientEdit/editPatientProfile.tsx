@@ -265,6 +265,13 @@ const EditPatientMobile = () => {
       const data = new FormData();
 
       data.append("pName", pName);
+       if (dob) {
+        data.append("dob", dob);              // e.g. "2025-11-26"
+      }
+      if (ageNumber) {
+        data.append("age", ageNumber);        // numeric string
+        // data.append("ageUnit", ageUnit);      // "days" | "months" | "years"
+      }
       data.append("weight", weight);
       data.append("height", height);
       data.append("phoneNumber", phoneNumber);
@@ -282,7 +289,6 @@ const EditPatientMobile = () => {
       if (photoFile) data.append("photo", photoFile);
 
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
-
       const res = await UpdateFiles(
         `patient/${user?.hospitalID}/patients/single/${id}`,
         data,
@@ -475,7 +481,8 @@ const EditPatientMobile = () => {
             </View>
 
             <View style={styles.row}>
-              <View className="col">
+              <View 
+              >
                 {renderInput("Weight (kg)", weight, setWeight, false, {
                   keyboardType: "numeric",
                 })}

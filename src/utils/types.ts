@@ -692,7 +692,8 @@ export type SurgeryDetail = {
   completedTime?: string | null;
   key?: number; 
   patientAddedon?: string; 
-  rejectedTime?:string | null
+  rejectedTime?:string | null;
+  age: string | number | null;
 };
 
 export interface symptompstype {
