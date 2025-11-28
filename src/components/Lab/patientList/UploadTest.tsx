@@ -223,7 +223,6 @@ const UploadTest: React.FC = () => {
   
   const { state } = route.params as any;
   const { timeLineID, testID, walkinID, loincCode, testName, patientData } = state;
-  console.log("loincCode")
 
   const [files, setFiles] = useState<FileType[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -318,7 +317,6 @@ const normalizeUriForUpload = async (uri: string, name: string) => {
     }
     return uri;
   } catch (err) {
-    console.log("URI normalization error:", err);
     return uri; // Return original URI as fallback
   }
 };
@@ -428,7 +426,6 @@ const normalizeUriForUpload = async (uri: string, name: string) => {
     } catch (error: any) {
       // silence cancellation
       if (!error?.message?.toLowerCase()?.includes("cancel")) {
-        console.log("Document picking error:", error);
         Alert.alert("Error", "Failed to pick document(s)");
       }
     }

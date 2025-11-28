@@ -147,7 +147,6 @@ export default function RequestSurgeryScreen() {
               source={requestSurgeryImage} 
               style={styles.surgeryImage}
               resizeMode="contain"
-              onError={() => console.log("Failed to load surgery image")}
             />
           </View>
 
