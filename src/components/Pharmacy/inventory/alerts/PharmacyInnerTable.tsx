@@ -152,7 +152,7 @@ const PharmacyInnerTable: React.FC<InnerTableProps> = ({
             setNurses(response?.data?.data || []);
           }
         } catch (error) {
-          console.error("Error fetching nurses:", error);
+          dispatch(showError("Error fetching nurses"));
         }
       }
     };

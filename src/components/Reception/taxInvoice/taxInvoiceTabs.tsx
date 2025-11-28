@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Calendar as CalendarIcon, X as XIcon } from "lucide-react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useRoute } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -25,6 +25,7 @@ import {
 } from "../../../utils/responsive";
 import Footer from "../../dashboard/footer";
 import BillingTaxInvoiceList from "./ipdBilling";
+import { showError } from "../../../store/toast.slice";
 
 /* -------------------------------------------------------------------------- */
 /*                                   Types                                    */
@@ -113,7 +114,7 @@ const BillingTaxInvoiceMobile: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [nurses, setNurses] = useState<any[]>([]);
-
+  const dispatch = useDispatch();
   /* ------------------------------------------------------------------------ */
   /*                               Helper utils                               */
   /* ------------------------------------------------------------------------ */
@@ -886,7 +887,7 @@ const fetchPharmacyBilling = async (token: string) => {
         setNurses(response?.data?.data);
       }
     } catch (error) {
-      console.error("Error fetching nurses:", error);
+      dispatch(showError("Error fetching nurses"));
     }
   };
 

@@ -124,7 +124,6 @@ const AddInventory: React.FC = ({ navigation }: any) => {
       setExpenseData(data);
       setFilteredData(data);
     } catch (error) {
-      console.error("Error fetching inventory data:", error);
       setExpenseData([]);
       setFilteredData([]);
     } finally {

@@ -204,7 +204,6 @@ const FileUpload: React.FC<{
     } catch (error: any) {
       // If user cancelled — many libs throw; ignore
       if (!error?.message?.toLowerCase()?.includes("cancel")) {
-        console.log("Document picking error:", error);
         dispatch(showError("Failed to pick document"));
       }
     }
@@ -656,16 +655,6 @@ const SaleComp: React.FC = () => {
   const handleProceedToPay = async () => {
     const isAuthenticated = await checkAuth();
     if (!isAuthenticated) return;
-
-    // DEBUG: Check what's being passed
-    console.log("DEBUG - Before navigation:", {
-      type: type,
-      selectedTests: selectedTests,
-      selectedTestsLength: selectedTests.length,
-      selectedTestsContent: JSON.stringify(selectedTests),
-      selectedMedicines: selectedMedicines,
-      selectedMedicinesLength: selectedMedicines.length
-    });
 
     if (validateFormData()) {
       setIsSubmitting(true);

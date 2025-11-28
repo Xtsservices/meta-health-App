@@ -143,10 +143,10 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
           // Alternative structure
           setNurses(response.data);
         } else {
-          console.log("No nurses found - invalid response structure");
+          dispatch(showError("No nurses found - invalid response structure"));
         }
       } catch (error) {
-        console.error("Error fetching nurses:", error);
+        dispatch(showError("Error fetching nurses"));
       }
     };
 
@@ -236,7 +236,6 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
         dispatch(showError(errorMessage));
       }
     } catch (error: any) {
-      console.error("Approve order error:", error);
       dispatch(showError(error?.response?.data?.message || "Failed to approve order"));
     } finally {
       setIsProcessing(false);

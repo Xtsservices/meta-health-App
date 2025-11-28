@@ -17,6 +17,8 @@ import { formatDateTime } from "../../../utils/dateTime";
 import { PatientData } from "./taxInvoiceTabs";
 import { UserIcon } from "../../../utils/SvgIcons";
 import { ExternalLinkIcon } from "../../../utils/SvgIcons";
+import { showError } from "../../../store/toast.slice";
+import { useDispatch } from "react-redux";
 type Mode = "billing" | "allTax";
 
 type Props = {
@@ -53,7 +55,7 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
   const isLab = userDepartment === 'pathology';
   const isRadiology = userDepartment === 'radiology';
   const isReception = userDepartment === 'reception' || (!isPharmacy && !isLab && !isRadiology);
-
+  const dispatch = useDispatch();
   // Get department options based on mode and user department
   const getDepartmentOptions = () => {
     const isBilling = mode === 'billing';
@@ -162,12 +164,12 @@ const displayAmount = showDueAmount ? dueAmount : total;
 const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
 
     const handlePrescriptionPress = () => {
-      if (item.prescriptionURL) {
-        // You can use Linking to open the URL or navigate to a prescription viewer
-        Linking.openURL(item.prescriptionURL).catch(err => 
-          console.error('Failed to open prescription URL:', err)
-        );
-      }
+        if (item.prescriptionURL) {
+          Linking.openURL(item.prescriptionURL)
+            .catch(err => {
+              dispatch(showError("Failed to open prescription URL"));
+            });
+        }
     };
 
 

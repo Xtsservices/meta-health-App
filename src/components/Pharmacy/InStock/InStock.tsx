@@ -133,7 +133,6 @@ try {
     medicines = resp.medicines;
   }
 } catch (error) {
-  console.error('Error parsing medicine data:', error);
   medicines = [];
 }
 
