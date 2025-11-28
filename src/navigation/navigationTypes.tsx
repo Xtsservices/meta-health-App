@@ -131,4 +131,9 @@ DischargeSummaryDownload: undefined;
   PharmacyExpenses:undefined;
   InStock:undefined;
   BillingDetails:undefined;
+  AddInventory:undefined;
+  InventoryDetail:undefined;
+  AddInventoryItem:undefined;
+  InvoiceDetailsLab:undefined;
+  PharmacyOrderDetails:undefined
 };

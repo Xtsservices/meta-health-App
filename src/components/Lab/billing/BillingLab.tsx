@@ -887,7 +887,7 @@ const BillingLab: React.FC = () => {
       },
     ];
   }
-  };
+
 
   const bottomItems: SidebarItem[] = [
     {

@@ -57,27 +57,9 @@ interface InnerTableProps {
   patientOrderOpd?: string;
   paidAmount?: string;
   dueAmount?: string;
-  grossAmount?: string;
-  gstAmount?: string;
-  totalAmount?: string;
   isRejected?: boolean;
   rejectedReason?: string;
-  sale?: string;
-  isRejectReason?: string;
-  isPharmacyOrder?: boolean;
-  alertFrom?: string;
-  patientData?: any;
-  nurseID?: number;
 }
-
-const medicineCategoryReverse: Record<number, string> = {
-  1: "Tablet",
-  2: "Capsule", 
-  3: "Syrup",
-  4: "Injection",
-  5: "Ointment",
-  6: "Drops"
-};
 
 const InnerTable: React.FC<InnerTableProps> = ({
   patientID,
@@ -93,17 +75,8 @@ const InnerTable: React.FC<InnerTableProps> = ({
   patientOrderOpd,
   paidAmount,
   dueAmount,
-  grossAmount,
-  gstAmount,
-  totalAmount,
   isRejected = false,
   rejectedReason,
-  sale,
-  isRejectReason,
-  isPharmacyOrder = false,
-  alertFrom,
-  patientData,
-  nurseID,
 }) => {
   // 🔹 Normalized arrays
   const tests: TestItem[] = testsList ?? data ?? [];
@@ -203,29 +176,6 @@ const InnerTable: React.FC<InnerTableProps> = ({
             </Text>
           </View>
         </View>
-    </View>
-  );
-};
-
-  const renderMedicineTakenBy = (nurseID?: number, datetime?: string) => {
-    if (!nurseID) return null;
-
-    return (
-      <View style={styles.medicineTakenContainer}>
-        <View style={styles.medicineTakenContent}>
-          <Text style={styles.medicineTakenText}>
-            Medication Taken by <Text style={styles.nurseName}>Nurse #{nurseID}</Text>
-          </Text>
-          <View style={styles.acceptedBadge}>
-            <Text style={styles.acceptedText}>Accepted</Text>
-            <Text style={styles.checkmark}>✓</Text>
-          </View>
-        </View>
-        {datetime && (
-          <Text style={styles.medicineDate}>
-            {formatDateTime(datetime)}
-          </Text>
-        )}
       </View>
     );
   };
@@ -385,7 +335,7 @@ const InnerTable: React.FC<InnerTableProps> = ({
   const hasMeds = meds?.length > 0;
 
   return (
-    <View>
+    <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerMain}>
           <Text style={styles.headerTitle}>Order Details</Text>
@@ -582,50 +532,6 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     marginTop: SPACING.xs,
   },
-  medicineCard: {
-    backgroundColor: 'transparent',
-    margin: SPACING.sm,
-    borderRadius: 12,
-    padding: SPACING.md,
-  },
-  medicineHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-    paddingBottom: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.bg,
-  },
-  medicineBadge: {
-    backgroundColor: COLORS.success,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  medicineBadgeText: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: "700",
-    color: COLORS.buttonText,
-  },
-  medicineId: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.sub,
-    fontWeight: "500",
-  },
-  medicineContent: {
-    gap: SPACING.sm,
-  },
-  medicineName: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: "600",
-    color: COLORS.text,
-    lineHeight: 22,
-  },
-  medicineDetails: {
-    gap: SPACING.xs,
-    marginTop: SPACING.xs,
-  },
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -683,138 +589,43 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   billingSummary: {
-    padding: SPACING.sm,
-    backgroundColor: COLORS.card,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.bg,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
-  summaryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
   summaryTitle: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
     color: COLORS.text,
     marginBottom: SPACING.md,
     textAlign: "center",
   },
   summaryGrid: {
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
-  summaryRow: {
+  summaryItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: SPACING.xs,
   },
-  summaryItem: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: SPACING.sm,
-  },
   summaryLabel: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     fontWeight: "500",
   },
   summaryValue: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: "600",
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "700",
     color: COLORS.text,
-  },
-  dueRow: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: SPACING.sm,
-    marginTop: SPACING.xs,
   },
   dueAmount: {
     color: COLORS.danger,
-    fontWeight: '700',
   },
   paidAmount: {
     color: COLORS.success,
-    fontWeight: '700',
   },
-  statusBadge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: COLORS.chipBg,
-    marginLeft: SPACING.sm,
-  },
-  statusText: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: "700",
-  },
-  dueStatus: {
-    color: COLORS.danger,
-  },
-  paidStatus: {
-    color: COLORS.success,
-  },
-  medicineGroup: {
-    marginBottom: SPACING.lg,
-  },
-  groupHeader: {
-    padding: SPACING.md,
-    backgroundColor: COLORS.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  groupTitle: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: "600",
-    color: COLORS.text,
-  },
-  medicineTakenContainer: {
-    backgroundColor: '#BFFDC5',
-    margin: SPACING.md,
-    padding: SPACING.md,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#077D13',
-  },
-  medicineTakenContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  medicineTakenText: {
-    fontSize: FONT_SIZE.sm,
-    color: '#077D13',
-  },
-  nurseName: {
-    fontWeight: '700',
-    fontSize: FONT_SIZE.md,
-  },
-  acceptedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  acceptedText: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: '700',
-    color: '#077D13',
-  },
-  checkmark: {
-    fontSize: FONT_SIZE.md,
-    color: '#17D329',
-    fontWeight: 'bold',
-  },
-  medicineDate: {
-    fontSize: FONT_SIZE.xs,
-    color: '#077D13',
-    marginTop: SPACING.xs,
-    fontStyle: 'italic',
-  },
-  
 });
 
 export default InnerTable;

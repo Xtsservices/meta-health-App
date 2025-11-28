@@ -798,13 +798,19 @@ const DashboardLab: React.FC = () => {
         key: "billing",
         label: "Billing",
         icon: FileTextIcon,
-        onPress: () => go(`Billing${basePath}`)
+        onPress: () => navigation.navigate("TaxInvoiceTabs", { 
+          mode: "billing",
+          department: departmentType 
+        }),
       },
       {
         key: "tax",
         label: "Tax Invoice",
         icon: ReceiptIcon,
-        onPress: () => go(`TaxInvoice${basePath}`)
+        onPress: () => navigation.navigate("TaxInvoiceTabs", { 
+          mode: "allTax",
+          department: departmentType 
+        }),
       },
       
       // Operations Section

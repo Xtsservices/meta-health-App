@@ -10,15 +10,14 @@ import {
   UIManager,
   Pressable,
   Animated,
-  Dimensions,
 } from "react-native";
 import {
   SPACING,
   FONT_SIZE,
   ICON_SIZE,
+  responsiveWidth,
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
-import LinearGradient from 'react-native-linear-gradient';
 
 // Icons
 import {
@@ -27,12 +26,12 @@ import {
   EditIcon,
   PackageIcon,
   AlertTriangleIcon,
-  LinkIcon,
   XIcon,
   RupeeIcon,
   CalendarIcon,
   PillIcon,
 } from "../../../utils/SvgIcons";
+import { formatDate } from "../../../utils/dateTime";
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -73,28 +72,28 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
   const [selectedMedicineId, setSelectedMedicineId] = useState<number | null>(null);
   const [animations] = useState(new Map());
 
-  // Status colors with gradient
+  // Status colors
   const getStatusColors = (status: string) => {
     switch (status) {
       case "Expired":
-        return ['#ef4444', '#dc2626'];
+        return '#ef4444';
       case "Low Stock":
-        return ['#f59e0b', '#d97706'];
+        return '#f59e0b';
       case "Active":
-        return ['#10b981', '#059669'];
+        return '#10b981';
       default:
-        return [COLORS.sub, COLORS.sub];
+        return COLORS.sub;
     }
   };
 
   // Priority: Expired > Low Stock > Active
   const getItemStatus = (row: SelectedMedicineData) => {
-    if (row.expiryDate) {
+    if (row?.expiryDate) {
       const expiry = new Date(row.expiryDate);
       const now = new Date();
       if (!isNaN(expiry.getTime()) && expiry < now) return "Expired";
     }
-    if (typeof row.quantity === "number" && row.quantity <= 10) return "Low Stock";
+    if (typeof row?.quantity === "number" && row?.quantity <= 10) return "Low Stock";
     return "Active";
   };
 
@@ -166,40 +165,27 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
     return `₹${(value || 0).toFixed(2)}`;
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch {
-      return "-";
-    }
-  };
-
   return (
     <View style={styles.container}>
-      {data.length === 0 ? (
+      {data?.length === 0 ? (
         <View style={styles.noData}>
           <PillIcon size={32} color={COLORS.border} />
           <Text style={styles.noDataText}>No medicines in this order</Text>
         </View>
       ) : (
-        data.map((row) => {
+        data?.map((row) => {
           const status = getItemStatus(row);
-          const statusColors = getStatusColors(status);
-          const isExpanded = expandedRow === row.id;
-          const animation = getAnimation(row.id);
+          const statusColor = getStatusColors(status);
+          const isExpanded = expandedRow === row?.id;
+          const animation = getAnimation(row?.id);
 
-          const totalValue = (row.costPrice * row.quantity) || 0;
-          const gstAmount = (totalValue * (row.gst || 0)) / 100;
+          const totalValue = (row?.costPrice * row?.quantity) || 0;
+          const gstAmount = (totalValue * (row?.gst || 0)) / 100;
           const totalWithGst = totalValue + gstAmount;
 
           return (
             <Animated.View 
-              key={String(row.id)} 
+              key={String(row?.id)} 
               style={[
                 styles.medicineCard,
                 {
@@ -214,34 +200,29 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
             >
               <View style={styles.cardTop}>
                 <View style={styles.left}>
-                  <LinearGradient
-                    colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-                    style={styles.iconWrap}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
+                  <View style={styles.iconWrap}>
                     <PillIcon size={18} color={COLORS.buttonText} />
-                  </LinearGradient>
+                  </View>
 
                   <View style={styles.titleWrap}>
                     <Text numberOfLines={1} style={styles.nameText}>
-                      {row.name}
+                      {row?.name}
                     </Text>
                     <View style={styles.idCategoryRow}>
-                      <Text style={styles.idText}>ID: MED{String(row.id).padStart(3, "0")}</Text>
+                      <Text style={styles.idText}>ID: MED{String(row?.id).padStart(3, "0")}</Text>
                       <Text style={styles.dot}>•</Text>
-                      <Text style={styles.categoryText}>{row.category || "Uncategorized"}</Text>
+                      <Text style={styles.categoryText}>{row?.category || "Uncategorized"}</Text>
                     </View>
                   </View>
                 </View>
 
                 <View style={styles.right}>
                   <View style={styles.quantityBadge}>
-                    <Text style={styles.quantityText}>{row.quantity} pcs</Text>
+                    <Text style={styles.quantityText}>{row?.quantity} pcs</Text>
                   </View>
 
-                  <Pressable
-                    onPress={() => handleExpandClick(row.id)}
+                  {/* <Pressable
+                    onPress={() => handleExpandClick(row?.id)}
                     hitSlop={8}
                     accessibilityLabel={isExpanded ? "Collapse details" : "Expand details"}
                     style={styles.expandButton}
@@ -251,24 +232,19 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
                     ) : (
                       <ChevronDownIcon size={20} color={COLORS.brand} />
                     )}
-                  </Pressable>
+                  </Pressable> */}
                 </View>
               </View>
 
               <View style={styles.metaRow}>
                 <View style={styles.costSection}>
                   <RupeeIcon size={12} color={COLORS.sub} />
-                  <Text style={styles.costText}>{formatCurrency(row.costPrice)}</Text>
+                  <Text style={styles.costText}>{formatCurrency(row?.costPrice)}</Text>
                 </View>
 
-                <LinearGradient
-                  colors={statusColors}
-                  style={styles.statusBadge}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
+                <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
                   <Text style={styles.statusText}>{status}</Text>
-                </LinearGradient>
+                </View>
               </View>
 
               <Animated.View 
@@ -287,25 +263,25 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
                   <View style={styles.detailsGrid}>
                     <View style={styles.detailItem}>
                       <Text style={styles.detailLabel}>HSN / Batch</Text>
-                      <Text style={styles.detailValue}>{row.hsn || row.batchNumber || "-"}</Text>
+                      <Text style={styles.detailValue}>{row?.hsn || row?.batchNumber || "-"}</Text>
                     </View>
 
                     <View style={styles.detailItem}>
                       <Text style={styles.detailLabel}>Expiry Date</Text>
                       <View style={styles.dateRow}>
                         <CalendarIcon size={12} color={COLORS.sub} />
-                        <Text style={styles.detailValue}>{formatDate(row.expiryDate || "")}</Text>
+                        <Text style={styles.detailValue}>{formatDate(row?.expiryDate || "")}</Text>
                       </View>
                     </View>
 
                     <View style={styles.detailItem}>
                       <Text style={styles.detailLabel}>GST Rate</Text>
-                      <Text style={styles.detailValue}>{row.gst || 0}%</Text>
+                      <Text style={styles.detailValue}>{row?.gst || 0}%</Text>
                     </View>
 
                     <View style={styles.detailItem}>
                       <Text style={styles.detailLabel}>Selling Price</Text>
-                      <Text style={styles.detailValue}>{formatCurrency(row.sellingPrice)}</Text>
+                      <Text style={styles.detailValue}>{formatCurrency(row?.sellingPrice)}</Text>
                     </View>
                   </View>
 
@@ -315,7 +291,7 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
                       <Text style={styles.calcValue}>{formatCurrency(totalValue)}</Text>
                     </View>
                     <View style={styles.calcRow}>
-                      <Text style={styles.calcLabel}>GST ({row.gst || 0}%):</Text>
+                      <Text style={styles.calcLabel}>GST ({row?.gst || 0}%):</Text>
                       <Text style={styles.calcValue}>{formatCurrency(gstAmount)}</Text>
                     </View>
                     <View style={[styles.calcRow, styles.totalRow]}>
@@ -326,19 +302,12 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
 
                   <View style={styles.actionsRow}>
                     <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleEditMedicine(row.id)}
-                      accessibilityLabel={`Edit medicine ${row.name}`}
+                      style={[styles.actionButton, styles.primaryAction]}
+                      onPress={() => handleEditMedicine(row?.id)}
+                      accessibilityLabel={`Edit medicine ${row?.name}`}
                     >
-                      <LinearGradient
-                        colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-                        style={styles.actionGradient}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                      >
-                        <EditIcon size={14} color={COLORS.buttonText} />
-                        <Text style={styles.actionText}>Edit</Text>
-                      </LinearGradient>
+                      <EditIcon size={14} color={COLORS.buttonText} />
+                      <Text style={styles.actionText}>Edit</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -346,7 +315,7 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
                       onPress={() => {
                         /* update stock handler */
                       }}
-                      accessibilityLabel={`Update stock for ${row.name}`}
+                      accessibilityLabel={`Update stock for ${row?.name}`}
                     >
                       <PackageIcon size={14} color={COLORS.brand} />
                       <Text style={[styles.actionText, styles.secondaryActionText]}>Update Stock</Text>
@@ -354,8 +323,8 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
 
                     <TouchableOpacity
                       style={[styles.actionButton, styles.dangerAction]}
-                      onPress={() => handleDeleteMedicine(row.id)}
-                      accessibilityLabel={`Delete medicine ${row.name}`}
+                      onPress={() => handleDeleteMedicine(row?.id)}
+                      accessibilityLabel={`Delete medicine ${row?.name}`}
                     >
                       <XIcon size={14} color={COLORS.danger} />
                       <Text style={[styles.actionText, styles.dangerActionText]}>Delete</Text>
@@ -397,14 +366,7 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
                 style={styles.modalDelete} 
                 onPress={confirmDelete}
               >
-                <LinearGradient
-                  colors={['#ef4444', '#dc2626']}
-                  style={styles.modalDeleteGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.modalDeleteText}>Delete</Text>
-                </LinearGradient>
+                <Text style={styles.modalDeleteText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -449,6 +411,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
+    backgroundColor: COLORS.brand,
     justifyContent: "center",
     alignItems: "center",
     marginRight: SPACING.xs,
@@ -604,15 +567,15 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
     borderRadius: 8,
-    overflow: 'hidden',
-  },
-  actionGradient: {
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
     gap: SPACING.xs / 2,
+  },
+  primaryAction: {
+    backgroundColor: COLORS.brand,
   },
   secondaryAction: {
     borderWidth: 1.5,
@@ -705,11 +668,9 @@ const styles = StyleSheet.create({
   },
   modalDelete: {
     flex: 1,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  modalDeleteGradient: {
     padding: SPACING.sm,
+    backgroundColor: COLORS.danger,
+    borderRadius: 10,
     alignItems: "center",
   },
   modalDeleteText: {

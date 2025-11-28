@@ -13,6 +13,8 @@ import {
   UserPlus2,
   List as ListIcon,
   Settings,
+  Package, // For inventory icon
+  ShoppingCart, // For sales icon
 } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -44,24 +46,32 @@ const Footer: React.FC<Props> = ({
         navigation.navigate("DashboardOpd");
       } else if (user?.patientStatus === 2) {
         navigation.navigate("DashboardIpd");
-    }else if (user?.patientStatus === 2) {
-      navigation.navigate("TriageDashboard");
-      }else if (user?.roleName === "reception") {
-      navigation.navigate("DashboardReception");
-      }
-       else {
+      } else if (user?.patientStatus === 2) {
+        navigation.navigate("TriageDashboard");
+      } else if (user?.roleName === "reception") {
+        navigation.navigate("DashboardReception");
+      } else if (user?.roleName === "pharmacy") {
+        navigation.navigate("DashboardPharma");
+      } else {
         navigation.navigate("EmergencyDashboard");
       }
     } else if (k === "addPatient") {
+      // For pharmacy role, navigate to SaleComp (Walk-in/Sales)
+      if (user?.roleName === "pharmacy") {
+        navigation.navigate("SaleComp");
+      } 
       // For pathology and radiology roles, navigate to SaleComp (Walk-in)
-      if (user?.roleName === "pathology" || user?.roleName === "radiology") {
+      else if (user?.roleName === "pathology" || user?.roleName === "radiology") {
         navigation.navigate("SaleComp");
       } else {
         navigation.navigate("AddPatient");
       }
     } else if (k === "patients") {
+      if (user?.roleName === "pharmacy") {
+        navigation.navigate("AddInventory");
+      }
       // For pathology and radiology roles, navigate to PatientListLab
-      if (user?.roleName === "pathology" || user?.roleName === "radiology") {
+      else if (user?.roleName === "pathology" || user?.roleName === "radiology") {
         navigation.navigate("PatientListLab");
       }else if (user?.roleName === "reception") {
         navigation.navigate("ReceptionPatientsList");
@@ -75,6 +85,17 @@ const Footer: React.FC<Props> = ({
   };
 
   const getTabLabel = (k: TabKey): string => {
+    // Pharmacy specific labels
+    if (user?.roleName === "pharmacy") {
+      if (k === "addPatient") {
+        return "Sales";
+      }
+      if (k === "patients") {
+        return "Inventory";
+      }
+    }
+    
+    // Pathology/Radiology specific labels
     if (k === "addPatient" && (user?.roleName === "pathology" || user?.roleName === "radiology")) {
       return "Walk-in";
     }
@@ -89,12 +110,34 @@ const Footer: React.FC<Props> = ({
     return labels[k];
   };
 
+  const getTabIcon = (k: TabKey): React.ElementType => {
+    // Pharmacy specific icons
+    if (user?.roleName === "pharmacy") {
+      if (k === "addPatient") {
+        return ShoppingCart; // Sales icon
+      }
+      if (k === "patients") {
+        return Package; // Inventory icon
+      }
+    }
+    
+    // Default icons for other roles
+    const icons = {
+      dashboard: LayoutDashboard,
+      addPatient: UserPlus2,
+      patients: ListIcon,
+      management: Settings,
+    };
+    
+    return icons[k];
+  };
+
   const Item: React.FC<{
     k: TabKey;
-    Icon: React.ElementType;
-  }> = ({ k, Icon }) => {
+  }> = ({ k }) => {
     const isActive = active === k;
     const label = getTabLabel(k);
+    const IconComponent = getTabIcon(k);
     
     return (
       <TouchableOpacity
@@ -104,7 +147,7 @@ const Footer: React.FC<Props> = ({
         activeOpacity={0.9}
         style={styles.tab}
       >
-        <Icon size={22} color="#ffffff" />
+        <IconComponent size={22} color="#ffffff" />
         <Text style={[styles.tabText, { opacity: isActive ? 1 : 0.85 }]}>
           {label}
         </Text>
@@ -123,10 +166,10 @@ const Footer: React.FC<Props> = ({
 
   return (
     <View style={[styles.footer, { backgroundColor: brandColor }]}>
-      <Item k="dashboard" Icon={LayoutDashboard} />
-      <Item k="addPatient" Icon={UserPlus2} />
-      <Item k="patients" Icon={ListIcon} />
-      <Item k="management" Icon={Settings} />
+      <Item k="dashboard" />
+      <Item k="addPatient" />
+      <Item k="patients" />
+      <Item k="management" />
     </View>
   );
 };

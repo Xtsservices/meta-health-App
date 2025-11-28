@@ -39,6 +39,7 @@ export type MedicineItem = {
   price: number;
   gst: number;
   amount: number;
+  nurseID?: number;
 };
 
 export type TestItem = {
@@ -67,6 +68,12 @@ export type PatientData = {
   procedures: any[];
   patientTimeLineID?: string;
   pType?: string;
+  type?: string;
+  
+  paidAmount?: number;
+  dueAmount?: number;
+  totalAmount?: number;
+  prescriptionURL?: string; 
 };
 
 type Mode = "billing" | "allTax";
@@ -74,7 +81,8 @@ type Mode = "billing" | "allTax";
 const FOOTER_H = FOOTER_HEIGHT || 70;
 
 type RouteParams = {
-  mode?: Mode; // "billing" or "allTax"
+  mode?: Mode;
+  department?: string;
 };
 
 const BillingTaxInvoiceMobile: React.FC = () => {
@@ -84,7 +92,12 @@ const BillingTaxInvoiceMobile: React.FC = () => {
 
   // 🔹 Decide screen mode from navigation param
   const mode: Mode = route?.params?.mode === "allTax" ? "allTax" : "billing";
+  const department = route?.params?.department || user?.roleName?.toLowerCase();
   const isBilling = mode === "billing";
+  const isPharmacy = department === 'pharmacy';
+  const isLab = department === 'pathology';
+  const isRadiology = department === 'radiology';
+  const isReception = !isPharmacy && !isLab && !isRadiology;
 
   // 🔹 Date range state
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -99,6 +112,7 @@ const BillingTaxInvoiceMobile: React.FC = () => {
   const [data, setData] = useState<PatientData[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [nurses, setNurses] = useState<any[]>([]);
 
   /* ------------------------------------------------------------------------ */
   /*                               Helper utils                               */
@@ -159,15 +173,32 @@ const BillingTaxInvoiceMobile: React.FC = () => {
     setEndDate(null);
   };
 
-  const getDepartmentLabelBilling = (ptype: number) => {
+  const getDepartmentLabelBilling = (ptype: number, department?: string) => {
+    // For reception department
+    if (department === 'reception') {
     if (ptype === 1 || ptype === 21) return "OPD";
     if (ptype === 2 || ptype === 3) return "IPD / Emergency";
     return "Unknown";
   };
-
-  const getDepartmentLabelTax = (deptType: string): string => {
-    return deptType === "1" ? "OPD" : "IPD / Emergency";
+    // For all other departments (pharmacy, lab, radiology, etc.)
+    if (ptype === 21 || ptype === 1) return "OPD";
+    if (ptype === 2 || ptype === 3) return "IPD / Emergency";
+    return "Rejected";
   };
+
+  const getDepartmentLabelTax = (deptType: string, department?: string): string => {
+  // For reception department
+  if (department === 'reception') {
+    if (deptType === "1") return "OPD";
+    return "IPD / Emergency";
+  }
+  
+  // For all other departments (pharmacy, lab, radiology, etc.)
+  if (deptType === "1") return "OPD";
+  if (deptType === "2") return "IPD";
+  if (deptType === "3") return "Walk-in";
+  return "Unknown";
+};
 
   /* ------------------------------------------------------------------------ */
   /*                            Fetching & Normalizing                        */
@@ -175,12 +206,13 @@ const BillingTaxInvoiceMobile: React.FC = () => {
 
   // Reset department filter when mode changes (billing / tax)
   useEffect(() => {
-    setDepartmentType( "2" );
+    setDepartmentType("2");
     setData([]);
     setError(null);
-  }, [isBilling]);
+  }, [isBilling, department]);
 
-  const fetchBilling = async (token: string) => {
+  // Original reception billing function (unchanged)
+  const fetchReceptionBilling = async (token: string) => {
     if (!user?.hospitalID) return;
 
     const deptNum =
@@ -230,6 +262,7 @@ if (response?.status === "success" && "data" in response) {
   const isOPD = matchOPD(Number(ptypeSource));
   const isIPD = matchIPD(Number(ptypeSource));
   const finalDeptType = isOPD ? 1 : 2;
+  
   // 🔹 5. Universal timeline extractor (unchanged)
   const extractTimelineId = (obj: any): string => {
     return (
@@ -282,17 +315,31 @@ if (response?.status === "success" && "data" in response) {
     admissionDate: item.admittedOn ?? addedOn,
 
     // 🔹 6. Use ALL medicines (unfiltered)
-    medicinesList: meds.map((m: any) => ({
-      id: m.id,
-      name: m.medicineName ?? "Unknown",
-      qty: Number(m.updatedQuantity) || 1,
-      hsn: m.hsn ?? "",
-      price: Number(m.sellingPrice) || 0,
-      gst: Number(m.gst) || 0,
-      amount:
-        (Number(m.sellingPrice) || 0) *
-        (1 + (Number(m.gst) || 0) / 100),
-    })),
+medicinesList: Array.isArray(item.medicinesList) ? item.medicinesList.map((m: any) => {
+  const sellingPrice = Number(m.sellingPrice) || 0;
+  const quantity = Number(m.updatedQuantity) || 1;
+  const gst = Number(m.gst) || 0;
+  
+  // Calculate base amount (price * quantity)
+  const baseAmount = sellingPrice * quantity;
+  
+  // Calculate GST amount
+  const gstAmount = (baseAmount * gst) / 100;
+  
+  // Total amount = base amount + GST
+  const totalAmount = baseAmount + gstAmount;
+  
+  return {
+    id: m.id,
+    name: m.name || m.medicineName || "Unknown",
+    qty: quantity,
+    hsn: m.hsn || "",
+    price: sellingPrice,
+    gst: gst,
+    amount: totalAmount,
+    nurseID: m.nurseID,
+  };
+}) : [],
 
     // 🔹 7. Use FILTERED tests
     testList: tests.map((t: any) => ({
@@ -315,6 +362,101 @@ if (response?.status === "success" && "data" in response) {
   processed.push(patient);
 });
 
+    const sorted = processed.sort((a, b) => {
+        const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
+        const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      setData(sorted);
+    }
+  };
+
+  // Pharmacy billing function
+// Pharmacy billing function
+const fetchPharmacyBilling = async (token: string) => {
+  if (!user?.hospitalID) return;
+
+  const deptNum = typeof departmentType === "number" ? departmentType : Number(departmentType) || 2;
+  
+  let url = "";
+  if (deptNum === 1) {
+    // OPD
+    url = `medicineInventoryPatientsOrder/${user.hospitalID}/completed/1/getMedicineInventoryPatientsOrderWithType`;
+  } else if (deptNum === 2) {
+    // IPD
+    url = `medicineInventoryPatientsOrder/${user.hospitalID}/completed/2/getMedicineInventoryPatientsOrderWithType`;
+  } else if (deptNum === 3) {
+    // Walk-in
+    url = `medicineInventoryPatientsOrder/${user.hospitalID}/getMedicineInventoryPatientsOrderCompletedWithoutReg`;
+  } else if (deptNum === 4) {
+    // Rejected
+    url = `medicineInventoryPatientsOrder/${user.hospitalID}/rejected/getMedicineInventoryPatientsOrder`;
+  }
+
+  const response = await AuthFetch(url, token);
+  
+  if (response?.status === "success" && "data" in response) {
+    const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
+    
+    const processed: PatientData[] = rawData.map((item: any, index: number) => {
+      // Calculate total amount from medicines
+      const totalAmount = Array.isArray(item.medicinesList) 
+        ? item.medicinesList.reduce((sum: number, medicine: any) => {
+            const sellingPrice = Number(medicine.sellingPrice) || 0;
+            const quantity = Number(medicine.updatedQuantity) || 1;
+            const gst = Number(medicine.gst) || 0;
+            
+            const baseAmount = sellingPrice * quantity;
+            const gstAmount = (baseAmount * gst) / 100;
+            return sum + (baseAmount + gstAmount);
+          }, 0)
+        : 0;
+
+      // Get payment amounts from API response
+      const paidAmount = Number(item.paidAmount) || 0;
+      const dueAmount = Number(item.dueAmount) || totalAmount;
+
+      return {
+        id: index + 1,
+        patientID: String(item.patientID || item.pID || ""),
+        pName: item.pName || "Unknown Patient",
+        dept: getDepartmentLabelBilling(item.ptype || deptNum),
+        addedOn: item.addedOn || item.datetime || "",
+        firstName: item.doctorFirstName || "",
+        lastName: item.doctorLastName || "",
+        category: item.location || "",
+        patientTimeLineID: String(item.timeLineID || item.id || ""),
+        pType: deptNum === 1 ? "Outpatient" : "Inpatient",
+        type: "medicine",
+        // ADDED: Include payment amounts
+        totalAmount: totalAmount,
+        paidAmount: paidAmount,
+        dueAmount: dueAmount,
+        medicinesList: Array.isArray(item.medicinesList) ? item.medicinesList.map((m: any) => {
+          const sellingPrice = Number(m.sellingPrice) || 0;
+          const quantity = Number(m.updatedQuantity) || 1;
+          const gst = Number(m.gst) || 0;
+          
+          const baseAmount = sellingPrice * quantity;
+          const gstAmount = (baseAmount * gst) / 100;
+          const totalAmount = baseAmount + gstAmount;
+
+          return {
+            id: m.id,
+            name: m.name || m.medicineName || "Unknown",
+            qty: quantity,
+            hsn: m.hsn || "",
+            price: sellingPrice,
+            gst: gst,
+            amount: totalAmount,
+            nurseID: m.nurseID,
+          };
+        }) : [],
+        testList: [],
+        procedures: [],
+      };
+    });
 
     const sorted = processed.sort((a, b) => {
       const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
@@ -323,9 +465,85 @@ if (response?.status === "success" && "data" in response) {
     });
 
     setData(sorted);
-}
+  }
+};
+  // Lab/Radiology billing function - MODIFIED to include dueAmount
+  const fetchLabRadiologyBilling = async (token: string) => {
+    if (!user?.hospitalID) return;
+
+    const deptName = isRadiology ? 'radiology' : 'pathology';
+    const url = `test/${deptName}/${user.hospitalID}/approved/getBillingData`;
+    
+    const response = await AuthFetch(url, token);
+    // FIXED: Use the correct response structure from working code
+    const billingData = response?.data?.billingData || response?.billingData || response?.data?.data || response?.data;
+    
+    if ((response?.data?.message === "success" || response?.message === "success" || response?.status === "success") && Array.isArray(billingData)) {
+      
+      // FIXED: Use the same filtering logic as working code
+      const filteredData = billingData.filter((each: any) => {
+        const ptype = each?.ptype;
+        if (departmentType === "1") return ptype === 21; // OPD (21)
+        if (departmentType === "2") return ptype === 2 || ptype === 3; // IPD (2 or 3)
+        return true;
+      });
+
+      const processed: PatientData[] = filteredData.map((item: any, index: number) => {
+        // Calculate total amount from tests
+        const totalAmount = Array.isArray(item.testsList) 
+          ? item.testsList.reduce((sum: number, test: any) => {
+              const price = Number(test.testPrice) || 0;
+              const gst = Number(test.gst) || 0;
+              return sum + (price * (1 + gst / 100));
+            }, 0)
+          : 0;
+
+        // Get paid amount and due amount from API response
+        const paidAmount = Number(item.paidAmount) || 0;
+        const dueAmount = Number(item.dueAmount) || totalAmount; // Use dueAmount from API, fallback to totalAmount
+
+        return {
+          id: index + 1,
+          patientID: String(item.patientID || item.pID || ""),
+          pName: item.pName || "Unknown Patient",
+          dept: getDepartmentLabelBilling(item.ptype || 1),
+          addedOn: item.addedOn || item.datetime || "",
+          firstName: item.doctorFirstName || "",
+          lastName: item.doctorLastName || "",
+          category: "",
+          patientTimeLineID: String(item.timeLineID || item.id || ""),
+          pType: (item.ptype === 21) ? "Outpatient" : "Inpatient",
+          type: "lab",
+          testList: Array.isArray(item.testsList) ? item.testsList.map((t: any) => ({
+            testID: t.id || t.testID,
+            testName: t.test || t.testName,
+            loinc_num_: t.loinc_num_ || "",
+            category: t.category || "pathology",
+            price: Number(t.testPrice) || 0,
+            gst: Number(t.gst) || 0,
+            amount: (Number(t.testPrice) || 0) * (1 + (Number(t.gst) || 0) / 100),
+          })) : [],
+          medicinesList: [],
+          procedures: [],
+          // ADDED: Include payment amounts from API response
+          totalAmount: totalAmount,
+          paidAmount: paidAmount,
+          dueAmount: dueAmount,
+        };
+      });
+
+      const sorted = processed.sort((a, b) => {
+        const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
+        const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      setData(sorted);
+    } else {
+      setData([]); // Set empty array if no data
+    }
   };
-  const fetchAllTaxInvoices = async (token: string) => {
+  const fetchReceptionTaxInvoices = async (token: string) => {
     if (!user?.hospitalID) return;
 
     const deptStr =
@@ -388,6 +606,7 @@ if (response?.status === "success" && "data" in response) {
               price,
               gst,
               amount,
+              nurseID: m.nurseID,
             };
           }) || [];
 
@@ -447,6 +666,231 @@ if (response?.status === "success" && "data" in response) {
     setData(normalized);
   };
 
+  // Pharmacy tax invoices function
+  const fetchPharmacyTaxInvoices = async (token: string) => {
+    if (!user?.hospitalID) return;
+
+    const deptNum = typeof departmentType === "number" ? departmentType : Number(departmentType) || 2;
+    
+    let url = "";
+    if (deptNum === 1) {
+      // OPD
+      url = `medicineInventoryPatientsOrder/${user.hospitalID}/1/getMedicineInventoryPatientsOrderCompletedWithRegPatient?startDate=&endDate=`;
+    } else if (deptNum === 2) {
+      // IPD
+      url = `medicineInventoryPatientsOrder/${user.hospitalID}/2/getMedicineInventoryPatientsOrderCompletedWithRegPatient?startDate=&endDate=`;
+    } else if (deptNum === 3) {
+      // Walk-in
+      url = `medicineInventoryPatientsOrder/${user.hospitalID}/getMedicineInventoryPatientsOrderCompletedWithoutReg?startDate=&endDate=`;
+    }
+
+    const response = await AuthFetch(url, token);
+    
+    if (response?.status === "success" && "data" in response) {
+      const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
+      
+      const processed: PatientData[] = rawData.map((item: any, index: number) => ({
+        id: index + 1,
+        patientID: String(item.patientID || item.pID || ""),
+        pName: item.pName || "Unknown Patient",
+        dept: getDepartmentLabelTax(String(deptNum)),
+        addedOn: item.addedOn || item.datetime || "",
+        firstName: item.firstName || "",
+        lastName: item.lastName || "",
+        category: "",
+        patientTimeLineID: String(item.patientTimeLineID || item.id || ""),
+        pType: deptNum === 1 ? "Outpatient" : "Inpatient",
+        type: "medicine",
+        medicinesList: Array.isArray(item.medicinesList) ? item.medicinesList.map((m: any) => ({
+          id: m.id,
+          name: m.name || m.medicineName || "Unknown",
+          category: m.medicineType || "",
+          qty: Number(m.updatedQuantity) || 1,
+          hsn: m.hsn || "",
+          price: Number(m.sellingPrice) || 0,
+          gst: Number(m.gst) || 0,
+          amount: (Number(m.sellingPrice) || 0) * (Number(m.updatedQuantity) || 1) * (1 + (Number(m.gst) || 0) / 100),
+          nurseID: m.nurseID,
+        })) : [],
+        testList: [],
+        procedures: [],
+      }));
+
+      setData(processed);
+    }
+  };
+
+  // Lab/Radiology tax invoices function
+  const fetchLabRadiologyTaxInvoices = async (token: string) => {
+    if (!user?.hospitalID) return;
+
+    const deptName = isRadiology ? 'Radiology' : 'Pathology';
+    const url = `test/getOpdIpdTaxInvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`;
+    
+    const response = await AuthFetch(url, token);
+    if (response?.status === "success" && "data" in response) {
+      const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
+      
+      // Filter by department type
+      const filteredData = rawData.filter((item: any) => {
+        if (departmentType === "1") return item.departmemtType === 1; // OPD
+        if (departmentType === "2") return item.departmemtType === 2; // IPD
+        return true;
+      });
+
+      const processed: PatientData[] = filteredData.map((item: any, index: number) => ({
+        id: index + 1,
+        patientID: String(item.patientID || ""),
+        pName: item.pName || "Unknown Patient",
+        dept: getDepartmentLabelTax(String(item.departmemtType || 1)),
+        addedOn: item.addedOn || "",
+        firstName: item.firstName || "",
+        lastName: item.lastName || "",
+        category: item.category || "",
+        patientTimeLineID: String(item.patientTimeLineID || ""),
+        pType: item.departmemtType === 1 ? "Outpatient" : "Inpatient",
+        type: "lab",
+        testList: Array.isArray(item.testsList) ? item.testsList.map((t: any) => ({
+          testID: t.testID,
+          testName: t.testName,
+          loinc_num_: t.loinc_num_ || "",
+          category: t.category || "",
+          price: Number(t.testPrice) || 0,
+          gst: Number(t.gst) || 0,
+          amount: (Number(t.testPrice) || 0) * (1 + (Number(t.gst) || 0) / 100),
+        })) : [],
+        medicinesList: [],
+        procedures: [],
+      }));
+      const sorted = processed.sort((a, b) => {
+      const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
+      const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
+      return dateB - dateA; // Descending order (newest first)
+    });
+
+
+      setData(sorted);
+    }
+  };
+
+  // Walk-in tax invoices function
+  const fetchWalkinTaxInvoices = async (token: string) => {
+    if (!user?.hospitalID) return;
+
+    if (isPharmacy) {
+      const url = `medicineInventoryPatientsOrder/${user.hospitalID}/getMedicineInventoryPatientsOrderCompletedWithoutReg?startDate=&endDate=`;
+      const response = await AuthFetch(url, token);
+      
+      if (response?.status === "success" && "data" in response) {
+        const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
+        
+        const processed: PatientData[] = rawData.map((item: any, index: number) => ({
+          id: index + 1,
+          patientID: String(item.pID || item.patientID || ""),
+          pName: item.pName || "Unknown Patient",
+          dept: "Walk-in",
+          addedOn: item.addedOn || "",
+          firstName: "",
+          lastName: "",
+          category: "",
+          patientTimeLineID: String(item.id || ""),
+          pType: "Walk-in",
+          type: "medicine",
+          pIdNew: item.pIdNew ? String(item.pIdNew) : undefined, // Add this
+          prescriptionURL: item.prescriptionURL || undefined, // Add this
+          medicinesList: Array.isArray(item.medicinesList) ? item.medicinesList.map((m: any) => ({
+            id: m.id,
+            name: m.name || m.medicineName || "Unknown", 
+            category: m.medicineType || "",
+            qty: Number(m.updatedQuantity) || 1,
+            hsn: m.hsn || "",
+            price: Number(m.sellingPrice) || 0,
+            gst: Number(m.gst) || 0,
+            amount: (Number(m.sellingPrice) || 0) * (Number(m.updatedQuantity) || 1) * (1 + (Number(m.gst) || 0) / 100),
+            nurseID: m.nurseID,
+          })) : [],
+          testList: [],
+          procedures: [],
+        }));
+
+        setData(processed);
+      }
+    } else {
+      const deptName = isRadiology ? 'Radiology' : 'Pathology';
+      const url = `test/getWalkinTaxinvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`;
+      
+      const response = await AuthFetch(url, token);
+      
+      if (response?.status === "success" && "data" in response) {
+        const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
+        
+        const processed: PatientData[] = rawData.map((item: any, index: number) => ({
+          id: index + 1,
+          patientID: String(item.pID || item.patientID || ""),
+          pName: item.pName || "Unknown Patient",
+          dept: "Walk-in",
+          addedOn: item.addedOn || "",
+          firstName: "",
+          lastName: "",
+          category: "",
+          patientTimeLineID: String(item.id || ""),
+          pType: "Walk-in",
+          type: "lab",
+          testList: Array.isArray(item.testsList) ? item.testsList.map((t: any) => ({
+            testID: t.testID,
+            testName: t.testName,
+            loinc_num_: t.loinc_num_ || "",
+            category: t.category || "",
+            price: Number(t.testPrice) || 0,
+            gst: Number(t.gst) || 0,
+            amount: (Number(t.testPrice) || 0) * (1 + (Number(t.gst) || 0) / 100),
+          })) : [],
+          medicinesList: [],
+          procedures: [],
+        }));
+
+        setData(processed);
+      }
+    }
+  };
+
+  const fetchBilling = async (token: string) => {
+    if (isPharmacy) {
+      await fetchPharmacyBilling(token);
+    } else if (isLab || isRadiology) {
+      await fetchLabRadiologyBilling(token);
+    } else {
+      await fetchReceptionBilling(token);
+    }
+  };
+
+  const fetchAllTaxInvoices = async (token: string) => {
+    if (departmentType === "3") {
+      // Walk-in
+      await fetchWalkinTaxInvoices(token);
+    } else if (isPharmacy) {
+      await fetchPharmacyTaxInvoices(token);
+    } else if (isLab || isRadiology) {
+      await fetchLabRadiologyTaxInvoices(token);
+    } else {
+      await fetchReceptionTaxInvoices(token);
+    }
+  };
+
+  const fetchNurses = async (token: string) => {
+    if (!user?.hospitalID) return;
+    
+    try {
+      const response = await AuthFetch(`doctor/${user.hospitalID}/getAllNurse`, token);
+      if (response?.status === "success" && Array.isArray(response?.data?.data)) {
+        setNurses(response?.data?.data);
+      }
+    } catch (error) {
+      console.error("Error fetching nurses:", error);
+    }
+  };
+
+  // Update the load function to fetch nurses
   useEffect(() => {
     const load = async () => {
       if (!user?.hospitalID) {
@@ -469,6 +913,9 @@ if (response?.status === "success" && "data" in response) {
           return;
         }
 
+        // Fetch nurses first
+        await fetchNurses(token);
+
         if (isBilling) {
           await fetchBilling(token);
         } else {
@@ -483,14 +930,13 @@ if (response?.status === "success" && "data" in response) {
     };
 
     load();
-  }, [user?.hospitalID, isBilling, departmentType]);
+  }, [user?.hospitalID, isBilling, departmentType, department]);
 
   /* ------------------------------------------------------------------------ */
   /*                               Date Filtered                              */
   /* ------------------------------------------------------------------------ */
 
   const filteredData = useMemo(() => {
-    // If no dates selected, return everything
     if (!startDate && !endDate) return data;
 
     const start = startDate
@@ -523,8 +969,8 @@ if (response?.status === "success" && "data" in response) {
 
   const headerTitle = isBilling ? "Billing" : "All Tax Invoices";
   const headerSubtitle = isBilling
-    ? "View IPD/OPD billing records"
-    : "View all completed tax invoices";
+    ? `View ${department} billing records`
+    : `View all completed ${department} tax invoices`;
 
   /* ------------------------------------------------------------------------ */
   /*                                 Render                                   */
@@ -605,7 +1051,7 @@ if (response?.status === "success" && "data" in response) {
         <DateTimePicker
           value={tempDate}
           mode="date"
-          display={Platform.OS === "android" ? "spinner" : "default"} // as requested
+          display={Platform.OS === "android" ? "spinner" : "default"}
           maximumDate={new Date()}
           minimumDate={
             pickerTarget === "end" && startDate
@@ -628,6 +1074,8 @@ if (response?.status === "success" && "data" in response) {
           endDate={endDate}
           departmentType={departmentType}
           onDepartmentTypeChange={setDepartmentType}
+          userDepartment={department}
+          nurses={nurses} 
         />
       </View>
 
@@ -669,7 +1117,6 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xs,
     gap: 8,
   },
-  // New date box styles
   dateBox: {
     flex: 1,
     paddingHorizontal: SPACING.sm,
@@ -702,24 +1149,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
-  // old chip styles (unused but harmless; delete if you want clean file)
-  dateChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 999,
-    backgroundColor: "#E5F6FF",
-    gap: 6,
-    maxWidth: responsiveWidth(70),
-  },
-  dateChipText: {
-    flex: 1,
-    fontSize: FONT_SIZE.xs,
-    color: "#111827",
-  },
-
   content: {
     flex: 1,
     paddingHorizontal: SPACING.md,

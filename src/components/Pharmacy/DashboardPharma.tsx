@@ -7,7 +7,6 @@ import {
   ScrollView,
   StatusBar,
   TouchableOpacity,
-  Dimensions,
   Platform,
   ActivityIndicator,
   Modal,
@@ -25,7 +24,7 @@ import { RootState } from "../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../auth/auth";
 import Footer from "../dashboard/footer";
-import { LineChart } from "react-native-chart-kit";
+import { LineChart, BarChart } from "react-native-chart-kit";
 import { formatDate } from "../../utils/dateTime";
 
 // Import responsive utils and colors
@@ -63,7 +62,9 @@ import {
   FileTextIcon,
   XIcon,
   UsersIcon,
-  ReceiptIcon
+  ReceiptIcon,
+  TrendingUpIcon,
+  Package2Icon
 } from "../../utils/SvgIcons";
 
 // Types
@@ -162,10 +163,15 @@ const ConfirmDialog: React.FC<{
 const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onMenu }) => {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
-        <MenuIcon size={isSmallDevice ? ICON_SIZE.sm : ICON_SIZE.md} color={COLORS.buttonText} />
-      </TouchableOpacity>
+      <View style={styles.headerContent}>
+        <View>
+          <Text style={styles.headerTitle}>{title}</Text>
+          <Text style={styles.headerSubtitle}>Pharmacy Management Dashboard</Text>
+        </View>
+        <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
+          <MenuIcon size={isSmallDevice ? ICON_SIZE.sm : ICON_SIZE.md} color={COLORS.buttonText} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -176,19 +182,28 @@ const StatCard: React.FC<{
   value: number | string;
   icon: React.ElementType;
   color: string;
-}> = ({ title, value, icon: Icon, color }) => {
+  trend?: number;
+}> = ({ title, value, icon: Icon, color, trend }) => {
   const cardWidth = isTablet 
     ? responsiveWidth(22) 
     : (responsiveWidth(100) - SPACING.lg * 2 - SPACING.sm) / 2;
 
   return (
-    <View style={[styles.statCard, { backgroundColor: `${color}15`, width: cardWidth }]}>
+    <View style={[styles.statCard, { width: cardWidth }]}>
       <View style={styles.statContent}>
         <View style={styles.statInfo}>
           <Text style={styles.statTitle}>{title}</Text>
           <Text style={styles.statValue}>{value}</Text>
+          {trend !== undefined && (
+            <View style={styles.trendContainer}>
+              <TrendingUpIcon size={14} color={trend >= 0 ? COLORS.success : COLORS.danger} />
+              <Text style={[styles.trendText, { color: trend >= 0 ? COLORS.success : COLORS.danger }]}>
+                {trend >= 0 ? '+' : ''}{trend}%
+              </Text>
+            </View>
+          )}
         </View>
-        <View style={[styles.statIcon, { backgroundColor: `${color}30` }]}>
+        <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
           <Icon size={isSmallDevice ? ICON_SIZE.sm : ICON_SIZE.md} color={color} />
         </View>
       </View>
@@ -201,6 +216,7 @@ const ChartCard: React.FC<{ title: string; children: React.ReactNode }> = ({ tit
   <View style={styles.chartCard}>
     <View style={styles.chartHeader}>
       <Text style={styles.chartTitle}>{title}</Text>
+     
     </View>
     {children}
   </View>
@@ -703,35 +719,38 @@ const DashboardPharma: React.FC = () => {
     },
     
     // Pharmacy Management Section
-// In the sidebar items, update the sale navigation:
-{
-  key: "sale",
-  label: "Sale",
-  icon: ShoppingCartIcon,
-  onPress: () => navigation.navigate("SaleComp", { 
-    type: "medicine" 
-    // department is not needed for medicine type
-  })
-},
-  {
-    key: "alerts",
-    label: "Alerts",
-    icon: BellIcon, // Using BellIcon for alerts
-    onPress: () => go("AlertsPharmacy"), // Navigate to pharmacy alerts
-    isAlert: true, // Optional: to show alert badge
-    alertCount: 5 // Optional: number of pending alerts
-  },
+    {
+      key: "sale",
+      label: "Sale",
+      icon: ShoppingCartIcon,
+      onPress: () => navigation.navigate("SaleComp", { 
+        type: "medicine" 
+      })
+    },
+    {
+      key: "alerts",
+      label: "Alerts",
+      icon: BellIcon,
+      onPress: () => go("AlertsLab"),
+      isAlert: true,
+    },
     {
       key: "orders",
       label: "Patient Orders",
       icon: FileTextIcon,
-      onPress: () => go(`BillingLab`)
+      onPress: () => navigation.navigate("TaxInvoiceTabs", { 
+        mode: "billing",
+        department: "pharmacy" 
+      }),
     },
     {
       key: "tax",
       label: "Tax Invoice",
       icon: ReceiptIcon,
-      onPress: () => go("TaxInvoice")
+      onPress: () => navigation.navigate("TaxInvoiceTabs", { 
+        mode: "allTax",
+        department: "pharmacy" 
+      }),
     },
     {
       key: "stock",
@@ -779,7 +798,7 @@ const DashboardPharma: React.FC = () => {
 
   // Render medication item
   const renderMedicationItem = ({ item, index }: { item: TopMedication; index: number }) => (
-    <View style={styles.medicationItem}>
+    <TouchableOpacity style={styles.medicationItem} activeOpacity={0.7}>
       <View style={styles.medicationRank}>
         <Text style={styles.rankText}>#{index + 1}</Text>
       </View>
@@ -796,14 +815,17 @@ const DashboardPharma: React.FC = () => {
         <Text style={styles.prescribedText}>{item?.prescribed}</Text>
         <Text style={styles.prescribedLabel}>prescribed</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   // Render prescription item
   const renderPrescriptionItem = ({ item }: { item: PharmacyOrder }) => (
-    <TouchableOpacity style={styles.prescriptionItem}>
+    <TouchableOpacity style={styles.prescriptionItem} activeOpacity={0.7}>
       <View style={styles.prescriptionHeader}>
-        <Text style={styles.patientName}>{item?.pName}</Text>
+        <View style={styles.patientInfo}>
+          <Text style={styles.patientName}>{item?.pName}</Text>
+          <Text style={styles.patientId}>ID: {item?.patientID || 'N/A'}</Text>
+        </View>
         <View style={[
           styles.statusBadge,
           { backgroundColor: item?.alertStatus?.toLowerCase() === 'pending' ? COLORS.warning + '20' : COLORS.success + '20' }
@@ -817,18 +839,28 @@ const DashboardPharma: React.FC = () => {
         </View>
       </View>
       <View style={styles.prescriptionDetails}>
-        <Text style={styles.detailText}>
-          {item?.medicinesList?.length || 0} items • {formatDate(item?.addedOn)}
-        </Text>
-        <Text style={styles.detailText}>
-          {item?.location || '-'}
-        </Text>
+        <View style={styles.detailRow}>
+          <Package2Icon size={14} color={COLORS.sub} />
+          <Text style={styles.detailText}>
+            {item?.medicinesList?.length || 0} items
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <ClockIcon size={14} color={COLORS.sub} />
+          <Text style={styles.detailText}>
+            {formatDate(item?.addedOn)}
+          </Text>
+        </View>
       </View>
       <View style={styles.prescriptionFooter}>
         <Text style={styles.amountText}>
-          {item?.paidAmount ? `₹${item.paidAmount}` : ''}
+          {item?.paidAmount ? `₹${item.paidAmount}` : 'Not Paid'}
         </Text>
-        <EyeIcon size={isSmallDevice ? 14 : 16} color={COLORS.sub} />
+        <View style={styles.actionButtons}>
+          <TouchableOpacity style={styles.viewButton}>
+            <EyeIcon size={16} color={COLORS.brand} />
+          </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -863,41 +895,65 @@ const DashboardPharma: React.FC = () => {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          {isDashboardCountsLoading ? (
-            <ActivityIndicator size="small" color={COLORS.brand} />
-          ) : dashboardCounts ? (
-            <>
-              <StatCard
-                title="Prescriptions Today"
-                value={dashboardCounts.prescriptionsToday}
-                icon={FileTextIcon}
-                color={COLORS.brand}
-              />
-              <StatCard
-                title="Pending Orders"
-                value={dashboardCounts.prescriptionsToday - dashboardCounts.acceptedPrescriptions}
-                icon={ClockIcon}
-                color={COLORS.warning}
-              />
-              <StatCard
-                title="Low Stock Items"
-                value={dashboardCounts.lowStockItems}
-                icon={AlertTriangleIcon}
-                color={COLORS.danger}
-              />
-              <StatCard
-                title="Revenue Today"
-                value={formatCurrency(dashboardCounts.revenueToday)}
-                icon={IndianRupeeIcon}
-                color={COLORS.success}
-              />
-            </>
-          ) : (
-            <Text style={styles.noDataText}>No dashboard data available</Text>
-          )}
+        {/* Welcome Section */}
+        <View style={styles.welcomeSection}>
+          <View>
+            <Text style={styles.welcomeTitle}>Welcome back, {user?.firstName}!</Text>
+            <Text style={styles.welcomeSubtitle}>Here's your pharmacy overview for today</Text>
+          </View>
+          <View style={styles.dateBadge}>
+            <Text style={styles.dateText}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+          </View>
         </View>
+
+{/* Stats Grid - 2x2 Layout */}
+<View style={styles.statsGrid}>
+  {isDashboardCountsLoading ? (
+    <ActivityIndicator size="small" color={COLORS.brand} />
+  ) : dashboardCounts ? (
+    <>
+      {/* First Row */}
+      <View style={styles.statsRow}>
+        <StatCard
+          title="Prescriptions Today"
+          value={dashboardCounts.prescriptionsToday}
+          icon={FileTextIcon}
+          color={COLORS.brand}
+          trend={12}
+        />
+        <StatCard
+          title="Pending Orders"
+          value={dashboardCounts.prescriptionsToday - dashboardCounts.acceptedPrescriptions}
+          icon={ClockIcon}
+          color={COLORS.warning}
+          trend={-5}
+        />
+      </View>
+      
+      {/* Second Row */}
+      <View style={styles.statsRow}>
+        <StatCard
+          title="Low Stock Items"
+          value={dashboardCounts.lowStockItems}
+          icon={AlertTriangleIcon}
+          color={COLORS.danger}
+          trend={8}
+        />
+        <StatCard
+          title="Revenue Today"
+          value={formatCurrency(dashboardCounts.revenueToday)}
+          icon={IndianRupeeIcon}
+          color={COLORS.success}
+          trend={15}
+        />
+      </View>
+    </>
+  ) : (
+    <View style={styles.noDataContainer}>
+      <Text style={styles.noDataText}>No dashboard data available</Text>
+    </View>
+  )}
+</View>
 
         {/* Primary action */}
         <View style={styles.controlPanel}>
@@ -912,7 +968,9 @@ const DashboardPharma: React.FC = () => {
           {/* Sales Chart */}
           <ChartCard title="Weekly Sales & Prescriptions">
             {isWeeklyDataLoading ? (
-              <ActivityIndicator size="small" color={COLORS.brand} />
+              <View style={styles.chartLoading}>
+                <ActivityIndicator size="small" color={COLORS.brand} />
+              </View>
             ) : weeklySalesData?.length > 0 ? (
               <View style={styles.chartContainer}>
                 <LineChart
@@ -934,7 +992,7 @@ const DashboardPharma: React.FC = () => {
                     legend: ['Sales Revenue', 'Prescriptions'],
                   }}
                   width={responsiveWidth(90)}
-                  height={isSmallDevice ? 180 : 220}
+                  height={isSmallDevice ? 200 : 240}
                   yAxisLabel="₹"
                   yAxisSuffix=""
                   chartConfig={{
@@ -942,13 +1000,13 @@ const DashboardPharma: React.FC = () => {
                     backgroundGradientFrom: COLORS.card,
                     backgroundGradientTo: COLORS.card,
                     decimalPlaces: 0,
-                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+                    color: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
+                    labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
                     style: {
                       borderRadius: 16,
                     },
                     propsForDots: {
-                      r: '5',
+                      r: '4',
                       strokeWidth: '2',
                       stroke: COLORS.brand,
                     },
@@ -980,14 +1038,18 @@ const DashboardPharma: React.FC = () => {
                 </View>
               </View>
             ) : (
-              <Text style={styles.noDataText}>No sales data available</Text>
+              <View style={styles.noDataContainer}>
+                <Text style={styles.noDataText}>No sales data available</Text>
+              </View>
             )}
           </ChartCard>
 
           {/* Top Medications */}
-          <ChartCard title="Top Medications">
+          <ChartCard title="Top Medications This Week">
             {isTopMedicationsLoading ? (
-              <ActivityIndicator size="small" color={COLORS.brand} />
+              <View style={styles.chartLoading}>
+                <ActivityIndicator size="small" color={COLORS.brand} />
+              </View>
             ) : topMedications?.length > 0 ? (
               <FlatList
                 data={topMedications}
@@ -996,15 +1058,20 @@ const DashboardPharma: React.FC = () => {
                 scrollEnabled={false}
               />
             ) : (
-              <Text style={styles.noDataText}>No medication data available</Text>
+              <View style={styles.noDataContainer}>
+                <Text style={styles.noDataText}>No medication data available</Text>
+              </View>
             )}
           </ChartCard>
         </View>
 
         {/* Recent Prescriptions */}
-        <View style={styles.section}>
+        <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Prescriptions</Text>
+            <View>
+              <Text style={styles.sectionTitle}>Recent Prescriptions</Text>
+              <Text style={styles.sectionSubtitle}>Latest patient orders and prescriptions</Text>
+            </View>
             <TouchableOpacity style={styles.viewAllButton}>
               <Text style={styles.viewAllText}>View All</Text>
               <ChevronRightIcon size={isSmallDevice ? 14 : 16} color={COLORS.brand} />
@@ -1019,7 +1086,10 @@ const DashboardPharma: React.FC = () => {
               style={styles.prescriptionsList}
             />
           ) : (
-            <Text style={styles.noDataText}>No recent prescriptions</Text>
+            <View style={styles.noDataContainer}>
+              <Text style={styles.noDataText}>No recent prescriptions</Text>
+              <Text style={styles.noDataSubtext}>New prescriptions will appear here</Text>
+            </View>
           )}
         </View>
 
@@ -1077,27 +1147,37 @@ const styles = StyleSheet.create({
 
   /* Header */
   header: {
-    height: isSmallDevice ? 80 : 100,
-    paddingHorizontal: SPACING.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    height: isSmallDevice ? 100 : 120,
+    paddingHorizontal: SPACING.lg,
+    borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.brand,
+    paddingTop: Platform.OS === 'ios' ? SPACING.xl : SPACING.lg,
+    justifyContent: 'center',
+  },
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: COLORS.brand,
-    paddingTop: Platform.OS === 'ios' ? SPACING.lg : 0,
   },
   headerTitle: { 
-    fontSize: isSmallDevice ? FONT_SIZE.lg : FONT_SIZE.xl, 
-    fontWeight: "700", 
-    color: COLORS.buttonText 
+    fontSize: isSmallDevice ? FONT_SIZE.xl : FONT_SIZE.xxl, 
+    fontWeight: "800", 
+    color: COLORS.buttonText,
+    marginBottom: 2,
+  },
+  headerSubtitle: {
+    fontSize: FONT_SIZE.sm,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: "500",
   },
   menuBtn: {
-    width: isSmallDevice ? 34 : 38,
-    height: isSmallDevice ? 34 : 38,
-    borderRadius: 10,
+    width: isSmallDevice ? 40 : 44,
+    height: isSmallDevice ? 40 : 44,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
 
   container: { 
@@ -1105,8 +1185,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg 
   },
   containerContent: { 
-    padding: SPACING.md, 
-    gap: SPACING.lg 
+    padding: SPACING.lg, 
+    gap: SPACING.xl 
   },
 
   loadingContainer: {
@@ -1121,49 +1201,90 @@ const styles = StyleSheet.create({
     color: COLORS.sub,
   },
 
+  welcomeSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  welcomeTitle: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  welcomeSubtitle: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    fontWeight: '500',
+  },
+  dateBadge: {
+    backgroundColor: COLORS.brandLight,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 12,
+  },
+  dateText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.brand,
+    fontWeight: '600',
+  },
+
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: SPACING.sm,
+    gap: SPACING.md,
     justifyContent: "space-between"
   },
   statCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: SPACING.md,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    minHeight: isSmallDevice ? 80 : 100,
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: SPACING.lg,
     shadowColor: COLORS.shadow,
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   statContent: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     flex: 1,
   },
   statInfo: {
     flex: 1,
   },
+statsRow: {
+  flexDirection: "row",
+  gap: SPACING.md,
+  justifyContent: "space-between"
+},
   statTitle: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     marginBottom: SPACING.xs,
+    fontWeight: '600',
   },
   statValue: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: "bold",
+    fontSize: FONT_SIZE.xxl,
+    fontWeight: "800",
     color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  trendContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trendText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '700',
   },
   statIcon: {
-    width: isSmallDevice ? 40 : 48,
-    height: isSmallDevice ? 40 : 48,
-    borderRadius: isSmallDevice ? 20 : 24,
+    width: isSmallDevice ? 44 : 48,
+    height: isSmallDevice ? 44 : 48,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1175,54 +1296,71 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     backgroundColor: COLORS.brand,
-    height: isSmallDevice ? 40 : 44,
-    borderRadius: 12,
-    paddingHorizontal: SPACING.md,
+    height: isSmallDevice ? 48 : 52,
+    borderRadius: 16,
+    paddingHorizontal: SPACING.lg,
     flexDirection: "row",
     alignItems: "center",
     gap: SPACING.sm,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowColor: COLORS.brand,
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   primaryBtnText: { 
     color: COLORS.buttonText, 
     fontWeight: "700", 
-    fontSize: FONT_SIZE.sm 
+    fontSize: FONT_SIZE.md 
   },
 
   chartsSection: { 
-    gap: SPACING.lg 
+    gap: SPACING.xl 
   },
   chartCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 20,
+    padding: SPACING.lg,
     shadowColor: COLORS.shadow,
     shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   chartHeader: {
-    marginBottom: SPACING.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
   },
   chartTitle: {
     fontSize: FONT_SIZE.lg,
-    fontWeight: "600",
+    fontWeight: "700",
     color: COLORS.text,
+  },
+  chartAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  chartActionText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.brand,
+    fontWeight: '600',
   },
   chartContainer: {
     alignItems: 'center',
-    paddingVertical: SPACING.sm,
+  },
+  chartLoading: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   legend: {
     flexDirection: "row",
     justifyContent: "center",
     gap: SPACING.lg,
-    marginTop: SPACING.md,
+    marginTop: SPACING.lg,
   },
   legendItem: {
     flexDirection: "row",
@@ -1237,43 +1375,44 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
+    fontWeight: '500',
   },
 
   medicationItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   medicationRank: {
-    width: isSmallDevice ? 28 : 32,
-    height: isSmallDevice ? 28 : 32,
-    borderRadius: isSmallDevice ? 14 : 16,
-    backgroundColor: COLORS.pill,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: SPACING.sm,
-  },
-  rankText: {
-    fontSize: FONT_SIZE.xs,
-    fontWeight: "bold",
-    color: COLORS.sub,
-  },
-  medicationIcon: {
     width: isSmallDevice ? 32 : 36,
     height: isSmallDevice ? 32 : 36,
     borderRadius: isSmallDevice ? 16 : 18,
+    backgroundColor: COLORS.pill,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: SPACING.md,
+  },
+  rankText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "800",
+    color: COLORS.sub,
+  },
+  medicationIcon: {
+    width: isSmallDevice ? 40 : 44,
+    height: isSmallDevice ? 40 : 44,
+    borderRadius: isSmallDevice ? 20 : 22,
     backgroundColor: COLORS.brandLight,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: SPACING.sm,
+    marginRight: SPACING.md,
   },
   medicationInfo: {
     flex: 1,
   },
   medicationName: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     color: COLORS.text,
     marginBottom: 2,
@@ -1281,39 +1420,48 @@ const styles = StyleSheet.create({
   medicationCategory: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
+    fontWeight: '500',
   },
   prescribedCount: {
     alignItems: "flex-end",
   },
   prescribedText: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: "bold",
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "800",
     color: COLORS.brand,
   },
   prescribedLabel: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
     textTransform: "uppercase",
+    fontWeight: '600',
   },
 
-  section: {
-    // backgroundColor: COLORS.card,
-    // padding: SPACING.md,
-    // shadowColor: COLORS.shadow,
-    // // shadowOpacity: 0.08,
-    // shadowRadius: 6,
-    // // elevation: 2,
+  sectionCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: SPACING.lg,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.md,
+    alignItems: "flex-start",
+    marginBottom: SPACING.lg,
   },
   sectionTitle: {
     fontSize: FONT_SIZE.lg,
-    fontWeight: "600",
+    fontWeight: "700",
     color: COLORS.text,
+  },
+  sectionSubtitle: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    marginTop: 4,
   },
   viewAllButton: {
     flexDirection: "row",
@@ -1323,45 +1471,60 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.brand,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   prescriptionsList: {
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   prescriptionItem: {
     backgroundColor: COLORS.field,
-    borderRadius: 12,
-    padding: SPACING.md,
+    borderRadius: 16,
+    padding: SPACING.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   prescriptionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
+    alignItems: "flex-start",
+    marginBottom: SPACING.md,
+  },
+  patientInfo: {
+    flex: 1,
   },
   patientName: {
     fontSize: FONT_SIZE.md,
-    fontWeight: "600",
+    fontWeight: "700",
     color: COLORS.text,
+    marginBottom: 2,
+  },
+  patientId: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    fontWeight: '500',
   },
   statusBadge: {
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: 12,
   },
   statusText: {
     fontSize: FONT_SIZE.xs,
-    fontWeight: "500",
+    fontWeight: "700",
   },
   prescriptionDetails: {
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
+    gap: SPACING.xs,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
   },
   detailText: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
-    marginBottom: 2,
+    fontWeight: '500',
   },
   prescriptionFooter: {
     flexDirection: "row",
@@ -1370,15 +1533,38 @@ const styles = StyleSheet.create({
   },
   amountText: {
     fontSize: FONT_SIZE.md,
-    fontWeight: "600",
+    fontWeight: "700",
     color: COLORS.text,
   },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  viewButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: COLORS.brandLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-  noDataText: {
-    textAlign: "center",
-    color: COLORS.sub,
-    fontSize: FONT_SIZE.sm,
+  noDataContainer: {
     paddingVertical: SPACING.xl,
+    alignItems: "center",
+  },
+  noDataText: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
+    textAlign: "center",
+    fontWeight: "600",
+  },
+  noDataSubtext: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.placeholder,
+    textAlign: "center",
+    marginTop: SPACING.xs,
+    fontStyle: "italic",
   },
 
   /* Modal */
@@ -1393,8 +1579,13 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: responsiveWidth(90),
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: 20,
     padding: SPACING.lg,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
   modalTitle: { 
     fontSize: FONT_SIZE.lg, 
@@ -1404,18 +1595,21 @@ const styles = StyleSheet.create({
   modalMsg: { 
     fontSize: FONT_SIZE.sm, 
     color: COLORS.text, 
-    marginTop: SPACING.sm 
+    marginTop: SPACING.sm,
+    lineHeight: 20,
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: SPACING.sm,
-    marginTop: SPACING.md,
+    gap: SPACING.md,
+    marginTop: SPACING.lg,
   },
   modalBtn: {
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    borderRadius: 10,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    minWidth: 100,
+    alignItems: 'center',
   },
   modalBtnGhost: {
     backgroundColor: COLORS.brandLight,
@@ -1432,10 +1626,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: COLORS.card,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     borderTopColor: COLORS.border,
     zIndex: 10,
     elevation: 6,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
   },
   navShield: {
     position: "absolute",
@@ -1446,7 +1644,7 @@ const styles = StyleSheet.create({
     zIndex: 9,
   },
 
-  // Sidebar Styles - NO BORDERS
+  // Sidebar Styles
   sidebarContainer: {
     position: "absolute",
     left: 0,
@@ -1454,12 +1652,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: COLORS.card,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.lg,
     elevation: 8,
     shadowColor: COLORS.shadow,
     shadowOpacity: 0.2,
-    shadowRadius: 10,
-    shadowOffset: { width: 2, height: 0 },
+    shadowRadius: 20,
+    shadowOffset: { width: 4, height: 0 },
   },
   sidebarHeader: {
     paddingBottom: SPACING.lg,
@@ -1469,9 +1667,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 0,
     top: -SPACING.sm,
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.pill,
@@ -1482,11 +1680,11 @@ const styles = StyleSheet.create({
     paddingRight: 50,
   },
   userInfo: {
-    marginLeft: SPACING.sm,
+    marginLeft: SPACING.md,
     flex: 1,
   },
   userName: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700",
     color: COLORS.text,
     marginBottom: 2,
@@ -1495,27 +1693,31 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
     marginBottom: 2,
+    fontWeight: '500',
   },
   userDepartment: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.brand,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   sidebarContent: {
     flex: 1,
   },
+  section: {
+    marginBottom: SPACING.xl,
+  },
   sectionTitle: {
     fontSize: FONT_SIZE.xs,
-    fontWeight: "600",
+    fontWeight: "700",
     color: COLORS.sub,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   sidebarButton: {
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: SPACING.xs,
   },
   sidebarButtonActive: {
@@ -1524,10 +1726,10 @@ const styles = StyleSheet.create({
   buttonContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   buttonText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     flex: 1,
   },
@@ -1543,7 +1745,7 @@ const styles = StyleSheet.create({
   alertText: {
     color: COLORS.buttonText,
     fontSize: FONT_SIZE.xs,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   bottomActions: {
     paddingTop: SPACING.lg,
@@ -1552,10 +1754,10 @@ const styles = StyleSheet.create({
   bottomButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-    paddingVertical: SPACING.sm,
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   modulesButton: {
     backgroundColor: COLORS.brandLight,
@@ -1564,7 +1766,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.chipBP,
   },
   bottomButtonText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
   },
   avatar: {
@@ -1575,6 +1777,6 @@ const styles = StyleSheet.create({
   avatarText: {
     fontWeight: "800",
     color: COLORS.text,
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.lg,
   },
 });

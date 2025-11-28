@@ -67,7 +67,7 @@ interface TestAlertsProps {
   onPageChange: (page: number) => void;
   onPatientExpand: (id: string | null) => void;
   onFilterChange: (filter: string) => void;
-   alertFrom?: "lab" | "reception";
+  alertFrom?: "lab" | "reception" | "pharmacy";
 }
 
 interface RejectedAlertsProps {
@@ -84,7 +84,7 @@ interface AlertsTabsProps {
   onFilterChange: (filter: string) => void;
   onPageChange: (page: number) => void;
   onPatientExpand: (id: string | null) => void;
-  alertFrom?: "lab" | "reception";
+  alertFrom?: "lab" | "reception" | "pharmacy";
 }
 
 // Sidebar Component
@@ -187,7 +187,15 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
   alertFrom = "lab",
 }) => {
   const isReception = alertFrom === "reception";
-  const titlePrefix = isReception ? "Reception Alerts" : "Lab Test Alerts";
+  const isPharmacy = alertFrom === "pharmacy";
+  
+  const getTitlePrefix = () => {
+    if (isReception) return "Reception Alerts";
+    if (isPharmacy) return "Pharmacy Alerts";
+    return "Lab Test Alerts";
+  };
+
+  const titlePrefix = getTitlePrefix();
 
   return (
     <View style={styles.tabContent}>
@@ -195,7 +203,7 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
          title={`${titlePrefix} - ${filter}`}
         data={currentAlerts ?? []}
         isButton={true}
-         alertFrom={isReception ? "Reception" : "Lab"}
+         alertFrom={alertFrom}
         expandedPatientId={expandedPatientId}
         onPatientExpand={onPatientExpand}
         filter={filter}
@@ -206,11 +214,11 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
         onPageChange={onPageChange}
       />
 
-      <Text style={styles.resultsText}>
+      {/* <Text style={styles.resultsText}>
         Showing {currentAlerts?.length ?? 0} of {filteredAlerts?.length ?? 0} result
         {filteredAlerts?.length !== 1 ? "s" : ""}
         {expandedPatientId && " • Patient details expanded above"}
-      </Text>
+      </Text> */}
     </View>
   );
 };
@@ -250,12 +258,13 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState("test-alerts");
   const rowsPerPage = 10;
- const isReception = alertFrom === "reception";
+  const isReception = alertFrom === "reception";
+  const isPharmacy = alertFrom === "pharmacy";
   const indexOfFirstRow = currentPage * rowsPerPage;
   const indexOfLastRow = indexOfFirstRow + rowsPerPage;
   const currentAlerts = filteredAlerts?.slice(indexOfFirstRow, indexOfLastRow) ?? [];
   const totalPages = Math.ceil((filteredAlerts?.length ?? 0) / rowsPerPage);
-
+  const shouldShowTabs = !isPharmacy;
   const renderContent = () => {
     switch (activeTab) {
       case "test-alerts":
@@ -271,7 +280,7 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
               onPageChange={onPageChange}
               onPatientExpand={onPatientExpand}
               onFilterChange={onFilterChange}
-               alertFrom={alertFrom}
+              alertFrom={alertFrom}
             />
           </View>
         );
@@ -286,14 +295,15 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
     }
   };
 
- const tabs = [
-    { key: "test-alerts", label: isReception ? "Alerts" : "Test Alerts" },
-    { key: "rejected-alerts", label: isReception ? "Rejected" : "Rejected Alerts" },
+  const tabs = [
+    { key: "test-alerts", label: isPharmacy ? "Alerts" : isReception ? "Alerts" : "Test Alerts" },
+    { key: "rejected-alerts", label: isPharmacy ? "Rejected" : isReception ? "Rejected" : "Rejected Alerts" },
   ];
 
   return (
     <View style={styles.tabsMainContainer}>
       {/* Enhanced Tab Headers with Gradient */}
+      {shouldShowTabs && (      
       <View style={styles.tabContainer}>
         {tabs?.map((tab) => (
           <TouchableOpacity
@@ -324,7 +334,7 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
           </TouchableOpacity>
         ))}
       </View>
-
+         )}
       {/* Tab Content */}
       <View style={styles.tabContentArea}>
         {renderContent()}
@@ -351,6 +361,7 @@ const AlertsLab: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const isReceptionAlerts = user?.roleName === "reception";
+  const isPharmacyAlerts = user?.roleName === "pharmacy";
 
   const navigationState = route?.params?.state || {};
 
@@ -415,6 +426,12 @@ const AlertsLab: React.FC = () => {
           token
         );
         alertsData = response?.data?.data?.data || response?.data || [];
+      } else if (isPharmacyAlerts) {
+        const response = await AuthFetch(
+          `medicineInventoryPatientsOrder/${user?.hospitalID}/pending/getMedicineInventoryPatientsOrder`,
+          token
+        );
+        alertsData = response?.data?.data || [];
       } else {
         // 👇 Existing lab alerts
         const response = await AuthFetch(
@@ -427,13 +444,13 @@ const AlertsLab: React.FC = () => {
       if (Array.isArray(alertsData)) {
         setAllAlerts(alertsData);
         setFilteredAlerts(alertsData);
-        if (!alertsData.length && !isReceptionAlerts) {
+        if (!alertsData.length && !isReceptionAlerts && !isPharmacyAlerts) {
           dispatch(showError("No alerts found"));
         }
       } else {
         setAllAlerts([]);
         setFilteredAlerts([]);
-        if (!isReceptionAlerts) {
+        if (!isReceptionAlerts && !isPharmacyAlerts) {
           dispatch(showError("No alerts found"));
         }
       }
@@ -476,6 +493,12 @@ const AlertsLab: React.FC = () => {
             token
           );
           rejectedData = response?.data?.data || response?.data || [];
+        } else if (isPharmacyAlerts) {
+          const response = await AuthFetch(
+            `medicineInventoryPatientsOrder/${user?.hospitalID}/rejected/getMedicineInventoryPatientsOrder`,
+            token
+          );
+          rejectedData = response?.data?.data || [];
         } else {
           // 👇 Existing lab rejected billing
           const response = await AuthFetch(
@@ -504,11 +527,11 @@ const AlertsLab: React.FC = () => {
     let filtered = [...allAlerts];
     if (filter === "OPD") {
       
-      filtered = allAlerts?.filter((order) => order?.ptype === 21) ?? [];
+      filtered = allAlerts?.filter((order) => order?.ptype === 1 || order?.departmemtType === 1) ?? [];
     } else if (filter === "IPD") {
-      filtered = allAlerts?.filter((order) => order?.ptype === 2) ?? [];
+      filtered = allAlerts?.filter((order) => order?.ptype === 2 || order?.departmemtType === 2) ?? [];
     } else if (filter === "Emergency") {
-      filtered = allAlerts?.filter((order) => order?.ptype === 3) ?? [];
+      filtered = allAlerts?.filter((order) => order?.ptype === 3 || order?.departmemtType === 3) ?? [];
     } else {
       filtered = allAlerts;
     }
@@ -566,8 +589,7 @@ const AlertsLab: React.FC = () => {
             onFilterChange={handleFilterChange}
             onPageChange={handlePageChange}
             onPatientExpand={handlePatientExpand}
-            alertFrom={isReceptionAlerts ? "reception" : "lab"}
-
+            alertFrom={isPharmacyAlerts ? "pharmacy" : isReceptionAlerts ? "reception" : "lab"} 
           />
         </View>
       </KeyboardAvoidingView>

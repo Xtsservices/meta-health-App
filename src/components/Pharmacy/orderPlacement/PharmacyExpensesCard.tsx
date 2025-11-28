@@ -1,21 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
-  Modal,
-  FlatList,
-  Dimensions,
   Animated,
 } from "react-native";
 import {
   SPACING,
   FONT_SIZE,
-  isTablet,
-  isSmallDevice,
-  ICON_SIZE,
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
 import LinearGradient from 'react-native-linear-gradient';
@@ -24,12 +17,10 @@ import LinearGradient from 'react-native-linear-gradient';
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  FilterIcon,
-  XIcon,
+  PackageIcon,
   UserIcon,
   PhoneIcon,
   EmailIcon,
-  PackageIcon,
   CalendarIcon,
   RupeeIcon,
 } from "../../../utils/SvgIcons";
@@ -56,20 +47,14 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [animation] = useState(new Animated.Value(0));
 
-  useEffect(() => {
-    setExpandedId(null);
-  }, [data]);
-
   const handleToggleExpand = (id: number) => {
     if (expandedId === id) {
-      // Collapse
       Animated.timing(animation, {
         toValue: 0,
         duration: 300,
         useNativeDriver: false,
       }).start(() => setExpandedId(null));
     } else {
-      // Expand
       setExpandedId(id);
       Animated.timing(animation, {
         toValue: 1,
@@ -82,15 +67,15 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
   const getStatusColors = (status: string) => {
     switch (status?.toLowerCase()) {
       case "completed":
-        return [COLORS.gradientSuccessStart, COLORS.gradientSuccessEnd];
-      case "pending":
-        return [COLORS.gradientWarningStart, COLORS.gradientWarningEnd];
-      case "processing":
-        return [COLORS.gradientProcessingStart, COLORS.gradientProcessingEnd];
-      case "delivered":
         return ['#10b981', '#059669'];
+      case "pending":
+        return ['#f59e0b', '#d97706'];
+      case "processing":
+        return ['#3b82f6', '#2563eb'];
+      case "delivered":
+        return ['#8b5cf6', '#7c3aed'];
       default:
-        return [COLORS.sub, COLORS.sub];
+        return [COLORS.brand, COLORS.brandDark];
     }
   };
 
@@ -99,10 +84,9 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
   };
 
   const formatCurrency = (value: number) => {
-    return `₹${(value || 0).toFixed(2)}`;
+    return `₹${(value || 0).toLocaleString()}`;
   };
 
-  // Card rendering for each expense
   const renderCard = (item: ExpenseData) => {
     const medicinesCount = Array.isArray(item.medicinesList) ? item.medicinesList.length : 0;
     const date = item.addedOn ? new Date(item.addedOn).toLocaleDateString('en-US', {
@@ -120,7 +104,7 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
     const statusColors = getStatusColors(item.status || "processing");
 
     return (
-      <View key={item.id || Math.random()} style={styles.card}>
+      <View key={item.id} style={styles.card}>
         {/* Card Header */}
         <View style={styles.cardHeader}>
           <View style={styles.headerLeft}>
@@ -257,14 +241,7 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={data}
-        renderItem={({ item }) => renderCard(item)}
-        keyExtractor={(item) => item.id?.toString() ?? Math.random().toString()}
-        contentContainerStyle={styles.cardsWrapper}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={false}
-      />
+      {data.map((item) => renderCard(item))}
     </View>
   );
 };
@@ -272,31 +249,20 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  cardsWrapper: {
     gap: SPACING.sm,
   },
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: SPACING.md,
-    marginHorizontal: SPACING.xs,
-    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: SPACING.lg,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: COLORS.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
   },
   headerLeft: {
     flex: 1,
@@ -319,8 +285,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   agencyName: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: "700",
+    fontSize: FONT_SIZE.md,
+    fontWeight: "600",
     color: COLORS.text,
     marginBottom: 2,
   },
@@ -335,13 +301,13 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
     minWidth: 80,
     alignItems: "center",
   },
   statusText: {
     fontSize: FONT_SIZE.xs,
-    fontWeight: "700",
+    fontWeight: "600",
     color: COLORS.buttonText,
   },
   expandBtn: {
@@ -350,12 +316,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.brandLight,
   },
   cardBody: {
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   infoGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   infoBlock: {
     flex: 1,
@@ -379,29 +345,28 @@ const styles = StyleSheet.create({
   },
   totalValue: {
     color: COLORS.brand,
-    fontSize: FONT_SIZE.md,
     fontWeight: "700",
   },
   dateSection: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingTop: SPACING.xs,
+    paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
+    borderTopColor: COLORS.border,
   },
   dateText: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
   },
   expandedSection: {
-    marginTop: SPACING.sm,
-    borderTopWidth: 1.5,
+    marginTop: SPACING.md,
+    borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.md,
   },
   expandedContent: {
-    gap: SPACING.sm,
+    gap: SPACING.md,
   },
   emailSection: {
     flexDirection: "row",
@@ -418,13 +383,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   medicinesSection: {
-    gap: SPACING.xs,
+    gap: SPACING.sm,
   },
   medicinesTitle: {
     fontSize: FONT_SIZE.sm,
-    fontWeight: "700",
+    fontWeight: "600",
     color: COLORS.text,
-    marginBottom: SPACING.xs,
   },
 });
 

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   FlatList,
+  Linking
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useNavigation } from "@react-navigation/native";
@@ -14,7 +15,8 @@ import { COLORS } from "../../../utils/colour";
 import { FONT_SIZE, responsiveWidth, SPACING } from "../../../utils/responsive";
 import { formatDateTime } from "../../../utils/dateTime";
 import { PatientData } from "./taxInvoiceTabs";
-
+import { UserIcon } from "../../../utils/SvgIcons";
+import { ExternalLinkIcon } from "../../../utils/SvgIcons";
 type Mode = "billing" | "allTax";
 
 type Props = {
@@ -27,17 +29,9 @@ type Props = {
   endDate: Date | null;
   departmentType: string | number;
   onDepartmentTypeChange: (value: string | number) => void;
+  userDepartment?: string;
+  nurses?: any[]; 
 };
-
-const BILLING_DEPARTMENT_OPTIONS = [
-  { value: "1", label: "OPD" },
-  { value: "2", label: "IPD / Emergency" },
-];
-
-const TAX_DEPARTMENT_OPTIONS = [
-  { value: "1", label: "OPD" },
-  { value: "2", label: "IPD / Emergency" },
-];
 
 const BillingTaxInvoiceList: React.FC<Props> = ({
   mode,
@@ -49,20 +43,133 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
   endDate,
   departmentType,
   onDepartmentTypeChange,
+  userDepartment = "reception",
+  nurses = [],
 }) => {
   const navigation = useNavigation<any>();
 
-  const deptOptions =
-    mode === "billing" ? BILLING_DEPARTMENT_OPTIONS : TAX_DEPARTMENT_OPTIONS;
+  // User type detection at component level
+  const isPharmacy = userDepartment === 'pharmacy';
+  const isLab = userDepartment === 'pathology';
+  const isRadiology = userDepartment === 'radiology';
+  const isReception = userDepartment === 'reception' || (!isPharmacy && !isLab && !isRadiology);
+
+  // Get department options based on mode and user department
+  const getDepartmentOptions = () => {
+    const isBilling = mode === 'billing';
+
+    if (isPharmacy) {
+      if (isBilling) {
+        return [
+          { value: "2", label: "IPD" },
+          { value: "1", label: "OPD" },
+          { value: "3", label: "Walk-in" },
+          { value: "4", label: "Rejected" },
+        ];
+      } else {
+        return [
+          { value: "2", label: "IPD" },
+          { value: "1", label: "OPD" },
+          { value: "3", label: "Walk-in" },
+        ];
+      }
+    } else if (isLab || isRadiology) {
+      if (isBilling) {
+        return [
+          { value: "1", label: "OPD" },
+          { value: "2", label: "IPD" },
+        ];
+      } else {
+        return [
+          { value: "2", label: "IPD " },
+          { value: "1", label: "OPD" },
+          { value: "3", label: "Walk-in" },
+        ];
+      }
+    } else {
+      // Reception
+      if (isBilling) {
+        return [
+          { value: "1", label: "OPD" },
+          { value: "2", label: "IPD / Emergency" },
+        ];
+      } else {
+        return [
+          { value: "all", label: "All Departments" },
+          { value: "1", label: "OPD" },
+          { value: "2", label: "IPD / Emergency" },
+        ];
+      }
+    }
+  };
+
+  const deptOptions = getDepartmentOptions();
+  const getNurseName = (nurseId: number) => {
+    const nurse = nurses.find(n => n.id === nurseId);
+    return nurse ? `${nurse.firstName} ${nurse.lastName}` : `Nurse #${nurseId}`;
+  };
 
   const renderCard = ({ item }: { item: PatientData }) => {
     const totalTests = item.testList?.length ?? 0;
     const totalMeds = item.medicinesList?.length ?? 0;
+    const itemIsPharmacy = item.type === 'medicine' || isPharmacy;
+    const itemIsLab = item.type === 'lab' || isLab || isRadiology;
+
+    const isIPD = item.dept?.includes('IPD');
+    const firstMedicine = item.medicinesList?.[0];
+    const nurseId = firstMedicine?.nurseID;
+    const nurseName = nurseId ? getNurseName(nurseId) : null;
 
     const sourceParam = mode === "billing" ? "billing" : "allTax";
     const itemsLabel = mode === "billing" ? "Items" : "Invoices";
-    const ctaText =
-      mode === "billing" ? "View Billing Details" : "View Invoice Details";
+    const ctaText = mode === "billing" ? "View Billing Details" : "View Invoice Details";
+
+const calculateAmounts = () => {
+  // For PHARMACY users in BILLING mode, always show total amount only
+  if (isPharmacy && mode === "billing") {
+    const total = item.medicinesList?.reduce((sum, medicine) => sum + medicine.amount, 0) || 0;
+    return { total, dueAmount: 0, paidAmount: 0 };
+  }
+  
+  // For BILLING mode and non-reception users, use dueAmount from API
+  if (mode === "billing" && !isReception) {
+    const dueAmount = Number(item.dueAmount) || 0;
+    const paidAmount = Number(item.paidAmount) || 0;
+    const totalAmount = Number(item.totalAmount) || dueAmount + paidAmount;
+    return { total: totalAmount, dueAmount, paidAmount };
+  }
+  
+  let total = 0;
+  
+  if (itemIsPharmacy) {
+    total = item.medicinesList?.reduce((sum, medicine) => sum + medicine.amount, 0) || 0;
+  } else {
+    total = item.testList?.reduce((sum, test) => sum + test.amount, 0) || 0;
+  }
+  
+  // Get paid amount from the item data
+  const paidAmount = Number(item.paidAmount || 0);
+  const dueAmount = Math.max(0, total - paidAmount);
+  
+  return { total, dueAmount, paidAmount };
+};
+
+  const { total, dueAmount, paidAmount } = calculateAmounts();
+
+  // Show due amount only in BILLING mode for non-reception users
+const showDueAmount = mode === "billing" && !isReception && !isPharmacy;
+const displayAmount = showDueAmount ? dueAmount : total;
+const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
+
+    const handlePrescriptionPress = () => {
+      if (item.prescriptionURL) {
+        // You can use Linking to open the URL or navigate to a prescription viewer
+        Linking.openURL(item.prescriptionURL).catch(err => 
+          console.error('Failed to open prescription URL:', err)
+        );
+      }
+    };
+
 
     return (
       <TouchableOpacity
@@ -72,16 +179,18 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
           navigation.navigate("InvoiceDetails", {
             invoice: item,
             source: sourceParam,
+            department: userDepartment,
+            nurses: nurses,
           })
         }
       >
         <View style={styles.cardHeaderRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.patientName, { color: COLORS.text }]}>
-              {item.pName}
+              {item?.pName}
             </Text>
             <Text style={[styles.patientId, { color: COLORS.sub }]}>
-              ID: {item.patientID}
+              ID: {item?.pIdNew || item?.patientID}
             </Text>
           </View>
           <View style={{ alignItems: "flex-end" }}>
@@ -99,6 +208,43 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
           </View>
         </View>
 
+{item.prescriptionURL && (
+  <View style={styles.prescriptionSection}>
+    <View style={styles.prescriptionHeader}>
+      <Text style={styles.prescriptionLabel}>Prescription Available</Text>
+     
+    </View>
+    <TouchableOpacity 
+      style={styles.prescriptionButton}
+      onPress={handlePrescriptionPress}
+      activeOpacity={0.8}
+    >
+      <ExternalLinkIcon size={16} color="#ffffff" />
+      <Text style={styles.prescriptionButtonText}>Open Prescription</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
+
+         {(item.firstName || item.lastName) && (
+  <View style={styles.metaRow}>
+    <Text style={styles.metaLabel}>Doctor</Text>
+    <Text style={styles.metaValue}>
+      {`${item.firstName || ""} ${item.lastName || ""}`.trim() || "—"}
+    </Text>
+  </View>
+)}
+        
+{item.category && (
+  <View style={styles.metaRow}>
+    <Text style={styles.metaLabel}>Category</Text>
+    <Text style={styles.metaValue}>
+      {item.category}
+    </Text>
+  </View>
+)}
+
+
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>Added On</Text>
           <Text style={styles.metaValue}>
@@ -109,9 +255,49 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>{itemsLabel}</Text>
           <Text style={styles.metaValue}>
-            {totalTests} tests • {totalMeds} medicines
+            {isPharmacy 
+              ? `${totalMeds} medicines` 
+              : isReception 
+                ? `${totalTests} tests ${totalMeds} meds` 
+                : `${totalTests} tests`
+            }
           </Text>
         </View>
+
+        {!isReception && 
+        <View style={styles.metaRow}>
+        <Text style={styles.metaLabel}>{amountLabel}</Text>
+        <Text style={[
+          styles.totalAmount, 
+          showDueAmount && dueAmount > 0 && { color: COLORS.error }
+        ]}>
+          ₹{displayAmount.toFixed(2)}
+        </Text>
+      </View>}
+      
+      {/* Show paid amount only in BILLING mode for non-reception users when there's a paid amount */}
+      {mode === "billing" && !isReception && paidAmount > 0 && (
+        <View style={styles.metaRow}>
+          <Text style={styles.metaLabel}>Paid Amount</Text>
+          <Text style={[styles.metaValue, { color: COLORS.success }]}>
+            ₹{paidAmount.toFixed(2)}
+          </Text>
+        </View>
+      )}
+
+        {isIPD && nurseName && (
+          <View style={styles.metaRow}>
+            <View style={styles.labelWithIcon}>
+              <UserIcon size={14} color={COLORS.brand} />
+              <Text style={[styles.metaLabel, { marginLeft: 4 }]}>
+                Medication Given By
+              </Text>
+            </View>
+            <Text style={[styles.metaValue, { color: '#000000', fontWeight: '600' }]}>
+              {nurseName}
+            </Text>
+          </View>
+        )}
 
         <View style={styles.viewDetailsRow}>
           <Text style={styles.viewDetailsText}>{ctaText}</Text>
@@ -176,7 +362,7 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
               <Text style={styles.emptyTitle}>No Records Found</Text>
               {startDate && endDate && (
                 <Text style={styles.emptySub}>
-                  Try adjusting your date range
+                  Try adjusting your date range or department filter
                 </Text>
               )}
             </View>
@@ -208,16 +394,11 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontWeight: "500",
   },
-//   pickerWrap: {
-//     width: responsiveWidth(46),
-//     borderWidth: 1,
-//     borderColor: "#d1d5db",
-//     borderRadius: 999,
-//     overflow: "hidden",
-//     backgroundColor: "#fff",
-//     // color: "black",
-//   },
-
+    
+  labelWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
     pickerWrap: {
         width: responsiveWidth(90),
     borderWidth: 1.5,
@@ -226,6 +407,59 @@ const styles = StyleSheet.create({
      overflow: "hidden",
      backgroundColor: "#f9fafb",
   },
+  prescriptionSection: {
+    marginTop: 12,
+    marginBottom: 8,
+    padding: 12,
+    backgroundColor: '#f0fdfa',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#ccfbf1',
+    shadowColor: '#14b8a6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  prescriptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  prescriptionLabel: {
+    fontSize: FONT_SIZE.sm,
+    color: '#0f766e',
+    fontWeight: '600',
+  },
+  prescriptionBadge: {
+    backgroundColor: '#14b8a6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  prescriptionBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  prescriptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#14b8a6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  prescriptionButtonText: {
+    fontSize: FONT_SIZE.sm,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+
+  
   picker: {
     height: 55,
     width: "100%",
@@ -312,6 +546,12 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     color: COLORS.text,
     textAlign: "right",
+    lineHeight: 16, 
+  },
+  totalAmount: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+    color: COLORS.success,
   },
   viewDetailsRow: {
     marginTop: 10,

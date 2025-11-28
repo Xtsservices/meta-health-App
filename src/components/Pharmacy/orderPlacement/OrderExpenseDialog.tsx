@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -100,6 +100,11 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
     initialSelectedMedicineData
   );
 
+  // UI state to control suggestions visibility (can add debounce later if desired)
+  const [showMedicineSuggestions, setShowMedicineSuggestions] = useState(false);
+  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
+  const [showAgencySuggestions, setShowAgencySuggestions] = useState(false);
+
   const medicineTypes = [
     "Capsules",
     "Syrups",
@@ -126,7 +131,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
         );
 
         if (response?.data?.status === 200) {
-          setManufactureData(response?.data?.data);
+          setManufactureData(response?.data?.data || []);
         }
       } catch (error) {
         Alert.alert("Error", "Failed to fetch manufacturer data");
@@ -154,7 +159,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
         );
 
         if (response?.data?.status === 200) {
-          setMedicineInStockData(response?.data?.medicines);
+          setMedicineInStockData(response?.data?.medicines || []);
         }
       } catch (error) {
         Alert.alert("Error", "Failed to fetch inventory data");
@@ -168,7 +173,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
     }
   }, [user, open]);
 
-  // Auto-fill agency details when agency name changes
+  // Auto-fill agency details when agency name changes (keeps as-is)
   useEffect(() => {
     const selectedAgency = manufactureData.find(
       (agency) => agency.agencyName === selectedMedicineData.agencyName
@@ -185,9 +190,32 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
     }
   }, [selectedMedicineData.agencyName, manufactureData]);
 
+  // Derived suggestion lists (filtered)
+  const filteredMedicineSuggestions = useMemo(() => {
+    const q = selectedMedicineData.name.trim().toLowerCase();
+    if (!q) return [];
+    return medicineInStockData
+      .filter((m) => m.name?.toLowerCase().includes(q))
+      .slice(0, 6); // limit to 6
+  }, [selectedMedicineData.name, medicineInStockData]);
+
+  const filteredCategorySuggestions = useMemo(() => {
+    const q = selectedMedicineData.category.trim().toLowerCase();
+    if (!q) return medicineTypes.slice(0, 6);
+    return medicineTypes.filter((c) => c.toLowerCase().includes(q)).slice(0, 6);
+  }, [selectedMedicineData.category]);
+
+  const filteredAgencySuggestions = useMemo(() => {
+    const q = selectedMedicineData.agencyName.trim().toLowerCase();
+    if (!q) return manufactureData.slice(0, 6);
+    return manufactureData
+      .filter((a) => a.agencyName?.toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [selectedMedicineData.agencyName, manufactureData]);
+
   const addMedicineToList = () => {
     // Validate all required fields
-    const validationErrors = [];
+    const validationErrors: string[] = [];
 
     if (!selectedMedicineData.name?.trim()) {
       validationErrors.push("Medicine Name");
@@ -224,6 +252,9 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
 
     setMedicineList([...medicineList, newMedicine]);
     setSelectedMedicineData(initialSelectedMedicineData);
+    setShowMedicineSuggestions(false);
+    setShowAgencySuggestions(false);
+    setShowCategorySuggestions(false);
     Alert.alert("Success", `${selectedMedicineData.name} added to order`);
   };
 
@@ -309,6 +340,37 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
     </View>
   );
 
+  // helpers to select suggestion items
+  const onSelectMedicineSuggestion = (stock: StockData) => {
+    setSelectedMedicineData((prev) => ({
+      ...prev,
+      name: stock.name || "",
+      category: stock.category || prev.category,
+      manufacturer: stock.manufacturer || prev.manufacturer,
+    }));
+    setShowMedicineSuggestions(false);
+  };
+
+  const onSelectCategorySuggestion = (category: string) => {
+    setSelectedMedicineData((prev) => ({
+      ...prev,
+      category,
+    }));
+    setShowCategorySuggestions(false);
+  };
+
+  const onSelectAgencySuggestion = (agency: ManufacturerData) => {
+    setSelectedMedicineData((prev) => ({
+      ...prev,
+      agencyName: agency.agencyName || "",
+      contactNo: agency.contactNo || prev.contactNo,
+      email: agency.email || prev.email,
+      agentCode: agency.agentCode ?? prev.agentCode,
+      manufacturer: agency.manufacturer || prev.manufacturer,
+    }));
+    setShowAgencySuggestions(false);
+  };
+
   return (
     <Modal
       visible={open}
@@ -333,7 +395,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Medicine Details Card */}
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Medicine Details</Text>
@@ -346,10 +408,31 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
                     style={styles.textInput}
                     placeholder="Enter medicine name"
                     value={selectedMedicineData.name}
-                    onChangeText={(text) => setSelectedMedicineData(prev => ({ ...prev, name: text }))}
+                    onChangeText={(text) => {
+                      setSelectedMedicineData(prev => ({ ...prev, name: text }));
+                      setShowMedicineSuggestions(true);
+                    }}
                     placeholderTextColor={COLORS.sub}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    keyboardType="default"
                   />
                 </View>
+
+                {showMedicineSuggestions && filteredMedicineSuggestions.length > 0 && (
+                  <View style={styles.suggestionBox}>
+                    {filteredMedicineSuggestions.map((m) => (
+                      <TouchableOpacity
+                        key={m.id}
+                        style={styles.suggestionItem}
+                        onPress={() => onSelectMedicineSuggestion(m)}
+                      >
+                        <Text style={styles.suggestionText}>{m.name}</Text>
+                        <Text style={styles.suggestionSubText}>{m.category}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
@@ -359,22 +442,29 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
                     style={styles.textInput}
                     placeholder="Select category"
                     value={selectedMedicineData.category}
-                    onChangeText={(text) => setSelectedMedicineData(prev => ({ ...prev, category: text }))}
+                    onChangeText={(text) => {
+                      setSelectedMedicineData(prev => ({ ...prev, category: text }));
+                      setShowCategorySuggestions(true);
+                    }}
                     placeholderTextColor={COLORS.sub}
+                    autoCorrect={false}
+                    autoCapitalize="none"
                   />
                 </View>
 
-                <ScrollView horizontal style={styles.categorySuggestions} showsHorizontalScrollIndicator={false}>
-                  {medicineTypes.map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={styles.categoryChip}
-                      onPress={() => setSelectedMedicineData(prev => ({ ...prev, category: type }))}
-                    >
-                      <Text style={styles.categoryChipText}>{type}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                {showCategorySuggestions && filteredCategorySuggestions.length > 0 && (
+                  <View style={styles.suggestionBox}>
+                    {filteredCategorySuggestions.map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        style={styles.suggestionItem}
+                        onPress={() => onSelectCategorySuggestion(type)}
+                      >
+                        <Text style={styles.suggestionText}>{type}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
 
@@ -410,22 +500,30 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
                     style={styles.textInput}
                     placeholder="Enter agency name"
                     value={selectedMedicineData.agencyName}
-                    onChangeText={(text) => setSelectedMedicineData(prev => ({ ...prev, agencyName: text }))}
+                    onChangeText={(text) => {
+                      setSelectedMedicineData(prev => ({ ...prev, agencyName: text }));
+                      setShowAgencySuggestions(true);
+                    }}
                     placeholderTextColor={COLORS.sub}
+                    autoCapitalize="words"
+                    autoCorrect={false}
                   />
                 </View>
 
-                <ScrollView horizontal style={styles.agencySuggestions} showsHorizontalScrollIndicator={false}>
-                  {manufactureData.slice(0, 6).map((agency, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.agencyChip}
-                      onPress={() => setSelectedMedicineData(prev => ({ ...prev, agencyName: agency.agencyName }))}
-                    >
-                      <Text style={styles.agencyChipText}>{agency.agencyName}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                {showAgencySuggestions && filteredAgencySuggestions.length > 0 && (
+                  <View style={styles.suggestionBox}>
+                    {filteredAgencySuggestions.map((agency, index) => (
+                      <TouchableOpacity
+                        key={`${agency.agencyName}-${index}`}
+                        style={styles.suggestionItem}
+                        onPress={() => onSelectAgencySuggestion(agency)}
+                      >
+                        <Text style={styles.suggestionText}>{agency.agencyName}</Text>
+                        <Text style={styles.suggestionSubText}>{agency.contactNo}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
@@ -637,6 +735,31 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     color: COLORS.text,
     padding: 0,
+  },
+
+  suggestionBox: {
+    marginTop: SPACING.sm,
+    backgroundColor: COLORS.bg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    maxHeight: 200,
+    overflow: "hidden",
+  },
+  suggestionItem: {
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  suggestionText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    fontWeight: "600",
+  },
+  suggestionSubText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
   },
 
   categorySuggestions: {

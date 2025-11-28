@@ -13,6 +13,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   FlatList,
+  RefreshControl,
 } from "react-native";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -39,6 +40,14 @@ import {
   PlusIcon,
   XIcon,
   FilterIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronsLeftIcon,
+  ChevronsRightIcon,
+  PackageIcon,
+  ShoppingBagIcon,
+  UsersIcon,
+  IndianRupeeIcon,
 } from "../../../utils/SvgIcons";
 import { AuthFetch } from "../../../auth/auth";
 import PharmacyExpensesCard from "./PharmacyExpensesCard";
@@ -47,7 +56,7 @@ import Footer from "../../dashboard/footer";
 import { formatDate } from "../../../utils/dateTime";
 
 const FOOTER_H = FOOTER_HEIGHT;
-const PAGE_SIZE = 10; // pagination: 10 per page
+const PAGE_SIZE = 10;
 
 interface ExpenseData {
   id: number;
@@ -58,15 +67,13 @@ interface ExpenseData {
   manufacturer?: string;
   addedOn?: string;
   medicinesList?: any[];
+  totalValue?: number;
 }
 
 const PharmacyExpenses: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((state: RootState) => state.currentUser);
   const insets = useSafeAreaInsets();
-  const hasBottomInsets = insets.bottom > 0;
-
-  const smallDevice = isSmallDevice || isExtraSmallDevice;
 
   const [openOrderExpense, setOpenOrderExpense] = useState<boolean>(false);
   const [expenseData, setExpenseData] = useState<ExpenseData[]>([]);
@@ -76,15 +83,19 @@ const PharmacyExpenses: React.FC = () => {
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [datePickerMode, setDatePickerMode] = useState<"start" | "end">("start");
   const [isLoading, setIsLoading] = useState<boolean>(false);
-
-  // pagination
-  const [page, setPage] = useState<number>(1);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Fetch expense data
-  const fetchExpenseData = useCallback(async () => {
+  const fetchExpenseData = useCallback(async (isRefresh = false) => {
     if (!user?.hospitalID) return;
 
-    setIsLoading(true);
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    
     try {
       const token = await AsyncStorage.getItem("token");
       const response = await AuthFetch(
@@ -93,7 +104,6 @@ const PharmacyExpenses: React.FC = () => {
       );
 
       if (response?.data?.status === 200 && response?.data?.data) {
-        // Sort data by date - most recent first
         const sortedData = [...response?.data?.data].sort((a: ExpenseData, b: ExpenseData) => {
           if (!a?.addedOn && !b?.addedOn) return 0;
           if (!a?.addedOn) return 1;
@@ -113,11 +123,11 @@ const PharmacyExpenses: React.FC = () => {
         setExpenseData([]);
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.warn("Fetch expense data failed:", error);
       setExpenseData([]);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
   }, [user]);
 
@@ -125,15 +135,19 @@ const PharmacyExpenses: React.FC = () => {
     fetchExpenseData();
   }, [fetchExpenseData, openOrderExpense]);
 
-  // Reset to page 1 when filters/search change
+  const onRefresh = () => {
+    setRefreshing(true);
+    setCurrentPage(1);
+    fetchExpenseData(true);
+  };
+
   useEffect(() => {
-    setPage(1);
+    setCurrentPage(1);
   }, [searchQuery, startDate, endDate, expenseData.length]);
 
   // Filter data based on search and date range
   const filteredData = useMemo(() => {
     return expenseData.filter((expense) => {
-      // Search filter
       if (searchQuery && searchQuery.trim() !== "") {
         const query = searchQuery.toLowerCase().trim();
         const matchesAgencyName = expense.agencyName?.toLowerCase().includes(query);
@@ -142,21 +156,13 @@ const PharmacyExpenses: React.FC = () => {
         const matchesManufacturer = expense.manufacturer?.toLowerCase().includes(query);
         const matchesCode = (expense.agentCode ?? "").toString().toLowerCase().includes(query);
 
-        if (
-          !matchesAgencyName &&
-          !matchesContactNo &&
-          !matchesEmail &&
-          !matchesManufacturer &&
-          !matchesCode
-        ) {
+        if (!matchesAgencyName && !matchesContactNo && !matchesEmail && !matchesManufacturer && !matchesCode) {
           return false;
         }
       }
 
-      // Date range filter (if both provided)
       if (startDate && endDate) {
         if (!expense.addedOn) return false;
-
         try {
           const expenseDate = new Date(expense.addedOn);
           if (isNaN(expenseDate.getTime())) return false;
@@ -166,23 +172,18 @@ const PharmacyExpenses: React.FC = () => {
             expenseDate.getMonth(),
             expenseDate.getDate()
           );
-
           const normalizedStartDate = new Date(
             startDate.getFullYear(),
             startDate.getMonth(),
             startDate.getDate()
           );
-
           const normalizedEndDate = new Date(
             endDate.getFullYear(),
             endDate.getMonth(),
             endDate.getDate()
           );
 
-          return (
-            normalizedExpenseDate >= normalizedStartDate &&
-            normalizedExpenseDate <= normalizedEndDate
-          );
+          return normalizedExpenseDate >= normalizedStartDate && normalizedExpenseDate <= normalizedEndDate;
         } catch (error) {
           return false;
         }
@@ -192,15 +193,30 @@ const PharmacyExpenses: React.FC = () => {
     });
   }, [expenseData, searchQuery, startDate, endDate]);
 
+  // Calculate stats
+  const stats = useMemo(() => {
+    const totalOrders = expenseData.length;
+    const totalValue = expenseData.reduce((sum, item) => sum + (item.totalValue || 0), 0);
+    const today = new Date().toISOString().split("T")[0];
+    const todayOrders = expenseData.filter(item => {
+      if (!item.addedOn) return false;
+      return new Date(item.addedOn).toISOString().split("T")[0] === today;
+    }).length;
+
+    return {
+      totalOrders,
+      todayOrders,
+      totalValue: totalValue >= 100000 ? `${(totalValue / 100000).toFixed(1)}L` : `₹${totalValue.toLocaleString()}`,
+      filteredCount: filteredData.length,
+    };
+  }, [expenseData, filteredData]);
+
   // pagination calculations
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
-  const clampedPage = Math.min(Math.max(1, page), totalPages);
-
-  const pagedData = useMemo(() => {
-    const start = (clampedPage - 1) * PAGE_SIZE;
-    return filteredData.slice(start, start + PAGE_SIZE);
-  }, [filteredData, clampedPage]);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const endIndex = Math.min(totalItems, startIndex + PAGE_SIZE);
+  const paginatedData = filteredData.slice(startIndex, endIndex);
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === "android") {
@@ -211,7 +227,6 @@ const PharmacyExpenses: React.FC = () => {
       if (datePickerMode === "start") {
         setStartDate(selectedDate);
         if (Platform.OS === "android") {
-          // For android, show end date picker next (if user is picking range)
           setTimeout(() => {
             setDatePickerMode("end");
             setShowDatePicker(true);
@@ -252,95 +267,96 @@ const PharmacyExpenses: React.FC = () => {
     setEndDate(null);
   };
 
-  const onPrevPage = () => setPage((p) => Math.max(1, p - 1));
-  const onNextPage = () => setPage((p) => Math.min(totalPages, p + 1));
-  const jumpToPage = (p: number) => setPage(Math.min(Math.max(1, p), totalPages));
+  const navigateToAddItem = () => {
+    setOpenOrderExpense(true);
+  };
+
+  const renderStatCard = (title: string, value: string | number, IconComponent: React.ElementType, color: string) => {
+    return (
+      <View style={styles.statCard}>
+        <View style={styles.statContent}>
+          <View style={styles.statInfo}>
+            <Text style={styles.statLabel}>{title}</Text>
+            <Text style={styles.statValue}>{value}</Text>
+          </View>
+          <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
+            <IconComponent size={24} color={color} />
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
       <View style={styles.safeArea}>
-        <StatusBar
-          barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"}
-          backgroundColor={COLORS.brand}
-        />
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.brand} />
 
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerInner}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Supplier Order Management</Text>
-              <Text style={styles.subtitle}>Manage supplier orders and procurement — card view.</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.headerAction}
-              onPress={() => setOpenOrderExpense(true)}
-              accessibilityLabel="Create new order"
-            >
-              <PlusIcon size={18} color={COLORS.buttonText} />
-              <Text style={styles.headerActionText}>Create</Text>
-            </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Supplier Order Management</Text>
+            <Text style={styles.headerSubtitle}>Manage supplier orders and procurement</Text>
           </View>
+          <TouchableOpacity style={styles.addButton} onPress={navigateToAddItem}>
+            <PlusIcon size={20} color={COLORS.buttonText} />
+            <Text style={styles.addButtonText}>Create</Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView
-          style={styles.container}
+          style={styles.content}
           contentContainerStyle={[
-            styles.containerContent,
-            {
-              paddingBottom:
-                FOOTER_H + (hasBottomInsets ? insets.bottom : SPACING.lg) + SPACING.lg,
-            },
+            styles.contentContainer,
+            { paddingBottom: FOOTER_H + (insets.bottom || 0) + SPACING.lg },
           ]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
         >
-          {/* Controls */}
-          <View style={styles.controlsWrap}>
-            {/* Search */}
-            <View style={styles.searchRow}>
-              <View style={styles.searchBox}>
-                <SearchIcon size={18} color={COLORS.sub} />
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInner}>
+              <View style={styles.searchLeft}>
+                <SearchIcon size={20} color={COLORS.sub} style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search supplier, contact, manufacturer, code"
-                  placeholderTextColor={COLORS.sub}
+                  placeholder="Search supplier, contact, manufacturer, code..."
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  returnKeyType="search"
-                  accessibilityLabel="Search orders"
+                  placeholderTextColor={COLORS.sub}
                 />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearchQuery("")}
-                    style={styles.clearSearchBtn}
-                    accessibilityLabel="Clear search"
-                  >
-                    <XIcon size={14} color={COLORS.sub} />
-                  </TouchableOpacity>
-                )}
               </View>
-
-              <TouchableOpacity
-                style={[styles.filterButton, (startDate || endDate) ? styles.filterButtonActive : null]}
-                onPress={() => openDatePicker("start")}
-                accessibilityLabel="Open date range picker"
-              >
-                <CalendarIcon size={16} color={startDate || endDate ? COLORS.brand : COLORS.sub} />
+              <TouchableOpacity style={styles.filterButton}>
+                <FilterIcon size={18} color={COLORS.brand} />
               </TouchableOpacity>
             </View>
+          </View>
+          {/* Orders Section */}
+          <View style={styles.ordersSection}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Text style={styles.sectionTitle}>Recent Orders</Text>
+                <Text style={styles.sectionSubtitle}>Recently added supplier orders</Text>
+              </View>
+              <View style={styles.sectionControls}>
+                <View style={styles.itemsCount}>
+                  <Text style={styles.countText}>{totalItems} items</Text>
+                </View>
+              </View>
+            </View>
 
-            {/* Actions Row */}
-            <View style={styles.actionsRow}>
+            {/* Date Filter */}
+            <View style={styles.dateFilterContainer}>
               <View style={styles.dateInfoWrap}>
-                <Text style={styles.smallLabel}>Date</Text>
+                <Text style={styles.smallLabel}>Date Range</Text>
                 <TouchableOpacity
                   style={[styles.dateRangeBtn, startDate || endDate ? styles.dateRangeBtnActive : null]}
                   onPress={() => openDatePicker("start")}
                 >
+                  <CalendarIcon size={16} color={startDate || endDate ? COLORS.brand : COLORS.sub} />
                   <Text numberOfLines={1} style={[styles.dateRangeText, startDate || endDate ? styles.dateRangeTextActive : null]}>
                     {getDateRangeText()}
                   </Text>
-
                   {(startDate || endDate) && (
                     <TouchableOpacity
                       onPress={(e) => {
@@ -348,187 +364,131 @@ const PharmacyExpenses: React.FC = () => {
                         handleClearDates();
                       }}
                       style={styles.dateClearInner}
-                      accessibilityLabel="Clear date range"
                     >
                       <XIcon size={14} color={COLORS.danger} />
                     </TouchableOpacity>
                   )}
                 </TouchableOpacity>
               </View>
-
-              <View style={styles.resultsSummary}>
-                <Text style={styles.resultsText}>
-                  Showing <Text style={styles.resultsBadge}>{pagedData.length}</Text> of{" "}
-                  <Text style={styles.resultsBadge}>{totalItems}</Text> results
-                </Text>
-              </View>
             </View>
-          </View>
 
-          {/* Content */}
-          <View style={styles.contentSection}>
             {isLoading ? (
-              <View style={styles.loadingOverlay}>
+              <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={COLORS.brand} />
                 <Text style={styles.loadingText}>Loading orders...</Text>
               </View>
-            ) : pagedData.length === 0 ? (
+            ) : paginatedData.length > 0 ? (
+              <>
+                <View style={styles.ordersList}>
+                  {paginatedData.map((item, index) => (
+                    <View key={item?.id?.toString() || index.toString()}>
+                      <PharmacyExpensesCard data={[item]} />
+                    </View>
+                  ))}
+                </View>
+                
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <View style={styles.paginationContainer}>
+                    <Text style={styles.paginationInfo}>
+                      Showing {startIndex + 1} to {endIndex} of {totalItems} items
+                    </Text>
+                    <View style={styles.paginationControls}>
+                      <TouchableOpacity 
+                        disabled={currentPage === 1} 
+                        onPress={() => setCurrentPage(1)} 
+                        style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
+                      >
+                        <ChevronsLeftIcon size={16} color={currentPage === 1 ? COLORS.sub : COLORS.text} />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        disabled={currentPage === 1} 
+                        onPress={() => setCurrentPage(Math.max(1, currentPage - 1))} 
+                        style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
+                      >
+                        <ChevronLeftIcon size={16} color={currentPage === 1 ? COLORS.sub : COLORS.text} />
+                      </TouchableOpacity>
+
+                      <Text style={styles.pageNumber}>{currentPage} / {totalPages}</Text>
+
+                      <TouchableOpacity 
+                        disabled={currentPage === totalPages} 
+                        onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} 
+                        style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]}
+                      >
+                        <ChevronRightIcon size={16} color={currentPage === totalPages ? COLORS.sub : COLORS.text} />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        disabled={currentPage === totalPages} 
+                        onPress={() => setCurrentPage(totalPages)} 
+                        style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]}
+                      >
+                        <ChevronsRightIcon size={16} color={currentPage === totalPages ? COLORS.sub : COLORS.text} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </>
+            ) : (
               <View style={styles.emptyState}>
-                <SearchIcon size={72} color={COLORS.border} />
-                <Text style={styles.emptyTitle}>No Orders Found</Text>
-                <Text style={styles.emptyText}>
+                <PackageIcon size={48} color={COLORS.sub} />
+                <Text style={styles.emptyStateTitle}>No Orders Found</Text>
+                <Text style={styles.emptyStateText}>
                   {searchQuery || (startDate || endDate)
                     ? "Try adjusting your search or date range."
                     : "There are no supplier orders yet. Create a new order to get started."}
                 </Text>
 
                 {expenseData.length > 0 ? (
-                  <TouchableOpacity
-                    style={styles.clearFiltersBtn}
-                    onPress={clearAllFilters}
-                    accessibilityLabel="Clear filters"
-                  >
+                  <TouchableOpacity style={styles.clearFiltersBtn} onPress={clearAllFilters}>
                     <Text style={styles.clearFiltersText}>Clear Filters</Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity
-                    style={styles.createPrimaryBtn}
-                    onPress={() => setOpenOrderExpense(true)}
-                    accessibilityLabel="Create your first order"
-                  >
-                    <Text style={styles.createPrimaryText}>Create your first order</Text>
+                  <TouchableOpacity style={styles.emptyStateButton} onPress={navigateToAddItem}>
+                    <PlusIcon size={18} color={COLORS.buttonText} />
+                    <Text style={styles.emptyStateButtonText}>Create your first order</Text>
                   </TouchableOpacity>
                 )}
               </View>
-            ) : (
-              // Card list for current page
-              <FlatList
-                data={pagedData}
-                keyExtractor={(item) => item.id?.toString() ?? Math.random().toString()}
-                renderItem={({ item }) => <PharmacyExpensesCard data={[item]} />}
-                contentContainerStyle={{ paddingBottom: SPACING.lg }}
-                ItemSeparatorComponent={() => <View style={{ height: SPACING.sm }} />}
-                showsVerticalScrollIndicator={false}
-              />
             )}
           </View>
-
-          {/* Pagination controls */}
-          {totalItems > 0 && (
-            <View style={styles.paginationWrap}>
-              <TouchableOpacity
-                style={[styles.pageBtn, page <= 1 && styles.pageBtnDisabled]}
-                onPress={onPrevPage}
-                disabled={page <= 1}
-                accessibilityLabel="Previous page"
-              >
-                <Text style={[styles.pageBtnText, page <= 1 && styles.pageBtnTextDisabled]}>Prev</Text>
-              </TouchableOpacity>
-
-              {/* show up to 5 page buttons centered */}
-              <View style={styles.pageNumbers}>
-                {Array.from({ length: Math.min(totalPages, 5) }).map((_, idx) => {
-                  // center logic: show pages around current page
-                  const centerStart = Math.max(1, Math.min(totalPages - 4, page - 2));
-                  const pageNumber = centerStart + idx;
-                  if (pageNumber > totalPages) return null;
-                  const active = pageNumber === page;
-                  return (
-                    <TouchableOpacity
-                      key={pageNumber}
-                      style={[styles.pageNumberBtn, active && styles.pageNumberBtnActive]}
-                      onPress={() => jumpToPage(pageNumber)}
-                      accessibilityLabel={`Go to page ${pageNumber}`}
-                    >
-                      <Text style={[styles.pageNumberText, active && styles.pageNumberTextActive]}>{pageNumber}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <TouchableOpacity
-                style={[styles.pageBtn, page >= totalPages && styles.pageBtnDisabled]}
-                onPress={onNextPage}
-                disabled={page >= totalPages}
-                accessibilityLabel="Next page"
-              >
-                <Text style={[styles.pageBtnText, page >= totalPages && styles.pageBtnTextDisabled]}>Next</Text>
-              </TouchableOpacity>
-
-              <View style={styles.pageInfo}>
-                <Text style={styles.pageInfoText}>
-                  Page <Text style={styles.resultsBadge}>{clampedPage}</Text> of{" "}
-                  <Text style={styles.resultsBadge}>{totalPages}</Text>
-                </Text>
-              </View>
-            </View>
-          )}
         </ScrollView>
 
         {/* Footer */}
-        <View
-          style={[
-            styles.footerWrap,
-            {
-              bottom: hasBottomInsets ? insets.bottom : 0,
-              height: FOOTER_H,
-            },
-          ]}
-        >
+        <View style={[styles.footerWrap, { bottom: insets.bottom || 0 }]}>
           <Footer active={"orderplacement"} brandColor={COLORS.brand} />
         </View>
 
-        {/* nav shield */}
-        {hasBottomInsets && (
+        {/* Bottom Safe Area Shield */}
+        {insets.bottom > 0 && (
           <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
         )}
 
         {/* Date Picker Modal */}
         {showDatePicker && (
-          <Modal
-            transparent={true}
-            animationType="slide"
-            visible={showDatePicker}
-            onRequestClose={() => setShowDatePicker(false)}
-          >
+          <Modal transparent animationType="slide" visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
             <View style={styles.datePickerModal}>
               <View style={styles.datePickerContainer}>
                 <View style={styles.datePickerHeader}>
                   <Text style={styles.datePickerTitle}>
                     {datePickerMode === "start" ? "Select start date" : "Select end date"}
                   </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowDatePicker(false)}
-                    style={styles.closeButton}
-                    accessibilityLabel="Close date picker"
-                  >
+                  <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.closeButton}>
                     <XIcon size={20} color={COLORS.text} />
                   </TouchableOpacity>
                 </View>
-
                 <DateTimePicker
                   value={datePickerMode === "start" ? startDate || new Date() : endDate || new Date()}
                   mode="date"
                   display={Platform.OS === "ios" ? "inline" : "calendar"}
                   onChange={handleDateChange}
-                  textColor={COLORS.text}
                   style={styles.dateTimePicker}
                 />
-
                 <View style={styles.datePickerActions}>
                   <TouchableOpacity style={styles.datePickerCancel} onPress={() => setShowDatePicker(false)}>
                     <Text style={styles.datePickerCancelText}>Cancel</Text>
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.datePickerConfirm,
-                      !(startDate && endDate) && styles.datePickerConfirmDisabled,
-                    ]}
-                    onPress={() => setShowDatePicker(false)}
-                    disabled={!(startDate && endDate)}
-                    accessibilityLabel="Apply date range"
-                  >
+                  <TouchableOpacity style={styles.datePickerConfirm} onPress={() => setShowDatePicker(false)}>
                     <Text style={styles.datePickerConfirmText}>Apply</Text>
                   </TouchableOpacity>
                 </View>
@@ -537,146 +497,159 @@ const PharmacyExpenses: React.FC = () => {
           </Modal>
         )}
 
-        {/* Order Expense Dialog */}
         <OrderExpenseDialog open={openOrderExpense} setOpen={setOpenOrderExpense} onOrderPlaced={fetchExpenseData} />
       </View>
     </TouchableWithoutFeedback>
   );
 };
 
-export default PharmacyExpenses;
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-
+  safeArea: { flex: 1, backgroundColor: COLORS.bg },
   header: {
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.md,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.lg,
     backgroundColor: COLORS.card,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.03,
-        shadowOffset: { width: 0, height: 3 },
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
   },
-  headerInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: SPACING.md,
-  },
-  headerText: {
-    flex: 1,
-    paddingRight: SPACING.md,
-  },
-  title: {
-    fontSize: FONT_SIZE.xl + 2,
-    fontWeight: "800",
+  headerContent: { flex: 1 },
+  headerTitle: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: "700",
     color: COLORS.text,
-    marginBottom: SPACING.xs,
+    marginBottom: 2,
   },
-  subtitle: {
+  headerSubtitle: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
-    lineHeight: 20,
   },
-  headerAction: {
+  addButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.brand,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     borderRadius: 12,
+    gap: SPACING.xs,
   },
-  headerActionText: {
+  addButtonText: {
     color: COLORS.buttonText,
     fontSize: FONT_SIZE.sm,
-    fontWeight: "700",
-    marginLeft: SPACING.sm,
+    fontWeight: "600",
   },
-
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  containerContent: {
-    padding: SPACING.md,
-    gap: SPACING.lg,
-  },
-
-  controlsWrap: {
-    gap: SPACING.md,
-  },
-
-  searchRow: {
+  content: { flex: 1, backgroundColor: "transparent" },
+  contentContainer: { padding: SPACING.sm, gap: SPACING.md },
+  searchContainer: { marginHorizontal: SPACING.sm },
+  searchInner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.sm,
-  },
-  searchBox: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.field,
+    backgroundColor: COLORS.card,
     borderRadius: 12,
-    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  searchInput: {
+  searchLeft: {
     flex: 1,
-    marginLeft: SPACING.sm,
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.text,
-    padding: 0,
-  },
-  clearSearchBtn: {
-    marginLeft: SPACING.sm,
-    padding: SPACING.xs,
-  },
-
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: COLORS.field,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  filterButtonActive: {
-    borderColor: COLORS.brand,
-    backgroundColor: COLORS.brandLight,
-  },
-
-  actionsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+  },
+  searchIcon: { marginRight: SPACING.sm },
+  searchInput: {
+    flex: 1,
+    paddingVertical: SPACING.md,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+  },
+  filterButton: { padding: SPACING.xs, marginLeft: SPACING.sm },
+  
+  // Stats Section
+  statsSection: { marginHorizontal: SPACING.sm },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: SPACING.sm,
   },
-
-  dateInfoWrap: {
+  statCard: {
     flex: 1,
+    minWidth: responsiveWidth(43),
+    borderRadius: 12,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: SPACING.sm,
   },
-  smallLabel: {
-    fontSize: FONT_SIZE.xxs,
+  statContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  statInfo: { flex: 1 },
+  statLabel: {
+    fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
-    marginBottom: SPACING.xs / 2,
+    marginBottom: SPACING.xs,
+    fontWeight: '500',
+  },
+  statValue: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  statIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  
+  // Orders Section
+  ordersSection: { marginHorizontal: SPACING.sm },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: SPACING.lg,
+  },
+  sectionTitleContainer: { flex: 1 },
+  sectionTitle: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
+  },
+  sectionSubtitle: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+  },
+  sectionControls: { alignItems: 'flex-end' },
+  itemsCount: {
+    backgroundColor: COLORS.brand + '15',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.brand + '30',
+  },
+  countText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.brand,
+    fontWeight: "600",
+  },
+  
+  // Date Filter
+  dateFilterContainer: { marginBottom: SPACING.lg },
+  dateInfoWrap: { flex: 1 },
+  smallLabel: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginBottom: SPACING.xs,
+    fontWeight: '500',
   },
   dateRangeBtn: {
     flexDirection: "row",
@@ -696,6 +669,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     flex: 1,
+    marginLeft: SPACING.sm,
   },
   dateRangeTextActive: {
     color: COLORS.brand,
@@ -705,149 +679,116 @@ const styles = StyleSheet.create({
     padding: SPACING.xs,
     marginLeft: SPACING.sm,
   },
-
-  resultsSummary: {
-    marginLeft: SPACING.md,
-  },
-  resultsText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.sub,
-  },
-  resultsBadge: {
-    color: COLORS.brand,
-    fontWeight: "700",
-  },
-
-  contentSection: {
-    flex: 1,
-    marginTop: SPACING.sm,
-  },
-
-  loadingOverlay: {
+  
+  // Orders List
+  ordersList: { gap: SPACING.sm },
+  
+  // Loading States
+  loadingContainer: {
     alignItems: "center",
-    justifyContent: "center",
     paddingVertical: SPACING.xl,
   },
   loadingText: {
     marginTop: SPACING.md,
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
   },
-
+  
+  // Empty State
   emptyState: {
     alignItems: "center",
-    justifyContent: "center",
     paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
   },
-  emptyTitle: {
+  emptyStateTitle: {
     fontSize: FONT_SIZE.lg,
-    fontWeight: "700",
+    fontWeight: "600",
     color: COLORS.text,
     marginTop: SPACING.md,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
-  emptyText: {
+  emptyStateText: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     textAlign: "center",
-    lineHeight: 20,
     marginBottom: SPACING.lg,
   },
   clearFiltersBtn: {
     backgroundColor: COLORS.brandLight,
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    borderRadius: 10,
+    paddingVertical: SPACING.md,
+    borderRadius: 8,
   },
   clearFiltersText: {
     color: COLORS.brand,
     fontSize: FONT_SIZE.sm,
-    fontWeight: "700",
-  },
-
-  createPrimaryBtn: {
-    backgroundColor: COLORS.brand,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    borderRadius: 10,
-  },
-  createPrimaryText: {
-    color: COLORS.buttonText,
-    fontSize: FONT_SIZE.sm,
-    fontWeight: "700",
-  },
-
-  // Pagination
-  paginationWrap: {
-    marginTop: SPACING.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: SPACING.sm,
-    flexWrap: "wrap",
-  },
-  pageBtn: {
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-    backgroundColor: COLORS.field,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  pageBtnDisabled: {
-    opacity: 0.5,
-  },
-  pageBtnText: {
-    color: COLORS.text,
-    fontWeight: "700",
-  },
-  pageBtnTextDisabled: {
-    color: COLORS.sub,
-  },
-  pageNumbers: {
-    flexDirection: "row",
-    gap: SPACING.xs,
-    alignItems: "center",
-  },
-  pageNumberBtn: {
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-    minWidth: 36,
-    alignItems: "center",
-  },
-  pageNumberBtnActive: {
-    backgroundColor: COLORS.brand,
-    borderColor: COLORS.brand,
-  },
-  pageNumberText: {
-    color: COLORS.text,
     fontWeight: "600",
   },
-  pageNumberTextActive: {
+  emptyStateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.brand,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: 8,
+    gap: SPACING.xs,
+  },
+  emptyStateButtonText: {
     color: COLORS.buttonText,
-  },
-  pageInfo: {
-    marginLeft: SPACING.sm,
-  },
-  pageInfoText: {
-    color: COLORS.sub,
     fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
   },
-
+  
+  // Pagination
+  paginationContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: SPACING.lg,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  paginationInfo: {
+    color: COLORS.sub,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '500',
+  },
+  paginationControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  pageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.field,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pageBtnDisabled: {
+    backgroundColor: COLORS.field,
+    opacity: 0.5,
+  },
+  pageNumber: {
+    fontWeight: "700",
+    fontSize: FONT_SIZE.sm,
+    marginHorizontal: SPACING.sm,
+    color: COLORS.text,
+    minWidth: 40,
+    textAlign: 'center',
+  },
+  
+  // Footer
   footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
+    height: FOOTER_H,
+    justifyContent: "center",
     backgroundColor: COLORS.card,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    zIndex: 10,
-    elevation: 6,
   },
   navShield: {
     position: "absolute",
@@ -858,7 +799,7 @@ const styles = StyleSheet.create({
     zIndex: 9,
   },
 
-  // Date Picker & modal styles
+  // Date Picker Modal
   datePickerModal: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
@@ -882,12 +823,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: COLORS.text,
   },
-  closeButton: {
-    padding: SPACING.xs,
-  },
-  dateTimePicker: {
-    height: 220,
-  },
+  closeButton: { padding: SPACING.xs },
+  dateTimePicker: { height: 220 },
   datePickerActions: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -914,12 +851,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
   },
-  datePickerConfirmDisabled: {
-    backgroundColor: COLORS.border,
-  },
   datePickerConfirmText: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.buttonText,
     fontWeight: "700",
   },
 });
+
+export default PharmacyExpenses;

@@ -120,7 +120,11 @@ import taxInvoiceTabs from "../components/Reception/taxInvoice/taxInvoiceTabs";
 import invoiceDetails from "../components/Reception/taxInvoice/invoiceDetails";
 import PharmacyExpenses from "../components/Pharmacy/orderPlacement/PharmacyExpenses";
 import InStock from "../components/Pharmacy/InStock/InStock";
-import BillingDetails from "../components/Lab/billing/BillingDetails";
+
+import AddInventory from "../components/Pharmacy/inventory/AddInventory";
+import InventoryDetails from "../components/Pharmacy/inventory/InventoryDetails";
+import AddInventoryItemScreen from "../components/Pharmacy/inventory/AddInventoryItem";
+import PharmacyOrderDetailsScreen from "../components/Pharmacy/PharmacyOrderDetailsScreen";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -427,8 +431,26 @@ const Routing = () => {
           component={InStock} 
           options={{ title: 'In-Stock', headerTitleAlign: "center", headerShown: true }}
           />
-          <Stack.Screen name="BillingDetails" component={BillingDetails} />
-
+          <Stack.Screen 
+          name="AddInventory" 
+          component={AddInventory}
+          options={{ title: 'Inventory', headerTitleAlign: "center", headerShown: true }}  
+        />
+        <Stack.Screen 
+          name="InventoryDetail" 
+          component={InventoryDetails}
+          options={{ title: 'Inventory-Details', headerTitleAlign: "center", headerShown: true }}  
+        />
+        <Stack.Screen 
+          name="AddInventoryItem" 
+          component={AddInventoryItemScreen}
+          options={{ title: 'Add-Inventory', headerTitleAlign: "center", headerShown: true }}  
+        />
+<Stack.Screen 
+  name="PharmacyOrderDetails" 
+  component={PharmacyOrderDetailsScreen}
+  options={{ title: 'Pharmacy Order Details', headerTitleAlign: "center", headerShown: true }}  
+/>
       </Stack.Navigator>
     </NavigationContainer>
   );

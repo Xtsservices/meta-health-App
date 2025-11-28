@@ -1,4 +1,3 @@
-// components/Pharmacy/AddInventory.tsx
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -6,29 +5,20 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Modal,
   TextInput,
+  FlatList,
   ActivityIndicator,
-  Alert,
-  Platform,
+  RefreshControl,
+  StatusBar,
+  SafeAreaView,
   Dimensions,
+  Platform,
 } from "react-native";
 import { useSelector } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
-import { RootState } from "../../store/store";
+import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AuthFetch } from "../../auth/auth";
-
-// Import responsive utils and colors
-import { 
-  SPACING, 
-  FONT_SIZE,
-  isTablet,
-  isSmallDevice,
-  responsiveWidth,
-  responsiveHeight 
-} from "../../utils/responsive";
-import { COLORS } from "../../utils/colour";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import LinearGradient from 'react-native-linear-gradient';
 
 // Import SVG Icons
 import {
@@ -38,30 +28,41 @@ import {
   PackageIcon,
   UsersIcon,
   IndianRupeeIcon,
-  ChevronLeftIcon,
   ChevronRightIcon,
+  FilterIcon,
+  ChevronLeftIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
-  FilterIcon,
-  DownloadIcon,
-  TrendingUpIcon,
-} from "../../utils/SvgIcons";
+} from "../../../utils/SvgIcons";
 
-// Import components
-import AddInventoryDialog from "./AddInventoryDialog";
-import AddInventoryCard from "./AddInventoryCard";
+// Import responsive utils and colors
+import {
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  isTablet,
+  isSmallDevice,
+  responsiveWidth,
+  responsiveHeight,
+  FOOTER_HEIGHT,
+} from "../../../utils/responsive";
+import { COLORS } from "../../../utils/colour";
+import { AuthFetch } from "../../../auth/auth";
+import { RootState } from "../../../store/store";
+import Footer from "../../dashboard/footer";
+import { formatDate } from "../../../utils/dateTime";
 
 // Types
 interface ExpenseData {
   id: number;
-  firstName: string;
-  lastName: string;
-  agencyName: string;
-  contactNo: string;
-  agentCode: number | null;
-  manufacturer: string;
-  addedOn: string;
-  medicinesList: any[];
+  firstName?: string;
+  lastName?: string;
+  agencyName?: string;
+  contactNo?: string;
+  agentCode?: number | null;
+  manufacturer?: string;
+  addedOn?: string;
+  medicinesList?: any[];
 }
 
 interface DashboardStats {
@@ -71,664 +72,876 @@ interface DashboardStats {
   totalValue: string;
 }
 
-const AddInventory: React.FC = () => {
-  const navigation = useNavigation();
+const ITEMS_PER_PAGE = 10;
+
+// Safe color getter with fallbacks
+const getColors = (primary: string, secondary?: string) => {
+  const primaryColor = primary || '#14b8a6';
+  const secondaryColor = secondary || primaryColor;
+  
+  return [primaryColor, secondaryColor].filter(color => 
+    color && typeof color === 'string' && color.length > 0
+  );
+};
+
+const AddInventory: React.FC = ({ navigation }: any) => {
   const user = useSelector((state: RootState) => state.currentUser);
-  
-  const [openOrderExpense, setOpenOrderExpense] = useState<boolean>(false);
+  const insets = useSafeAreaInsets();
+
   const [expenseData, setExpenseData] = useState<ExpenseData[]>([]);
-  const [renderData, setRenderData] = useState(false);
-  const [editMEdId, setEditMEdId] = useState<number | null>(null);
+  const [filteredData, setFilteredData] = useState<ExpenseData[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // Pagination states
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  
-  const initialSelectedMedicineData = {
-    name: "",
-    category: "",
-    hsn: "",
-    quantity: 0,
-    costPrice: 0,
-    sellingPrice: 0,
-    lowStockValue: 0,
-    email: "",
-    expiryDate: "",
-    agencyName: "",
-    contactNo: "",
-    agentCode: null,
-    manufacturer: "",
-    addedOn: "",
-    gst: null,
-    agencyID: null,
-  };
+  const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
-  const [editMedicineData, setEditMedicineData] = useState(initialSelectedMedicineData);
-
-  // Fetch inventory logs
-  const fetchInventoryLogs = useCallback(async () => {
+  // Fetch inventory data
+  const fetchInventoryData = async () => {
     if (!user?.hospitalID) return;
 
-    setIsLoading(true);
     try {
+      setLoading(true);
       const token = await AsyncStorage.getItem("token");
       const response = await AuthFetch(
         `medicineInventoryLogs/${user.hospitalID}/getInventoryLogs`,
         token
       );
 
+      let data: any[] = [];
       if (response?.status === 200) {
-        setExpenseData(response.data || []);
-      } else {
-        setExpenseData([]);
-        Alert.alert("Error", "Failed to fetch inventory data");
+        data = Array.isArray(response.data) ? response.data : [];
+      } else if (response?.data?.status === 200) {
+        data = Array.isArray(response.data.data) ? response.data.data : [];
+      } else if (Array.isArray(response)) {
+        data = response;
+      } else if (Array.isArray(response?.data)) {
+        data = response.data;
       }
+
+      setExpenseData(data);
+      setFilteredData(data);
     } catch (error) {
+      console.error("Error fetching inventory data:", error);
       setExpenseData([]);
-      Alert.alert("Error", "Failed to fetch inventory data");
+      setFilteredData([]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
-  }, [user]);
+  };
 
-  useEffect(() => {
-    fetchInventoryLogs();
-  }, [fetchInventoryLogs, openOrderExpense, renderData]);
-
-  // Filter data based on search query
-  const filteredData = expenseData.filter(item => 
-    item.agencyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.manufacturer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.contactNo?.includes(searchQuery) ||
-    item.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.lastName?.toLowerCase().includes(searchQuery.toLowerCase())
+  useFocusEffect(
+    useCallback(() => {
+      fetchInventoryData();
+    }, [user])
   );
 
-  // Pagination logic
-  const totalItems = filteredData.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, endIndex);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
+  const onRefresh = () => {
+    setRefreshing(true);
     setCurrentPage(1);
-  }, [searchQuery, itemsPerPage]);
-
-  const handlePageChange = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
+    fetchInventoryData();
   };
 
-  const handleItemsPerPageChange = (value: number) => {
-    setItemsPerPage(value);
-    setCurrentPage(1);
-  };
-
-  // Generate page numbers for pagination
-  const getPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    const maxVisible = 5;
-
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) {
-          pages.push(i);
-        }
-        pages.push("...");
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push("...");
-        for (let i = totalPages - 3; i <= totalPages; i++) {
-          pages.push(i);
-        }
-      } else {
-        pages.push(1);
-        pages.push("...");
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
-          pages.push(i);
-        }
-        pages.push("...");
-        pages.push(totalPages);
-      }
-    }
-
-    return pages;
-  };
-
-  // Calculate stats from actual data
+  // Calculate stats - with null checks
   const calculateStats = (): DashboardStats => {
+    const data = Array.isArray(expenseData) ? expenseData : [];
+
     const today = new Date().toISOString().split("T")[0];
-    const itemsToday = expenseData.filter(
-      (item) => new Date(item.addedOn).toISOString().split("T")[0] === today
-    ).length;
+    const itemsToday = data.filter((item) => {
+      if (!item?.addedOn) return false;
+      try {
+        return formatDate(item.addedOn) === today;
+      } catch {
+        return false;
+      }
+    }).length;
 
-    // Get unique categories
-    const categories = new Set();
-    expenseData.forEach((item) => {
-      item.medicinesList?.forEach((med: any) => {
-        if (med.category) categories.add(med.category);
-      });
+    const categories = new Set<string>();
+    data.forEach((item) => {
+      if (item?.medicinesList && Array.isArray(item.medicinesList)) {
+        item.medicinesList.forEach((med: any) => {
+          if (med?.category) categories.add(String(med.category));
+        });
+      }
     });
 
-    // Get unique suppliers
-    const suppliers = new Set();
-    expenseData.forEach((item) => {
-      if (item.agencyName) suppliers.add(item.agencyName);
+    const suppliers = new Set<string>();
+    data.forEach((item) => {
+      if (item?.agencyName) suppliers.add(String(item.agencyName));
     });
 
-    // Calculate total value
     let totalValue = 0;
-    expenseData.forEach((item) => {
-      item.medicinesList?.forEach((med: any) => {
-        totalValue += (med.quantity || 0) * (med.sellingPrice || 0);
-      });
+    data.forEach((item) => {
+      if (item?.medicinesList && Array.isArray(item.medicinesList)) {
+        item.medicinesList.forEach((med: any) => {
+          const quantity = Number(med.quantity) || 0;
+          const sellingPrice = Number(med.sellingPrice) || 0;
+          totalValue += quantity * sellingPrice;
+        });
+      }
     });
 
-    const valueInLakhs = totalValue / 100000;
-    
     return {
       itemsAddedToday: itemsToday,
       categories: categories.size,
       activeSuppliers: suppliers.size,
-      totalValue: valueInLakhs >= 1 ? `${valueInLakhs.toFixed(1)}L` : `₹${Math.round(totalValue).toLocaleString()}`,
+      totalValue:
+        totalValue >= 100000
+          ? `${(totalValue / 100000).toFixed(1)}L`
+          : `₹${totalValue.toLocaleString()}`,
     };
   };
 
   const stats = calculateStats();
 
-  const StatCard: React.FC<{
-    label: string;
-    value: string | number;
-    icon: React.ElementType;
-    color: string;
-  }> = ({ label, value, icon: Icon, color }) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={styles.statContent}>
-        <View style={styles.statText}>
-          <Text style={styles.statLabel}>{label}</Text>
-          <Text style={styles.statValue}>{value}</Text>
-        </View>
-        <View style={[styles.statIcon, { backgroundColor: `${color}20` }]}>
-          <Icon size={24} color={color} />
+  // Filter data based on search query - with null checks
+  const filterData = () => {
+    const data = Array.isArray(expenseData) ? expenseData : [];
+
+    if (!searchQuery.trim()) {
+      setFilteredData(data);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    const filtered = data.filter((expense) => {
+      if (!expense) return false;
+
+      return (
+        (expense.agencyName?.toLowerCase().includes(query) || false) ||
+        (expense.contactNo?.toLowerCase().includes(query) || false) ||
+        (String(expense.agentCode || "").toLowerCase().includes(query) || false) ||
+        (expense.manufacturer?.toLowerCase().includes(query) || false) ||
+        (expense.medicinesList?.some((med: any) =>
+          med?.name?.toLowerCase().includes(query)
+        ) || false)
+      );
+    });
+
+    setFilteredData(filtered);
+  };
+
+  useEffect(() => {
+    filterData();
+  }, [searchQuery, expenseData]);
+
+  // Pagination calculations
+  const totalItems = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(totalItems, startIndex + itemsPerPage);
+  const paginatedData = filteredData.slice(startIndex, endIndex);
+
+  const navigateToAddItem = () => {
+    navigation.navigate("AddInventoryItem");
+  };
+
+  const navigateToInventoryDetail = (item: ExpenseData) => {
+    navigation.navigate("InventoryDetail", { inventoryData: item });
+  };
+
+  const renderStatCard = (
+    title: string,
+    value: string | number,
+    IconComponent: React.ElementType,
+    color: string
+  ) => {
+    return (
+      <View style={styles.statCard}>
+        <View style={styles.statContent}>
+          <View style={styles.statInfo}>
+            <Text style={styles.statLabel}>{title}</Text>
+            <Text style={styles.statValue}>{value}</Text>
+          </View>
+          <View style={[styles.statIcon, { backgroundColor: `${color || '#14b8a6'}15` }]}>
+            <IconComponent size={24} color={color || '#14b8a6'} />
+          </View>
         </View>
       </View>
-    </View>
+    );
+  };
+
+  const renderInventoryItem = ({
+    item,
+    index,
+  }: {
+    item: ExpenseData;
+    index: number;
+  }) => (
+    <TouchableOpacity
+      style={styles.inventoryCard}
+      onPress={() => navigateToInventoryDetail(item)}
+    >
+      <View style={styles.cardHeader}>
+        <View style={styles.agencyInfo}>
+          <Text style={styles.agencyName}>{item?.agencyName || "Unknown Agency"}</Text>
+          <Text style={styles.manufacturer}>{item?.manufacturer || "Unknown Manufacturer"}</Text>
+        </View>
+        <View style={styles.statusBadge}>
+          <View style={styles.statusDot} />
+          <Text style={styles.statusText}>Active</Text>
+        </View>
+      </View>
+
+      <View style={styles.cardDetails}>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Contact:</Text>
+          <Text style={styles.detailValue}>{item?.contactNo || "N/A"}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Agent Code:</Text>
+          <Text style={styles.detailValue}>{item?.agentCode ?? "N/A"}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Added By:</Text>
+          <Text style={styles.detailValue}>
+            {`${item?.firstName || ""} ${item?.lastName || ""}`.trim() || "Unknown User"}
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Items:</Text>
+          <Text style={styles.detailValue}>
+            {Array.isArray(item?.medicinesList) ? item.medicinesList.length : 0} medicines
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.cardFooter}>
+        <Text style={styles.dateText}>
+          {item?.addedOn ? formatDate(item.addedOn) : "Unknown Date"}
+        </Text>
+        <View style={styles.arrowContainer}>
+          <ChevronRightIcon size={16} color={COLORS.brand || '#14b8a6'} />
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
+  // compute bottom padding for scroll content so the footer doesn't cover it
+  const contentBottomPadding = FOOTER_HEIGHT + (insets.bottom || 0) + SPACING.lg;
+
   return (
-    <View style={styles.container}>
-      {/* Header Section */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Add Inventory</Text>
-      </View>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.brand || '#14b8a6'} />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Search and Actions Section */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <SearchIcon size={20} color={COLORS.sub} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search items, categories, suppliers..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor={COLORS.sub}
-            />
+      {/* Main Content */}
+      <View style={styles.mainContainer}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Inventory Management</Text>
+            <Text style={styles.headerSubtitle}>Manage your medicine inventory</Text>
           </View>
-
-          <View style={styles.actionButtons}>
-            {/* <TouchableOpacity style={styles.filterButton}>
-              <FilterIcon size={18} color={COLORS.brand} />
-              <Text style={styles.filterButtonText}>Filter</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.exportButton}>
-              <DownloadIcon size={18} color={COLORS.brand} />
-              <Text style={styles.exportButtonText}>Export</Text>
-            </TouchableOpacity> */}
-
-            <TouchableOpacity 
-              style={styles.addButton}
-              onPress={() => setOpenOrderExpense(true)}
+          <TouchableOpacity style={styles.addButton} onPress={navigateToAddItem}>
+            <LinearGradient
+              colors={getColors(COLORS.brand, COLORS.brandDark)}
+              style={styles.addButtonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
             >
-              <PlusIcon size={18} color={COLORS.buttonText} />
-              <Text style={styles.addButtonText}>Add New Item</Text>
-            </TouchableOpacity>
-          </View>
+              <PlusIcon size={20} color={COLORS.buttonText || '#ffffff'} />
+              <Text style={styles.addButtonText}>Add New</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
 
-        {/* Stats Cards */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            label="Items Added Today"
-            value={stats.itemsAddedToday}
-            icon={ShoppingBagIcon}
-            color="#10B981"
-          />
-          <StatCard
-            label="Categories"
-            value={stats.categories}
-            icon={PackageIcon}
-            color="#3B82F6"
-          />
-          <StatCard
-            label="Active Suppliers"
-            value={stats.activeSuppliers}
-            icon={UsersIcon}
-            color="#8B5CF6"
-          />
-          <StatCard
-            label="Total Inventory Value"
-            value={stats.totalValue}
-            icon={IndianRupeeIcon}
-            color="#F59E0B"
-          />
-        </View>
-
-        {/* Recently Added Items Section */}
-        <View style={styles.recentSection}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Recently Added Items</Text>
-              <Text style={styles.sectionSubtitle}>
-                New inventory items added to the system
-              </Text>
-            </View>
-            <View style={styles.headerRight}>
-              <View style={styles.itemsBadge}>
-                <Text style={styles.itemsBadgeText}>{totalItems} items</Text>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: contentBottomPadding }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInner}>
+              <View style={styles.searchLeft}>
+                <SearchIcon size={20} color={COLORS.sub || '#6b7280'} style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search items, categories, suppliers..."
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholderTextColor={COLORS.sub || '#6b7280'}
+                />
               </View>
-              <View style={styles.perPageContainer}>
-                <Text style={styles.perPageLabel}>Show:</Text>
-                <TouchableOpacity 
-                  style={styles.perPageButton}
-                  onPress={() => {
-                    const options = [5, 10, 20, 50];
-                    const currentIndex = options.indexOf(itemsPerPage);
-                    const nextIndex = (currentIndex + 1) % options.length;
-                    handleItemsPerPageChange(options[nextIndex]);
-                  }}
-                >
-                  <Text style={styles.perPageText}>{itemsPerPage} per page</Text>
+              <TouchableOpacity style={styles.filterButton}>
+                <FilterIcon size={18} color={COLORS.brand || '#14b8a6'} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Stats Grid */}
+          <View style={styles.statsSection}>
+            <Text style={styles.sectionTitle}>Inventory Overview</Text>
+            <View style={styles.statsGrid}>
+              {renderStatCard("Items Added Today", stats.itemsAddedToday, ShoppingBagIcon, COLORS.success)}
+              {renderStatCard("Categories", stats.categories, PackageIcon, COLORS.info)}
+              {renderStatCard("Active Suppliers", stats.activeSuppliers, UsersIcon, COLORS.warning)}
+              {renderStatCard("Total Value", stats.totalValue, IndianRupeeIcon, COLORS.brand)}
+            </View>
+          </View>
+
+          {/* Recently Added Section */}
+          <View style={styles.inventorySection}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <Text style={styles.sectionTitle}>Recent Inventory</Text>
+                <Text style={styles.sectionSubtitle}>Recently added inventory items</Text>
+              </View>
+              <View style={styles.sectionControls}>
+                <View style={styles.itemsCount}>
+                  <Text style={styles.countText}>
+                    {totalItems} items
+                  </Text>
+                </View>
+                <View style={styles.perPageRow}>
+                  {[5, 10, 20].map((size) => (
+                    <TouchableOpacity 
+                      key={size}
+                      onPress={() => {
+                        setItemsPerPage(size);
+                        setCurrentPage(1);
+                      }} 
+                      style={[
+                        styles.perPageBtn, 
+                        itemsPerPage === size && styles.perPageActive
+                      ]}
+                    >
+                      <Text style={itemsPerPage === size ? styles.perPageActiveText : styles.perPageText}>
+                        {size}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={COLORS.brand || '#14b8a6'} />
+                <Text style={styles.loadingText}>Loading inventory...</Text>
+              </View>
+            ) : paginatedData.length > 0 ? (
+              <>
+                <View style={styles.inventoryList}>
+                  {paginatedData.map((item, index) => (
+                    <View key={item?.id?.toString() || index.toString()}>
+                      {renderInventoryItem({ item, index })}
+                    </View>
+                  ))}
+                </View>
+                
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <View style={styles.paginationContainer}>
+                    <Text style={styles.paginationInfo}>
+                      Showing {startIndex + 1} to {endIndex} of {totalItems} items
+                    </Text>
+                    <View style={styles.paginationControls}>
+                      <TouchableOpacity 
+                        disabled={currentPage === 1} 
+                        onPress={() => setCurrentPage(1)} 
+                        style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
+                      >
+                        <ChevronsLeftIcon size={16} color={currentPage === 1 ? COLORS.sub : COLORS.text} />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        disabled={currentPage === 1} 
+                        onPress={() => setCurrentPage(Math.max(1, currentPage - 1))} 
+                        style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
+                      >
+                        <ChevronLeftIcon size={16} color={currentPage === 1 ? COLORS.sub : COLORS.text} />
+                      </TouchableOpacity>
+
+                      <Text style={styles.pageNumber}>{currentPage} / {totalPages}</Text>
+
+                      <TouchableOpacity 
+                        disabled={currentPage === totalPages} 
+                        onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} 
+                        style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]}
+                      >
+                        <ChevronRightIcon size={16} color={currentPage === totalPages ? COLORS.sub : COLORS.text} />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        disabled={currentPage === totalPages} 
+                        onPress={() => setCurrentPage(totalPages)} 
+                        style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]}
+                      >
+                        <ChevronsRightIcon size={16} color={currentPage === totalPages ? COLORS.sub : COLORS.text} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.emptyState}>
+                <PackageIcon size={48} color={COLORS.sub || '#6b7280'} />
+                <Text style={styles.emptyStateTitle}>No Inventory Items</Text>
+                <Text style={styles.emptyStateText}>
+                  Get started by adding your first inventory item
+                </Text>
+                <TouchableOpacity style={styles.emptyStateButton} onPress={navigateToAddItem}>
+                  <LinearGradient
+                    colors={getColors(COLORS.brand, COLORS.brandDark)}
+                    style={styles.emptyStateGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <PlusIcon size={18} color={COLORS.buttonText || '#ffffff'} />
+                    <Text style={styles.emptyStateButtonText}>Add First Item</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
-            </View>
+            )}
           </View>
+        </ScrollView>
+      </View>
 
-          {isLoading ? (
-            <ActivityIndicator size="large" color={COLORS.brand} style={styles.loader} />
-          ) : (
-            <>
-              <AddInventoryCard
-                data={paginatedData}
-                setEditMEdId={setEditMEdId}
-                setRenderData={setRenderData}
-                setOpenDialog={setOpenOrderExpense}
-              />
+      <View style={[styles.footerWrap, { bottom: insets.bottom || 0 }]}>
+        <Footer active={"patients"} brandColor="#14b8a6" />
+      </View>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <View style={styles.paginationContainer}>
-                  <Text style={styles.paginationInfo}>
-                    Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} items
-                  </Text>
-
-                  <View style={styles.paginationControls}>
-                    {/* First Page */}
-                    <TouchableOpacity
-                      onPress={() => handlePageChange(1)}
-                      disabled={currentPage === 1}
-                      style={[
-                        styles.paginationButton,
-                        currentPage === 1 && styles.paginationButtonDisabled
-                      ]}
-                    >
-                      <ChevronsLeftIcon size={18} color={currentPage === 1 ? COLORS.sub : COLORS.brand} />
-                    </TouchableOpacity>
-
-                    {/* Previous Page */}
-                    <TouchableOpacity
-                      onPress={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      style={[
-                        styles.paginationButton,
-                        currentPage === 1 && styles.paginationButtonDisabled
-                      ]}
-                    >
-                      <ChevronLeftIcon size={18} color={currentPage === 1 ? COLORS.sub : COLORS.brand} />
-                    </TouchableOpacity>
-
-                    {/* Page Numbers */}
-                    <View style={styles.pageNumbers}>
-                      {getPageNumbers().map((page, index) => (
-                        <TouchableOpacity
-                          key={index}
-                          onPress={() => typeof page === 'number' && handlePageChange(page)}
-                          disabled={page === "..."}
-                          style={[
-                            styles.pageNumber,
-                            page === currentPage && styles.activePage,
-                            page === "..." && styles.ellipsis
-                          ]}
-                        >
-                          <Text style={[
-                            styles.pageNumberText,
-                            page === currentPage && styles.activePageText,
-                            page === "..." && styles.ellipsisText
-                          ]}>
-                            {page}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-
-                    {/* Next Page */}
-                    <TouchableOpacity
-                      onPress={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      style={[
-                        styles.paginationButton,
-                        currentPage === totalPages && styles.paginationButtonDisabled
-                      ]}
-                    >
-                      <ChevronRightIcon size={18} color={currentPage === totalPages ? COLORS.sub : COLORS.brand} />
-                    </TouchableOpacity>
-
-                    {/* Last Page */}
-                    <TouchableOpacity
-                      onPress={() => handlePageChange(totalPages)}
-                      disabled={currentPage === totalPages}
-                      style={[
-                        styles.paginationButton,
-                        currentPage === totalPages && styles.paginationButtonDisabled
-                      ]}
-                    >
-                      <ChevronsRightIcon size={18} color={currentPage === totalPages ? COLORS.sub : COLORS.brand} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </>
-          )}
-        </View>
-      </ScrollView>
-
-      {/* Add Inventory Dialog */}
-      <AddInventoryDialog
-        visible={openOrderExpense}
-        onClose={() => {
-          setOpenOrderExpense(false);
-          setEditMEdId(null);
-          setEditMedicineData(initialSelectedMedicineData);
-        }}
-        editMedicineData={editMedicineData}
-        editMEdId={editMEdId}
-        onSave={() => {
-          setOpenOrderExpense(false);
-          setRenderData(prev => !prev);
-        }}
-      />
-    </View>
+      {/* Bottom Safe Area Shield */}
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: COLORS.bg || '#f8fafc'
+  },
+  mainContainer: {
+    flex: 1,
+    backgroundColor: COLORS.bg || '#f8fafc',
+    marginBottom: FOOTER_HEIGHT,
+  },
   container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg || '#f8fafc',
   },
   header: {
-    padding: SPACING.md,
-    backgroundColor: COLORS.brand,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.lg,
+    backgroundColor: COLORS.card || '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: COLORS.border || '#e5e7eb',
+  },
+  headerContent: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: FONT_SIZE.xl,
     fontWeight: "700",
-    color: COLORS.buttonText,
-    textAlign: "center",
+    color: COLORS.text || '#1f2937',
+    marginBottom: 2,
   },
-  scrollView: {
-    flex: 1,
-  },
-  searchSection: {
-    padding: SPACING.md,
-    gap: SPACING.md,
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.field,
-    borderRadius: 12,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: SPACING.sm,
+  headerSubtitle: {
     fontSize: FONT_SIZE.sm,
-    color: COLORS.text,
-  },
-  actionButtons: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    justifyContent: "flex-end",
-  },
-  filterButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.field,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    gap: SPACING.xs,
-  },
-  filterButtonText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.brand,
-    fontWeight: "500",
-  },
-  exportButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.field,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    gap: SPACING.xs,
-  },
-  exportButtonText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.brand,
-    fontWeight: "500",
+    color: COLORS.sub || '#6b7280',
   },
   addButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: COLORS.brand || '#14b8a6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addButtonGradient: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.brand,
-    borderRadius: 8,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
     gap: SPACING.xs,
   },
   addButtonText: {
+    color: COLORS.buttonText || '#ffffff',
     fontSize: FONT_SIZE.sm,
-    color: COLORS.buttonText,
     fontWeight: "600",
   },
-  statsGrid: {
-    padding: SPACING.md,
-    gap: SPACING.md,
+  content: {
+    flex: 1,
+    backgroundColor: "transparent",
   },
-  statCard: {
-    backgroundColor: COLORS.card,
+  searchContainer: {
+    marginHorizontal: SPACING.sm,
+    marginVertical: SPACING.md,
+  },
+  searchInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.card || '#ffffff',
     borderRadius: 12,
-    padding: SPACING.md,
-    borderLeftWidth: 4,
-    shadowColor: COLORS.shadow,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border || '#e5e7eb',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+  },
+  searchLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  searchIcon: {
+    marginRight: SPACING.sm,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: SPACING.md,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text || '#1f2937',
+  },
+  filterButton: {
+    padding: SPACING.xs,
+    marginLeft: SPACING.sm,
+  },
+  
+  // Stats Section
+  statsSection: {
+    marginHorizontal: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: responsiveWidth(43),
+    borderRadius: 12,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.card || '#ffffff',
+    borderWidth: 1,
+    borderColor: COLORS.border || '#e5e7eb',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: SPACING.sm,
   },
   statContent: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
-  statText: {
+  statInfo: {
     flex: 1,
   },
   statLabel: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.sub,
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub || '#6b7280',
     marginBottom: SPACING.xs,
+    fontWeight: '500',
   },
   statValue: {
     fontSize: FONT_SIZE.xl,
     fontWeight: "700",
-    color: COLORS.text,
+    color: COLORS.text || '#1f2937',
   },
   statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
-  recentSection: {
-    padding: SPACING.md,
-    gap: SPACING.md,
+  
+  // Inventory Section
+  inventorySection: {
+    marginHorizontal: SPACING.sm,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    marginBottom: SPACING.lg,
+  },
+  sectionTitleContainer: {
+    flex: 1,
   },
   sectionTitle: {
     fontSize: FONT_SIZE.lg,
     fontWeight: "600",
-    color: COLORS.text,
+    color: COLORS.text || '#1f2937',
     marginBottom: SPACING.xs,
   },
   sectionSubtitle: {
     fontSize: FONT_SIZE.sm,
-    color: COLORS.sub,
+    color: COLORS.sub || '#6b7280',
   },
-  headerRight: {
-    alignItems: "flex-end",
+  sectionControls: {
+    alignItems: 'flex-end',
     gap: SPACING.sm,
   },
-  itemsBadge: {
-    backgroundColor: COLORS.brandLight,
-    paddingHorizontal: SPACING.sm,
+  itemsCount: {
+    backgroundColor: COLORS.brand + '15',
+    paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
-    borderRadius: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.brand + '30',
   },
-  itemsBadgeText: {
+  countText: {
     fontSize: FONT_SIZE.xs,
-    color: COLORS.brand,
+    color: COLORS.brand || '#14b8a6',
     fontWeight: "600",
   },
-  perPageContainer: {
+  perPageRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
+    gap: 4,
+    backgroundColor: COLORS.field || '#f3f4f6',
+    padding: 2,
+    borderRadius: 8,
   },
-  perPageLabel: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.sub,
-  },
-  perPageButton: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    backgroundColor: COLORS.field,
+  perPageBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  },
+  perPageActive: {
+    backgroundColor: COLORS.brand || '#14b8a6',
   },
   perPageText: {
+    color: COLORS.sub || '#6b7280',
     fontSize: FONT_SIZE.xs,
-    color: COLORS.text,
+    fontWeight: '500',
+  },
+  perPageActiveText: {
+    color: COLORS.buttonText || '#ffffff',
+    fontWeight: "700",
+    fontSize: FONT_SIZE.xs,
+  },
+  
+  // Inventory Cards
+  inventoryList: {
+    gap: SPACING.sm,
+  },
+  inventoryCard: {
+    backgroundColor: COLORS.card || '#ffffff',
+    borderRadius: 12,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border || '#e5e7eb',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: SPACING.md,
+  },
+  agencyInfo: {
+    flex: 1,
+  },
+  agencyName: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "600",
+    color: COLORS.text || '#1f2937',
+    marginBottom: 2,
+  },
+  manufacturer: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub || '#6b7280',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.success + '15',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.success + '30',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.success || '#10b981',
+    marginRight: 4,
+  },
+  statusText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.success || '#10b981',
     fontWeight: "500",
   },
-  loader: {
-    marginVertical: SPACING.xl,
+  cardDetails: {
+    gap: 6,
+    marginBottom: SPACING.md,
   },
-  paginationContainer: {
-    marginTop: SPACING.lg,
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  detailLabel: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub || '#6b7280',
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.text || '#1f2937',
+    fontWeight: "500",
+  },
+  cardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: SPACING.md,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: (COLORS.border || '#e5e7eb') + '30',
+  },
+  dateText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub || '#6b7280',
+  },
+  arrowContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.brand + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  // Loading States
+  loadingContainer: {
+    alignItems: "center",
+    paddingVertical: SPACING.xl,
+  },
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub || '#6b7280',
+  },
+  
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: SPACING.xl,
+  },
+  emptyStateTitle: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "600",
+    color: COLORS.text || '#1f2937',
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  emptyStateText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub || '#6b7280',
+    textAlign: "center",
+    marginBottom: SPACING.lg,
+  },
+  emptyStateButton: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    shadowColor: COLORS.brand || '#14b8a6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  emptyStateGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: 8,
+    gap: SPACING.xs,
+  },
+  emptyStateButtonText: {
+    color: COLORS.buttonText || '#ffffff',
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+  
+  // Pagination
+  paginationContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: SPACING.lg,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border || '#e5e7eb',
   },
   paginationInfo: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.sub,
+    color: COLORS.sub || '#6b7280',
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '500',
   },
   paginationControls: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACING.xs,
   },
-  paginationButton: {
-    padding: SPACING.sm,
-    borderRadius: 6,
-    backgroundColor: COLORS.field,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  pageBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: COLORS.field || '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  paginationButtonDisabled: {
+  pageBtnDisabled: {
+    backgroundColor: COLORS.field || '#f3f4f6',
     opacity: 0.5,
   },
-  pageNumbers: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
   pageNumber: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 6,
-    minWidth: 40,
-    alignItems: "center",
-    backgroundColor: COLORS.field,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  activePage: {
-    backgroundColor: COLORS.brand,
-    borderColor: COLORS.brand,
-  },
-  ellipsis: {
-    backgroundColor: "transparent",
-    borderWidth: 0,
-  },
-  pageNumberText: {
+    fontWeight: "700",
     fontSize: FONT_SIZE.sm,
-    color: COLORS.text,
-    fontWeight: "500",
+    marginHorizontal: SPACING.sm,
+    color: COLORS.text || '#1f2937',
+    minWidth: 40,
+    textAlign: 'center',
   },
-  activePageText: {
-    color: COLORS.buttonText,
+  
+  // Footer
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: FOOTER_HEIGHT,
+    justifyContent: "center",
+    backgroundColor: COLORS.card || '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border || '#e5e7eb',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 6,
   },
-  ellipsisText: {
-    color: COLORS.sub,
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.card || '#ffffff',
+    zIndex: 9,
   },
 });
 

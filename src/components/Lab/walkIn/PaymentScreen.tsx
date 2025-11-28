@@ -282,6 +282,7 @@ const PaymentMethodScreen: React.FC = () => {
   const {
     amount = 0,
     selectedTests,
+    selectedMedicines, 
     formData,
     files,
     discount,
@@ -291,7 +292,7 @@ const PaymentMethodScreen: React.FC = () => {
     user,
     orderData,
     onPaymentSuccess,
-    // 👇 NEW: invoice data from Reception/Billing
+    type,
     receptionData,
   } = (route.params as any) || {};
 
@@ -375,6 +376,10 @@ const PaymentMethodScreen: React.FC = () => {
 
   // Helper: determine whether this transaction requires full payment (OPD)
   const requiresFullPayment = useMemo(() => {
+    // For ALL sales from SaleComp, require full payment
+    if (type === "medicine" || type === "test") {
+      return true;
+    }
     const normalize = (v: any) =>
       v === undefined || v === null
         ? ""
@@ -386,13 +391,43 @@ const PaymentMethodScreen: React.FC = () => {
     const orderptype = normalize(
       orderData?.ptype || orderData?.orderType || ""
     );
-    // treat 'opd' or 'outpatient' same
+    const explicitPtype = route.params?.ptype;
+    const isExplicitOPD = explicitPtype === 21;
+    
+    if (isExplicitOPD) return true;
     if (dept === "opd" || dept === "outpatient" || receptionData?.pType === "Outpatient") return true;
     if (fptype === "opd" || fptype === "outpatient") return true;
     if (orderptype === "opd" || orderptype === "outpatient")
       return true;
     return false;
-  }, [department, formData, orderData, receptionData]);
+  }, [type, department, formData, orderData, receptionData, route.params?.ptype]);
+
+  const isSubmitEnabled = useCallback(() => {
+    const totalEntered = Object.values(
+      enteredAmountNum
+    ).reduce((s, v) => s + v, 0);
+    
+    if (requiresFullPayment || type === "medicine" || type === "test") {
+      return (
+        selectedMethods.size > 0 &&
+        totalEntered > 0 &&
+        Math.abs(totalEntered - amount) < 0.01
+      );
+    } else {
+      return (
+        selectedMethods.size > 0 &&
+        totalEntered > 0 &&
+        totalEntered <= amount + 0.001
+      );
+    }
+  }, [
+    enteredAmountNum,
+    selectedMethods,
+    amount,
+    requiresFullPayment,
+    type,
+  ]);
+
   // stabilize handlers
   const handleCheckboxChange = useCallback(
     (method: PaymentMethod) => {
@@ -474,32 +509,6 @@ const PaymentMethodScreen: React.FC = () => {
     },
     [totalDue]
   );
-  // isSubmitEnabled now respects OPD (requires full payment) vs IPD (allow partial)
-  const isSubmitEnabled = useCallback(() => {
-    const totalEntered = Object.values(
-      enteredAmountNum
-    ).reduce((s, v) => s + v, 0);
-    if (requiresFullPayment) {
-      // OPD — must pay full amount
-      return (
-        selectedMethods.size > 0 &&
-        totalEntered > 0 &&
-        Math.abs(totalEntered - amount) < 0.01
-      );
-    } else {
-      // IPD / others — allow partial (entered must be >0 and <= amount)
-      return (
-        selectedMethods.size > 0 &&
-        totalEntered > 0 &&
-        totalEntered <= amount + 0.001
-      );
-    }
-  }, [
-    enteredAmountNum,
-    selectedMethods,
-    amount,
-    requiresFullPayment,
-  ]);
 
   const handleInputFocus = useCallback((method: PaymentMethod) => {
     setActiveInputs((prev) => {
@@ -529,78 +538,77 @@ const PaymentMethodScreen: React.FC = () => {
   }, []);
 
   // ------------------- SALES PAYMENT (EXISTING) -------------------
-  const handleSalesPayment = useCallback(
-    async (paymentDetails: any, token: string) => {
-      const labsPath = `tests/walkinPatients/${department}`;
-      const formDataToSend = new FormData();
+const handleSalesPayment = useCallback(
+  async (paymentDetails: any, token: string) => {
+    // Use the type from route params
+    const isMedicineSale = type === "medicine";
+    const endpointPath = isMedicineSale 
+      ? `medicineInventoryPatients/${user?.hospitalID}/addPatientWithOrder`
+      : `medicineInventoryPatients/${user?.hospitalID}/tests/walkinPatients/${department}`;
+    
+    const formDataToSend = new FormData();
 
-      if (files?.length > 0) {
-        const file = files[0];
-        const uploadUri =
-          Platform.OS === "ios" &&
-          file?.uri?.startsWith("file://")
-            ? file?.uri?.replace("file://", "")
-            : file?.uri;
+    // Handle file upload
+    if (files?.length > 0) {
+      const file = files[0];
+      const uploadUri =
+        Platform.OS === "ios" && file?.uri?.startsWith("file://")
+          ? file?.uri?.replace("file://", "")
+          : file?.uri;
 
+      if (uploadUri) {
         formDataToSend.append("files", {
           uri: uploadUri,
-          type:
-            file?.mimeType ||
-            file?.type ||
-            "application/octet-stream",
+          type: file?.mimeType || file?.type || "application/octet-stream",
           name: file?.name || `file_${Date.now()}`,
         } as any);
       }
+    }
 
-      formDataToSend.append(
-        "testsList",
-        JSON.stringify(selectedTests)
-      );
-      formDataToSend.append(
-        "patientData",
-        JSON.stringify(formData)
-      );
-      formDataToSend.append(
-        "userID",
-        user?.id?.toString() ?? ""
-      );
-      formDataToSend.append("department", department);
-      formDataToSend.append(
-        "paymentMethod",
-        JSON.stringify(paymentDetails)
-      );
-      formDataToSend.append(
-        "paymentAmount",
-        String(
-          paymentDetails
-            ? Object.values(paymentDetails).reduce(
-                (s: any, v: any) =>
-                  s + (Number(v) || 0),
-                0
-              )
-            : 0
-        )
-      );
-      formDataToSend.append(
-        "discount",
-        JSON.stringify({
-          discount,
-          discountReason,
-          discountReasonID,
-        })
-      );
+    // Use the correct items based on type
+    const itemsToUse = isMedicineSale ? selectedMedicines : selectedTests;
+    // Append data based on sale type
+    if (isMedicineSale) {
+      formDataToSend.append("medicineList", JSON.stringify(itemsToUse || []));
+    } else {
+      formDataToSend.append("testsList", JSON.stringify(itemsToUse || []));
+    }
+
+    // Common data for both types
+    formDataToSend.append("patientData", JSON.stringify(formData || {}));
+    formDataToSend.append("userID", user?.id?.toString() || "");
+    
+    if (!isMedicineSale) {
+      formDataToSend.append("department", department || "");
+    }
+
+    formDataToSend.append("paymentMethod", JSON.stringify(paymentDetails || {}));
+    
+    const totalPaymentAmount = paymentDetails 
+      ? Object.values(paymentDetails).reduce((s: any, v: any) => s + (Number(v) || 0), 0)
+      : 0;
+    formDataToSend.append("paymentAmount", String(totalPaymentAmount));
+    
+    const discountData = {
+      discount: discount || 0,
+      discountReason: discountReason || "",
+      discountReasonID: discountReasonID || "",
+    };
+    formDataToSend.append("discount", JSON.stringify(discountData));
 
       const response = await AuthPost(
-        `medicineInventoryPatients/${user?.hospitalID}/${labsPath}`,
+      endpointPath,
         formDataToSend,
         token
       );
       return response;
     },
     [
+    type,
       department,
       files,
       selectedTests,
+      selectedMedicines,
       formData,
       user,
       discount,
@@ -826,7 +834,7 @@ const PaymentMethodScreen: React.FC = () => {
     ).reduce((s, v) => s + v, 0);
 
     // validate according to mode
-    if (requiresFullPayment) {
+    if (requiresFullPayment || type === "medicine" || type === "test") {
       if (
         !(
           selectedMethods.size > 0 &&
@@ -836,9 +844,7 @@ const PaymentMethodScreen: React.FC = () => {
       ) {
         Alert.alert(
           "Amount Mismatch",
-          `OPD orders require full payment. Please ensure the paid amount matches the total amount ₹${amount.toFixed(
-            2
-          )}.`,
+          `Full payment required. Please ensure the paid amount matches the total amount ₹${amount.toFixed(2)}.`,
           [{ text: "OK" }]
         );
         return;
@@ -848,11 +854,7 @@ const PaymentMethodScreen: React.FC = () => {
       if (totalEntered > amount + 0.001) {
         Alert.alert(
           "Amount Error",
-          `Entered amount (₹${totalEntered.toFixed(
-            2
-          )}) cannot exceed total amount (₹${amount.toFixed(
-            2
-          )}).`,
+          `Entered amount (₹${totalEntered.toFixed(2)}) cannot exceed total amount (₹${amount.toFixed(2)}).`,
           [{ text: "OK" }]
         );
         return;
@@ -938,10 +940,7 @@ const PaymentMethodScreen: React.FC = () => {
               if (isReceptionPayment || isBillingOrder) {
                 navigation.goBack();
               } else {
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: "Dashboard" as never }],
-                });
+                navigation.goBack();
               }
             },
           },
@@ -975,6 +974,7 @@ const PaymentMethodScreen: React.FC = () => {
     user,
     onPaymentSuccess,
     navigation,
+    type, // ADD type dependency
   ]);
 
   // UI values derived
@@ -1419,8 +1419,8 @@ const PaymentMethodScreen: React.FC = () => {
                       fontSize: FONT_SIZE.xs,
                     }}
                   >
-                    {requiresFullPayment
-                      ? "OPD orders require full payment."
+                    {(requiresFullPayment || type === "medicine" || type === "test")
+                      ? "Full payment required for this order."
                       : "Partial payments allowed."}
                   </Text>
                 </View>
@@ -1436,8 +1436,7 @@ const PaymentMethodScreen: React.FC = () => {
               >
                 <TouchableOpacity
                   onPress={handleSubmit}
-                  
-                  disabled={!submitEnabled || isSubmitting }
+                  disabled={!submitEnabled || isSubmitting}
                   style={[
                     styles.payInner,
                     {
@@ -1735,6 +1734,8 @@ const styles = StyleSheet.create({
   toggleOptionActiveLight: {
     backgroundColor: "#e6f4ea",
   },
+  paidAmount: {},
+  zeroAmount: {},
 });
 
 export default PaymentMethodScreen;
