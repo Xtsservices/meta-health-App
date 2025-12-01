@@ -167,12 +167,9 @@ if (user?.patientStatus === 1) {
         }
       }
 }else{
-  console.log(screenType, "screen type in fetch patients");
   url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
 }
-      console.log(url, "fetch patients url");
       const response = await AuthFetch(url, token);
-      console.log(response, "patients response");
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response?.data?.patients
