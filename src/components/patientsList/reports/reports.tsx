@@ -259,7 +259,7 @@ dispatch(showError(error?.message|| error?.status || "failed to delete report"))
             <Text style={styles.dot}>View</Text>
             {/* <ExternalLink size={18} color={COLORS.text} /> */}
           </Pressable>
-          {!isCustomerCare && !reception && (
+          {!isOt  &&!isCustomerCare && !reception && (
             <Pressable onPress={() => onDelete(item.id)} style={styles.iconBtn} hitSlop={8}>
               <Trash2 size={18} color={COLORS.danger} />
             </Pressable>

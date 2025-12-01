@@ -138,7 +138,7 @@ const isOt = user?.roleName === "surgeon" || user?.roleName === "anesthesist"
     try {
       setLoading(true);
       let url = "";
-if (user?.roleName !== "surgeon" && user?.roleName !== "anesthesia"){
+if (user?.roleName !== "surgeon" && user?.roleName !== "anesthetist"){
 if (user?.patientStatus === 1) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseopdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
@@ -167,10 +167,12 @@ if (user?.patientStatus === 1) {
         }
       }
 }else{
+  console.log(screenType, "screen type in fetch patients");
   url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
 }
-      
+      console.log(url, "fetch patients url");
       const response = await AuthFetch(url, token);
+      console.log(response, "patients response");
       if (response?.status === "success") {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response?.data?.patients
@@ -418,11 +420,13 @@ if (user?.patientStatus === 1) {
   };
 
   const handleNotificationClick = (patient: PatientType) => {
-    navigation.navigate("NotificationScreen", {
-      timelineID: patient.patientTimeLineID,
-      patientName: patient.pName || "Unknown Patient",
-      patientId: patient.id
-    });
+   navigation.navigate("NotificationScreen" as never, {
+  timelineID: patient.patientTimeLineID,
+  patientName: patient.pName || "Unknown Patient",
+  patientId: patient.id,
+  title: "Notification",
+} as never);
+
   };
 
   const handleAddPatient = () => {

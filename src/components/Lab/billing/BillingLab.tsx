@@ -930,7 +930,7 @@ const BillingLab: React.FC = () => {
         userImage={user?.avatarUrl || user?.profileImage}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("Profile" as never);
+          navigation.navigate("DoctorProfile" as never);
         }}
         items={getSidebarItems()}
         bottomItems={bottomItems}

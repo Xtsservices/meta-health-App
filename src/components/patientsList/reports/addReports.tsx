@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   ActivityIndicator,
+  PermissionsAndroid,
 } from "react-native";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import { pick, types } from '@react-native-documents/picker';
@@ -22,6 +23,8 @@ import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 // import { ArrowLeft, Upload, Trash2 } from "lucide-react-native";
 import { useReportStore } from "../../../store/zustandstore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { DeleteIcon } from "../../../utils/SvgIcons";
+import { COLORS } from "../../../utils/colour";
 
 type FileItem = {
   uri: string;
@@ -49,30 +52,59 @@ const ReportUploadScreen: React.FC<Props> = ({ navigation, route }) => {
   // --------------------------
   // PICK FROM CAMERA
   // --------------------------
-  const openCamera = async () => {
-    try {
-      const res = await launchCamera({
-        mediaType: "photo",
-        quality: 0.8,
-      });
+const requestCameraPermission = async () => {
+  if (Platform.OS !== "android") return true;
 
-      if (!res.didCancel && res.assets?.length) {
-        const file = res.assets[0];
-
-        setFiles((prev) => [
-          ...prev,
-          {
-            uri: file.uri!,
-            name: file.fileName || `photo_${Date.now()}.jpg`,
-            type: file.type || "image/jpeg",
-            size: file.fileSize,
-          },
-        ]);
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {
+        title: "Camera Permission",
+        message: "App needs access to your camera to take photos.",
+        buttonNeutral: "Ask Me Later",
+        buttonNegative: "Cancel",
+        buttonPositive: "OK",
       }
-    } catch (err) {
-      dispatch(showError("Camera error"));
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch (err) {
+    dispatch(showError("Camera permission error"));
+    return false;
+  }
+};
+
+
+  const openCamera = async () => {
+  try {
+    const hasPermission = await requestCameraPermission();
+    if (!hasPermission) {
+      dispatch(showError("Camera permission denied"));
+      return;
     }
-  };
+
+    const res = await launchCamera({
+      mediaType: "photo",
+      quality: 0.8,
+    });
+
+    if (!res.didCancel && res.assets?.length) {
+      const file = res.assets[0];
+
+      setFiles((prev) => [
+        ...prev,
+        {
+          uri: file.uri!,
+          name: file.fileName || `photo_${Date.now()}.jpg`,
+          type: file.type || "image/jpeg",
+          size: file.fileSize,
+        },
+      ]);
+    }
+  } catch (err) {
+    dispatch(showError("Camera error"));
+  }
+};
+
 
   // --------------------------
   // PICK FROM GALLERY
@@ -238,7 +270,8 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
             <Text style={styles.fileName}>{file.name}</Text>
 
             <TouchableOpacity onPress={() => removeFile(i)}>
-               <Text style={styles.fileName}>Delete</Text>
+              <DeleteIcon size={16} color={COLORS.error}/>
+               {/* <Text style={styles.fileName}>Delete</Text> */}
             </TouchableOpacity>
           </View>
         ))}

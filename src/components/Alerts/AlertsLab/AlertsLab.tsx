@@ -68,6 +68,7 @@ interface TestAlertsProps {
   onPatientExpand: (id: string | null) => void;
   onFilterChange: (filter: string) => void;
   alertFrom?: "lab" | "reception" | "pharmacy";
+  onRefresh?: () => void;
 }
 
 interface RejectedAlertsProps {
@@ -85,6 +86,7 @@ interface AlertsTabsProps {
   onPageChange: (page: number) => void;
   onPatientExpand: (id: string | null) => void;
   alertFrom?: "lab" | "reception" | "pharmacy";
+  onRefresh?: () => void;
 }
 
 // Sidebar Component
@@ -185,6 +187,7 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
   onPatientExpand,
   onFilterChange,
   alertFrom = "lab",
+  onRefresh,
 }) => {
   const isReception = alertFrom === "reception";
   const isPharmacy = alertFrom === "pharmacy";
@@ -212,6 +215,7 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
         currentPage={currentPage}
         totalPages={totalPages}
         onPageChange={onPageChange}
+        onRefresh={onRefresh}
       />
 
       {/* <Text style={styles.resultsText}>
@@ -255,6 +259,7 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
   onPageChange, 
   onPatientExpand,
   alertFrom = "lab",
+  onRefresh,
 }) => {
   const [activeTab, setActiveTab] = useState("test-alerts");
   const rowsPerPage = 10;
@@ -281,6 +286,7 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
               onPatientExpand={onPatientExpand}
               onFilterChange={onFilterChange}
               alertFrom={alertFrom}
+              onRefresh={onRefresh}
             />
           </View>
         );
@@ -590,6 +596,7 @@ const AlertsLab: React.FC = () => {
             onPageChange={handlePageChange}
             onPatientExpand={handlePatientExpand}
             alertFrom={isPharmacyAlerts ? "pharmacy" : isReceptionAlerts ? "reception" : "lab"} 
+            onRefresh={onRefresh}
           />
         </View>
       </KeyboardAvoidingView>

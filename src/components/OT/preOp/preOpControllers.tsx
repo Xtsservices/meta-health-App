@@ -57,7 +57,7 @@ const isReadOnly = user?.roleName === "surgeon";
 
   const handleNext = () => {
     // matches the key used in PatientTabsGrid → navigation.navigate(item.key, { ot: true })
-    navigation.navigate("preopTests" as never, { ot: true } as never);
+    navigation.navigate("Tests" as never, { ot: true, currentTab: "PreOpRecord" } as never);
   };
 
   return (

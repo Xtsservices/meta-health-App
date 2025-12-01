@@ -380,9 +380,9 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         );
       }
 
-      if (res?.data?.status === "success" || res?.status === 200) {
+      if (res?.data?.status === 200 ) {
         setActionValues((prev) => ({ ...prev, [orderId]: "Accepted" }));
-        dispatch(showSuccess("Order approved successfully"));
+        dispatch(showSuccess(res?.data?.message || "Order approved successfully"));
         if (onRefresh) {
           onRefresh();
         }

@@ -126,7 +126,7 @@ const EditMedicalHistoryScreen: React.FC = () => {
       );
       if (res?.status === "success") {
         dispatch(showSuccess("Medical history successfully updated"));
-        navigation.goBack();
+        navigation.navigate("MedicalHistory");
       } else {
         dispatch(showError(res?.message || "Failed to update history"));
       }

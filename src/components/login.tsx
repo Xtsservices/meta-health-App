@@ -104,8 +104,9 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
       }
 
       const response = await UsePost('user/emailLogin', body);
+     
       const data = response?.data;
-      if (data.message === 'success') {
+      if (response?.status === 'success'  ) {
       
         await AsyncStorage.setItem('token', data?.token);
        if (data?.id != null) {
@@ -140,7 +141,7 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
           }
         }
       } else {
-        dispatch( showError(data?.message));
+        dispatch( showError(response?.message));
       }
     } catch (error: any) {
       dispatch(showError(error?.response?.data?.message || 'Login failed'));

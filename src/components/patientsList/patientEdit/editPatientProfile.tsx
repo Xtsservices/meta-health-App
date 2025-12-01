@@ -554,8 +554,8 @@ const EditPatientMobile = () => {
                 { label: "Yes", value: 1 },
               ]}
             />
-
-            {insurance === 1 && (
+{/* TODO */}
+            {/* {insurance === 1 && (
               <>
                 {renderInput(
                   "Insurance Number",
@@ -568,7 +568,7 @@ const EditPatientMobile = () => {
                   setInsuranceCompany
                 )}
               </>
-            )}
+            )} */}
           </View>
 
           {/* SAVE BUTTON */}

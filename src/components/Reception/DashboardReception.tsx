@@ -1259,7 +1259,7 @@ const DashboardReception: React.FC = () => {
         userImage={userImg}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("Profile" as never);
+          navigation.navigate("DoctorProfile" as never);
         }}
         items={sidebarItems}
         bottomItems={bottomItems}

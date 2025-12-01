@@ -172,7 +172,6 @@ if (!match) {
           duration: symptom.duration,
           durationParameter: symptom.durationParameter,
           conceptID: symptom.conceptID,
-        //   notes: symptom.notes,
         })),
         patientID,
       };
@@ -290,26 +289,6 @@ onChangeText={(t) => {
               );
             })}
           </View>
-
-          {/* Notes */}
-          <Text style={[styles.label, { color: COLORS.sub, marginTop: 10 }]}>Additional Notes (optional)</Text>
-          <TextInput
-            placeholder="Describe the symptom in detail..."
-            placeholderTextColor={COLORS.sub}
-            style={[
-              styles.input,
-              {
-                height: 90,
-                textAlignVertical: "top",
-                borderColor: COLORS.border,
-                color: COLORS.text,
-                backgroundColor: COLORS.field,
-              },
-            ]}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-          />
 
           {/* Add to list */}
           <Pressable

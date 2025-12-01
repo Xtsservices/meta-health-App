@@ -129,9 +129,10 @@ export default function SymptomsScreen() {
         </Text>
         <Text style={[styles.sub, { color: COLORS.sub }]}>{formatDateTime(item.addedOn)}</Text>
       </View>
+      {!isOt && user?.roleName !== "reception" && currentpatient.ptype != 21 && (
       <Pressable onPress={() => onDelete(item)} style={styles.deleteBtn} hitSlop={8}>
         <Trash2 size={18} color={COLORS.danger} />
-      </Pressable>
+      </Pressable>)}
     </View>
   );
 

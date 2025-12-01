@@ -62,7 +62,221 @@ const neurologicalDisorderList = [
 ];
 
 // Common type for name + date items
+// Common type for name + date items
 type NamedDateItem = { name: string; date: Date | null };
+
+// 🔹 Helpers to parse stored strings back into structured state
+const parseDateString = (value?: string | null): Date | null => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const direct = new Date(trimmed);
+  if (!isNaN(direct.getTime())) return direct;
+
+  // try DD-MM-YYYY or DD/MM/YYYY
+  const m = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m) {
+    const day = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const year = Number(m[3]);
+    return new Date(year, month, day);
+  }
+
+  return null;
+};
+
+const splitToNamedDateItems = (raw?: string | null): NamedDateItem[] => {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const [namePart, datePart] = chunk.split(":");
+      return {
+        name: (namePart || "").trim(),
+        date: parseDateString(datePart),
+      };
+    });
+};
+
+const parseDiseaseField = (raw?: string | null) => {
+  const result: {
+    diseaseArray: string[];
+    checked: Set<string>;
+    dates: { [key: string]: Date | null };
+    surgeryText: string;
+  } = {
+    diseaseArray: [],
+    checked: new Set<string>(),
+    dates: {},
+    surgeryText: "",
+  };
+
+  if (!raw) return result;
+
+  const parts = raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  result.diseaseArray = parts;
+
+  parts.forEach((item) => {
+    if (item.startsWith("Diabetes")) {
+      result.checked.add("Diabetes");
+      const [, dateStr] = item.split(":");
+      result.dates["Diabetes"] = parseDateString(dateStr);
+    } else if (item.startsWith("Been Through any Surgery")) {
+      result.checked.add("Been Through any Surgery");
+      const afterColon = item.split(":")[1] || "";
+      const [textPart, dateStr] = afterColon.split("|");
+      result.surgeryText = (textPart || "").trim();
+      result.dates["Surgery"] = parseDateString(dateStr);
+    }
+  });
+
+  return result;
+};
+
+const parsePregnantField = (raw?: string | null) => {
+  if (!raw || raw === "No") {
+    return {
+      isPregnant: false,
+      numberOfPregnancies: "",
+      liveBirths: "",
+      date: null as Date | null,
+    };
+  }
+
+  let numberOfPregnancies = "";
+  let liveBirths = "";
+  let date: Date | null = null;
+
+  const parts = raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  parts.forEach((part) => {
+    const lower = part.toLowerCase();
+    const [, valueRaw] = part.split(":");
+    const value = (valueRaw || "").trim();
+
+    if (lower.startsWith("number of pregnancies")) {
+      numberOfPregnancies = value;
+    } else if (lower.startsWith("live births")) {
+      liveBirths = value;
+    } else if (lower.startsWith("date")) {
+      date = parseDateString(value);
+    }
+  });
+
+  return { isPregnant: true, numberOfPregnancies, liveBirths, date };
+};
+
+const parseLumpsField = (raw?: string | null) => {
+  if (!raw || raw === "No") {
+    return {
+      istrue: false,
+      details: {
+        location: "",
+        size: "",
+        consistency: "",
+        date: null as Date | null,
+      },
+    };
+  }
+
+  const details: {
+    location: string;
+    size: string;
+    consistency: string;
+    date: Date | null;
+  } = {
+    location: "",
+    size: "",
+    consistency: "",
+    date: null,
+  };
+
+  raw
+    .split(",")
+    .map((p) => p.trim())
+    .forEach((part) => {
+      const [labelRaw, valueRaw] = part.split(":");
+      const label = (labelRaw || "").toLowerCase();
+      const value = (valueRaw || "").trim();
+
+      if (label.startsWith("location")) details.location = value;
+      else if (label.startsWith("size")) details.size = value;
+      else if (label.startsWith("consistency")) details.consistency = value;
+      else if (label.startsWith("date")) details.date = parseDateString(value);
+    });
+
+  return { istrue: true, details };
+};
+
+const parseCancerField = (raw?: string | null) => {
+  if (!raw || raw === "No") {
+    return {
+      istrue: false,
+      details: {
+        type: "",
+        stage: "",
+        date: null as Date | null,
+      },
+    };
+  }
+
+  const details: { type: string; stage: string; date: Date | null } = {
+    type: "",
+    stage: "",
+    date: null,
+  };
+
+  raw
+    .split(",")
+    .map((p) => p.trim())
+    .forEach((part) => {
+      const [labelRaw, valueRaw] = part.split(":");
+      const label = (labelRaw || "").toLowerCase();
+      const value = (valueRaw || "").trim();
+
+      if (label.startsWith("type")) details.type = value;
+      else if (label.startsWith("stage")) details.stage = value;
+      else if (label.startsWith("date")) details.date = parseDateString(value);
+    });
+
+  return { istrue: true, details };
+};
+
+const parseHereditaryField = (raw?: string | null) => {
+  if (!raw) {
+    return { istrue: false, items: [] as { disease: string; name: string }[] };
+  }
+
+  const items = raw
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const [diseasePart, namePart] = chunk.split(":");
+      return {
+        disease: (diseasePart || "").trim(),
+        name: (namePart || "").trim(),
+      };
+    });
+
+  return {
+    istrue: items.length > 0,
+    items,
+  };
+};
+
+
+
 
 // Small helper components
 const ChipButton: React.FC<{
@@ -188,20 +402,18 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 
   // Surgical Section State
-  const [disease, setDisease] = useState<string[]>(
-    medicalHistoryData?.disease
-      ? medicalHistoryData.disease.split(",").map((v) => v.trim())
-      : []
-  );
-  const [surgeryText, setSurgeryText] = useState("");
-  const [checkedDiseases, setCheckedDiseases] = useState<Set<string>>(
-    new Set(
-      medicalHistoryData?.disease
-        ? medicalHistoryData.disease.split(",").map((v) => v.trim())
-        : []
-    )
-  );
-  const [dates, setDates] = useState<{ [key: string]: Date | null }>({});
+ const parsedDisease = parseDiseaseField(medicalHistoryData?.disease);
+
+// Surgical Section State
+const [disease, setDisease] = useState<string[]>(parsedDisease.diseaseArray);
+const [surgeryText, setSurgeryText] = useState(parsedDisease.surgeryText);
+const [checkedDiseases, setCheckedDiseases] = useState<Set<string>>(
+  parsedDisease.checked
+);
+const [dates, setDates] = useState<{ [key: string]: Date | null }>(
+  parsedDisease.dates
+);
+
 
   // Lipid Section State
   const [hyperLipidaemia, setHyperLipidaemia] = useState<boolean | null>(
@@ -216,31 +428,27 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 
   // Allergies Section State (with date per item)
-  const [foodAllergy, setFoodAllergy] = useState<{
-    istrue: boolean;
-    items: NamedDateItem[];
-  }>({
-    istrue: !!medicalHistoryData?.foodAllergy,
-    items: medicalHistoryData?.foodAllergy
-      ? medicalHistoryData.foodAllergy.split(",").map((raw: string) => {
-          const [name] = raw.split(":");
-          return { name: name.trim(), date: null };
-        })
-      : [],
-  });
+ const [foodAllergy, setFoodAllergy] = useState<{
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.foodAllergy &&
+      medicalHistoryData.foodAllergy.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.foodAllergy),
+}));
+
 
   const [medicineAllergy, setMedicineAllergy] = useState<{
-    istrue: boolean;
-    items: NamedDateItem[];
-  }>({
-    istrue: !!medicalHistoryData?.medicineAllergy,
-    items: medicalHistoryData?.medicineAllergy
-      ? medicalHistoryData.medicineAllergy.split(",").map((raw: string) => {
-          const [name] = raw.split(":");
-          return { name: name.trim(), date: null };
-        })
-      : [],
-  });
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.medicineAllergy &&
+      medicalHistoryData.medicineAllergy.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.medicineAllergy),
+}));
+
 
   const [anaesthesia, setAnaesthesia] = useState<boolean | null>(
     medicalHistoryData?.anaesthesia === "Yes" ? true : false
@@ -249,107 +457,135 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const [newMedicineAllergy, setNewMedicineAllergy] = useState("");
 
   // Prescribed Medicines State (detailed, with dropdown for name)
-  const [prescribedMeds, setPrescribedMeds] = useState<{
-    istrue: boolean;
-    items: any[];
-  }>({
-    istrue: !!medicalHistoryData?.meds,
-    items: [],
-  });
-  const [newPrescribedMed, setNewPrescribedMed] = useState({
-    name: "",
-    dosage: "",
-    dosageUnit: "mg",
-    frequency: "",
-    duration: "",
-    durationUnit: "days",
-    startDate: null as Date | null,
-  });
+// Prescribed Medicines State (detailed, with dropdown for name)
+const [prescribedMeds, setPrescribedMeds] = useState<{
+  istrue: boolean;
+  items: any[];
+}>(() => {
+  const raw = medicalHistoryData?.meds || "";
+  const names = raw
+    .split(",")
+    .map((n: string) => n.trim())
+    .filter((n) => n.length > 0);
 
-  // Self Meds State
-  const [selfMeds, setSelfMeds] = useState<{
-    istrue: boolean;
-    items: any[];
-  }>({
-    istrue: !!medicalHistoryData?.selfMeds,
-    items: [],
-  });
-  const [newSelfMed, setNewSelfMed] = useState({
-    name: "",
-    dosage: "",
-    dosageUnit: "mg",
-    frequency: "",
-    duration: "",
-    durationUnit: "days",
-    startDate: null as Date | null,
-  });
+  return {
+    istrue: names.length > 0,
+    items: names.map((name) => ({
+      name,
+      dosage: "",
+      dosageUnit: "mg",
+      frequency: "",
+      duration: "",
+      durationUnit: "days",
+      startDate: null as Date | null,
+    })),
+  };
+});
+
+const [newPrescribedMed, setNewPrescribedMed] = useState({
+  name: "",
+  dosage: "",
+  dosageUnit: "mg",
+  frequency: "",
+  duration: "",
+  durationUnit: "days",
+  startDate: null as Date | null,
+});
+
+// Self Meds State
+const [selfMeds, setSelfMeds] = useState<{
+  istrue: boolean;
+  items: any[];
+}>(() => {
+  const raw = medicalHistoryData?.selfMeds || "";
+  const names = raw
+    .split(",")
+    .map((n: string) => n.trim())
+    .filter((n) => n.length > 0);
+
+  return {
+    istrue: names.length > 0,
+    items: names.map((name) => ({
+      name,
+      dosage: "",
+      dosageUnit: "mg",
+      frequency: "",
+      duration: "",
+      durationUnit: "days",
+      startDate: null as Date | null,
+    })),
+  };
+});
+
+const [newSelfMed, setNewSelfMed] = useState({
+  name: "",
+  dosage: "",
+  dosageUnit: "mg",
+  frequency: "",
+  duration: "",
+  durationUnit: "days",
+  startDate: null as Date | null,
+});
+
 
   // Health Conditions State (now with dates per item)
   const [chestCondition, setChestCondition] = useState<{
-    istrue: boolean;
-    items: NamedDateItem[];
-  }>(() => ({
-    istrue:
-      !!medicalHistoryData?.chestCondition &&
-      medicalHistoryData.chestCondition !== "No Chest Pain",
-    items:
-      medicalHistoryData?.chestCondition &&
-      medicalHistoryData.chestCondition !== "No Chest Pain"
-        ? medicalHistoryData.chestCondition.split(",").map((raw: string) => {
-            const [name] = raw.split(":");
-            return { name: name.trim(), date: null };
-          })
-        : [],
-  }));
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => {
+  const raw = medicalHistoryData?.chestCondition;
+  if (!raw || raw === "No Chest Pain") {
+    return { istrue: false, items: [] };
+  }
+  return {
+    istrue: true,
+    items: splitToNamedDateItems(raw),
+  };
+});
+
 
   const [neurologicalDisorder, setNeurologicalDisorder] = useState<{
-    istrue: boolean;
-    items: NamedDateItem[];
-  }>(() => {
-    const raw = medicalHistoryData?.neurologicalDisorder;
-    if (!raw || raw === "No") {
-      return { istrue: false, items: [] };
-    }
-    if (raw === "Yes") {
-      return {
-        istrue: true,
-        items: [{ name: "Neurological Disorder", date: null }],
-      };
-    }
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => {
+  const raw = medicalHistoryData?.neurologicalDisorder;
+  if (!raw || raw === "No") {
+    return { istrue: false, items: [] };
+  }
+  if (raw === "Yes") {
     return {
       istrue: true,
-      items: raw.split(",").map((chunk: string) => {
-        const [name] = chunk.split(":");
-        return { name: name.trim(), date: null };
-      }),
+      items: [{ name: "Neurological Disorder", date: null }],
     };
-  });
+  }
+  return {
+    istrue: true,
+    items: splitToNamedDateItems(raw),
+  };
+});
 
-  const [heartProblems, setHeartProblems] = useState<{
-    istrue: boolean;
-    items: NamedDateItem[];
-  }>({
-    istrue: !!medicalHistoryData?.heartProblems,
-    items: medicalHistoryData?.heartProblems
-      ? medicalHistoryData.heartProblems.split(",").map((raw: string) => {
-          const [name] = raw.split(":");
-          return { name: name.trim(), date: null };
-        })
-      : [],
-  });
+
+ const [heartProblems, setHeartProblems] = useState<{
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.heartProblems &&
+      medicalHistoryData.heartProblems.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.heartProblems),
+}));
+
 
   const [mentalHealth, setMentalHealth] = useState<{
-    istrue: boolean;
-    items: NamedDateItem[];
-  }>({
-    istrue: !!medicalHistoryData?.mentalHealth,
-    items: medicalHistoryData?.mentalHealth
-      ? medicalHistoryData.mentalHealth.split(",").map((raw: string) => {
-          const [name] = raw.split(":");
-          return { name: name.trim(), date: null };
-        })
-      : [],
-  });
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.mentalHealth &&
+      medicalHistoryData.mentalHealth.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.mentalHealth),
+}));
+
 
   const [newChestCondition, setNewChestCondition] = useState("");
   const [newNeurologicalCondition, setNewNeurologicalCondition] = useState("");
@@ -357,46 +593,47 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const [newMentalHealth, setNewMentalHealth] = useState("");
 
   // Infectious Diseases State
-  const [infections, setInfections] = useState<{
-    istrue: boolean;
-    items: { name: string; date: Date | null }[];
-  }>({
-    istrue: !!medicalHistoryData?.infections,
-    items: medicalHistoryData?.infections
-      ? medicalHistoryData.infections.split(",").map((raw: string) => {
-          const [name] = raw.split(":");
-          return { name: name.trim(), date: null };
-        })
-      : [],
-  });
+ const [infections, setInfections] = useState<{
+  istrue: boolean;
+  items: { name: string; date: Date | null }[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.infections &&
+      medicalHistoryData.infections.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.infections),
+}));
+
+
 
   // Addiction State
   const [addiction, setAddiction] = useState<{
-    istrue: boolean;
-    items: { name: string; date: Date | null }[];
-  }>({
-    istrue: !!medicalHistoryData?.drugs,
-    items: medicalHistoryData?.drugs
-      ? medicalHistoryData.drugs.split(",").map((raw: string) => {
-          const [name] = raw.split(":");
-          return { name: name.trim(), date: null };
-        })
-      : [],
-  });
+  istrue: boolean;
+  items: { name: string; date: Date | null }[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.drugs &&
+      medicalHistoryData.drugs.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.drugs),
+}));
+
 
   // Family History State
-  const [pregnant, setPregnant] = useState<boolean>(
-    !!medicalHistoryData?.pregnant && medicalHistoryData.pregnant !== "No"
-  );
-  const [pregnancyDetails, setPregnancyDetails] = useState<{
-    numberOfPregnancies: string;
-    liveBirths: string;
-    date: Date | null;
-  }>({
-    numberOfPregnancies: "",
-    liveBirths: "",
-    date: null,
-  });
+const parsedPregnancy = parsePregnantField(medicalHistoryData?.pregnant);
+
+// Family History State
+const [pregnant, setPregnant] = useState<boolean>(
+  parsedPregnancy.isPregnant
+);
+const [pregnancyDetails, setPregnancyDetails] = useState<{
+  numberOfPregnancies: string;
+  liveBirths: string;
+  date: Date | null;
+}>({
+  numberOfPregnancies: parsedPregnancy.numberOfPregnancies,
+  liveBirths: parsedPregnancy.liveBirths,
+  date: parsedPregnancy.date,
+});
+
 
   // 🔹 If patient is neonate (category 1), force pregnancy to "No"
   useEffect(() => {
@@ -411,39 +648,24 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   }, [currentPatient?.category]);
 
   const [hereditaryDisease, setHereditaryDisease] = useState<{
-    istrue: boolean;
-    items: { disease: string; name: string }[];
-  }>({
-    istrue: !!medicalHistoryData?.hereditaryDisease,
-    items: medicalHistoryData?.hereditaryDisease
-      ? medicalHistoryData.hereditaryDisease
-          .split(",")
-          .map((name: string) => ({ disease: name.trim(), name: "" }))
-      : [],
-  });
+  istrue: boolean;
+  items: { disease: string; name: string }[];
+}>(() => parseHereditaryField(medicalHistoryData?.hereditaryDisease));
+
 
   // Physical Examination State
-  const [lumps, setLumps] = useState<{ istrue: boolean; details: any }>({
-    istrue:
-      medicalHistoryData?.lumps !== "" && medicalHistoryData?.lumps !== "No",
-    details: {
-      location: "",
-      size: "",
-      consistency: "",
-      date: null as Date | null,
-    },
-  });
+  // Physical Examination State
+const [lumps, setLumps] = useState<{ istrue: boolean; details: any }>(
+  parseLumpsField(medicalHistoryData?.lumps)
+);
+
 
   // Cancer History State
-  const [cancer, setCancer] = useState<{ istrue: boolean; details: any }>({
-    istrue:
-      medicalHistoryData?.cancer !== "" && medicalHistoryData?.cancer !== "No",
-    details: {
-      type: "",
-      stage: "",
-      date: null as Date | null,
-    },
-  });
+  // Cancer History State
+const [cancer, setCancer] = useState<{ istrue: boolean; details: any }>(
+  parseCancerField(medicalHistoryData?.cancer)
+);
+
 
   // API Data
   const [BloodList, setBloodList] = useState<string[]>([]);
@@ -490,16 +712,16 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
             )
           : null;
 
-      if (foodRes?.status === "success") {
+      if (foodRes?.status === "success" && "data" in foodRes) {
         setFoodAlergyList(foodRes?.data?.foodAllergies || []);
       }
-      if (heartRes?.status === "success") {
+      if (heartRes?.status === "success" && "data" in heartRes) {
         setHeartProblemList(heartRes?.data?.boneProblems || []);
       }
-      if (bloodRes?.status === "success") {
+      if (bloodRes?.status === "success" && "data" in bloodRes) {
         setBloodList(bloodRes?.data?.bloodGroups || []);
       }
-      if (medRes?.status === "success") {
+      if (medRes?.status === "success" && "data" in medRes) {
         setMedicineList(medRes?.data?.medicines || []);
       }
     } catch {
@@ -513,7 +735,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
     try {
       const res = await AuthFetch("data/relations", token);
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         setRelationList(res?.data?.relations || []);
       }
     } catch {
@@ -633,18 +855,9 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         )
         .join(","),
       anaesthesia: anaesthesia ? "Yes" : "No",
-      meds: prescribedMeds.items
-        .map(
-          (item) =>
-            `${item.name} (${item.dosage}${item.dosageUnit}, ${item.frequency}/day, ${item.duration}${item.durationUnit})`
-        )
-        .join(", "),
-      selfMeds: selfMeds.items
-        .map(
-          (item) =>
-            `${item.name} (${item.dosage}${item.dosageUnit}, ${item.frequency}/day, ${item.duration}${item.durationUnit})`
-        )
-        .join(", "),
+     meds: prescribedMeds.items.map((item) => item.name).join(","),
+selfMeds: selfMeds.items.map((item) => item.name).join(","),
+
       chestCondition: chestCondition.items
         .map((item) =>
           item.date ? `${item.name}:${formatDate(item.date)}` : item.name
@@ -779,9 +992,14 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
           maxLength={10}
           onChangeText={(text) => {
             const onlyDigits = text.replace(/\D/g, "");
-            if (onlyDigits.length <= 10) {
-              setPhoneNumber(onlyDigits);
-            }
+
+            // block more than 10 digits
+            if (onlyDigits.length > 10) return;
+
+            // first digit must be 6 / 7 / 8 / 9
+            if (onlyDigits.length === 1 && !/^[6-9]/.test(onlyDigits)) return;
+
+            setPhoneNumber(onlyDigits);
           }}
         />
       </View>
@@ -2751,6 +2969,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         return renderBasicSection();
     }
   };
+  const isLastSection = sectionOrder[sectionOrder.length - 1] === section;  
 
   return (
     <View style={styles.screen}>
@@ -2792,26 +3011,43 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
               </TouchableOpacity>
 
               {/* NEXT – disabled until basic details are filled */}
-              <TouchableOpacity
-                style={[
-                  styles.navButton,
-                  formDisabled && styles.navButtonDisabled,
-                ]}
-                disabled={formDisabled}
-                onPress={() => {
-                  if (formDisabled) return;
-                  const idx = sectionOrder.indexOf(section);
-                  if (idx < sectionOrder.length - 1) {
-                    navigation.navigate("MedicalHistoryForm", {
-                      section: sectionOrder[idx + 1],
-                      medicalHistoryData: formData,
-                      onDataUpdate,
-                    });
-                  }
-                }}
-              >
-                <Text style={styles.navButtonText}>Next</Text>
-              </TouchableOpacity>
+               {isLastSection ? (
+                <TouchableOpacity
+                  style={[
+                    styles.navButton,
+                    formDisabled && styles.navButtonDisabled,
+                  ]}
+                  disabled={formDisabled}
+                  onPress={() => {
+                    if (formDisabled) return;
+                    onDataUpdate(formData); // ensure latest data
+                   handleSave();
+                  }}
+                >
+                  <Text style={styles.navButtonText}>Save</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.navButton,
+                    formDisabled && styles.navButtonDisabled,
+                  ]}
+                  disabled={formDisabled}
+                  onPress={() => {
+                    if (formDisabled) return;
+                    const idx = sectionOrder.indexOf(section);
+                    if (idx < sectionOrder.length - 1) {
+                      navigation.navigate("MedicalHistoryForm", {
+                        section: sectionOrder[idx + 1],
+                        medicalHistoryData: formData,
+                        onDataUpdate,
+                      });
+                    }
+                  }}
+                >
+                  <Text style={styles.navButtonText}>Next</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </ScrollView>

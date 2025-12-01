@@ -414,25 +414,25 @@ const DashboardTriage: React.FC = () => {
             title="Today's Patients"
             value={todayCount}
             icon={<UsersIcon size={22} color="#2563EB" />}
-            bg="#E8F0FE"
+            bg="#ffffffff"
           />
           <KpiCard
             title="Appointments"
             value={appointmentsToday}
             icon={<CalendarIcon size={22} color="#10B981" />}
-            bg="#E7F8F1"
+            bg="#ffffffff"
           />
           <KpiCard
             title="This Month"
             value={thisMonthCount}
             icon={<ClockIcon size={22} color="#F59E0B" />}
-            bg="#FFF4E5"
+            bg="#ffffffff"
           />
           <KpiCard
             title="This Year"
             value={thisYearCount}
             icon={<ActivityIcon size={22} color="#7C3AED" />}
-            bg="#F3E8FF"
+            bg="#ffffffff"
           />
         </View>
 
@@ -538,7 +538,7 @@ const DashboardTriage: React.FC = () => {
         userImage={userImg}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("Profile" as never);
+          navigation.navigate("DoctorProfile" as never);
         }}
         items={sidebarItems}
         bottomItems={bottomItems}

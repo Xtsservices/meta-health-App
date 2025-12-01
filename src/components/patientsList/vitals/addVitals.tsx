@@ -82,6 +82,23 @@ type VitalsForm = {
   hrvTime?: string;
 };
 
+const VITAL_LIMITS: Partial<
+  Record<
+    keyof VitalsForm,
+    { min: number; max: number }
+  >
+> = {
+  temperature:     { min: 20, max: 45 },   // °C
+  pulse:           { min: 30, max: 220 },  // bpm
+  oxygen:          { min: 50, max: 100 },  // %
+  respiratoryRate: { min: 1,  max: 60 },   // breaths/min
+  bpH:             { min: 30, max: 250 },  // systolic
+  bpL:             { min: 30, max: 150 },  // diastolic
+  hrv:             { min: 20, max: 300 },  // ms
+};
+
+
+
 /** ---------- Time Picker (HH:MM) ---------- */
 function TimePickerField({
   label,
@@ -270,29 +287,22 @@ export default function AddVitalsScreen() {
     }
   }, [applyAll, givenTime]);
 
-  const onChange = (name: keyof VitalsForm, value: string) => {
+const onChange = (name: keyof VitalsForm, value: string) => {
   // Temperature → allow decimals (including "36." while typing)
   if (name === "temperature") {
     if (value !== "" && !/^(\d*\.?\d*)$/.test(value)) return;
   }
-  
   // All other numeric fields → integers only
   else if (["oxygen", "pulse", "hrv", "respiratoryRate", "bpH", "bpL"].includes(name)) {
     if (value !== "" && !/^\d*$/.test(value)) return;
   }
 
- 
-
-  // Upper limits (unchanged)
-  if (name === "oxygen" && Number(value) > 100) return;
-  if (name === "temperature" && Number(value) > 45) return;
-  if (name === "pulse" && Number(value) > 200) return;
-  if (name === "hrv" && Number(value) > 200) return;
-  if (name === "bpH" && Number(value) > 200) return;
-  if (name === "bpL" && Number(value) > 200) return;
+  // ❌ No min or max checks here
+  // Just store the value so typing is never blocked
 
   setForm((p) => ({ ...p, [name]: value }));
 };
+
 
   const createTimeISO = (hhmm: string) => {
     if (!hhmm) return "";
@@ -311,7 +321,7 @@ export default function AddVitalsScreen() {
       try {
         const token = user?.token ?? (await AsyncStorage.getItem("token"));
         const res = await AuthFetch(`ward/${user.hospitalID}`, token);
-        if ((res?.status === "success" || res?.message === "success") && mounted) {
+        if ((res?.status === "success") && mounted) {
           const found = (res?.wards || []).find((w: any) => w?.id == wardID);
           setWardName(found?.name || "");
         }
@@ -322,6 +332,80 @@ export default function AddVitalsScreen() {
     };
   }, [wardID, user?.hospitalID]);
 
+  const validateRange = (field: keyof VitalsForm): boolean => {
+  const limits = VITAL_LIMITS[field];
+  const raw = form[field];
+
+  // Empty / no limits → skip
+  if (!limits || raw === undefined || raw === "") return true;
+
+  const num = Number(raw);
+  if (isNaN(num)) return true;
+
+  if (num < limits.min) {
+    // MIN messages
+    switch (field) {
+      case "temperature":
+        dispatch(showError(`Temperature must be ≥ ${limits.min}°C`));
+        break;
+      case "pulse":
+        dispatch(showError(`Heart rate must be ≥ ${limits.min} bpm`));
+        break;
+      case "oxygen":
+        dispatch(showError(`Oxygen saturation must be ≥ ${limits.min}%`));
+        break;
+      case "respiratoryRate":
+        dispatch(showError(`Respiratory rate must be ≥ ${limits.min}`));
+        break;
+      case "bpL":
+        dispatch(showError(`Low BP must be ≥ ${limits.min}`));
+        break;
+      case "bpH":
+        dispatch(showError(`High BP must be ≥ ${limits.min}`));
+        break;
+      case "hrv":
+        dispatch(showError(`HRV must be ≥ ${limits.min}`));
+        break;
+      default:
+        dispatch(showError(`Value must be ≥ ${limits.min}`));
+    }
+    return false;
+  }
+
+  if (num > limits.max) {
+    // MAX messages
+    switch (field) {
+      case "temperature":
+        dispatch(showError(`Temperature must be ≤ ${limits.max}°C`));
+        break;
+      case "pulse":
+        dispatch(showError(`Heart rate must be ≤ ${limits.max} bpm`));
+        break;
+      case "oxygen":
+        dispatch(showError(`Oxygen saturation must be ≤ ${limits.max}%`));
+        break;
+      case "respiratoryRate":
+        dispatch(showError(`Respiratory rate must be ≤ ${limits.max}`));
+        break;
+      case "bpL":
+        dispatch(showError(`Low BP must be ≤ ${limits.max}`));
+        break;
+      case "bpH":
+        dispatch(showError(`High BP must be ≤ ${limits.max}`));
+        break;
+      case "hrv":
+        dispatch(showError(`HRV must be ≤ ${limits.max}`));
+        break;
+      default:
+        dispatch(showError(`Value must be ≤ ${limits.max}`));
+    }
+    return false;
+  }
+
+  return true; // within range
+};
+
+
   const submit = async () => {
     if (!hasAnyVital) return dispatch(showError("Please enter at least one vital measurement"));
     if (applyAll && !givenTime) return dispatch(showError("Please provide a time when applying to all"));
@@ -330,7 +414,21 @@ export default function AddVitalsScreen() {
     if (form.bpH && form.bpL && Number(form.bpL) > Number(form.bpH)) {
       return dispatch(showError("BP Low cannot be greater than BP High"));
     }
+const fieldsToCheck: (keyof VitalsForm)[] = [
+    "temperature",
+    "pulse",
+    "oxygen",
+    "respiratoryRate",
+    "bpH",
+    "bpL",
+    "hrv",
+  ];
 
+  for (const f of fieldsToCheck) {
+    if (!validateRange(f)) {
+      return; // stop submit on first error
+    }
+  }
     setSaving(true);
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
@@ -354,7 +452,7 @@ export default function AddVitalsScreen() {
       };
 
       const res = await AuthPost(`vitals/${user?.hospitalID}/${patientID}`, body, token);
-      if (res?.status === "success" || res?.message === "success") {
+      if (res?.status === "success") {
         dispatch(showSuccess("Vitals successfully added"));
         navigation.goBack();
       } else {
@@ -438,7 +536,7 @@ export default function AddVitalsScreen() {
     onChange: (v) => onChange("temperature", v),
     placeholder: "e.g., 36.6",
     bg: fieldBg.temp,
-    keyboardType: "decimal-pad", // ← This is the key change
+    keyboardType: "decimal-pad",
     onFocus: () => handleFocus("temperature"),
     onBlur: handleBlur,
     isFocused: focusedInput === "temperature",

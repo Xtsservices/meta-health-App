@@ -46,8 +46,8 @@ const Footer: React.FC<Props> = ({
         navigation.navigate("DashboardOpd");
       } else if (user?.patientStatus === 2) {
         navigation.navigate("DashboardIpd");
-      } else if (user?.patientStatus === 2) {
-        navigation.navigate("TriageDashboard");
+      } else if (user?.patientStatus === 3) {
+        navigation.navigate("DashboardTriage");
       } else if (user?.roleName === "reception") {
         navigation.navigate("DashboardReception");
       } else if (user?.roleName === "pharmacy") {

@@ -1,16 +1,16 @@
 // DischargeStyles.ts
 import { StyleSheet, Platform } from "react-native";
-import { 
-  SPACING, 
-  FONT_SIZE, 
-  ICON_SIZE, 
-  SCREEN_WIDTH, 
+import {
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  SCREEN_WIDTH,
   SCREEN_HEIGHT,
   isTablet,
   isSmallDevice,
   responsiveWidth,
   responsiveHeight,
-  GRID
+  GRID,
 } from "../../utils/responsive";
 import { COLORS } from "../../utils/colour";
 
@@ -30,6 +30,7 @@ export const RESPONSIVE = {
 export const styles = StyleSheet.create({
   safe: {
     flex: 1,
+    backgroundColor: COLORS.bg,
   },
   container: {
     flex: 1,
@@ -41,7 +42,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: isTablet ? SPACING.xl : SPACING.md,
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.xxl,
+    paddingBottom: SPACING.xxl * 2,
   },
   gridContainer: {
     flexDirection: isTablet ? "row" : "column",
@@ -49,7 +50,7 @@ export const styles = StyleSheet.create({
   },
   formColumn: {
     flex: isTablet ? 1 : 0,
-    width: isTablet ? "100%" : "100%",
+    width: "100%",
   },
   imageColumn: {
     flex: 1,
@@ -104,12 +105,13 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     minHeight: isSmallDevice ? 44 : 48,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   picker: {
     paddingVertical: 0,
     margin: 0,
   },
+
   // Diet Styles
   dietDropdownTrigger: {
     flexDirection: "row",
@@ -138,29 +140,34 @@ export const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    maxWidth: responsiveWidth(40),
+    // removed maxWidth so long text is visible
+    marginRight: SPACING.xs,
+    marginBottom: SPACING.xs,
   },
   chipText: {
     fontSize: FONT_SIZE.xs,
     flex: 1,
     marginRight: SPACING.xs,
+    color: COLORS.text,
   },
   chipRemove: {
     padding: 2,
   },
+
   // Dropdown Modal Styles
   dropdownOverlay: {
     flex: 1,
-    backgroundColor: COLORS.overlay,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
   },
   dropdownContainer: {
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: SPACING.md,
-    maxHeight: responsiveHeight(70),
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.lg,
+    maxHeight: responsiveHeight(75),
+    marginBottom: Platform.OS === "ios" ? 0 : 0,
   },
   dropdownHeader: {
     flexDirection: "row",
@@ -172,6 +179,10 @@ export const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: "600",
   },
+  selectedSummaryText: {
+    fontSize: FONT_SIZE.sm,
+    marginBottom: SPACING.sm,
+  },
   searchInput: {
     borderWidth: 1,
     borderRadius: 8,
@@ -182,7 +193,7 @@ export const styles = StyleSheet.create({
     minHeight: 44,
   },
   dietList: {
-    maxHeight: responsiveHeight(40),
+    maxHeight: responsiveHeight(45),
   },
   dietItem: {
     flexDirection: "row",
@@ -235,18 +246,18 @@ export const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: "600",
   },
-  // Actions
+
+  // Actions (Submit / Cancel)
   actions: {
     flexDirection: "row",
     gap: SPACING.md,
     paddingHorizontal: isTablet ? SPACING.xl : SPACING.md,
     paddingVertical: SPACING.md,
     borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.card,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 5,
@@ -269,10 +280,13 @@ export const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: "600",
   },
+
   // Footer
   footerWrap: {
-    left: 0,
-    right: 0,
+    width: "100%",
+    backgroundColor: COLORS.bg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
   navShield: {
     left: 0,
@@ -280,7 +294,8 @@ export const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: COLORS.bg,
   },
-  // Utility Styles
+
+  // Utility
   center: {
     flex: 1,
     alignItems: "center",

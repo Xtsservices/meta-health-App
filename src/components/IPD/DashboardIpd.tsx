@@ -189,7 +189,6 @@ const DashboardIpd: React.FC = () => {
         `patient/${user.hospitalID}/patients/calendarCards?date=${currentDate}`,
         token
       );
-
       if (patientCountData?.status === "success") {
         setDischargedCount(patientCountData.data?.Discharged_Patients ?? 0);
         setInPatientCount(patientCountData.data?.Total_InPatients ?? 0);
@@ -512,7 +511,7 @@ const DashboardIpd: React.FC = () => {
         userImage={userImg}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("EditPatientProfile" as never, { id } as never);
+          navigation.navigate("DoctorProfile" as never, { id } as never);
         }}
         items={sidebarItems}
         bottomItems={bottomItems}

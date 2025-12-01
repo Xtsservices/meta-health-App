@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSelector } from 'react-redux';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
@@ -355,15 +355,16 @@ if (shouldShowPreOpTests || shouldShowPostOpTests) {
     }
   };
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     if (currentPatient?.patientTimeLineID) {
       getAllMedicine();
     } else if (!currentPatient?.patientTimeLineID) {
       setLoading(false);
       setError('No patient selected');
     }
-  }, [currentPatient]);
-
+  }, [currentPatient]))
+  
   // Also update when medications from pre-op form change
 // Also update when pre-op / post-op medications change
 useEffect(() => {
@@ -387,11 +388,15 @@ useEffect(() => {
       return;
     }
     
-    navigation.navigate('NotificationScreen' as never, {
-      timelineID: currentPatient.patientTimeLineID,
-      patientName: currentPatient.pName,
-      patientId: currentPatient.patientid
-    } as never);
+    navigation.navigate(
+  "NotificationScreen" as never,
+  {
+    timelineID: currentPatient.patientTimeLineID,
+    patientName: currentPatient.pName,
+    patientId: currentPatient.patientid,
+    title: "Medicine Timeline",
+  } as never
+);
   };
 
   const retryFetch = () => {

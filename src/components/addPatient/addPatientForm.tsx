@@ -29,7 +29,7 @@ import { AuthFetch, UploadFiles } from "../../auth/auth";
 import Footer from "../dashboard/footer";
 import { RootState } from "../../store/store";
 import { city, state } from "../../utils/stateCity";
-import { Category, genderList, getUniqueId, getValidationMessage } from "../../utils/addPatientFormHelper";
+import { Category, genderList, getEmailValidationMessage, getPhoneValidationMessage, getUniqueId, getValidationMessage } from "../../utils/addPatientFormHelper";
 import { Role_NAME, patientStatus } from "../../utils/role";
 import {
   validateAgeAndUnit as validateAgeAndUnitUtil,
@@ -530,28 +530,29 @@ if (heightError) {
               valid = digits.length === 14;
               message = valid ? "" : "UHID must be 14 digits";
             } 
-            else if (name === "phoneNumber" || name === "pinCode") {
-            const onlyDigits = text.replace(/\D/g, "");
-            const required = name === "pinCode" ? 6 : 10;
-            formatted = onlyDigits;
+           else if (name === "phoneNumber") {
+  const onlyDigits = text.replace(/\D/g, "");
+  formatted = onlyDigits;
+  const error = getPhoneValidationMessage(onlyDigits);
+  valid = !error;
+  message = error || "";
+}
+else if (name === "pinCode") {
+  const onlyDigits = text.replace(/\D/g, "");
+  formatted = onlyDigits;
 
-            if (!onlyDigits) {
-              valid = false;
-              message =
-                name === "pinCode"
-                  ? "PIN code is required"
-                  : "Mobile number is required";
-            } else if (onlyDigits.length !== required) {
-              valid = false;
-              message =
-                name === "pinCode"
-                  ? `PIN code must be ${required} digits`
-                  : `Mobile number must be ${required} digits`;
-            } else {
-              valid = true;
-              message = "";
-            }
-          }
+  if (!onlyDigits) {
+    valid = false;
+    message = "PIN code is required";
+  } else if (onlyDigits.length !== 6) {
+    valid = false;
+    message = "PIN code must be 6 digits";
+  } else {
+    valid = true;
+    message = "";
+  }
+}
+
            else if (name === "pName") {
             formatted = text;
             if (!text.trim()) {
@@ -566,17 +567,11 @@ if (heightError) {
             }
           }
 else if (name === "email") {
-            formatted = text.trim();
-            if (!formatted) {
-              // optional field – blank is OK
-              valid = true;
-              message = "";
-            } else {
-              const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
-    valid = gmailRegex.test(formatted);
-    message = valid ? "" : "Enter a valid Gmail ID (example@gmail.com)";
-            }
-          }
+  formatted = text.trim();
+  const error = getEmailValidationMessage(formatted);
+  valid = !error;
+  message = error || "";
+}
 
           // 🔹 Manual AGE validation (when DOB not selected)
           else if (name === "age") {

@@ -1,6 +1,7 @@
 // Routing.tsx
 import React from "react";
-import { NavigationContainer } from '@react-navigation/native';
+import { HeaderBackButton } from "@react-navigation/elements";
+import { NavigationContainer} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from "./navigationTypes";
 import splashScreen from "../components/splashScreen";
@@ -125,6 +126,7 @@ import AddInventory from "../components/Pharmacy/inventory/AddInventory";
 import InventoryDetails from "../components/Pharmacy/inventory/InventoryDetails";
 import AddInventoryItemScreen from "../components/Pharmacy/inventory/AddInventoryItem";
 import PharmacyOrderDetailsScreen from "../components/Pharmacy/PharmacyOrderDetailsScreen";
+import doctorProfile from "../components/dashboard/doctorProfile";
 // import addReports from "../components/patientsList/reports/addReports";
 
 
@@ -132,6 +134,7 @@ import PharmacyOrderDetailsScreen from "../components/Pharmacy/PharmacyOrderDeta
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const Routing = () => {
+  
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
@@ -152,7 +155,7 @@ const Routing = () => {
         <Stack.Screen name="Reports" component={reports} options={{ title: "Reports", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen name="AddReports" component={addReports} options={{ title: "Add reports", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen name="Doctors" component={doctors} options={{ title: "Treating Doctors", headerTitleAlign: "center", headerShown: true }} />
-        <Stack.Screen name="AddDoctors" component={addDoctors} options={{ title: "Add Tresting Doctors", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="AddDoctors" component={addDoctors} options={{ title: "Add Treating Doctor", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen name="Timeline" component={timeline} options={{ title: "Timeline", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen name="TimelineRow" component={timelineRow} options={{ title: "TreatmentPlain", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen name="Prescription" component={prescription} options={{ title: "Prescription", headerTitleAlign: "center", headerShown: true }} />
@@ -236,7 +239,18 @@ const Routing = () => {
         <Stack.Screen name="OtDashboard" component={otDashboard} options={{headerShown: false }} />
         <Stack.Screen name="DashboardAlerts" component={dashboardAlerts} options={{ title: "Surgery Alerts", headerTitleAlign: "center", headerShown: true }} />
        
-        <Stack.Screen name="OtInnerTabs" component={otInnerTabs} options={{headerShown: true }} />
+        <Stack.Screen name="OtInnerTabs" component={otInnerTabs} options={({ navigation, route }) => ({
+    headerShown: true,
+    headerLeft: () => (
+      <HeaderBackButton
+        onPress={() => {
+          navigation.navigate("PatientProfile", {
+            patientID: route.params?.patientID, // pass whatever you need
+          });
+        }}
+      />
+    ),
+  })} />
         <Stack.Screen name="InitialDetails" component={initialDetails} options={{ title: "Initial Details", headerTitleAlign: "center", headerShown: true }}  />
         <Stack.Screen name="GeneralPhysicalExamination" component={generalPhysicalExamination} options={{ title: "General Physical Examination", headerTitleAlign: "center", headerShown: true }}  />
         <Stack.Screen name="Respiratory" component={respiratory} options={{ title: "Respiratory", headerTitleAlign: "center", headerShown: true }}  />
@@ -262,7 +276,7 @@ const Routing = () => {
           component={DischargedPatientsIPD}
           options={{ title: "Discharged Patients", headerTitleAlign: "center", headerShown: true }}
         />
-        <Stack.Screen name="NotificationScreen" component={NotificationScreen} options={{ title: "Notification", headerTitleAlign: "center", headerShown: true }}/>
+        <Stack.Screen name="NotificationScreen" component={NotificationScreen} options={({ route }) => ({ title: (route?.params as any)?.title ?? "Notification", headerTitleAlign: "center", headerShown: true })} />
         <Stack.Screen name="Tests" component={TestsScreen} options={{ title: "Tests", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen name="AddTests" component={AddTestsScreen} options={{ title: "Add Tests", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen
@@ -450,6 +464,11 @@ const Routing = () => {
   name="PharmacyOrderDetails" 
   component={PharmacyOrderDetailsScreen}
   options={{ title: 'Pharmacy Order Details', headerTitleAlign: "center", headerShown: true }}  
+/>
+<Stack.Screen 
+  name="DoctorProfile" 
+  component={doctorProfile}
+  options={{ title: 'Doctor Profile', headerTitleAlign: "center", headerShown: true }}  
 />
       </Stack.Navigator>
     </NavigationContainer>
