@@ -67,7 +67,7 @@ export default function VitalsTabScreen() {
 
       const res = await AuthFetch(apiUrl, token);
       let list: any[] = [];
-      if (res?.status === "success" || res?.message === "success") {
+      if (res?.status === "success" && "data" in res) {
         if (currentPatinet?.currentPatient?.role === "homecarepatient") {
           list = (res?.data.vitals || []).map((item: any, idx: number) => ({
             id: `hc-${idx}`,

@@ -157,16 +157,7 @@ const HelpScreen: React.FC = () => {
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <ArrowLeftIcon size={24} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help & Support</Text>
-        <View style={styles.headerPlaceholder} />
-      </View>
+      
 
       <ScrollView 
         style={styles.scrollView}

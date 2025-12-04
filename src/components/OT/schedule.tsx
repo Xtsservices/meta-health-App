@@ -425,7 +425,7 @@ const OTScheduleScreen: React.FC = () => {
         `user/${user.hospitalID}/list/${Role_NAME.doctor}`,
         token
       );
-      if ( res?.status === "success" ) {
+      if ( res?.status === "success" && "data" in res) {
         setAttendeesList(res?.data?.users || res.data || []);
       }
     } catch {
@@ -574,7 +574,7 @@ const OTScheduleScreen: React.FC = () => {
         },
         token
       );
-      if ( res?.status === "success") {
+      if ( res?.status === "success" && "data" in res) {
         dispatch(showSuccess("Scheduled successfully"));
         // push newly added event for current view without refetch
         const newEvent: EventItem = {
@@ -604,7 +604,7 @@ const OTScheduleScreen: React.FC = () => {
     //     dispatch(showError("Already scheduled"));
     //   }
      else {
-        dispatch(showError(res?.message || "Scheduling failed"));
+        dispatch(showError("message" in res && res?.message || "Scheduling failed"));
       }
     } catch {
       dispatch(showError("Scheduling failed"));

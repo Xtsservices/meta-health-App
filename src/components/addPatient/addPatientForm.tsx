@@ -45,8 +45,15 @@ import {
 import { showError, showSuccess } from "../../store/toast.slice";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 import { COLORS } from "../../utils/colour";
+import { formatDate } from "../../utils/dateTime";
 
 type Department = { id: number; name: string };
+type PatientField = {
+  value: any;
+  valid: boolean;
+  showError: boolean;
+  message: string;
+};
 
 const { height } = Dimensions.get("window");
 
@@ -132,12 +139,32 @@ const AddPatientForm: React.FC = () => {
   // ---------- Prefill hospitalID / pID / ptype ----------
   useEffect(() => {
     const value = getUniqueId();
-    setFormData(prev => ({
-      ...prev,
-      hospitalID: { value: user?.hospitalID ?? null, valid: !!user?.hospitalID, showError: !user?.hospitalID, message: "" },
-      pID: { valid: true, showError: false, value, message: "" },
-      ptype: { valid: true, showError: false, value: patientStatusFromRoute, message: "" },
-    }));
+   setFormData((prev) => ({
+  ...prev,
+  hospitalID: {
+    ...prev.hospitalID,
+    value: user?.hospitalID ?? null,
+    valid: !!user?.hospitalID,
+    showError: !user?.hospitalID,
+    message: "",
+  },
+  pID: {
+    ...prev.pID,
+    valid: true,
+    showError: false,
+    value,
+    message: "",
+  },
+  ptype: {
+    ...prev.ptype,
+    valid: true,
+    showError: false,
+    // 🔹 ensure it's always a number (no undefined)
+    value: Number(patientStatusFromRoute ?? 1),
+    message: "",
+  },
+}));
+
   }, [user?.hospitalID, patientStatusFromRoute]);
 
   // ---------- Fetch departments, doctors, and wards ----------
@@ -149,9 +176,9 @@ const AddPatientForm: React.FC = () => {
         AuthFetch(`user/${user?.hospitalID}/list/${Role_NAME.doctor}`, token),
         AuthFetch(`ward/${user?.hospitalID}`, token), // NEW: Fetch wards
       ]);
-      if (deptRes?.status === "success") setDepartmentList(deptRes?.data?.departments || []);
-      if (docRes?.status === "success") setDoctorList(docRes?.data?.users || []);
-      if (wardRes?.status === "success") setWardList(wardRes?.data?.wards || []); // NEW: Set ward list
+      if (deptRes?.status === "success" && "data" in deptRes) setDepartmentList(deptRes?.data?.departments || []);
+      if (docRes?.status === "success" && "data" in docRes) setDoctorList(docRes?.data?.users || []);
+      if (wardRes?.status === "success" && "data" in wardRes) setWardList(wardRes?.data?.wards || []); // NEW: Set ward list
     } catch {
       Alert.alert("Error", "Failed to load data");
     }
@@ -160,28 +187,78 @@ const AddPatientForm: React.FC = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // ---------- HOD prefill ----------
-  useEffect(() => {
-    if (user?.role === 4000 && user?.departmentID && departmentList?.length > 0) {
-      const dept = departmentList.find((d) => d.id === user.departmentID);
-      if (dept) {
-        const hodEntry: staffType = {
-          id: user?.id,
-          firstName: user.firstName || "",
-          lastName: user.lastName || "",
-          departmentID: user.departmentID,
-        };
-        const filtered = [hodEntry, ...doctorList.filter((d) => d.departmentID === user.departmentID)];
-        setFilteredDoctors(filtered);
-        setSelectedDepartmentID(user.departmentID);
-        setFormData((prev) => ({
-          ...prev,
-          department: { value: String(user.departmentID), valid: true, showError: false, message: "" },
-          departmentID: { value: user.departmentID, valid: true, showError: false, message: "" },
-          userID: { value: user.id, valid: true, showError: false, message: "" },
-        }));
-      }
-    }
-  }, [user, departmentList, doctorList]);
+useEffect(() => {
+  if (user?.role === 4000 && user?.departmentID && departmentList?.length > 0) {
+    const dept = departmentList.find((d) => d.id === user.departmentID);
+    if (!dept) return;
+
+    // 🔹 Ensure these are number | undefined (no string in union)
+    const userId: number | undefined =
+      user?.id != null ? Number(user.id) : undefined;
+
+    const deptId: number | undefined =
+      user?.departmentID != null ? Number(user.departmentID) : undefined;
+
+    // 🔹 Build FULL staffType object
+    const hodEntry: staffType = {
+      id: userId,
+      email: user?.email ?? "",
+      firstName: user?.firstName ?? "",
+      lastName: user?.lastName ?? "",
+      photo: user?.photo ?? null,
+      pinCode: user?.pinCode ?? null,
+      phoneNo: user?.phoneNo ?? null,
+      address: user?.address ?? null,
+      city: user?.city ?? null,
+      state: user?.state ?? null,
+      role: user?.role ?? null,
+      dob: user?.dob ?? null,
+      gender: user?.gender ?? null,
+      countryCode: user?.countryCode ?? null,
+      departmentID: deptId,
+      addedOn: user?.addedOn ?? "",
+      imageURL: user?.imageURL ?? "",
+      scope: user?.scope ?? "",
+      reportTo: user?.reportTo ?? null,
+      image: user?.image ?? null,
+    };
+
+    const filtered = [
+      hodEntry,
+      ...doctorList.filter((d) => d.departmentID === deptId),
+    ];
+
+    setFilteredDoctors(filtered);
+    setSelectedDepartmentID(deptId ?? null);
+
+    setFormData((prev) => ({
+      ...prev,
+      department: {
+        ...prev.department,
+        value: String(deptId ?? ""),
+        valid: true,
+        showError: false,
+        message: "",
+      },
+      departmentID: {
+        ...prev.departmentID,
+        value: deptId,
+        valid: true,
+        showError: false,
+        message: "",
+      },
+      userID: {
+        ...prev.userID,
+        value: userId ?? null,
+        valid: true,
+        showError: false,
+        message: "",
+      },
+    }));
+  }
+}, [user, departmentList, doctorList]);
+
+
 
   // ---------- Filter doctors by department ----------
   useEffect(() => {
@@ -218,16 +295,29 @@ useEffect(() => {
   // ✅ Validate age by category
   const rule = validateAgeAndUnit(catLabel, n, unit);
 
-  if (!rule.ok) {
-    dispatch(showError(rule.msg || "Invalid age"));
-    setFormData((prev) => ({
-      ...prev,
-      dob: { ...prev.dob, value: "", valid: false },
-      age: { ...prev.age, value: "", valid: false, showError: true, message: rule.msg },
-    }));
-    setSelectedDate(null);
-    return;
-  }
+if (!rule.ok) {
+  dispatch(showError(rule.msg || "Invalid age"));
+  setFormData((prev) => ({
+    ...prev,
+    dob: {
+      ...(prev.dob as PatientField),
+      value: "",
+      valid: false,
+      showError: true,
+      message: rule.msg || "Invalid age",
+    },
+    age: {
+       ...(prev.age as PatientField),
+      value: "",
+      valid: false,
+      showError: true,
+      message: rule.msg || "Invalid age",
+    },
+  }));
+  setSelectedDate(null);
+  return;
+}
+
 
   // ✅ Force proper display unit
   let displayUnit: AgeUnit = unit;
@@ -272,10 +362,15 @@ useEffect(() => {
           }
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err) {
-        dispatch(showError(err?.message || err?.status))
-        return false;
-      }
+      } catch (err: any) {
+  dispatch(
+    showError(
+      err?.message || err?.status || "Camera permission error"
+    )
+  );
+  return false;
+}
+
     }
     return true;
   };
@@ -313,37 +408,43 @@ useEffect(() => {
 
   const validateForm = () => {
     let valid = true;
-    const updated = { ...formData };
+    const updated: patientOPDbasicDetailType = { ...formData };
 
     if (!formData.pUHID.value || String(formData.pUHID.value).replace(/-/g, "").length !== 14) {
-      updated.pUHID = { ...updated.pUHID, valid: false, showError: true };
+      updated.pUHID = {...(updated.pUHID as PatientField), valid: false, showError: true };
       valid = false;
     }
 
     if (!formData.departmentID.value) {
-      updated.departmentID = { ...updated.departmentID, valid: false, showError: true };
+      updated.departmentID = { ...(updated.departmentID as PatientField), valid: false, showError: true };
       valid = false;
     }
 
     // Doctor is ALWAYS required for ALL patient statuses
     if (!formData.userID.value) {
-      updated.userID = { ...updated.userID, valid: false, showError: true };
+      updated.userID = { ...(updated.userID as PatientField), valid: false, showError: true };
       valid = false;
     }
 
     // Ward is required ONLY for inpatient (status 2)
     if (user?.patientStatus == 2 && !formData.wardID.value) {
-      updated.wardID = { ...updated.wardID, valid: false, showError: true };
+      updated.wardID = { ...(updated.wardID as PatientField), valid: false, showError: true };
       valid = false;
     }
 
-    (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach((key) => {
-      const field = formData[key];
+     (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach(
+    (key) => {
+      const field = formData[key] as PatientField;
+
       if (!field.valid && field.value !== null && field.value !== "") {
-        updated[key] = { ...field, showError: true };
+        (updated as any)[key] = {
+          ...field,
+          showError: true,
+        } as PatientField;
         valid = false;
       }
-    });
+    }
+  );
 
     const w = Number(formData.weight.value);
 const weightError = getValidationMessage(w, category, "weight");
@@ -444,7 +545,7 @@ if (heightError) {
           navigation.navigate("AddPatient");
         }
       } else {
-        dispatch(showError(res?.message || res?.status || res?.data?.message || "Patient registration failed"))
+        dispatch(showError("message" in res && res?.message || res?.status || "data" in res && res?.data?.message || "Patient registration failed"))
       }
     } catch (err: any) {
       dispatch(showError(err?.message || "Patient registration failed"))
@@ -674,7 +775,7 @@ else if (name === "email") {
                 {renderInput("Patient Name", "pName", { placeholder: "Enter full name" })}
               </View>
             </View>
-            {renderInput("Patient ID (Auto)", "pID", { placeholder: "Auto-generated" })}
+            {renderInput("Patient ID (Auto)", "pID", { placeholder: "Auto-generated", editable: false})}
             {renderInput("UHID", "pUHID", { keyboardType: "numeric", maxLength: 18, placeholder: "XXXX-XXX-XXX-XXXX" })}
           </View>
 
@@ -686,7 +787,7 @@ else if (name === "email") {
               <Text style={[styles.label, { color: COLORS.sub }]}>Date of Birth *</Text>
               <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.dateButton, { borderColor: COLORS.border }]}>
                 <Text style={{ color: selectedDate ? COLORS.text : COLORS.placeholder, fontSize: 15 }}>
-                  {selectedDate ? selectedDate.toLocaleDateString() : "Select DOB"}
+                  {selectedDate ? formatDate(selectedDate) : "Select DOB"}
                 </Text>
               </TouchableOpacity>
               {showDatePicker && (

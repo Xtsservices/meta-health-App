@@ -104,7 +104,7 @@ const DashboardTriage: React.FC = () => {
   const user = useSelector((s: RootState) => s.currentUser);
   const insets = useSafeAreaInsets();
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl || user?.profileImage;
+  const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;;
 
   const dispatch = useDispatch();
   const FOOTER_HEIGHT = 70;

@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -21,6 +21,7 @@ import { FONT_SIZE, FOOTER_HEIGHT, ICON_SIZE, SPACING } from "../../../utils/res
 import { AuthFetch } from "../../../auth/auth";
 import { COLORS } from "../../../utils/colour";
 import { convertTo12Hour, formatDate } from "../../../utils/dateTime";
+import { showError } from "../../../store/toast.slice";
 
 
 
@@ -39,7 +40,7 @@ const DoctorSlotsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
-
+  const dispatch = useDispatch();
   const doctorId: number | null = route.params?.doctorId ?? null;
   const doctorName: string | undefined = route.params?.doctorName;
 
@@ -62,7 +63,8 @@ const DoctorSlotsScreen: React.FC = () => {
         }
         const url = `doctor/${user?.hospitalID}/${doctorId}/getDoctorAppointmentsSlotsFromCurrentDate`;
         const resp = await AuthFetch(url, token);
-        const data = resp?.data?.data || [];
+        if (resp?.status=== "success" && "data" in resp ) {
+        const data = resp?.data?.data?.slots || [];
         const flattened: SimpleSlot[] = [];
 
         data.forEach((s: any) => {
@@ -81,10 +83,25 @@ const DoctorSlotsScreen: React.FC = () => {
           return String(a.fromTime).localeCompare(String(b.fromTime));
         });
 
-        setSlots(flattened);
-      } catch (err) {
-        setSlots([]);
-      } finally {
+        setSlots(flattened);}
+        else{
+          setSlots([]);
+          const errorMessage =
+            resp && 'message' in resp
+              ? resp.message
+              : resp?.data?.message ?? 'Failed to load doctor slots';
+          dispatch(showError(errorMessage));
+        }
+      } catch (err: any) {
+  setSlots([]);
+  const msg =
+    err?.response?.data?.message ||
+    err?.message ||
+    "Failed to load doctor slots";
+
+  dispatch(showError(msg));
+}
+finally {
         setLoading(false);
       }
     };

@@ -192,7 +192,9 @@ const Routing = () => {
           name="HelpScreen"
           component={HelpScreen}
           options={{
-            headerShown: false
+            title: "Help & Support",
+            headerTitleAlign: "center",
+            headerShown: true
           }}
         />
         <Stack.Screen

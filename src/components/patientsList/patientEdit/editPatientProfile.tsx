@@ -30,6 +30,7 @@ import { state as STATE_LIST, city as CITY_LIST } from "../../../utils/stateCity
 import { AgeUnit } from "../../../utils/age";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import { COLORS } from "../../../utils/colour";
+import { formatDate } from "../../../utils/dateTime";
 const FOOTER_H = 64;
 
 
@@ -92,20 +93,20 @@ const EditPatientMobile = () => {
         token
       );
 
-      const p = res?.patient || res?.data?.patient || res?.data || res;
+      const patient =res && "patient" in res &&  res?.patient || res && "data" in res && res?.data?.patient || res && "data" in res && res?.data || res;
 
-      if (!p) {
+      if (!patient) {
         dispatch(showError("Failed to load patient"));
         setLoading(false);
         return;
       }
 
-      setPName(p.pName || "");
-      setPID(p.pID || "");
-      setPUHID(p.pUHID ? String(p.pUHID) : "");
-      if (p.dob) {
-        const d = new Date(p.dob);
-        setDob(p.dob.split("T")[0] || "");
+      setPName(patient.pName || "");
+      setPID(patient.pID || "");
+      setPUHID(patient.pUHID ? String(patient.pUHID) : "");
+      if (patient.dob) {
+        const d = new Date(patient.dob);
+        setDob(patient.dob.split("T")[0] || "");
         setDobDate(d);
 
         // derive age here as well
@@ -128,26 +129,26 @@ const EditPatientMobile = () => {
         setAgeUnit(unit);
       }
 
-      setGender(p.gender || 0);
+      setGender(patient.gender || 0);
 
-      setWeight(p.weight ? String(p.weight) : "");
-      setHeight(p.height ? String(p.height) : "");
+      setWeight(patient.weight ? String(patient.weight) : "");
+      setHeight(patient.height ? String(patient.height) : "");
 
-      setPhoneNumber(p.phoneNumber ? String(p.phoneNumber) : "");
-      setEmail(p.email || "");
-      setAddress(p.address || "");
-      setStateName(p.state || "");
-      setCityName(p.city || "");
-      setPinCode(p.pinCode || "");
-      setReferredBy(p.referredBy || "");
+      setPhoneNumber(patient.phoneNumber ? String(patient.phoneNumber) : "");
+      setEmail(patient.email || "");
+      setAddress(patient.address || "");
+      setStateName(patient.state || "");
+      setCityName(patient.city || "");
+      setPinCode(patient.pinCode || "");
+      setReferredBy(patient.referredBy || "");
 
-      setInsurance(p.insurance ?? 0);
-      setInsuranceNumber(p.insuranceNumber || "");
-      setInsuranceCompany(p.insuranceCompany || "");
-      setPhotoUri(p.imageURL || null);
+      setInsurance(patient.insurance ?? 0);
+      setInsuranceNumber(patient.insuranceNumber || "");
+      setInsuranceCompany(patient.insuranceCompany || "");
+      setPhotoUri(patient.imageURL || null);
 
       // CITY LIST BY STATE
-      const i = STATE_LIST.indexOf(p.state || "");
+      const i = STATE_LIST.indexOf(patient.state || "");
       setCityList(i >= 0 ? CITY_LIST[i] : []);
     } catch (err) {
       dispatch(showError("Error loading patient"));
@@ -296,10 +297,10 @@ const EditPatientMobile = () => {
       );
       if (res?.status === "success") {
         dispatch(showSuccess("Updated successfully"));
-        dispatch(currentPatient(res?.data?.patient))
+        dispatch(currentPatient(res && "data" in res && res?.data?.patient))
         navigation.goBack();
       } else {
-        dispatch(showError(res?.message || "Update failed"));
+        dispatch(showError("message" in res ? res.message : "Update failed"));
       }
     } catch (e) {
       dispatch(showError("Save failed"));
@@ -433,7 +434,7 @@ const EditPatientMobile = () => {
                     fontSize: 15,
                   }}
                 >
-                  {dob || "Select DOB"}
+                  {formatDate(dob) || "Select DOB"}
                 </Text>
               </TouchableOpacity>
               {showDobPicker && (

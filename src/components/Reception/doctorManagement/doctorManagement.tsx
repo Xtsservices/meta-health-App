@@ -85,7 +85,7 @@ const DoctorManagementMobile: React.FC = () => {
       if (!token) return;
 
       const res = await AuthFetch(`department/${user.hospitalID}`, token);
-      if (res?.status === "success" && Array.isArray(res?.data?.departments)) {
+      if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.departments)) {
         setDepartments(res.data?.departments);
       } else {
         dispatch(showError("Failed to fetch departments"));
@@ -111,7 +111,7 @@ const DoctorManagementMobile: React.FC = () => {
         token
       );
 
-      if (res?.status === "success" && Array.isArray(res?.data?.users)) {
+      if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.users)) {
         const mapped: Doctor[] = res.data?.users.map((u: any): Doctor => {
           const departmentName =
             departments.find((d) => d.id === u.departmentID)?.name || "Unknown";
@@ -225,11 +225,11 @@ const DoctorManagementMobile: React.FC = () => {
       const url = `doctor/${user.hospitalID}/doctorAppointmentSchedule`;
       const resp = await AuthPost(url, { data: scheduleData }, token);
 
-      if (resp?.status === "error") {
+      if (resp?.status === "error" && "message" in resp) {
         dispatch(showError(resp?.message || "Failed to create slots"));
       } else {
         dispatch(
-          showSuccess(resp?.message || "Slots created successfully for doctor")
+          showSuccess("message" in resp && resp?.message || "Slots created successfully for doctor")
         );
         setSlotModalVisible(false);
         setActiveDoctorForSlots(null);

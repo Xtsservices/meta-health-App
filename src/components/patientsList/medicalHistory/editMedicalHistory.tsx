@@ -91,7 +91,7 @@ const EditMedicalHistoryScreen: React.FC = () => {
         token
       );
       
-      if (res?.status === "success" && res?.data?.medicalHistory) {
+      if (res?.status === "success" && "data" in res && res?.data?.medicalHistory) {
         setMedicalHistory(res.data?.medicalHistory);
       }
     } catch (e: any) {
@@ -128,7 +128,7 @@ const EditMedicalHistoryScreen: React.FC = () => {
         dispatch(showSuccess("Medical history successfully updated"));
         navigation.navigate("MedicalHistory");
       } else {
-        dispatch(showError(res?.message || "Failed to update history"));
+        dispatch(showError( res && "message" in res && res?.message || "Failed to update history"));
       }
     } catch (e: any) {
       dispatch(showError("Failed to update history"));

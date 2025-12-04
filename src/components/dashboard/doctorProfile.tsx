@@ -95,7 +95,6 @@ const doctorProfile: React.FC = () => {
   const dispatch = useDispatch();
     const user = useSelector((state: RootState) => state.currentUser);
   
-console.log(user, "doctor profile user");
   const [activeTab, setActiveTab] = useState<TabType>("personal");
 
   // profile image
@@ -119,7 +118,6 @@ console.log(user, "doctor profile user");
   const [hospitalName, setHospitalName] = useState(
     user?.role === 10007 ? "N/A" : user?.hospitalName || "Central Medical Hospital"
   );
-
   // personal form
   const [formData, setFormData] = useState<ProfileFormState>({
     firstName: { valid: true, showError: false, value: user?.firstName || "", message: "" },
@@ -129,7 +127,7 @@ console.log(user, "doctor profile user");
     dob: {
       valid: true,
       showError: false,
-      value: formatDate(user?.dob ? user?.dob.split("T")[0] : ""),
+      value: user?.dob ,
       message: "",
     },
     city: { valid: true, showError: false, value: user?.city || "", message: "" },
@@ -142,7 +140,6 @@ console.log(user, "doctor profile user");
   },
     address: { valid: true, showError: false, value: user?.address || "", message: "" },
   });
-console.log(formData, "profile form data");
   const [cityList, setCityList] = useState<string[]>([]);
   const [isEditingProfileInfo, setIsEditingProfileInfo] = useState(false);
 
@@ -151,7 +148,8 @@ console.log(formData, "profile form data");
     password: { valid: false, showError: false, value: "", message: "" },
     confirmPassword: { valid: false, showError: false, value: "", message: "" },
   });
-  const [showPassword, setShowPassword] = useState(false);
+ const [showPassword, setShowPassword] = useState(false);
+const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // date picker for DOB
   const [showDobPicker, setShowDobPicker] = useState(false);
@@ -164,7 +162,6 @@ console.log(formData, "profile form data");
     
     [user]
   );
- console.log(showSecurityTab,user, "showSecurityTab")
 
 
   const initials = `${user?.firstName?.charAt(0) || ""}${
@@ -200,7 +197,6 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"));
           `hospital/${user?.hospitalID}`,
         token
         );
-console.log(response, "hospital details");
         if (response.status === "success" && "data" in response && response?.data?.hospital?.name) {
           const fetchedImageURL = response.data.hospital.logoURL || null;
 
@@ -328,54 +324,63 @@ console.log(response, "hospital details");
     setProfileImagePreview(null);
   };
 
-  const validateProfileForm = (): boolean => {
-    const requiredFields: (keyof ProfileFormState)[] = [
-      "firstName",
-      "lastName",
-      "phoneNo",
-      "gender",
-      "dob",
-      "city",
-      "state",
-      "pinCode",
-      "address",
-    ];
+const validateProfileForm = (): boolean => {
+  const requiredFields: (keyof ProfileFormState)[] = [
+    "firstName",
+    "lastName",
+    "phoneNo",
+    "gender",
+    "dob",
+    "city",
+    "state",
+    "pinCode",
+    "address",
+  ];
 
-    let hasError = false;
-    const updated = { ...formData };
+  let hasError = false;
 
-    requiredFields.forEach((field) => {
-      const fieldData = updated[field];
-      let isValid = !!fieldData.value;
-      let msg = isValid ? "" : "This field is required";
+  // Clone existing form data
+  const updated: ProfileFormState = { ...formData };
 
-      if (field === "phoneNo") {
-        isValid =
-          !!fieldData.value && checkLength(Number(fieldData.value), 10);
-        msg = isValid ? "" : "Mobile number must be 10 digits";
-      } else if (field === "pinCode") {
-        isValid =
-          !!fieldData.value && checkLength(Number(fieldData.value), 6);
-        msg = isValid ? "" : "Pincode must be 6 digits";
-      }
+  requiredFields.forEach((fieldKey) => {
+    // Treat all fields as FieldState<any> for validation
+    const fieldData = updated[fieldKey] as FieldState<any>;
 
-      updated[field] = {
-        ...fieldData,
-        valid: isValid,
-        showError: !isValid,
-        message: msg,
-      };
+    let isValid = !!fieldData.value;
+    let msg = isValid ? "" : "This field is required";
 
-      if (!isValid) hasError = true;
-    });
-
-    setFormData(updated);
-    if (hasError) {
-      dispatch(showError("Please fill all required fields correctly"));
-      return false;
+    if (fieldKey === "phoneNo") {
+      const valueStr = String(fieldData.value ?? "");
+      isValid = valueStr !== "" && checkLength(Number(valueStr), 10);
+      msg = isValid ? "" : "Mobile number must be 10 digits";
+    } else if (fieldKey === "pinCode") {
+      const valueStr = String(fieldData.value ?? "");
+      isValid = valueStr !== "" && checkLength(Number(valueStr), 6);
+      msg = isValid ? "" : "Pincode must be 6 digits";
     }
-    return true;
-  };
+
+    // Safe write with an index using a cast
+    (updated as any)[fieldKey] = {
+      ...fieldData,
+      valid: isValid,
+      showError: !isValid,
+      message: msg,
+    };
+
+    if (!isValid) hasError = true;
+  });
+
+  setFormData(updated);
+
+  if (hasError) {
+    dispatch(showError("Please fill all required fields correctly"));
+    return false;
+  }
+
+  return true;
+};
+
+
 
   const handleProfileSubmit = useCallback(async () => {
     if (!validateProfileForm()) return;
@@ -415,14 +420,12 @@ console.log(response, "hospital details");
     }
     body.append("image", "any text");
  const token = user?.token ?? (await AsyncStorage.getItem("token"));
- console.log(body, "profile body");
     try {
       const data = await AuthPatch(
         `user/${user?.hospitalID}/${user?.id}`,
         body,
         token
       );
-console.log(data, "profile response",data?.data?.data?.imageURL);
       if (data.status === "success" && "data" in data) {
         const updated = data.data?.data || {};
   const mergedUser: any = { ...user };
@@ -445,7 +448,6 @@ console.log(data, "profile response",data?.data?.data?.imageURL);
   mergedUser.hospitalImageURL = user?.hospitalImageURL;
   mergedUser.hospitalName = user?.role === 10007 ? "N/A" : hospitalName;
 
-  console.log(mergedUser, "mergedUser (only updated fields)");
 
   dispatch(currentUser(mergedUser));
 
@@ -454,7 +456,7 @@ console.log(data, "profile response",data?.data?.data?.imageURL);
         setProfileImagePreview(null);
         dispatch(showSuccess("Profile successfully updated"));
       } else {
-        dispatch(showError(data.message || "Failed to update profile"));
+        dispatch(showError( data && "message" in data && data.message || "Failed to update profile"));
       }
     } catch (err: any) {
       dispatch(
@@ -511,7 +513,7 @@ console.log(data, "profile response",data?.data?.data?.imageURL);
         dispatch(showSuccess("Hospital logo updated successfully"));
       } else {
         dispatch(
-          showError(hospitalData.message || "Failed to update hospital logo")
+          showError(hospitalData && "message" in hospitalData &&hospitalData.message || "Failed to update hospital logo")
         );
       }
     } catch (err: any) {
@@ -601,7 +603,7 @@ console.log(data, "profile response",data?.data?.data?.imageURL);
           },
         });
       } else {
-        dispatch(showError(response.message || "Failed to change password"));
+        dispatch(showError(response && "message" in response && response.message || "Failed to change password"));
       }
     } catch (err: any) {
       dispatch(
@@ -629,7 +631,6 @@ console.log(data, "profile response",data?.data?.data?.imageURL);
         `user/${user?.hospitalID}/${user?.id}/getEditLogs`,
         token
       );
-      console.log(response, "edit logs response");
       if (response.status === "success" && "data" in response && response?.data?.logs) {
         setEditLogs(response.data.logs);
       } else {
@@ -684,7 +685,6 @@ console.log(data, "profile response",data?.data?.data?.imageURL);
   };
 
   // ---------------- RENDER ----------------
-console.log(user, "user profile render");
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: COLORS.bg }]}
@@ -980,7 +980,7 @@ console.log(user, "user profile render");
                           styles.inputReadOnly,
                           !isEditingProfileInfo && styles.inputDisabled,
                         ]}
-                        value={formData.dob.value}
+                        value={formatDate(formData.dob.value)}
                         placeholder="DD-MM-YYYY"
                         placeholderTextColor={COLORS.sub}
                         editable={false}
@@ -1257,9 +1257,10 @@ console.log(user, "user profile render");
                       onPress={() => setShowPassword((prev) => !prev)}
                     >
                       {showPassword ? (
-                        <EyeOff size={18} color={COLORS.sub} />
+                         <Eye size={18} color={COLORS.sub} />
                       ) : (
-                        <Eye size={18} color={COLORS.sub} />
+                       
+                        <EyeOff size={18} color={COLORS.sub} />
                       )}
                     </TouchableOpacity>
                   </View>
@@ -1585,7 +1586,7 @@ const styles = StyleSheet.create({
   },
   chipButtonText: {
     fontSize: FONT_SIZE.xs,
-    color: COLORS.buttonText || "#fff",
+    color: COLORS.fieldText || "#fff",
     fontWeight: "600",
   },
 

@@ -33,6 +33,8 @@ import { COLORS } from "../../../utils/colour";
 
 // Icons
 import { CheckIcon } from "../../../utils/SvgIcons";
+import { showError, showSuccess } from "../../../store/toast.slice";
+import { useDispatch } from "react-redux";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -278,7 +280,7 @@ const PaymentMethodScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-
+const dispatch = useDispatch();
   const {
     amount = 0,
     selectedTests,
@@ -294,6 +296,8 @@ const PaymentMethodScreen: React.FC = () => {
     onPaymentSuccess,
     type,
     receptionData,
+    pharmacyData,
+    labData,
   } = (route.params as any) || {};
 
   // Local UI theme toggle (light/dark)
@@ -322,7 +326,6 @@ const PaymentMethodScreen: React.FC = () => {
   const [paidAmount, setPaidAmount] = useState(0);
   const [totalDue, setTotalDue] = useState(amount);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const isBillingOrder = !!orderData;
   const isReceptionPayment = !!receptionData; // 👈 NEW flag
   const ptype =isReceptionPayment ? receptionData?.pType === "Outpatient" ? 1 : 2 : undefined;
@@ -376,10 +379,6 @@ const PaymentMethodScreen: React.FC = () => {
 
   // Helper: determine whether this transaction requires full payment (OPD)
   const requiresFullPayment = useMemo(() => {
-    // For ALL sales from SaleComp, require full payment
-    if (type === "medicine" || type === "test") {
-      return true;
-    }
     const normalize = (v: any) =>
       v === undefined || v === null
         ? ""
@@ -393,21 +392,34 @@ const PaymentMethodScreen: React.FC = () => {
     );
     const explicitPtype = route.params?.ptype;
     const isExplicitOPD = explicitPtype === 21;
-    
+   const isNewSaleFlow =
+      (type === "medicine" || type === "test") &&
+      !receptionData &&
+      !pharmacyData &&
+      !labData &&
+      !isBillingOrder;
+
+    if (isNewSaleFlow) return true;
+    // 🔹 Existing reception / OPD logic (kept same)
     if (isExplicitOPD) return true;
-    if (dept === "opd" || dept === "outpatient" || receptionData?.pType === "Outpatient") return true;
+    if (
+      dept === "opd" ||
+      dept === "outpatient" ||
+      receptionData?.pType === "Outpatient"
+    )
+      return true;
     if (fptype === "opd" || fptype === "outpatient") return true;
     if (orderptype === "opd" || orderptype === "outpatient")
       return true;
+    // 🔹 IPD / others → partial allowed (this covers pharmacy IPD also)
     return false;
   }, [type, department, formData, orderData, receptionData, route.params?.ptype]);
-
   const isSubmitEnabled = useCallback(() => {
     const totalEntered = Object.values(
       enteredAmountNum
     ).reduce((s, v) => s + v, 0);
     
-    if (requiresFullPayment || type === "medicine" || type === "test") {
+    if (requiresFullPayment ) {
       return (
         selectedMethods.size > 0 &&
         totalEntered > 0 &&
@@ -540,83 +552,137 @@ const PaymentMethodScreen: React.FC = () => {
   // ------------------- SALES PAYMENT (EXISTING) -------------------
 const handleSalesPayment = useCallback(
   async (paymentDetails: any, token: string) => {
-    // Use the type from route params
+    // 1️⃣ If we have pharmacyData → existing pharmacy order payment
+    if (pharmacyData) {
+      if (!user?.hospitalID) {
+        throw new Error("Missing pharmacy data or hospital details");
+      }
+
+      const getTimelineId = (d: any): string =>
+        (
+          d.patientTimeLineID ??
+          d.timelineID ??
+          d.timeLineID ??
+          d.patienttimelineID ??
+          d.patient_timeLine_id ??
+          d.visitID ??
+          d.orderID ??
+          ""
+        )
+          .toString()
+          .trim();
+
+      const patientTimeLineID = getTimelineId(pharmacyData);
+
+      if (!patientTimeLineID) {
+        throw new Error("Invalid patient timeline / order ID");
+      }
+
+      const payload = {
+        paymentMethod: paymentDetails,
+        discount: {
+          discount: discount || 0,
+          discountReason: discountReason || "",
+          discountReasonID: discountReasonID || "",
+        },
+        dueAmount: totalDue,
+        paidAmount: paidAmount,
+        totalAmount: amount.toFixed(2),
+      };
+
+      const url = `medicineInventoryPatientsOrder/${user.hospitalID}/payment/${patientTimeLineID}/updatePatientOrderStatus`;
+
+      const response = await AuthPost(url, payload, token);
+      return response;
+    }
+
+    // 2️⃣ Else → Walk-in flow from SaleComp (test / medicine)
+    if (!user?.hospitalID) {
+      throw new Error("Missing hospital details");
+    }
+
     const isMedicineSale = type === "medicine";
-    const endpointPath = isMedicineSale 
-      ? `medicineInventoryPatients/${user?.hospitalID}/addPatientWithOrder`
-      : `medicineInventoryPatients/${user?.hospitalID}/tests/walkinPatients/${department}`;
-    
+    const endpointPath = isMedicineSale
+      ? `medicineInventoryPatients/${user.hospitalID}/addPatientWithOrder`
+      : `medicineInventoryPatients/${user.hospitalID}/tests/walkinPatients/${department}`;
+
     const formDataToSend = new FormData();
 
-    // Handle file upload
-    if (files?.length > 0) {
+    // 🔹 File (first file only – matches your payload)
+    if (Array.isArray(files) && files.length > 0) {
       const file = files[0];
-      const uploadUri =
-        Platform.OS === "ios" && file?.uri?.startsWith("file://")
-          ? file?.uri?.replace("file://", "")
-          : file?.uri;
+      if (file?.uri) {
+        const uploadUri =
+          Platform.OS === "ios" && file.uri.startsWith("file://")
+            ? file.uri.replace("file://", "")
+            : file.uri;
 
-      if (uploadUri) {
         formDataToSend.append("files", {
           uri: uploadUri,
-          type: file?.mimeType || file?.type || "application/octet-stream",
-          name: file?.name || `file_${Date.now()}`,
+          type: (file as any).mimeType || file.type || "application/octet-stream",
+          name: file.name || `file_${Date.now()}`,
         } as any);
       }
     }
 
-    // Use the correct items based on type
+    // 🔹 Items: medicines vs tests
     const itemsToUse = isMedicineSale ? selectedMedicines : selectedTests;
-    // Append data based on sale type
+
     if (isMedicineSale) {
       formDataToSend.append("medicineList", JSON.stringify(itemsToUse || []));
     } else {
       formDataToSend.append("testsList", JSON.stringify(itemsToUse || []));
     }
 
-    // Common data for both types
+    // 🔹 Common fields
     formDataToSend.append("patientData", JSON.stringify(formData || {}));
     formDataToSend.append("userID", user?.id?.toString() || "");
-    
+
     if (!isMedicineSale) {
+      // For tests: Pathology / Radiology
       formDataToSend.append("department", department || "");
     }
 
     formDataToSend.append("paymentMethod", JSON.stringify(paymentDetails || {}));
-    
-    const totalPaymentAmount = paymentDetails 
-      ? Object.values(paymentDetails).reduce((s: any, v: any) => s + (Number(v) || 0), 0)
+
+    const totalPaymentAmount = paymentDetails
+      ? Object.values(paymentDetails).reduce(
+          (s: number, v: any) => s + (Number(v) || 0),
+          0
+        )
       : 0;
+
     formDataToSend.append("paymentAmount", String(totalPaymentAmount));
-    
+
     const discountData = {
       discount: discount || 0,
       discountReason: discountReason || "",
       discountReasonID: discountReasonID || "",
     };
+
     formDataToSend.append("discount", JSON.stringify(discountData));
 
-      const response = await AuthPost(
-      endpointPath,
-        formDataToSend,
-        token
-      );
-      return response;
-    },
-    [
-    type,
-      department,
-      files,
-      selectedTests,
-      selectedMedicines,
-      formData,
-      user,
-      discount,
-      discountReason,
-      discountReasonID,
-    ]
-  );
 
+    const response = await AuthPost(endpointPath, formDataToSend, token);
+    return response;
+  },
+  [
+    pharmacyData,
+    type,
+    department,
+    files,
+    selectedTests,
+    selectedMedicines,
+    formData,
+    user,
+    discount,
+    discountReason,
+    discountReasonID,
+    totalDue,
+    paidAmount,
+    amount,
+  ]
+);
   // ------------------- LAB BILLING PAYMENT (EXISTING) -------------------
   const handleBillingPayment = useCallback(
     async (paymentDetails: any, token: string) => {
@@ -637,7 +703,6 @@ const handleSalesPayment = useCallback(
         payload,
         token
       );
-
       return response;
     },
     [
@@ -814,7 +879,6 @@ const handleSalesPayment = useCallback(
       // Endpoint: /reception/{hospitalID}/{patientId}/{timelineId}/payFromReception
       const url = `reception/${user.hospitalID}/${patientId}/${timelineId}/payFromReception`;
       const response = await AuthPost(url, payload, token);
-     
       return response;
     },
     [
@@ -834,7 +898,7 @@ const handleSalesPayment = useCallback(
     ).reduce((s, v) => s + v, 0);
 
     // validate according to mode
-    if (requiresFullPayment || type === "medicine" || type === "test") {
+    if (requiresFullPayment ) {
       if (
         !(
           selectedMethods.size > 0 &&
@@ -852,11 +916,8 @@ const handleSalesPayment = useCallback(
     } else {
       // IPD (partial allowed) - only disallow overpay
       if (totalEntered > amount + 0.001) {
-        Alert.alert(
-          "Amount Error",
-          `Entered amount (₹${totalEntered.toFixed(2)}) cannot exceed total amount (₹${amount.toFixed(2)}).`,
-          [{ text: "OK" }]
-        );
+        dispatch(showError(`Entered amount (₹${totalEntered.toFixed(2)}) cannot exceed total amount (₹${amount.toFixed(2)}).`))
+       
         return;
       }
       if (
@@ -865,11 +926,7 @@ const handleSalesPayment = useCallback(
           totalEntered > 0
         )
       ) {
-        Alert.alert(
-          "Enter Amount",
-          `Please enter an amount greater than 0.`,
-          [{ text: "OK" }]
-        );
+        dispatch(showError("Please enter an amount greater than 0."));
         return;
       }
     }
@@ -892,24 +949,26 @@ const handleSalesPayment = useCallback(
     try {
       const token = await AsyncStorage.getItem("token");
       if (!user?.hospitalID || !token) {
-        Alert.alert("Error", "Authentication failed");
+        dispatch(showError("Authentication failed"));
+        navigation.navigate("Login");
         setIsSubmitting(false);
         return;
       }
 
       let response;
 
-      if (isReceptionPayment) {
+      if (receptionData) {
         response = await handleReceptionPayment(
           paymentDataWithTime,
           token
         );
-      } else if (isBillingOrder) {
+      } else if (isBillingOrder && !pharmacyData) {
         response = await handleBillingPayment(
           paymentDataWithTime,
           token
         );
       } else {
+      
         response = await handleSalesPayment(
           paymentDataWithTime,
           token
@@ -925,39 +984,16 @@ const handleSalesPayment = useCallback(
           : isBillingOrder
           ? "Payment completed successfully!"
           : "Patient and test order added successfully!";
-
-        Alert.alert("Success ✅", successMessage, [
-          {
-            text: "OK",
-            onPress: () => {
-              if (
-                (isBillingOrder || isReceptionPayment) &&
-                onPaymentSuccess
-              ) {
-                onPaymentSuccess();
-              }
-
-              if (isReceptionPayment || isBillingOrder) {
-                navigation.goBack();
-              } else {
-                navigation.goBack();
-              }
-            },
-          },
-        ]);
+dispatch(showSuccess(successMessage))
+        navigation.navigate("TaxInvoiceTabs", { mode: "billing" })
       } else {
-        Alert.alert(
-          "Error",
-          response?.message ||
-            "Failed to process payment"
-        );
+        dispatch(showError(response?.message ||"Failed to process payment"))
+        
       }
     } catch (error: any) {
-      Alert.alert(
-        "Error",
-        error?.response?.data?.message ||
-          "Failed to process payment. Please try again."
-      );
+      dispatch(showError( error?.response?.data?.message ||
+      "Failed to process payment. Please try again."))
+      
     } finally {
       setIsSubmitting(false);
     }
@@ -1419,7 +1455,7 @@ const handleSalesPayment = useCallback(
                       fontSize: FONT_SIZE.xs,
                     }}
                   >
-                    {(requiresFullPayment || type === "medicine" || type === "test")
+                    {(requiresFullPayment )
                       ? "Full payment required for this order."
                       : "Partial payments allowed."}
                   </Text>

@@ -130,10 +130,10 @@ const CriticalCareSidebar: React.FC<Props> = ({
         token
       );
 
-      if (response?.status === "success" && response?.data?.message === "success") {
+      if (response?.status === "success" &&"data" in response && response?.data?.message === "success") {
         setAlertCount(response.data.count || 0);
       } else if (response?.message === "success") {
-        setAlertCount(response.count || 0);
+        setAlertCount(response?.count || 0);
       }
     } catch (error) {
       console.error("Error fetching alert count");
@@ -189,10 +189,10 @@ const CriticalCareSidebar: React.FC<Props> = ({
     <Modal transparent visible={open} animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.modalBackdrop} onPress={onClose} />
       <Animated.View style={[styles.sidebarContainer, { width, transform: [{ translateX: slide }] }]}>
-        
+       
         {/* Header */}
         <View style={styles.sidebarHeader}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <XIcon size={24} color="#0b1220" />
           </TouchableOpacity>
 
@@ -346,6 +346,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
     marginBottom: 16,
+    flexDirection: "row",       // 👈 add
+  alignItems: "center",       // 👈 add
+  position: "relative",
   },
   closeButton: {
     position: "absolute",
@@ -357,11 +360,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#f1f5f9",
+    zIndex: 10,   
   },
   userProfileSection: {
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 50,
+    flex: 1, 
   },
   userInfo: {
     marginLeft: 12,

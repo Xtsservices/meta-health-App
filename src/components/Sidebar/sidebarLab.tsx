@@ -210,6 +210,8 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
+         
+  position: "relative",
   },
   profileSection: {
     flexDirection: "row",
@@ -250,6 +252,7 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 4,
+    zIndex: 10,
   },
   sidebarContent: {
     flex: 1,

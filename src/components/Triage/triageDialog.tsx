@@ -63,7 +63,7 @@ const navigation = useNavigation()
 
         const res = await AuthFetch(`ward/${user.hospitalID}`, token);
 
-        if (res?.status === "success" && Array.isArray(res?.data?.wards)) {
+        if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.wards)) {
           setWards(res.data.wards);
         
         } else {
@@ -116,12 +116,20 @@ const navigation = useNavigation()
         onClose();
        navigation.navigate("PatientList" as never);
       } else {
-        dispatch(showError(res?.message || res || "Triage transfer failed"))
+        dispatch(showError("message" in res && res?.message || res || "Triage transfer failed"))
        
       }
     } catch (err) {
-        dispatch(showError(err?.message || err || "Triage transfer failed"))
-    } finally {
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+      ? err
+      : "Triage transfer failed";
+
+  dispatch(showError(message));
+}
+ finally {
       setSubmitting(false);
     }
   };

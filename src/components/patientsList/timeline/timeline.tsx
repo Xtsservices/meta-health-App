@@ -104,7 +104,7 @@ export default function TimelineScreen() {
         `patientTimeLine/hospital/${user.hospitalID}/patient/${currentPatient.id}`,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         setTimelines(res?.data?.patientTimeLines ?? []);
       } else {
         setTimelines([]);

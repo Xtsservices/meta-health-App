@@ -321,8 +321,9 @@ const onChange = (name: keyof VitalsForm, value: string) => {
       try {
         const token = user?.token ?? (await AsyncStorage.getItem("token"));
         const res = await AuthFetch(`ward/${user.hospitalID}`, token);
-        if ((res?.status === "success") && mounted) {
-          const found = (res?.wards || []).find((w: any) => w?.id == wardID);
+        if ((res?.status === "success" ) && mounted && "wards" in res) {
+          const wards = Array.isArray(res?.wards) ? (res!.wards as any[]) : [];
+          const found = wards.find((w: any) => w?.id == wardID);
           setWardName(found?.name || "");
         }
       } catch {}
@@ -409,7 +410,7 @@ const onChange = (name: keyof VitalsForm, value: string) => {
   const submit = async () => {
     if (!hasAnyVital) return dispatch(showError("Please enter at least one vital measurement"));
     if (applyAll && !givenTime) return dispatch(showError("Please provide a time when applying to all"));
-    if (!timeLineID || !patientID) return Alert.alert("Error", "Missing patient timeline.");
+    if (!timeLineID || !patientID) return dispatch(showError("Missing patient timeline."));
 
     if (form.bpH && form.bpL && Number(form.bpL) > Number(form.bpH)) {
       return dispatch(showError("BP Low cannot be greater than BP High"));
@@ -456,7 +457,7 @@ const fieldsToCheck: (keyof VitalsForm)[] = [
         dispatch(showSuccess("Vitals successfully added"));
         navigation.goBack();
       } else {
-        dispatch(showError(res?.message || "Failed to add vitals"));
+        dispatch(showError("message" in res && res?.message || "Failed to add vitals"));
       }
     } catch {
       dispatch(showError("Failed to add vitals"));

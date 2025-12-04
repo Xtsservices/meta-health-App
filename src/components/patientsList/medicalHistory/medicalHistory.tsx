@@ -182,10 +182,16 @@ const dispatch = useDispatch()
         token
       );
       if (response.status === "success") {
-        setMedicalHistory(response?.data?.medicalHistory);
+        setMedicalHistory(response && "data" in response && response?.data?.medicalHistory);
       }
     } catch (error) {
-      dispatch(showError(error?.message || error || "Error fetching medical history"))
+      const errorMessage =
+        error && typeof error === "object" && "message" in error
+          ? (error as { message?: string }).message
+          : typeof error === "string"
+          ? error
+          : "Error fetching medical history";
+      dispatch(showError(errorMessage ?? "Error fetching medical history"));
       
     } finally {
       setLoading(false);

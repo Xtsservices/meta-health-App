@@ -184,7 +184,7 @@ const testNote =
     .join(", ") || "";
 
 const notesToShow =
-  detail?.medicineNotes || detail?.notes || testNote || "-";
+  detail?.medicineNotes  || testNote || "-";
 
   return (
     <View style={[styles.screen, { backgroundColor: COLORS.bg }]}>

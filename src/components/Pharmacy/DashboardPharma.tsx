@@ -424,7 +424,7 @@ const DashboardPharma: React.FC = () => {
   const user = useSelector((s: RootState) => s.currentUser);
   const insets = useSafeAreaInsets();
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl || user?.profileImage;
+  const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;
 
   const hasBottomInsets = insets.bottom > 0;
 
@@ -456,7 +456,7 @@ const DashboardPharma: React.FC = () => {
         token
       );
 
-      if (response?.status === 'success' && response?.data) {
+      if (response?.status === 'success' && "data" in response && response?.data) {
         const data = response?.data?.data;
         setDashboardCounts({
           prescriptionsToday: Number(data?.prescriptionsToday) || 0,
@@ -504,7 +504,7 @@ const DashboardPharma: React.FC = () => {
         token
       );
 
-      if (response?.status === 'success' && response?.data) {
+      if (response?.status === 'success' && "data" in response && response?.data) {
         const responseData = response?.data?.data;
 
         if (responseData?.dates && responseData?.prescriptions && responseData?.sales) {
@@ -549,7 +549,7 @@ const DashboardPharma: React.FC = () => {
         token
       );
 
-      if (response?.status === 'success') {
+      if (response?.status === 'success' && "data" in response) {
         let medicationsData = [];
 
         if (Array.isArray(response?.data)) {
@@ -586,7 +586,7 @@ const DashboardPharma: React.FC = () => {
         token
       );
 
-      if (response?.status === 'success') {
+      if (response?.status === 'success' && "data" in response) {
         let prescriptionsData = [];
 
         if (Array.isArray(response?.data)) {
@@ -620,7 +620,7 @@ const DashboardPharma: React.FC = () => {
         token
       );
 
-      if (response?.status === 'success') {
+      if (response?.status === 'success' && "data" in response) {
         if (Array.isArray(response?.data)) {
           setLowStockMedicineData(response.data);
         } else if (response?.data && Array.isArray(response?.data?.data)) {
@@ -628,7 +628,7 @@ const DashboardPharma: React.FC = () => {
         } else {
           setLowStockMedicineData([]);
         }
-      } else if (response?.message === 'Something went wrong') {
+      } else if (response && 'message' in response && response.message === 'Something went wrong') {
         setLowStockMedicineData([]);
       } else {
         setLowStockMedicineData([]);
@@ -649,7 +649,7 @@ const DashboardPharma: React.FC = () => {
         token
       );
 
-      if (response?.status === 'success') {
+      if (response?.status === 'success' && "data" in response) {
         if (Array.isArray(response?.data)) {
           setExpiredMedicineData(response.data);
         } else if (response?.data && Array.isArray(response?.data?.data)) {
@@ -657,7 +657,7 @@ const DashboardPharma: React.FC = () => {
         } else {
           setExpiredMedicineData([]);
         }
-      } else if (response?.message === 'Something went wrong') {
+      } else if (response && "message" in response && response?.message === 'Something went wrong') {
         setExpiredMedicineData([]);
       } else {
         setExpiredMedicineData([]);
@@ -1453,11 +1453,7 @@ statsRow: {
     alignItems: "flex-start",
     marginBottom: SPACING.lg,
   },
-  sectionTitle: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
+ 
   sectionSubtitle: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,

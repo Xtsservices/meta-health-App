@@ -114,9 +114,8 @@ const PatientTabsGrid: React.FC<Props> = ({
 
   const activeTab = route.params?.tabName;
   const user = useSelector((s: RootState) => s.currentUser);
-
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
  
-
   /** Build tiles depending on tabName coming from route */
   const tiles: GridItem[] = useMemo(() => {
     switch (activeTab) {
@@ -483,7 +482,7 @@ case "AnesthesiaRecord":
 
   const renderFooter = () => {
     // ---- Pre-Op tab: show Approve + Reject ----
-    if (activeTab === "PreOpRecord" && user?.roleName !== "surgeon") {
+    if (activeTab === "PreOpRecord" && user?.roleName !== "surgeon" && currentPatient?.status !== "approved") {
       return (
         <View style={styles.saveContainer}>
           <View style={styles.preopBtnRow}>
@@ -525,23 +524,28 @@ case "AnesthesiaRecord":
     }
 
     // ---- Other tabs: show Save ----
-    return (
-        
-      <View style={styles.saveContainer}>
-        <Pressable
-          onPress={debouncedSubmit}
-          style={({ pressed }) => [
-            styles.formNavButton,
-            {
-              backgroundColor: COLORS.brand,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-        >
-          <Text style={styles.formNavButtonTextPrimary}>Save</Text>
-        </Pressable>
-      </View>
-    );
+return (
+  <>
+    {user?.roleName !== "surgeon" &&
+      currentPatient?.status !== "approved" && (
+        <View style={styles.saveContainer}>
+          <Pressable
+            onPress={debouncedSubmit}
+            style={({ pressed }) => [
+              styles.formNavButton,
+              {
+                backgroundColor: COLORS.brand,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.formNavButtonTextPrimary}>Save</Text>
+          </Pressable>
+        </View>
+      )}
+  </>
+);
+
   };
 
   return (

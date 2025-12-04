@@ -191,7 +191,7 @@ const EmergencyDashboard: React.FC = () => {
   const config = DASHBOARD_CONFIG[dashboardType];
 
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl || user?.profileImage;
+  const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;
 
   // Sidebar & logout
   const [menuOpen, setMenuOpen] = useState(false);

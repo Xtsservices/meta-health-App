@@ -133,18 +133,16 @@ const requestCameraPermission = async () => {
   // --------------------------
   // FILE PICKER (PDF, DOC, ZIP)
   // --------------------------
- const pickDocuments = async () => {
+const pickDocuments = async () => {
   try {
     const results = await pick({
       allowMultiSelection: true,
       type: [types.allFiles],
     });
 
-    const mapped = await Promise.all(
-      results.map(async file => {
+    const mapped: FileItem[] = await Promise.all(
+      results.map(async (file): Promise<FileItem> => {
         let uri = file.uri;
-
-        // No need for old GuardedResultAsyncTask fix — this lib is compatible
 
         // For Android convert content:// → file:// using RNFS if needed
         if (Platform.OS === "android" && uri.startsWith("content://")) {
@@ -155,20 +153,23 @@ const requestCameraPermission = async () => {
 
         return {
           uri,
-          name: file.name,
+          name: file.name ?? `file_${Date.now()}`,
           type: file.type || "application/octet-stream",
-          size: file.size,
+          size: file.size as number | undefined,  // 👈 cast to match FileItem
         };
       })
     );
 
-    setFiles(prev => [...prev, ...mapped]);
+    setFiles((prev) => [...prev, ...mapped]);
   } catch (error) {
-    if (!error?.message?.includes("cancelled")) {
-      console.log("Document picking error:", error);
-    }
+  if (error instanceof Error && !error.message.includes("cancelled")) {
+    dispatch(showError(error.message || "Document picking error"));
+  } else if (!String(error).includes("cancelled")) {
+    dispatch(showError(String(error) || "Document picking error"));
   }
 }
+};
+
 
   // --------------------------
   // SUBMIT UPLOAD
@@ -198,7 +199,7 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
         form,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         dispatch(showSuccess("Report successfully uploaded"));
 
         setNewReport(
@@ -210,7 +211,7 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
 
         navigation.goBack();
       } else {
-        dispatch(showError(res?.message || "Upload failed"));
+        dispatch(showError("message" in res ? res.message : "Upload failed"));
       }
     } catch (err) {
       dispatch(showError("Upload error"));

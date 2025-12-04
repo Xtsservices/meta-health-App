@@ -369,7 +369,7 @@ const AlertsLab: React.FC = () => {
   const isReceptionAlerts = user?.roleName === "reception";
   const isPharmacyAlerts = user?.roleName === "pharmacy";
 
-  const navigationState = route?.params?.state || {};
+  const navigationState = (route?.params as any)?.state || {};
 
   const departmentType = user?.roleName === 'radiology' ? 'radiology' : 'pathology';
   const departmentName = departmentType === 'radiology' ? 'Radiology' : 'Laboratory';
@@ -431,22 +431,21 @@ const AlertsLab: React.FC = () => {
           `reception/${user?.hospitalID}/pending/getReceptionAlertsData`,
           token
         );
-        alertsData = response?.data?.data?.data || response?.data || [];
+        alertsData =response && "data" in response && response?.data?.data?.data || response && "data" in response &&  response?.data || [];
       } else if (isPharmacyAlerts) {
         const response = await AuthFetch(
           `medicineInventoryPatientsOrder/${user?.hospitalID}/pending/getMedicineInventoryPatientsOrder`,
           token
         );
-        alertsData = response?.data?.data || [];
+        alertsData =response && "data" in response && response?.data?.data || [];
       } else {
         // 👇 Existing lab alerts
         const response = await AuthFetch(
           `test/${user?.roleName}/${user?.hospitalID}/getAlerts`,
           token
         );
-        alertsData = response?.data?.alerts || response?.alerts || [];
+        alertsData =response && "data" in response && response?.data?.alerts || response && "alerts" in response && response?.alerts || [];
       }
-      
       if (Array.isArray(alertsData)) {
         setAllAlerts(alertsData);
         setFilteredAlerts(alertsData);
@@ -498,20 +497,20 @@ const AlertsLab: React.FC = () => {
             `reception/${user?.hospitalID}/rejected/getReceptionRejectedList`,
             token
           );
-          rejectedData = response?.data?.data || response?.data || [];
+          rejectedData = response && "data" in response &&  response?.data?.data || response && "data" in response &&  response?.data || [];
         } else if (isPharmacyAlerts) {
           const response = await AuthFetch(
             `medicineInventoryPatientsOrder/${user?.hospitalID}/rejected/getMedicineInventoryPatientsOrder`,
             token
           );
-          rejectedData = response?.data?.data || [];
+          rejectedData = response && "data" in response &&  response?.data?.data || [];
         } else {
           // 👇 Existing lab rejected billing
           const response = await AuthFetch(
             `test/${user?.roleName}/${user?.hospitalID}/rejected/getBillingData`,
             token
           );
-          rejectedData = response?.data?.billingData || response?.billingData || [];
+          rejectedData = response && "data" in response &&  response?.data?.billingData || response && "billingData" in response &&  response?.billingData || [];
         }
         if (Array.isArray(rejectedData)) {
           setRejectedOrders(rejectedData);

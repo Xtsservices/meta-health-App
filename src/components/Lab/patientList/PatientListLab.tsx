@@ -456,7 +456,6 @@ const PatientListLab: React.FC = () => {
           `test/${user.roleName}/${user.hospitalID}/${user.id}/getAllPatient`,
           token
         );
-        
         if (response?.data?.message === "success") {
           patientList = response?.data?.patientList ?? [];
           
@@ -549,8 +548,7 @@ const PatientListLab: React.FC = () => {
           `test/${user.roleName}/${user.hospitalID}/${user.id}/getAllReportsCompletedPatients`,
           token
         );
-
-        if (response?.data?.message === "success") {
+        if ("data" in response && response?.data?.message === "success") {
           let filteredList = response?.data?.patientList ?? [];
 
           // Filter by patient type
@@ -598,8 +596,7 @@ const PatientListLab: React.FC = () => {
       const filtered = data?.filter(patient =>
         patient?.pName?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
         patient?.patientName?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
-        patient?.patientID?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
-        patient?.pID?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
+        
         patient?.phoneNumber?.includes(searchQuery) ||
         patient?.phone?.includes(searchQuery)
       );
@@ -607,7 +604,6 @@ const PatientListLab: React.FC = () => {
     }
     setCurrentPage(1);
   }, [searchQuery, patientData, completedPatientData, tabIndex]);
-
   // Load data when dependencies change
   const loadData = useCallback(async (isRefresh = false) => {
     try {
@@ -690,7 +686,7 @@ const PatientListLab: React.FC = () => {
           <SearchIcon size={ICON_SIZE.sm} color={COLORS.sub} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search patients..."
+            placeholder="Search with mobile or name"
             placeholderTextColor={COLORS.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Linking,
   ScrollView,
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import LinearGradient from 'react-native-linear-gradient';
 // Icons
 import {
@@ -24,6 +24,10 @@ import {
 import { formatDate, formatDateTime } from "../../../utils/dateTime";
 import { RootState } from "../../../store/store";
 import { COLORS } from "../../../utils/colour";
+import { useFocusEffect } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AuthFetch } from "../../../auth/auth";
+import { showError } from "../../../store/toast.slice";
 
 // Gradient Button Component
 const GradientButton: React.FC<{
@@ -112,7 +116,7 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
 }) => {
   const user = useSelector((s: RootState) => s.currentUser);
   const [showReports, setShowReports] = useState(false);
-
+const dispatch = useDispatch()
   if (!patientDetails) {
     return (
       <View style={styles.profileCard}>
@@ -120,6 +124,35 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
       </View>
     );
   }
+const [completePatient, setCompletePaient] = useState()
+
+  useFocusEffect(
+    useCallback(() => {
+    const loadPatientMeta = async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        const hospitalID = user?.hospitalID;
+        const pid = patientDetails?.patientID ?? patientDetails?.pID;
+
+        if (!token || !hospitalID || !pid) return;
+
+        const res = await AuthFetch(
+          `patient/${hospitalID}/patients/single/${pid}`,
+          token
+        );
+if (res?.status === "success" && "data" in res){
+const data = res?.data?.patient
+setCompletePaient(data)
+}
+        // Try to safely extract patient object from response
+        
+      } catch (e) {
+        dispatch(showError("Error fetching single patient details", e))
+      }
+    };
+
+    loadPatientMeta();
+  }, [user?.hospitalID, patientDetails?.patientID, patientDetails?.pID]))
 
   // Patient Information
   const name = patientDetails?.pName ?? patientDetails?.patientName ?? "Unknown Patient";
@@ -134,15 +167,9 @@ const PatientProfileCard: React.FC<PatientProfileCardProps> = ({
 
   const dateLabel = patientDetails?.dischargeDate ? "Date of Discharge" :
                    patientDetails?.patientID ? "Date of Admission" : "Date";
+  const dateValue = formatDate(completePatient?.startTime)
 
-  const dateValue = patientDetails?.dischargeDate ? 
-                   formatDate(patientDetails.dischargeDate) :
-                   patientDetails?.addedOn ? 
-                   formatDate(patientDetails.addedOn) : "—";
-
-  const doctorName = patientDetails?.doctor_firstName || patientDetails?.doctor_lastName ?
-    `${patientDetails?.doctor_firstName ?? ""} ${patientDetails?.doctor_lastName ?? ""}`.trim()
-    : patientDetails?.doctorName ?? "—";
+  const doctorName = completePatient?.doctorName 
 
   const followUpText = patientDetails?.followUp ?? 
                       patientDetails?.follow_up ?? 

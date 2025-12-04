@@ -170,7 +170,7 @@ if (user?.patientStatus === 1) {
   url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
 }
       const response = await AuthFetch(url, token);
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response?.data?.patients
           : [];
@@ -244,7 +244,7 @@ if (user?.patientStatus === 1) {
 
     try {
       const response = await AuthFetch(`ward/${user.hospitalID}`, token);
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         setWardList(response?.data?.wards || []);
       }
     } catch (e) {
@@ -264,7 +264,7 @@ if (user?.patientStatus === 1) {
         token11
       );
 
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         let surgeryArray: FullSurgeryData[] = [];
 
         if (Array.isArray(response.data?.data)) {
@@ -281,15 +281,23 @@ if (user?.patientStatus === 1) {
           surgeryType: item.surgeryType || "",
           rejectReason: item.rejectReason || "N/A",
         }));
-
+const patientId = patient?.id
+if (patientId === null) return
         setSurgeryData(prev => ({
           ...prev,
-          [patient?.id]: formattedData
+          [patientId]: formattedData
         }));
       }
-    } catch (error) {
-      dispatch(showError(e?.response?.data?.message || 'Failed to load patients'));
-    }
+    } catch (error: any) {
+  dispatch(
+    showError(
+      error?.response?.data?.message ||
+      error?.message ||
+      "Something went wrong"
+    )
+  );
+}
+
   }, []);
 
   const debouncedSurgeryFetchRef = useRef(
@@ -324,12 +332,14 @@ if (user?.patientStatus === 1) {
         `followup/${user.hospitalID}/active`,
         token
       );
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
+      if (response?.status === "success" ) {
         setAllPatients(response.data?.followUps as PatientType[]);
       } else {
         setAllPatients([]);
       }
-    } catch (e) {
+    } 
+  }catch (e) {
       setAllPatients([]);
     } finally {
       setLoading(false);
@@ -445,7 +455,9 @@ if (user?.patientStatus === 1) {
   };
 
   const handleSurgeryWarningClick = (patient: PatientType) => {
-    const patientSurgeries = surgeryData[patient?.id] || [];
+      const patientId = patient.id;
+  if (patientId == null) return; // guard against null / undefined
+    const patientSurgeries = surgeryData[patientId ] || [];
     const rejectedSurgeries = patientSurgeries.filter(item =>
       item.status?.toLowerCase() === "rejected"
     );

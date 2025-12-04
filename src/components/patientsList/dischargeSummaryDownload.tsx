@@ -530,14 +530,6 @@ const DischargeSummarySheet: React.FC<Props> = ({
       const url = path.startsWith("file://") ? path : `file://${path}`;
 
       Alert.alert("PDF Saved", `Saved to:\n${path}`, [
-        {
-          text: "Open",
-          onPress: () => {
-            Linking.openURL(url).catch(() => {
-              Alert.alert("Error", "Unable to open PDF on this device.");
-            });
-          },
-        },
         { text: "OK", style: "cancel" },
       ]);
 

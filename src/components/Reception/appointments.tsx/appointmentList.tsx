@@ -517,7 +517,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
               onPress={() => setShowDatePicker(true)}
             >
               <Text style={styles.dateButtonText}>
-                {filterDate || "All dates"}
+                {formatDate(filterDate) || "All dates"}
               </Text>
             </TouchableOpacity>
           </View>

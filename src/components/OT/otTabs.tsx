@@ -210,11 +210,10 @@ const PatientTabsGrid: React.FC<Props> = ({
           `ot/${hospitalID}/${startedForPid}/getOTData`,
           token
         );
-
         if (cancelled) return;
         if (startedForPid !== currentPatient?.patientTimeLineID) return;
 
-        if (response?.status === "success") {
+        if (response?.status === "success" && "data" in response) {
           const root = response?.data?.data?.[0] || {};
           const physicalExaminationData = root?.physicalExamination;
 
@@ -243,6 +242,10 @@ const PatientTabsGrid: React.FC<Props> = ({
             // replace, don't append
             usePreOpStore.setState({
               tests: Array.isArray(preOPData?.tests) ? preOPData?.tests : [],
+               medications:
+      preOPData?.medications && typeof preOPData.medications === "object"
+        ? preOPData.medications
+        : [], 
             });
             setRiskConsent(Boolean(preOPData?.riskConsent));
             setArrangeBlood(Boolean(preOPData?.arrangeBlood));

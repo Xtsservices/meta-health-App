@@ -1,9 +1,12 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Modal,
 } from "react-native";
 
 // Utils
@@ -14,6 +17,10 @@ import {
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
 import { formatDateTime } from "../../../utils/dateTime";
+import { useDispatch, useSelector } from "react-redux";
+import { showError } from "../../../store/toast.slice";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AuthFetch } from "../../../auth/auth";
 
 interface TestItem {
   id: string;
@@ -39,7 +46,22 @@ interface MedicineItem {
   qty?: number;
   updatedQuantity?: number;
   addedOn?: string;
+
+
+  Frequency?: number;
+  daysCount?: number;
+  nurseID?: number;
+  nurseName?: string;
+
 }
+
+interface NurseType {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phoneNo?: string;
+}
+
 
 interface InnerTableProps {
   patientID: string;
@@ -59,6 +81,16 @@ interface InnerTableProps {
   dueAmount?: string;
   isRejected?: boolean;
   rejectedReason?: string;
+  nurseID?: string |number;
+  orderId?: string | number;
+  selectedNurse?: NurseType;
+  onNurseSelect?: (orderId: string | number, nurse: NurseType) => void;
+   grossAmount?: string;
+  gstAmount?: string;
+  totalAmount?: string;
+  isPharmacyOrder?: string | boolean
+  alertFrom?:  string | boolean | number
+  patientData?: string | boolean | number
 }
 
 const InnerTable: React.FC<InnerTableProps> = ({
@@ -77,10 +109,54 @@ const InnerTable: React.FC<InnerTableProps> = ({
   dueAmount,
   isRejected = false,
   rejectedReason,
+  orderId,
+  selectedNurse,
+  onNurseSelect,
+  
 }) => {
   // 🔹 Normalized arrays
   const tests: TestItem[] = testsList ?? data ?? [];
   const meds: MedicineItem[] = medicinesList ?? [];
+    const dispatch = useDispatch();
+  const user = useSelector((state: any) => state.currentUser);
+
+  const [nurses, setNurses] = useState<NurseType[]>([]);
+  const [nurseModalVisible, setNurseModalVisible] = useState(false);
+  const [activeMedId, setActiveMedId] = useState<string | number | null>(null);
+  const [selectedNurseByMedId, setSelectedNurseByMedId] = useState<
+    Record<string, NurseType>
+  >({});
+    const isIpdOrEmergency = pType === 2 || pType === 3;
+
+  useEffect(() => {
+    const fetchNurses = async () => {
+     
+
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (!token) return;
+
+        const response = await AuthFetch(
+          `doctor/${user?.hospitalID}/getAllNurse`,
+          token
+        );
+        if (
+          response?.status === "success" && "data" in response &&
+          Array.isArray(response?.data?.data)
+        ) {
+          setNurses(response.data.data);
+        } else if ( response && "data" in response && Array.isArray(response?.data)) {
+          setNurses(response.data);
+        } else {
+          dispatch(showError("No nurses found - invalid response structure"));
+        }
+      } catch (error) {
+        dispatch(showError("Error fetching nurses"));
+      }
+    };
+
+    fetchNurses();
+  }, [isIpdOrEmergency, user?.hospitalID]);
 
   /* ------------------------------------------------------------------------ */
   /*                               Calculations                               */
@@ -256,11 +332,34 @@ const InnerTable: React.FC<InnerTableProps> = ({
   /* ------------------------------------------------------------------------ */
 
   const renderMedicineCard = (med: MedicineItem, index: number) => {
-    const name = med.name || med.medicineName || "Unnamed Medicine";
-    const qty = med.qty ?? med.updatedQuantity ?? 1;
-    const unitPrice = med.price ?? med.sellingPrice ?? 0;
-    const gst = med.gst ?? 0;
-    const lineTotal = calculateMedicineTotal(med);
+  const name = med.name || med.medicineName || "Unnamed Medicine";
+
+  // 🔹 safer quantity calculation
+  const qtyFromFreqDays =
+    med?.Frequency && med?.daysCount
+      ? Number(med.Frequency) * Number(med.daysCount)
+      : undefined;
+
+  const qty =
+    qtyFromFreqDays ??
+    Number(med.qty ?? med.updatedQuantity ?? 1);
+
+  const unitPrice = med.price ?? med.sellingPrice ?? 0;
+  const gst = med.gst ?? 0;
+  const lineTotal = calculateMedicineTotal(med);
+
+        const medKey = String(med.id);
+  const selectedNurseLocal =
+    selectedNurseByMedId[medKey] || selectedNurse || undefined;
+
+  const nurseLabel = selectedNurseLocal
+    ? `${selectedNurseLocal.firstName} ${selectedNurseLocal.lastName}`
+    : med.nurseName
+    ? med.nurseName
+    : med.nurseID
+    ? `Nurse #${med.nurseID}`
+    : "Tap to select nurse";
+
 
     return (
       <View key={med?.id || `med-${index}`} style={styles.testCard}>
@@ -289,10 +388,41 @@ const InnerTable: React.FC<InnerTableProps> = ({
               <Text style={styles.detailValue}>{med.hsn || "N/A"}</Text>
             </View>
 
+            
+
+
+
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Quantity:</Text>
               <Text style={styles.detailValue}>{qty}</Text>
             </View>
+
+                        <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Nurse:</Text>
+              <TouchableOpacity
+                style={styles.nurseSelectPill}
+                onPress={() => {
+                  if (!nurses.length) return;
+                  setActiveMedId(med.id);
+                  setNurseModalVisible(true);
+                }}
+                disabled={!nurses.length}
+              >
+                <Text
+                  style={[
+                    styles.nurseSelectText,
+                    !selectedNurseLocal &&
+                      !med.nurseID &&
+                      !med.nurseName &&
+                      styles.nurseSelectPlaceholder,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {nurseLabel}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
 
             {labBilling && (
               <>
@@ -401,6 +531,75 @@ const InnerTable: React.FC<InnerTableProps> = ({
       </ScrollView>
 
       {labBilling && renderBillingSummary()}
+            {nurseModalVisible && (
+        <Modal
+          visible={nurseModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setNurseModalVisible(false);
+            setActiveMedId(null);
+          }}
+        >
+          <View style={styles.nurseModalOverlay}>
+            <View style={styles.nurseModal}>
+              <Text style={styles.nurseModalTitle}>Select Nurse</Text>
+
+              <ScrollView style={styles.nurseList}>
+                {nurses.map((nurse) => {
+                  const fullName = `${nurse.firstName} ${nurse.lastName}`.trim();
+                  return (
+                                       <TouchableOpacity
+                      key={nurse.id}
+                      style={styles.nurseItem}
+                      onPress={() => {
+                        if (activeMedId == null) return;
+
+                        const key = String(activeMedId);
+                        setSelectedNurseByMedId((prev) => ({
+                          ...prev,
+                          [key]: nurse,
+                        }));
+
+                        // 🔹 Inform parent (OuterTable) which nurse was chosen
+                        if (onNurseSelect && orderId !== undefined && orderId !== null) {
+                          onNurseSelect(orderId, nurse);
+                        }
+
+                        setNurseModalVisible(false);
+                        setActiveMedId(null);
+                      }}
+                    >
+
+                      <Text style={styles.nurseName}>{fullName}</Text>
+                      {nurse.phoneNo ? (
+                        <Text style={styles.nursePhone}>{nurse.phoneNo}</Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {nurses.length === 0 && (
+                  <Text style={styles.noNurseText}>
+                    No nurses available. Please contact administrator.
+                  </Text>
+                )}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styles.nurseModalCancelButton}
+                onPress={() => {
+                  setNurseModalVisible(false);
+                  setActiveMedId(null);
+                }}
+              >
+                <Text style={styles.nurseModalCancelText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+
     </View>
   );
 };
@@ -626,6 +825,98 @@ const styles = StyleSheet.create({
   paidAmount: {
     color: COLORS.success,
   },
+    nurseInput: {
+    flex: 1,
+    marginLeft: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    backgroundColor: COLORS.card,
+  },
+    nurseSelectPill: {
+    flex: 1,
+    marginLeft: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.field,
+  },
+  nurseSelectText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    fontWeight: "600",
+  },
+  nurseSelectPlaceholder: {
+    color: COLORS.placeholder,
+    fontWeight: "400",
+  },
+  nurseModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.md,
+  },
+  nurseModal: {
+    width: "100%",
+    maxWidth: 400,
+    maxHeight: "70%",
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: SPACING.lg,
+  },
+  nurseModalTitle: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
+    textAlign: "center",
+  },
+  nurseList: {
+    maxHeight: 300,
+    marginBottom: SPACING.md,
+  },
+  nurseItem: {
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  nurseName: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  nursePhone: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginTop: 2,
+  },
+  noNurseText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    textAlign: "center",
+    paddingVertical: SPACING.md,
+  },
+  nurseModalCancelButton: {
+    alignSelf: "center",
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: 999,
+    backgroundColor: COLORS.sub,
+  },
+  nurseModalCancelText: {
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+
+
 });
 
 export default InnerTable;

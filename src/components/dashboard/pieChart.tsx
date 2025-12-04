@@ -156,7 +156,7 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter, data: zoneD
       token
     );
 
-    if (responseWard?.status === "success" && responseWard.data?.summary) {
+    if (responseWard?.status === "success" && "data" in responseWard  && responseWard.data?.summary) {
       const summary: ApiResponse[] = responseWard.data.summary;
       const formatted: ChartData[] = summary.map((res, idx) => ({
         name: res.ward,

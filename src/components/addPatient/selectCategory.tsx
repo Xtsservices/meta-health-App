@@ -18,6 +18,7 @@ import { useSelector } from "react-redux";
 
 import Footer from "../dashboard/footer"; // ⬅️ same Footer you use in Dashboard
 import { RootState } from "../../store/store";
+import { FONT_SIZE, isExtraSmallDevice, isSmallDevice, responsiveWidth, SPACING } from "../../utils/responsive";
 
 type Props = {
   status: string | number;
@@ -243,54 +244,57 @@ const styles = StyleSheet.create({
   sub: { marginTop: 6, color: "#6b7280", fontSize: 14, textAlign: "center" },
 
   /* Reception ptype selector */
+  /* Reception ptype selector */
   ptypeBlock: {
-    marginTop: 10,
-    marginBottom: 16,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   ptypeLabel: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: "#111827",
-    marginBottom: 8,
+    marginBottom: SPACING.xs,
   },
   ptypeRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
   },
   ptypePill: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: isExtraSmallDevice ? SPACING.xs : SPACING.sm,
+    paddingVertical: isSmallDevice ? SPACING.xs : 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "#e5e7eb",
     backgroundColor: "#ffffff",
     flex: 1,
     marginRight: 8,
+    minWidth: responsiveWidth(28), // 3 pills fit even on small screens
   },
   ptypePillActive: {
     borderColor: "#14b8a6",
     backgroundColor: "#ecfeff",
   },
   ptypeRadioOuter: {
-    width: 18,
-    height: 18,
+    width: isSmallDevice ? 14 : 18,
+    height: isSmallDevice ? 14 : 18,
     borderRadius: 999,
     borderWidth: 2,
     borderColor: "#9ca3af",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
+    marginRight: isExtraSmallDevice ? SPACING.xs : 8,
   },
   ptypeRadioInner: {
-    width: 10,
-    height: 10,
+    width: isSmallDevice ? 8 : 10,
+    height: isSmallDevice ? 8 : 10,
     borderRadius: 999,
     backgroundColor: "#14b8a6",
   },
   ptypeText: {
-    fontSize: 13,
+    fontSize: isExtraSmallDevice ? FONT_SIZE.xs : FONT_SIZE.sm,
     color: "#374151",
     fontWeight: "500",
   },
@@ -298,6 +302,7 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     fontWeight: "700",
   },
+
 
   grid: {
     width: "100%",

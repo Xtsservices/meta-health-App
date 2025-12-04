@@ -135,7 +135,7 @@ const dispatch = useDispatch()
         `patient/${user.hospitalID}/patients/count/visit/combined?ptype=${patientStatus.outpatient}`,
         token
       );
-      if (res?.status === "success" && res?.data?.message === "success") {
+      if (res?.status === "success" && "data" in res && res?.data?.message === "success") {
         const c = res?.data?.count?.[0] ?? {};
         setAppointmentsToday(c?.appointment_count_today ?? 0);
         setTodayCount(c?.patient_count_today ?? 0);
@@ -143,8 +143,16 @@ const dispatch = useDispatch()
         setThisYearCount(c?.patient_count_year ?? 0);
       }
     } catch (e) {
- dispatch(showError(e?.message || e || 'getTotalCount error' ))
-    }
+  const msg =
+    (typeof e === "object" && e !== null && "message" in e && typeof (e as any).message === "string")
+      ? (e as any).message
+      : (typeof e === "string"
+          ? e
+          : "getTotalCount error");
+
+  dispatch(showError(msg));
+}
+
   }, [user?.hospitalID, user?.token]);
 
   const getWeekly = useCallback(async () => {
@@ -157,7 +165,7 @@ const dispatch = useDispatch()
     const url = `patient/${user.hospitalID}/patients/count/weeklyFilter/1?filter=month&filterYear=${y}&filterMonth=${m}`;
     const res = await AuthFetch(url, token);
 
-    if (res?.status === "success") {
+    if (res?.status === "success" && "data" in res) {
       const arr = (res?.data?.counts || []).map((it: any) => ({
         day: it?.day ?? it?.label ?? "",
         count: Number(it?.count ?? it?.value ?? 0),
@@ -175,7 +183,7 @@ const dispatch = useDispatch()
       const monthParam = m === "0" ? "" : `&filterMonth=${m}`;
       const url = `patient/${user.hospitalID}/patients/count/fullYearFilterLineChart/1?filter=${filterType}&filterYear=${y}${monthParam}`;
       const response = await AuthFetch(url, token);
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         const counts: any[] = Array.isArray(response?.data?.counts)
           ? response?.data?.counts
           : [];
@@ -220,7 +228,7 @@ const dispatch = useDispatch()
         token
       );
 
-      if (res?.status === "success" && Array.isArray(res?.data?.patients)) {
+      if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.patients)) {
         const rows: PatientRow[] = res?.data?.patients?.map((p: any, i: number) => ({
           id: p?.id ?? i,
           name: p?.name ?? "Unknown",
@@ -259,8 +267,12 @@ const dispatch = useDispatch()
   const confirmLogout = async () => {
     try {
       await AsyncStorage.multiRemove(["token", "userID"]); // clear session
-    } catch (e) {
-      dispatch(showError(e?.message || e || 'Logout storage cleanup error' ))
+   } catch (e: any) {
+  dispatch(
+    showError(
+      e?.message || String(e) || "Logout storage cleanup error"
+    )
+  );
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);

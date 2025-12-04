@@ -25,6 +25,7 @@ const selectUser = (s: RootState) => s.currentUser;
 const selectCurrentPatient = (s: RootState) => s.currentPatient;
 
 type TestRow = {
+  ICD_Code: string;
   id: number;
   test: string;
   loinc_num_: string;
@@ -70,7 +71,6 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
   const [loading, setLoading] = useState(false);
 
     
-
   const load = useCallback(async () => {
     if (!currentpatient?.id) return;
     setLoading(true);
@@ -164,13 +164,13 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
         <View style={styles.detailsGrid}>
           <View style={styles.detailItem}>
             <Text style={[styles.detailLabel, { color: COLORS.sub }]}>LOINC:</Text>
-            <Text style={[styles.detailValue, { color: COLORS.text }]}>{item?.loinc_num_ || "N/A"}</Text>
+            <Text style={[styles.detailValue, { color: COLORS.text }]}>{item?.loinc_num_ || item?.ICD_Code}</Text>
           </View>
-          
+          {!shouldShowPreOpTests && 
           <View style={styles.detailItem}>
             <Text style={[styles.detailLabel, { color: COLORS.sub }]}>Department:</Text>
             <Text style={[styles.detailValue, { color: COLORS.text }]}>{cap(item?.category || "")}</Text>
-          </View>
+          </View>}
         </View>
 
         {item?.notes && item?.notes?.trim() !== "" && (
@@ -179,7 +179,7 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
             <Text style={[styles.notesText, { color: COLORS.text }]}>{item?.notes}</Text>
           </View>
         )}
-
+{!shouldShowPreOpTests &&
         <View style={styles.metaContainer}>
           <Text style={[styles.metaText, { color: COLORS.sub }]}>
             Added: {formatDateTime(item?.addedOn)}
@@ -187,7 +187,7 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
           <Text style={[styles.metaText, { color: COLORS.sub }]}>
             Added By: {item?.userID || "N/A"}
           </Text>
-        </View>
+        </View>}
       </View>
       
       {(!item?.alertStatus || item?.alertStatus?.toLowerCase() === "pending") && (

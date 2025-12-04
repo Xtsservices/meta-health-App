@@ -72,7 +72,7 @@ const fetchSymptomsList = useCallback(async (val: string) => {
   try {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     const res = await AuthPost("data/symptoms", { text: val }, token);
-    if (res?.status === "success" && Array.isArray(res?.data?.symptoms)) {
+    if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.symptoms)) {
       setSuggestions(removeDuplicatesAndFilter(res.data?.symptoms, val));
     } else {
       setSuggestions([]);
@@ -176,14 +176,18 @@ if (!match) {
         patientID,
       };
       const res = await AuthPost("symptom", body, token);
-      if (res?.status === "success" || res?.status === "success") {
+      if (res?.status === "success" && "message" in res ) {
          dispatch( showSuccess(res?.message || "Symptoms added successfully"));
         navigation.goBack(); 
       } else {
-         dispatch( showError(res?.message || "Failed to submit symptoms."));
+         dispatch(showError("message" in res && res.message ? res.message : "Failed to submit symptoms."));
       }
     } catch (e) {
-       dispatch(showError(e?.message || "Failed to submit symptoms."));
+       const errorMessage =
+         typeof e === "object" && e !== null && "message" in e
+           ? (e as { message?: string }).message
+           : undefined;
+       dispatch(showError(errorMessage || "Failed to submit symptoms."));
     } finally {
       setSaving(false);
     }

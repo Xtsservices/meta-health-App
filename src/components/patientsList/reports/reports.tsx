@@ -135,7 +135,7 @@ const dispatch = useDispatch()
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     const url = `attachment/${user?.hospitalID}/all/${patientID}`;
     const res = await AuthFetch(url, token);
-    if (res?.status === "success") {
+    if (res?.status === "success" && "data" in res) {
       setReports(res?.data?.attachments);
     }
   }, [cp, setReports, user?.hospitalID, user?.token]);
@@ -179,7 +179,7 @@ const dispatch = useDispatch()
             // Already removed from UI, but refetch to ensure sync
             fetchReports();
             } else {
-              setReports((prev: any[]) => (prev || []).filter((r) => r.id !== id));
+              setReports(reports.filter((r: Attachment) => r.id !== id));
             }
           } catch (error: any) {
 dispatch(showError(error?.message|| error?.status || "failed to delete report"))

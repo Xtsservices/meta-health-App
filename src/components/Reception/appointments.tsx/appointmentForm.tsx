@@ -112,7 +112,7 @@ const BookAppointment: React.FC = () => {
           `department/${user?.hospitalID}`,
           token
         );
-        if (response?.status === "success") {
+        if (response?.status === "success" && "data" in response) {
           setDepartments(response?.data?.departments || response.data?.departments || []);
         }
       } catch (err) {
@@ -127,7 +127,7 @@ const BookAppointment: React.FC = () => {
           `user/${user?.hospitalID}/list/${Role_NAME.doctor}`,
           token
         );
-        if (doctorResponse?.status === "success") {
+        if (doctorResponse?.status === "success" && "users" in doctorResponse && "data" in doctorResponse ) {
           const docs = doctorResponse?.users || doctorResponse.data?.users || [];
           setDoctorList(docs);
           setFilteredDoctors(docs);
@@ -415,7 +415,7 @@ if (res?.status === "success" && "data" in res) {
     dispatch(showSuccess("Appointment booked successfully"));
 }
       else {
-        dispatch(showError(res?.data?.message || "Unable to book appointment"));
+        dispatch(showError("data" in res && res?.data?.message || "Unable to book appointment"));
         return;
       }
       resetAppointmentForm();
