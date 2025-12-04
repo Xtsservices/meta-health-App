@@ -244,6 +244,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
     marginBottom: isSmallScreen ? 12 : 16,
+    flexDirection: "row",       // 👈 add
+  alignItems: "center",       // 👈 add
+  position: "relative",
   },
   closeButton: {
     position: "absolute",
@@ -255,11 +258,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#f1f5f9",
+    zIndex: 10,
   },
   userProfileSection: {
     flexDirection: "row",
     alignItems: "center",
     paddingRight: isSmallScreen ? 45 : 50,
+    flex: 1,
   },
   userInfo: {
     marginLeft: isSmallScreen ? 10 : 12,

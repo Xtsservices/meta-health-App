@@ -453,7 +453,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   slotsPreview: {
-    maxHeight: 300,
     borderRadius: 8,
     backgroundColor: "#fff",
     borderWidth: 1,

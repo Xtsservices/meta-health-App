@@ -105,8 +105,7 @@ const Dashboard_Outpatient: React.FC = () => {
 const insets = useSafeAreaInsets();
   const userName =
     `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl || user?.profileImage;
-
+  const userImg = user?.avatarUrl || user?.profileImage|| user?.imageURL
   // Sidebar & logout
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
@@ -136,7 +135,7 @@ const dispatch = useDispatch()
         `patient/${user.hospitalID}/patients/count/visit/combined?ptype=${patientStatus.outpatient}`,
         token
       );
-      if (res?.status === "success" && res?.data?.message === "success") {
+      if (res?.status === "success" && "data" in res && res?.data?.message === "success") {
         const c = res?.data?.count?.[0] ?? {};
         setAppointmentsToday(c?.appointment_count_today ?? 0);
         setTodayCount(c?.patient_count_today ?? 0);
@@ -144,8 +143,16 @@ const dispatch = useDispatch()
         setThisYearCount(c?.patient_count_year ?? 0);
       }
     } catch (e) {
- dispatch(showError(e?.message || e || 'getTotalCount error' ))
-    }
+  const msg =
+    (typeof e === "object" && e !== null && "message" in e && typeof (e as any).message === "string")
+      ? (e as any).message
+      : (typeof e === "string"
+          ? e
+          : "getTotalCount error");
+
+  dispatch(showError(msg));
+}
+
   }, [user?.hospitalID, user?.token]);
 
   const getWeekly = useCallback(async () => {
@@ -158,7 +165,7 @@ const dispatch = useDispatch()
     const url = `patient/${user.hospitalID}/patients/count/weeklyFilter/1?filter=month&filterYear=${y}&filterMonth=${m}`;
     const res = await AuthFetch(url, token);
 
-    if (res?.status === "success") {
+    if (res?.status === "success" && "data" in res) {
       const arr = (res?.data?.counts || []).map((it: any) => ({
         day: it?.day ?? it?.label ?? "",
         count: Number(it?.count ?? it?.value ?? 0),
@@ -176,7 +183,7 @@ const dispatch = useDispatch()
       const monthParam = m === "0" ? "" : `&filterMonth=${m}`;
       const url = `patient/${user.hospitalID}/patients/count/fullYearFilterLineChart/1?filter=${filterType}&filterYear=${y}${monthParam}`;
       const response = await AuthFetch(url, token);
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         const counts: any[] = Array.isArray(response?.data?.counts)
           ? response?.data?.counts
           : [];
@@ -221,7 +228,7 @@ const dispatch = useDispatch()
         token
       );
 
-      if (res?.status === "success" && Array.isArray(res?.data?.patients)) {
+      if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.patients)) {
         const rows: PatientRow[] = res?.data?.patients?.map((p: any, i: number) => ({
           id: p?.id ?? i,
           name: p?.name ?? "Unknown",
@@ -260,8 +267,12 @@ const dispatch = useDispatch()
   const confirmLogout = async () => {
     try {
       await AsyncStorage.multiRemove(["token", "userID"]); // clear session
-    } catch (e) {
-      dispatch(showError(e?.message || e || 'Logout storage cleanup error' ))
+   } catch (e: any) {
+  dispatch(
+    showError(
+      e?.message || String(e) || "Logout storage cleanup error"
+    )
+  );
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);
@@ -295,10 +306,10 @@ const dispatch = useDispatch()
       >
         {/* KPI cards */}
         <View style={styles.statsGrid}>
-          <KpiCard title="Today's Patients" value={todayCount} icon={<Users size={22} color="#2563EB" />} bg="#E8F0FE" />
-          <KpiCard title="Appointments" value={appointmentsToday} icon={<Calendar size={22} color="#10B981" />} bg="#E7F8F1" />
-          <KpiCard title="This Month" value={thisMonthCount} icon={<Clock size={22} color="#F59E0B" />} bg="#FFF4E5" />
-          <KpiCard title="This Year" value={thisYearCount} icon={<ActivityIcon size={22} color="#7C3AED" />} bg="#F3E8FF" />
+          <KpiCard title="Today's Patients" value={todayCount} icon={<Users size={22} color="#2563EB" />} bg="#ffffffff" />
+          <KpiCard title="Appointments" value={appointmentsToday} icon={<Calendar size={22} color="#10B981" />} bg="#ffffffff" />
+          <KpiCard title="This Month" value={thisMonthCount} icon={<Clock size={22} color="#F59E0B" />} bg="#ffffffff" />
+          <KpiCard title="This Year" value={thisYearCount} icon={<ActivityIcon size={22} color="#7C3AED" />} bg="#ffffffff" />
         </View>
 
         {/* Primary action */}
@@ -342,7 +353,7 @@ const dispatch = useDispatch()
         userImage={userImg}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("Profile" as never);
+          navigation.navigate("DoctorProfile" as never);
         }}
         items={sidebarItems}
         bottomItems={bottomItems}
@@ -418,17 +429,20 @@ const styles = StyleSheet.create({
   containerContent: { padding: 16, paddingBottom: 32, gap: 16 },
 
   statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
+ card: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: 14,
+  borderRadius: 16,
+  borderWidth: 1,
+  borderColor: "#e2e8f0", // light gray border
+  // no backgroundColor here → no colored card bg
+  shadowColor: "#000",
+  shadowOpacity: 0.08,
+  shadowRadius: 6,
+  elevation: 2,
+},
   iconWrap: {
     width: 40,
     height: 40,

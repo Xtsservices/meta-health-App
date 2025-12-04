@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useSelector } from "react-redux";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
 import { COLORS } from "../../../utils/colour";
@@ -24,6 +24,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 type AllTaxInvoiceProps = {
   startDate: Date | null;
   endDate: Date | null;
+ department?: string;
 };
 
 type MedicineItem = {
@@ -74,7 +75,7 @@ const AllTaxInvoiceMobile: React.FC<AllTaxInvoiceProps> = ({
 }) => {
   const user = useSelector((s: RootState) => s.currentUser);
   const navigation = useNavigation<any>();
-  const route = useRoute();
+  const route = useRoute<RouteProp<Record<string, AllTaxInvoiceProps>, string>>();
 
   // Get department from route params or user role
   const department = route.params?.department || user?.roleName?.toLowerCase();

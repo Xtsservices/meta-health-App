@@ -9,27 +9,274 @@ import {
   StyleSheet,
   Platform,
   ScrollView,
-  StatusBar,
   KeyboardAvoidingView,
 } from "react-native";
 import { useSelector } from "react-redux";
-import { useRoute, useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import { RootState } from "../../../store/store";
-import { AuthFetch, AuthPost } from "../../../auth/auth";
+import { AuthFetch } from "../../../auth/auth";
 import type { medicalHistoryFormType } from "../../../utils/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { heriditaryList, infectionList } from "../../../utils/list";
-import { ArrowLeft } from "lucide-react-native";
 import { formatDate } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-type Props = {
-  route: any;
-  navigation: any;
+// 🔹 Mental problem master list (same as web)
+const mentalProblemList = [
+  "Anxiety Disorders",
+  "Mood Disorders",
+  "Schizophrenia Spectrum and Other Psychotic Disorders",
+  "Obsessive-Compulsive and Related Disorders",
+  "Trauma- and Stressor-Related Disorders",
+  "Dissociative Disorders",
+  "Somatic Symptom and Related Disorders",
+  "Feeding and Eating Disorders",
+  "Sleep-Wake Disorders",
+  "Substance-Related and Addictive Disorders",
+  "Personality Disorders",
+  "Neurodevelopmental Disorders",
+  "Neurocognitive Disorders",
+  "Impulse Control Disorders",
+];
+
+// 🔹 Extra master/suggestion lists for mobile
+const chestConditionList = [
+  "Chest Pain",
+  "Shortness of Breath",
+  "Asthma",
+  "COPD",
+  "Breathing Difficulty",
+  "Palpitations",
+];
+
+const neurologicalDisorderList = [
+  "Epilepsy",
+  "Stroke",
+  "Migraine",
+  "Multiple Sclerosis",
+  "Parkinson's Disease",
+  "Peripheral Neuropathy",
+  "Seizure Disorder",
+];
+
+// Common type for name + date items
+// Common type for name + date items
+type NamedDateItem = { name: string; date: Date | null };
+
+// 🔹 Helpers to parse stored strings back into structured state
+const parseDateString = (value?: string | null): Date | null => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const direct = new Date(trimmed);
+  if (!isNaN(direct.getTime())) return direct;
+
+  // try DD-MM-YYYY or DD/MM/YYYY
+  const m = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m) {
+    const day = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const year = Number(m[3]);
+    return new Date(year, month, day);
+  }
+
+  return null;
 };
+
+const splitToNamedDateItems = (raw?: string | null): NamedDateItem[] => {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const [namePart, datePart] = chunk.split(":");
+      return {
+        name: (namePart || "").trim(),
+        date: parseDateString(datePart),
+      };
+    });
+};
+
+const parseDiseaseField = (raw?: string | null) => {
+  const result: {
+    diseaseArray: string[];
+    checked: Set<string>;
+    dates: { [key: string]: Date | null };
+    surgeryText: string;
+  } = {
+    diseaseArray: [],
+    checked: new Set<string>(),
+    dates: {},
+    surgeryText: "",
+  };
+
+  if (!raw) return result;
+
+  const parts = raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  result.diseaseArray = parts;
+
+  parts.forEach((item) => {
+    if (item.startsWith("Diabetes")) {
+      result.checked.add("Diabetes");
+      const [, dateStr] = item.split(":");
+      result.dates["Diabetes"] = parseDateString(dateStr);
+    } else if (item.startsWith("Been Through any Surgery")) {
+      result.checked.add("Been Through any Surgery");
+      const afterColon = item.split(":")[1] || "";
+      const [textPart, dateStr] = afterColon.split("|");
+      result.surgeryText = (textPart || "").trim();
+      result.dates["Surgery"] = parseDateString(dateStr);
+    }
+  });
+
+  return result;
+};
+
+const parsePregnantField = (raw?: string | null) => {
+  if (!raw || raw === "No") {
+    return {
+      isPregnant: false,
+      numberOfPregnancies: "",
+      liveBirths: "",
+      date: null as Date | null,
+    };
+  }
+
+  let numberOfPregnancies = "";
+  let liveBirths = "";
+  let date: Date | null = null;
+
+  const parts = raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  parts.forEach((part) => {
+    const lower = part.toLowerCase();
+    const [, valueRaw] = part.split(":");
+    const value = (valueRaw || "").trim();
+
+    if (lower.startsWith("number of pregnancies")) {
+      numberOfPregnancies = value;
+    } else if (lower.startsWith("live births")) {
+      liveBirths = value;
+    } else if (lower.startsWith("date")) {
+      date = parseDateString(value);
+    }
+  });
+
+  return { isPregnant: true, numberOfPregnancies, liveBirths, date };
+};
+
+const parseLumpsField = (raw?: string | null) => {
+  if (!raw || raw === "No") {
+    return {
+      istrue: false,
+      details: {
+        location: "",
+        size: "",
+        consistency: "",
+        date: null as Date | null,
+      },
+    };
+  }
+
+  const details: {
+    location: string;
+    size: string;
+    consistency: string;
+    date: Date | null;
+  } = {
+    location: "",
+    size: "",
+    consistency: "",
+    date: null,
+  };
+
+  raw
+    .split(",")
+    .map((p) => p.trim())
+    .forEach((part) => {
+      const [labelRaw, valueRaw] = part.split(":");
+      const label = (labelRaw || "").toLowerCase();
+      const value = (valueRaw || "").trim();
+
+      if (label.startsWith("location")) details.location = value;
+      else if (label.startsWith("size")) details.size = value;
+      else if (label.startsWith("consistency")) details.consistency = value;
+      else if (label.startsWith("date")) details.date = parseDateString(value);
+    });
+
+  return { istrue: true, details };
+};
+
+const parseCancerField = (raw?: string | null) => {
+  if (!raw || raw === "No") {
+    return {
+      istrue: false,
+      details: {
+        type: "",
+        stage: "",
+        date: null as Date | null,
+      },
+    };
+  }
+
+  const details: { type: string; stage: string; date: Date | null } = {
+    type: "",
+    stage: "",
+    date: null,
+  };
+
+  raw
+    .split(",")
+    .map((p) => p.trim())
+    .forEach((part) => {
+      const [labelRaw, valueRaw] = part.split(":");
+      const label = (labelRaw || "").toLowerCase();
+      const value = (valueRaw || "").trim();
+
+      if (label.startsWith("type")) details.type = value;
+      else if (label.startsWith("stage")) details.stage = value;
+      else if (label.startsWith("date")) details.date = parseDateString(value);
+    });
+
+  return { istrue: true, details };
+};
+
+const parseHereditaryField = (raw?: string | null) => {
+  if (!raw) {
+    return { istrue: false, items: [] as { disease: string; name: string }[] };
+  }
+
+  const items = raw
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const [diseasePart, namePart] = chunk.split(":");
+      return {
+        disease: (diseasePart || "").trim(),
+        name: (namePart || "").trim(),
+      };
+    });
+
+  return {
+    istrue: items.length > 0,
+    items,
+  };
+};
+
+
+
 
 // Small helper components
 const ChipButton: React.FC<{
@@ -126,150 +373,299 @@ const DateField: React.FC<{
   );
 };
 
+type Props = {
+  route: any;
+  navigation: any;
+};
+
 const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
-   const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsets();
   const { section, medicalHistoryData, onDataUpdate } = route.params;
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
 
-  const [formData, setFormData] = useState<medicalHistoryFormType>(medicalHistoryData);
-  
+  const [formData, setFormData] = useState<medicalHistoryFormType>(
+    medicalHistoryData
+  );
+
   // Basic Section State
   const [giveBy, setGiveBy] = useState(medicalHistoryData?.givenName || "");
-  const [phoneNumber, setPhoneNumber] = useState<string>(medicalHistoryData?.givenPhone || "");
-  const [relation, setRelation] = useState(medicalHistoryData?.givenRelation || "");
+  const [phoneNumber, setPhoneNumber] = useState<string>(
+    medicalHistoryData?.givenPhone || ""
+  );
+  const [relation, setRelation] = useState(
+    medicalHistoryData?.givenRelation || ""
+  );
   const [bloodGrp, setBloodGrp] = useState(medicalHistoryData?.bloodGroup || "");
   const [bloodPressure, setBloodPressure] = useState<boolean | null>(
     medicalHistoryData?.bloodPressure === "Yes" ? true : false
   );
 
   // Surgical Section State
-  const [disease, setDisease] = useState<string[]>(
-    medicalHistoryData?.disease
-      ? medicalHistoryData.disease.split(",").map((v) => v.trim())
-      : []
-  );
-  const [surgeryText, setSurgeryText] = useState("");
-  const [checkedDiseases, setCheckedDiseases] = useState<Set<string>>(new Set());
-  const [dates, setDates] = useState<{ [key: string]: Date | null }>({});
+ const parsedDisease = parseDiseaseField(medicalHistoryData?.disease);
+
+// Surgical Section State
+const [disease, setDisease] = useState<string[]>(parsedDisease.diseaseArray);
+const [surgeryText, setSurgeryText] = useState(parsedDisease.surgeryText);
+const [checkedDiseases, setCheckedDiseases] = useState<Set<string>>(
+  parsedDisease.checked
+);
+const [dates, setDates] = useState<{ [key: string]: Date | null }>(
+  parsedDisease.dates
+);
+
 
   // Lipid Section State
   const [hyperLipidaemia, setHyperLipidaemia] = useState<boolean | null>(
-    medicalHistoryData?.disease?.includes("Hyper Lipidaemia") ? true : false
+    medicalHistoryData?.disease?.includes(
+      "Hyper Lipidaemia / Dyslipidaemia"
+    ) || medicalHistoryData?.disease?.includes("Hyper Lipidaemia")
+      ? true
+      : false
   );
-  const [hyperLipidaemiaDate, setHyperLipidaemiaDate] = useState<Date | null>(null);
+  const [hyperLipidaemiaDate, setHyperLipidaemiaDate] = useState<Date | null>(
+    null
+  );
 
-  // Allergies Section State
-  const [foodAllergy, setFoodAllergy] = useState<{ istrue: boolean; items: string[] }>({
-    istrue: !!medicalHistoryData?.foodAllergy,
-    items: medicalHistoryData?.foodAllergy ? medicalHistoryData.foodAllergy.split(",").map(v => v.trim()) : []
-  });
-  const [medicineAllergy, setMedicineAllergy] = useState<{ istrue: boolean; items: string[] }>({
-    istrue: !!medicalHistoryData?.medicineAllergy,
-    items: medicalHistoryData?.medicineAllergy ? medicalHistoryData.medicineAllergy.split(",").map(v => v.trim()) : []
-  });
+  // Allergies Section State (with date per item)
+ const [foodAllergy, setFoodAllergy] = useState<{
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.foodAllergy &&
+      medicalHistoryData.foodAllergy.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.foodAllergy),
+}));
+
+
+  const [medicineAllergy, setMedicineAllergy] = useState<{
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.medicineAllergy &&
+      medicalHistoryData.medicineAllergy.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.medicineAllergy),
+}));
+
+
   const [anaesthesia, setAnaesthesia] = useState<boolean | null>(
     medicalHistoryData?.anaesthesia === "Yes" ? true : false
   );
   const [newFoodAllergy, setNewFoodAllergy] = useState("");
   const [newMedicineAllergy, setNewMedicineAllergy] = useState("");
 
-  // Prescribed Medicines State
-  const [prescribedMeds, setPrescribedMeds] = useState<{ istrue: boolean; items: any[] }>({
-    istrue: !!medicalHistoryData?.meds,
-    items: []
-  });
-  const [newPrescribedMed, setNewPrescribedMed] = useState({
-    name: "",
-    dosage: "",
-    dosageUnit: "mg",
-    frequency: "",
-    duration: "",
-    durationUnit: "days",
-    startDate: null as Date | null
-  });
+  // Prescribed Medicines State (detailed, with dropdown for name)
+// Prescribed Medicines State (detailed, with dropdown for name)
+const [prescribedMeds, setPrescribedMeds] = useState<{
+  istrue: boolean;
+  items: any[];
+}>(() => {
+  const raw = medicalHistoryData?.meds || "";
+  const names = raw
+    .split(",")
+    .map((n: string) => n.trim())
+    .filter((n) => n.length > 0);
 
-  // Self Meds State
-  const [selfMeds, setSelfMeds] = useState<{ istrue: boolean; items: any[] }>({
-    istrue: !!medicalHistoryData?.selfMeds,
-    items: []
-  });
-  const [newSelfMed, setNewSelfMed] = useState({
-    name: "",
-    dosage: "",
-    dosageUnit: "mg",
-    frequency: "",
-    duration: "",
-    durationUnit: "days",
-    startDate: null as Date | null
-  });
+  return {
+    istrue: names.length > 0,
+    items: names.map((name) => ({
+      name,
+      dosage: "",
+      dosageUnit: "mg",
+      frequency: "",
+      duration: "",
+      durationUnit: "days",
+      startDate: null as Date | null,
+    })),
+  };
+});
 
-  // Health Conditions State
-  const [chestCondition, setChestCondition] = useState<{ istrue: boolean; conditions: string[] }>({
-    istrue: !!medicalHistoryData?.chestCondition,
-    conditions: medicalHistoryData?.chestCondition ? medicalHistoryData.chestCondition.split(",").map(v => v.trim()) : []
-  });
-  const [neurologicalDisorder, setNeurologicalDisorder] = useState<{ istrue: boolean; conditions: string[] }>({
-    istrue: !!medicalHistoryData?.neurologicalDisorder,
-    conditions: medicalHistoryData?.neurologicalDisorder ? medicalHistoryData.neurologicalDisorder.split(",").map(v => v.trim()) : []
-  });
-  const [heartProblems, setHeartProblems] = useState<{ istrue: boolean; conditions: string[] }>({
-    istrue: !!medicalHistoryData?.heartProblems,
-    conditions: medicalHistoryData?.heartProblems ? medicalHistoryData.heartProblems.split(",").map(v => v.trim()) : []
-  });
-  const [mentalHealth, setMentalHealth] = useState<{ istrue: boolean; conditions: string[] }>({
-    istrue: !!medicalHistoryData?.mentalHealth,
-    conditions: medicalHistoryData?.mentalHealth ? medicalHistoryData.mentalHealth.split(",").map(v => v.trim()) : []
-  });
+const [newPrescribedMed, setNewPrescribedMed] = useState({
+  name: "",
+  dosage: "",
+  dosageUnit: "mg",
+  frequency: "",
+  duration: "",
+  durationUnit: "days",
+  startDate: null as Date | null,
+});
+
+// Self Meds State
+const [selfMeds, setSelfMeds] = useState<{
+  istrue: boolean;
+  items: any[];
+}>(() => {
+  const raw = medicalHistoryData?.selfMeds || "";
+  const names = raw
+    .split(",")
+    .map((n: string) => n.trim())
+    .filter((n) => n.length > 0);
+
+  return {
+    istrue: names.length > 0,
+    items: names.map((name) => ({
+      name,
+      dosage: "",
+      dosageUnit: "mg",
+      frequency: "",
+      duration: "",
+      durationUnit: "days",
+      startDate: null as Date | null,
+    })),
+  };
+});
+
+const [newSelfMed, setNewSelfMed] = useState({
+  name: "",
+  dosage: "",
+  dosageUnit: "mg",
+  frequency: "",
+  duration: "",
+  durationUnit: "days",
+  startDate: null as Date | null,
+});
+
+
+  // Health Conditions State (now with dates per item)
+  const [chestCondition, setChestCondition] = useState<{
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => {
+  const raw = medicalHistoryData?.chestCondition;
+  if (!raw || raw === "No Chest Pain") {
+    return { istrue: false, items: [] };
+  }
+  return {
+    istrue: true,
+    items: splitToNamedDateItems(raw),
+  };
+});
+
+
+  const [neurologicalDisorder, setNeurologicalDisorder] = useState<{
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => {
+  const raw = medicalHistoryData?.neurologicalDisorder;
+  if (!raw || raw === "No") {
+    return { istrue: false, items: [] };
+  }
+  if (raw === "Yes") {
+    return {
+      istrue: true,
+      items: [{ name: "Neurological Disorder", date: null }],
+    };
+  }
+  return {
+    istrue: true,
+    items: splitToNamedDateItems(raw),
+  };
+});
+
+
+ const [heartProblems, setHeartProblems] = useState<{
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.heartProblems &&
+      medicalHistoryData.heartProblems.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.heartProblems),
+}));
+
+
+  const [mentalHealth, setMentalHealth] = useState<{
+  istrue: boolean;
+  items: NamedDateItem[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.mentalHealth &&
+      medicalHistoryData.mentalHealth.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.mentalHealth),
+}));
+
+
   const [newChestCondition, setNewChestCondition] = useState("");
   const [newNeurologicalCondition, setNewNeurologicalCondition] = useState("");
   const [newHeartProblem, setNewHeartProblem] = useState("");
   const [newMentalHealth, setNewMentalHealth] = useState("");
 
   // Infectious Diseases State
-  const [infections, setInfections] = useState<{ istrue: boolean; items: { name: string; date: Date | null }[] }>({
-    istrue: !!medicalHistoryData?.infections,
-    items: []
-  });
+ const [infections, setInfections] = useState<{
+  istrue: boolean;
+  items: { name: string; date: Date | null }[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.infections &&
+      medicalHistoryData.infections.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.infections),
+}));
+
+
 
   // Addiction State
-  const [addiction, setAddiction] = useState<{ istrue: boolean; items: { name: string; date: Date | null }[] }>({
-    istrue: !!medicalHistoryData?.drugs,
-    items: []
-  });
+  const [addiction, setAddiction] = useState<{
+  istrue: boolean;
+  items: { name: string; date: Date | null }[];
+}>(() => ({
+  istrue:
+    !!(medicalHistoryData?.drugs &&
+      medicalHistoryData.drugs.trim().length > 0),
+  items: splitToNamedDateItems(medicalHistoryData?.drugs),
+}));
+
 
   // Family History State
-  const [pregnant, setPregnant] = useState<boolean>(medicalHistoryData?.pregnant !== "No");
-  const [pregnancyDetails, setPregnancyDetails] = useState({
-    numberOfPregnancies: "",
-    liveBirths: "",
-    date: null as Date | null
-  });
-  const [hereditaryDisease, setHereditaryDisease] = useState<{ istrue: boolean; items: { disease: string; name: string }[] }>({
-    istrue: !!medicalHistoryData?.hereditaryDisease,
-    items: []
-  });
+const parsedPregnancy = parsePregnantField(medicalHistoryData?.pregnant);
+
+// Family History State
+const [pregnant, setPregnant] = useState<boolean>(
+  parsedPregnancy.isPregnant
+);
+const [pregnancyDetails, setPregnancyDetails] = useState<{
+  numberOfPregnancies: string;
+  liveBirths: string;
+  date: Date | null;
+}>({
+  numberOfPregnancies: parsedPregnancy.numberOfPregnancies,
+  liveBirths: parsedPregnancy.liveBirths,
+  date: parsedPregnancy.date,
+});
+
+
+  // 🔹 If patient is neonate (category 1), force pregnancy to "No"
+  useEffect(() => {
+    if (currentPatient?.category === 1) {
+      setPregnant(false);
+      setPregnancyDetails({
+        numberOfPregnancies: "",
+        liveBirths: "",
+        date: null,
+      });
+    }
+  }, [currentPatient?.category]);
+
+  const [hereditaryDisease, setHereditaryDisease] = useState<{
+  istrue: boolean;
+  items: { disease: string; name: string }[];
+}>(() => parseHereditaryField(medicalHistoryData?.hereditaryDisease));
+
 
   // Physical Examination State
-  const [lumps, setLumps] = useState<{ istrue: boolean; details: any }>({
-    istrue: medicalHistoryData?.lumps !== "" && medicalHistoryData?.lumps !== "No",
-    details: {
-      location: "",
-      size: "",
-      consistency: "",
-      date: null as Date | null
-    }
-  });
+  // Physical Examination State
+const [lumps, setLumps] = useState<{ istrue: boolean; details: any }>(
+  parseLumpsField(medicalHistoryData?.lumps)
+);
+
 
   // Cancer History State
-  const [cancer, setCancer] = useState<{ istrue: boolean; details: any }>({
-    istrue: medicalHistoryData?.cancer !== "" && medicalHistoryData?.cancer !== "No",
-    details: {
-      type: "",
-      stage: "",
-      date: null as Date | null
-    }
-  });
+  // Cancer History State
+const [cancer, setCancer] = useState<{ istrue: boolean; details: any }>(
+  parseCancerField(medicalHistoryData?.cancer)
+);
+
 
   // API Data
   const [BloodList, setBloodList] = useState<string[]>([]);
@@ -277,28 +673,29 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const [foodAlergyList, setFoodAlergyList] = useState<string[]>([]);
   const [relationList, setRelationList] = useState<string[]>([]);
   const [medicineList, setMedicineList] = useState<string[]>([]);
-
   const [formDisabled, setFormDisabled] = useState(false);
-const sectionOrder = [
-  "basic",
-  "surgical",
-  "lipid",
-  "allergies",
-  "prescribed",
-  "selfmeds",
-  "health",
-  "infectious",
-  "addiction",
-  "family",
-  "physical",
-  "cancer",
-];
 
-  // Initialize data
+  const sectionOrder = [
+    "basic",
+    "surgical",
+    "lipid",
+    "allergies",
+    "prescribed",
+    "selfmeds",
+    "health",
+    "infectious",
+    "addiction",
+    "family",
+    "physical",
+    "cancer",
+  ];
+
+  // Disable form if basic mandatory fields not filled
   useEffect(() => {
     setFormDisabled(!(giveBy && phoneNumber && relation));
   }, [giveBy, phoneNumber, relation]);
 
+  // Fetch master data (food allergy list, heart problems, blood groups, medicines)
   const getAllData = useCallback(async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     if (!token) return;
@@ -307,29 +704,43 @@ const sectionOrder = [
       const foodRes = await AuthFetch(`data/foodAllergies`, token);
       const heartRes = await AuthFetch(`data/heartProblems`, token);
       const bloodRes = await AuthFetch(`data/bloodGroups`, token);
-      
-      if (foodRes?.status === "success") {
+      const medRes =
+        user?.hospitalID != null
+          ? await AuthFetch(
+              `medicine/${user.hospitalID}/getMedicines`,
+              token
+            )
+          : null;
+
+      if (foodRes?.status === "success" && "data" in foodRes) {
         setFoodAlergyList(foodRes?.data?.foodAllergies || []);
       }
-      if (heartRes?.status === "success") {
+      if (heartRes?.status === "success" && "data" in heartRes) {
         setHeartProblemList(heartRes?.data?.boneProblems || []);
       }
-      if (bloodRes?.status === "success") {
+      if (bloodRes?.status === "success" && "data" in bloodRes) {
         setBloodList(bloodRes?.data?.bloodGroups || []);
       }
-    } catch {}
-  }, [user?.token]);
+      if (medRes?.status === "success" && "data" in medRes) {
+        setMedicineList(medRes?.data?.medicines || []);
+      }
+    } catch {
+      // ignore
+    }
+  }, [user?.token, user?.hospitalID]);
 
   const getRelationList = useCallback(async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     if (!token) return;
-    
+
     try {
       const res = await AuthFetch("data/relations", token);
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         setRelationList(res?.data?.relations || []);
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, [user?.token]);
 
   useEffect(() => {
@@ -337,9 +748,95 @@ const sectionOrder = [
     getRelationList();
   }, [getAllData, getRelationList]);
 
+  // ---------- Suggestions (like Autocomplete in web) ----------
+
+  const filteredFoodAllergyOptions = useMemo(
+    () =>
+      newFoodAllergy.trim()
+        ? foodAlergyList.filter((el) =>
+            el.toLowerCase().includes(newFoodAllergy.trim().toLowerCase())
+          )
+        : foodAlergyList,
+    [newFoodAllergy, foodAlergyList]
+  );
+
+  const filteredMedicineAllergyOptions = useMemo(
+    () =>
+      newMedicineAllergy.trim()
+        ? medicineList.filter((el) =>
+            el.toLowerCase().includes(newMedicineAllergy.trim().toLowerCase())
+          )
+        : medicineList,
+    [newMedicineAllergy, medicineList]
+  );
+
+  const filteredHeartProblemOptions = useMemo(
+    () =>
+      newHeartProblem.trim()
+        ? heartProblemList.filter((el) =>
+            el.toLowerCase().includes(newHeartProblem.trim().toLowerCase())
+          )
+        : heartProblemList,
+    [newHeartProblem, heartProblemList]
+  );
+
+  const filteredMentalHealthOptions = useMemo(
+    () =>
+      newMentalHealth.trim()
+        ? mentalProblemList.filter((el) =>
+            el.toLowerCase().includes(newMentalHealth.trim().toLowerCase())
+          )
+        : mentalProblemList,
+    [newMentalHealth]
+  );
+
+  const filteredPrescribedMedicineOptions = useMemo(
+    () =>
+      newPrescribedMed.name.trim()
+        ? medicineList.filter((el) =>
+            el
+              .toLowerCase()
+              .includes(newPrescribedMed.name.trim().toLowerCase())
+          )
+        : medicineList,
+    [newPrescribedMed.name, medicineList]
+  );
+
+  const filteredSelfMedicineOptions = useMemo(
+    () =>
+      newSelfMed.name.trim()
+        ? medicineList.filter((el) =>
+            el.toLowerCase().includes(newSelfMed.name.trim().toLowerCase())
+          )
+        : medicineList,
+    [newSelfMed.name, medicineList]
+  );
+
+  const filteredChestConditionOptions = useMemo(
+    () =>
+      newChestCondition.trim()
+        ? chestConditionList.filter((el) =>
+            el.toLowerCase().includes(newChestCondition.trim().toLowerCase())
+          )
+        : chestConditionList,
+    [newChestCondition]
+  );
+
+  const filteredNeurologicalOptions = useMemo(
+    () =>
+      newNeurologicalCondition.trim()
+        ? neurologicalDisorderList.filter((el) =>
+            el
+              .toLowerCase()
+              .includes(newNeurologicalCondition.trim().toLowerCase())
+          )
+        : neurologicalDisorderList,
+    [newNeurologicalCondition]
+  );
+
   // Update form data and notify parent
   useEffect(() => {
-    const updatedData = {
+    const updatedData: medicalHistoryFormType = {
       ...formData,
       givenName: giveBy,
       givenPhone: phoneNumber,
@@ -347,41 +844,103 @@ const sectionOrder = [
       bloodGroup: bloodGrp,
       bloodPressure: bloodPressure ? "Yes" : "No",
       disease: disease.filter((i) => i.trim() !== "").join(","),
-      foodAllergy: foodAllergy.items.join(","),
-      medicineAllergy: medicineAllergy.items.join(","),
+      foodAllergy: foodAllergy.items
+        .map((item) =>
+          item.date ? `${item.name}:${formatDate(item.date)}` : item.name
+        )
+        .join(","),
+      medicineAllergy: medicineAllergy.items
+        .map((item) =>
+          item.date ? `${item.name}:${formatDate(item.date)}` : item.name
+        )
+        .join(","),
       anaesthesia: anaesthesia ? "Yes" : "No",
-      meds: prescribedMeds.items.map(item => 
-        `${item.name} (${item.dosage}${item.dosageUnit}, ${item.frequency}/day, ${item.duration}${item.durationUnit})`
-      ).join(", "),
-      selfMeds: selfMeds.items.map(item => 
-        `${item.name} (${item.dosage}${item.dosageUnit}, ${item.frequency}/day, ${item.duration}${item.durationUnit})`
-      ).join(", "),
-      chestCondition: chestCondition.conditions.join(","),
-      neurologicalDisorder: neurologicalDisorder.conditions.join(","),
-      heartProblems: heartProblems.conditions.join(","),
-      mentalHealth: mentalHealth.conditions.join(","),
-      infections: infections.items.map(item => 
-        item.date ? `${item.name}:${formatDate(item.date)}` : item.name
-      ).join(", "),
-      drugs: addiction.items.map(item => 
-        item.date ? `${item.name}:${formatDate(item.date)}` : item.name
-      ).join(", "),
-      pregnant: pregnant ? `Number of Pregnancies: ${pregnancyDetails.numberOfPregnancies}, Live Births: ${pregnancyDetails.liveBirths}, Date: ${pregnancyDetails.date ? formatDate(pregnancyDetails.date) : ""}` : "No",
-      hereditaryDisease: hereditaryDisease.items.map(item => 
-        `${item.disease}:${item.name}`
-      ).join(", "),
-      lumps: lumps.istrue ? `Location: ${lumps.details.location}, Size: ${lumps.details.size}, Consistency: ${lumps.details.consistency}, Date: ${lumps.details.date ? formatDate(lumps.details.date) : ""}` : "",
-      cancer: cancer.istrue ? `Type: ${cancer.details.type}, Stage: ${cancer.details.stage}, Date: ${cancer.details.date ? formatDate(cancer.details.date) : ""}` : "",
+     meds: prescribedMeds.items.map((item) => item.name).join(","),
+selfMeds: selfMeds.items.map((item) => item.name).join(","),
+
+      chestCondition: chestCondition.items
+        .map((item) =>
+          item.date ? `${item.name}:${formatDate(item.date)}` : item.name
+        )
+        .join(","),
+      neurologicalDisorder: neurologicalDisorder.items
+        .map((item) =>
+          item.date ? `${item.name}:${formatDate(item.date)}` : item.name
+        )
+        .join(","),
+      heartProblems: heartProblems.items
+        .map((item) =>
+          item.date ? `${item.name}:${formatDate(item.date)}` : item.name
+        )
+        .join(","),
+      mentalHealth: mentalHealth.items
+        .map((item) =>
+          item.date ? `${item.name}:${formatDate(item.date)}` : item.name
+        )
+        .join(","),
+      infections: infections.items
+        .map((item) =>
+          item.date ? `${item.name}:${formatDate(item.date)}` : item.name
+        )
+        .join(", "),
+      drugs: addiction.items
+        .map((item) =>
+          item.date ? `${item.name}:${formatDate(item.date)}` : item.name
+        )
+        .join(", "),
+      pregnant: pregnant
+        ? `Number of Pregnancies: ${
+            pregnancyDetails.numberOfPregnancies
+          }, Live Births: ${
+            pregnancyDetails.liveBirths
+          }, Date: ${
+            pregnancyDetails.date ? formatDate(pregnancyDetails.date) : ""
+          }`
+        : "No",
+      hereditaryDisease: hereditaryDisease.items
+        .map((item) => `${item.disease}:${item.name}`)
+        .join(", "),
+      lumps: lumps.istrue
+        ? `Location: ${lumps.details.location}, Size: ${
+            lumps.details.size
+          }, Consistency: ${
+            lumps.details.consistency
+          }, Date: ${lumps.details.date ? formatDate(lumps.details.date) : ""}`
+        : "",
+      cancer: cancer.istrue
+        ? `Type: ${cancer.details.type}, Stage: ${
+            cancer.details.stage
+          }, Date: ${
+            cancer.details.date ? formatDate(cancer.details.date) : ""
+          }`
+        : "",
     };
-    
+
     setFormData(updatedData);
     onDataUpdate(updatedData);
   }, [
-    giveBy, phoneNumber, relation, bloodGrp, bloodPressure, disease,
-    foodAllergy, medicineAllergy, anaesthesia, prescribedMeds, selfMeds,
-    chestCondition, neurologicalDisorder, heartProblems, mentalHealth,
-    infections, addiction, pregnant, pregnancyDetails, hereditaryDisease,
-    lumps, cancer
+    giveBy,
+    phoneNumber,
+    relation,
+    bloodGrp,
+    bloodPressure,
+    disease,
+    foodAllergy,
+    medicineAllergy,
+    anaesthesia,
+    prescribedMeds,
+    selfMeds,
+    chestCondition,
+    neurologicalDisorder,
+    heartProblems,
+    mentalHealth,
+    infections,
+    addiction,
+    pregnant,
+    pregnancyDetails,
+    hereditaryDisease,
+    lumps,
+    cancer,
   ]);
 
   const handleSave = () => {
@@ -430,7 +989,18 @@ const sectionOrder = [
           placeholderTextColor="#9ca3af"
           keyboardType="phone-pad"
           value={phoneNumber}
-          onChangeText={setPhoneNumber}
+          maxLength={10}
+          onChangeText={(text) => {
+            const onlyDigits = text.replace(/\D/g, "");
+
+            // block more than 10 digits
+            if (onlyDigits.length > 10) return;
+
+            // first digit must be 6 / 7 / 8 / 9
+            if (onlyDigits.length === 1 && !/^[6-9]/.test(onlyDigits)) return;
+
+            setPhoneNumber(onlyDigits);
+          }}
         />
       </View>
 
@@ -501,12 +1071,11 @@ const sectionOrder = [
               const n = new Set(checkedDiseases);
               n.delete(name);
               setCheckedDiseases(n);
-              setDisease(prev => prev.filter(d => !d.startsWith(name)));
+              setDisease((prev) => prev.filter((d) => !d.startsWith(name)));
             } else {
               const n = new Set(checkedDiseases);
               n.add(name);
               setCheckedDiseases(n);
-              setDisease(prev => [...prev, name]);
             }
           }}
         />
@@ -517,11 +1086,11 @@ const sectionOrder = [
             maximumDate={new Date()}
             disabled={formDisabled}
             onChange={(date) => {
-              setDates(prev => ({ ...prev, Diabetes: date }));
+              setDates((prev) => ({ ...prev, Diabetes: date }));
               if (date) {
-                setDisease(prev => [
-                  ...prev.filter(d => !d.startsWith("Diabetes")),
-                  `Diabetes:${formatDate(date)}`
+                setDisease((prev) => [
+                  ...prev.filter((d) => !d.startsWith("Diabetes")),
+                  `Diabetes:${formatDate(date)}`,
                 ]);
               }
             }}
@@ -540,7 +1109,7 @@ const sectionOrder = [
               const n = new Set(checkedDiseases);
               n.delete(name);
               setCheckedDiseases(n);
-              setDisease(prev => prev.filter(d => !d.startsWith(name)));
+              setDisease((prev) => prev.filter((d) => !d.startsWith(name)));
               setSurgeryText("");
             } else {
               const n = new Set(checkedDiseases);
@@ -567,11 +1136,15 @@ const sectionOrder = [
               maximumDate={new Date()}
               disabled={formDisabled}
               onChange={(date) => {
-                setDates(prev => ({ ...prev, Surgery: date }));
+                setDates((prev) => ({ ...prev, Surgery: date }));
                 if (date && surgeryText) {
-                  setDisease(prev => [
-                    ...prev.filter(d => !d.startsWith("Been Through any Surgery")),
-                    `Been Through any Surgery:${surgeryText}|${formatDate(date)}`
+                  setDisease((prev) => [
+                    ...prev.filter(
+                      (d) => !d.startsWith("Been Through any Surgery")
+                    ),
+                    `Been Through any Surgery:${surgeryText}|${formatDate(
+                      date
+                    )}`,
                   ]);
                 }
               }}
@@ -589,7 +1162,9 @@ const sectionOrder = [
           label="Hyper Lipidaemia / Dyslipidaemia"
           checked={hyperLipidaemia === true}
           disabled={formDisabled}
-          onToggle={() => setHyperLipidaemia(prev => !prev)}
+          onToggle={() =>
+            setHyperLipidaemia((prev) => (prev === true ? false : true))
+          }
         />
         {hyperLipidaemia && (
           <DateField
@@ -606,6 +1181,7 @@ const sectionOrder = [
 
   const renderAllergiesSection = () => (
     <View style={styles.section}>
+      {/* Food Allergy */}
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Any Food Allergy?</Text>
         <View style={styles.row}>
@@ -613,13 +1189,21 @@ const sectionOrder = [
             label="Yes"
             selected={foodAllergy.istrue}
             disabled={formDisabled}
-            onPress={() => setFoodAllergy(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setFoodAllergy((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!foodAllergy.istrue}
             disabled={formDisabled}
-            onPress={() => setFoodAllergy(prev => ({ ...prev, istrue: false, items: [] }))}
+            onPress={() =>
+              setFoodAllergy((prev) => ({
+                ...prev,
+                istrue: false,
+                items: [],
+              }))
+            }
           />
         </View>
         {foodAllergy.istrue && (
@@ -631,33 +1215,83 @@ const sectionOrder = [
                   style={[styles.input, { flex: 1 }]}
                   value={newFoodAllergy}
                   onChangeText={setNewFoodAllergy}
-                  placeholder="Enter food allergy"
+                  placeholder="Search or enter food allergy"
                   placeholderTextColor="#9ca3af"
                 />
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => {
-                    if (newFoodAllergy.trim()) {
-                      setFoodAllergy(prev => ({
+                    const v = newFoodAllergy.trim();
+                    if (
+                      v &&
+                      !foodAllergy.items.some((item) => item.name === v)
+                    ) {
+                      setFoodAllergy((prev) => ({
                         ...prev,
-                        items: [...prev.items, newFoodAllergy.trim()]
+                        items: [...prev.items, { name: v, date: null }],
                       }));
-                      setNewFoodAllergy("");
                     }
+                    setNewFoodAllergy("");
                   }}
                 >
                   <Text style={styles.addButtonText}>Add</Text>
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Suggestions from master list */}
+            {!formDisabled &&
+              filteredFoodAllergyOptions.length > 0 &&
+              newFoodAllergy.trim().length > 0 && (
+                <View style={styles.suggestionsWrap}>
+                  {filteredFoodAllergyOptions.map((item) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={styles.suggestionPill}
+                      onPress={() => {
+                        if (
+                          !foodAllergy.items.some(
+                            (al) =>
+                              al.name.toLowerCase() === item.toLowerCase()
+                          )
+                        ) {
+                          setFoodAllergy((prev) => ({
+                            ...prev,
+                            items: [...prev.items, { name: item, date: null }],
+                          }));
+                        }
+                      }}
+                    >
+                      <Text style={styles.suggestionText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
             {foodAllergy.items.map((item, index) => (
               <View key={index} style={styles.selectedItem}>
-                <Text style={styles.selectedItemText}>{item}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.selectedItemText}>{item.name}</Text>
+                  <DateField
+                    label="Allergy Noted On"
+                    value={item.date}
+                    maximumDate={new Date()}
+                    disabled={formDisabled}
+                    onChange={(date) => {
+                      setFoodAllergy((prev) => ({
+                        ...prev,
+                        items: prev.items.map((it, i) =>
+                          i === index ? { ...it, date } : it
+                        ),
+                      }));
+                    }}
+                  />
+                </View>
                 <TouchableOpacity
                   onPress={() => {
-                    setFoodAllergy(prev => ({
+                    setFoodAllergy((prev) => ({
                       ...prev,
-                      items: prev.items.filter((_, i) => i !== index)
+                      items: prev.items.filter((_, i) => i !== index),
                     }));
                   }}
                 >
@@ -669,6 +1303,7 @@ const sectionOrder = [
         )}
       </View>
 
+      {/* Medicine Allergy */}
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Any Medicine Allergy?</Text>
         <View style={styles.row}>
@@ -676,13 +1311,21 @@ const sectionOrder = [
             label="Yes"
             selected={medicineAllergy.istrue}
             disabled={formDisabled}
-            onPress={() => setMedicineAllergy(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setMedicineAllergy((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!medicineAllergy.istrue}
             disabled={formDisabled}
-            onPress={() => setMedicineAllergy(prev => ({ ...prev, istrue: false, items: [] }))}
+            onPress={() =>
+              setMedicineAllergy((prev) => ({
+                ...prev,
+                istrue: false,
+                items: [],
+              }))
+            }
           />
         </View>
         {medicineAllergy.istrue && (
@@ -694,33 +1337,86 @@ const sectionOrder = [
                   style={[styles.input, { flex: 1 }]}
                   value={newMedicineAllergy}
                   onChangeText={setNewMedicineAllergy}
-                  placeholder="Enter medicine allergy"
+                  placeholder="Search or enter medicine"
                   placeholderTextColor="#9ca3af"
                 />
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => {
-                    if (newMedicineAllergy.trim()) {
-                      setMedicineAllergy(prev => ({
+                    const v = newMedicineAllergy.trim();
+                    if (
+                      v &&
+                      !medicineAllergy.items.some((item) => item.name === v)
+                    ) {
+                      setMedicineAllergy((prev) => ({
                         ...prev,
-                        items: [...prev.items, newMedicineAllergy.trim()]
+                        items: [...prev.items, { name: v, date: null }],
                       }));
-                      setNewMedicineAllergy("");
                     }
+                    setNewMedicineAllergy("");
                   }}
                 >
                   <Text style={styles.addButtonText}>Add</Text>
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* suggestions from medicineList */}
+            {!formDisabled &&
+              filteredMedicineAllergyOptions.length > 0 &&
+              newMedicineAllergy.trim().length > 0 && (
+                <View style={styles.suggestionsWrap}>
+                  {filteredMedicineAllergyOptions.map((item) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={styles.suggestionPill}
+                      onPress={() => {
+                        if (
+                          !medicineAllergy.items.some(
+                            (al) =>
+                              al.name.toLowerCase() === item.toLowerCase()
+                          )
+                        ) {
+                          setMedicineAllergy((prev) => ({
+                            ...prev,
+                            items: [
+                              ...prev.items,
+                              { name: item, date: null },
+                            ],
+                          }));
+                        }
+                      }}
+                    >
+                      <Text style={styles.suggestionText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
             {medicineAllergy.items.map((item, index) => (
               <View key={index} style={styles.selectedItem}>
-                <Text style={styles.selectedItemText}>{item}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.selectedItemText}>{item.name}</Text>
+                  <DateField
+                    label="Allergy Noted On"
+                    value={item.date}
+                    maximumDate={new Date()}
+                    disabled={formDisabled}
+                    onChange={(date) => {
+                      setMedicineAllergy((prev) => ({
+                        ...prev,
+                        items: prev.items.map((it, i) =>
+                          i === index ? { ...it, date } : it
+                        ),
+                      }));
+                    }}
+                  />
+                </View>
                 <TouchableOpacity
                   onPress={() => {
-                    setMedicineAllergy(prev => ({
+                    setMedicineAllergy((prev) => ({
                       ...prev,
-                      items: prev.items.filter((_, i) => i !== index)
+                      items: prev.items.filter((_, i) => i !== index),
                     }));
                   }}
                 >
@@ -761,13 +1457,21 @@ const sectionOrder = [
             label="Yes"
             selected={prescribedMeds.istrue}
             disabled={formDisabled}
-            onPress={() => setPrescribedMeds(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setPrescribedMeds((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!prescribedMeds.istrue}
             disabled={formDisabled}
-            onPress={() => setPrescribedMeds(prev => ({ ...prev, istrue: false, items: [] }))}
+            onPress={() =>
+              setPrescribedMeds((prev) => ({
+                ...prev,
+                istrue: false,
+                items: [],
+              }))
+            }
           />
         </View>
       </View>
@@ -779,11 +1483,31 @@ const sectionOrder = [
             <TextInput
               style={styles.input}
               value={newPrescribedMed.name}
-              onChangeText={(text) => setNewPrescribedMed(prev => ({ ...prev, name: text }))}
-              placeholder="Enter medicine name"
+              onChangeText={(text) =>
+                setNewPrescribedMed((prev) => ({ ...prev, name: text }))
+              }
+              placeholder="Search or enter medicine name"
               placeholderTextColor="#9ca3af"
             />
           </View>
+
+          {/* 🔹 Always show dropdown suggestions when data available */}
+          {!formDisabled &&
+            filteredPrescribedMedicineOptions.length > 0 && (
+              <View style={styles.suggestionsWrap}>
+                {filteredPrescribedMedicineOptions.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.suggestionPill}
+                    onPress={() =>
+                      setNewPrescribedMed((prev) => ({ ...prev, name: item }))
+                    }
+                  >
+                    <Text style={styles.suggestionText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
           <View style={styles.row}>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
@@ -791,7 +1515,9 @@ const sectionOrder = [
               <TextInput
                 style={styles.input}
                 value={newPrescribedMed.dosage}
-                onChangeText={(text) => setNewPrescribedMed(prev => ({ ...prev, dosage: text }))}
+                onChangeText={(text) =>
+                  setNewPrescribedMed((prev) => ({ ...prev, dosage: text }))
+                }
                 placeholder="Dosage"
                 placeholderTextColor="#9ca3af"
                 keyboardType="numeric"
@@ -802,7 +1528,12 @@ const sectionOrder = [
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newPrescribedMed.dosageUnit}
-                  onValueChange={(value) => setNewPrescribedMed(prev => ({ ...prev, dosageUnit: value }))}
+                  onValueChange={(value) =>
+                    setNewPrescribedMed((prev) => ({
+                      ...prev,
+                      dosageUnit: value,
+                    }))
+                  }
                   style={styles.picker}
                 >
                   <Picker.Item label="mg" value="mg" />
@@ -819,7 +1550,12 @@ const sectionOrder = [
               <TextInput
                 style={styles.input}
                 value={newPrescribedMed.frequency}
-                onChangeText={(text) => setNewPrescribedMed(prev => ({ ...prev, frequency: text }))}
+                onChangeText={(text) =>
+                  setNewPrescribedMed((prev) => ({
+                    ...prev,
+                    frequency: text,
+                  }))
+                }
                 placeholder="Frequency"
                 placeholderTextColor="#9ca3af"
                 keyboardType="numeric"
@@ -830,7 +1566,9 @@ const sectionOrder = [
               <TextInput
                 style={styles.input}
                 value={newPrescribedMed.duration}
-                onChangeText={(text) => setNewPrescribedMed(prev => ({ ...prev, duration: text }))}
+                onChangeText={(text) =>
+                  setNewPrescribedMed((prev) => ({ ...prev, duration: text }))
+                }
                 placeholder="Duration"
                 placeholderTextColor="#9ca3af"
                 keyboardType="numeric"
@@ -843,7 +1581,12 @@ const sectionOrder = [
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={newPrescribedMed.durationUnit}
-                onValueChange={(value) => setNewPrescribedMed(prev => ({ ...prev, durationUnit: value }))}
+                onValueChange={(value) =>
+                  setNewPrescribedMed((prev) => ({
+                    ...prev,
+                    durationUnit: value,
+                  }))
+                }
                 style={styles.picker}
               >
                 <Picker.Item label="Days" value="days" />
@@ -859,16 +1602,18 @@ const sectionOrder = [
             value={newPrescribedMed.startDate}
             maximumDate={new Date()}
             disabled={formDisabled}
-            onChange={(date) => setNewPrescribedMed(prev => ({ ...prev, startDate: date }))}
+            onChange={(date) =>
+              setNewPrescribedMed((prev) => ({ ...prev, startDate: date }))
+            }
           />
 
           <TouchableOpacity
             style={styles.addButtonLarge}
             onPress={() => {
               if (newPrescribedMed.name.trim()) {
-                setPrescribedMeds(prev => ({
+                setPrescribedMeds((prev) => ({
                   ...prev,
-                  items: [...prev.items, { ...newPrescribedMed }]
+                  items: [...prev.items, { ...newPrescribedMed }],
                 }));
                 setNewPrescribedMed({
                   name: "",
@@ -877,7 +1622,7 @@ const sectionOrder = [
                   frequency: "",
                   duration: "",
                   durationUnit: "days",
-                  startDate: null
+                  startDate: null,
                 });
               }
             }}
@@ -888,14 +1633,16 @@ const sectionOrder = [
           {prescribedMeds.items.map((item, index) => (
             <View key={index} style={styles.medicationItem}>
               <Text style={styles.medicationText}>
-                {item.name} - {item.dosage}{item.dosageUnit}, {item.frequency}/day, {item.duration} {item.durationUnit}
+                {item.name} - {item.dosage}
+                {item.dosageUnit}, {item.frequency}/day, {item.duration}{" "}
+                {item.durationUnit}
                 {item.startDate && `, Started: ${formatDate(item.startDate)}`}
               </Text>
               <TouchableOpacity
                 onPress={() => {
-                  setPrescribedMeds(prev => ({
+                  setPrescribedMeds((prev) => ({
                     ...prev,
-                    items: prev.items.filter((_, i) => i !== index)
+                    items: prev.items.filter((_, i) => i !== index),
                   }));
                 }}
               >
@@ -917,13 +1664,17 @@ const sectionOrder = [
             label="Yes"
             selected={selfMeds.istrue}
             disabled={formDisabled}
-            onPress={() => setSelfMeds(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setSelfMeds((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!selfMeds.istrue}
             disabled={formDisabled}
-            onPress={() => setSelfMeds(prev => ({ ...prev, istrue: false, items: [] }))}
+            onPress={() =>
+              setSelfMeds((prev) => ({ ...prev, istrue: false, items: [] }))
+            }
           />
         </View>
       </View>
@@ -935,11 +1686,31 @@ const sectionOrder = [
             <TextInput
               style={styles.input}
               value={newSelfMed.name}
-              onChangeText={(text) => setNewSelfMed(prev => ({ ...prev, name: text }))}
-              placeholder="Enter medicine name"
+              onChangeText={(text) =>
+                setNewSelfMed((prev) => ({ ...prev, name: text }))
+              }
+              placeholder="Search or enter medicine name"
               placeholderTextColor="#9ca3af"
             />
           </View>
+
+          {/* 🔹 Always show dropdown suggestions when data available */}
+          {!formDisabled &&
+            filteredSelfMedicineOptions.length > 0 && (
+              <View style={styles.suggestionsWrap}>
+                {filteredSelfMedicineOptions.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.suggestionPill}
+                    onPress={() =>
+                      setNewSelfMed((prev) => ({ ...prev, name: item }))
+                    }
+                  >
+                    <Text style={styles.suggestionText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
           <View style={styles.row}>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
@@ -947,7 +1718,9 @@ const sectionOrder = [
               <TextInput
                 style={styles.input}
                 value={newSelfMed.dosage}
-                onChangeText={(text) => setNewSelfMed(prev => ({ ...prev, dosage: text }))}
+                onChangeText={(text) =>
+                  setNewSelfMed((prev) => ({ ...prev, dosage: text }))
+                }
                 placeholder="Dosage"
                 placeholderTextColor="#9ca3af"
                 keyboardType="numeric"
@@ -958,7 +1731,12 @@ const sectionOrder = [
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={newSelfMed.dosageUnit}
-                  onValueChange={(value) => setNewSelfMed(prev => ({ ...prev, dosageUnit: value }))}
+                  onValueChange={(value) =>
+                    setNewSelfMed((prev) => ({
+                      ...prev,
+                      dosageUnit: value,
+                    }))
+                  }
                   style={styles.picker}
                 >
                   <Picker.Item label="mg" value="mg" />
@@ -975,7 +1753,9 @@ const sectionOrder = [
               <TextInput
                 style={styles.input}
                 value={newSelfMed.frequency}
-                onChangeText={(text) => setNewSelfMed(prev => ({ ...prev, frequency: text }))}
+                onChangeText={(text) =>
+                  setNewSelfMed((prev) => ({ ...prev, frequency: text }))
+                }
                 placeholder="Frequency"
                 placeholderTextColor="#9ca3af"
                 keyboardType="numeric"
@@ -986,7 +1766,9 @@ const sectionOrder = [
               <TextInput
                 style={styles.input}
                 value={newSelfMed.duration}
-                onChangeText={(text) => setNewSelfMed(prev => ({ ...prev, duration: text }))}
+                onChangeText={(text) =>
+                  setNewSelfMed((prev) => ({ ...prev, duration: text }))
+                }
                 placeholder="Duration"
                 placeholderTextColor="#9ca3af"
                 keyboardType="numeric"
@@ -999,7 +1781,12 @@ const sectionOrder = [
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={newSelfMed.durationUnit}
-                onValueChange={(value) => setNewSelfMed(prev => ({ ...prev, durationUnit: value }))}
+                onValueChange={(value) =>
+                  setNewSelfMed((prev) => ({
+                    ...prev,
+                    durationUnit: value,
+                  }))
+                }
                 style={styles.picker}
               >
                 <Picker.Item label="Days" value="days" />
@@ -1015,16 +1802,18 @@ const sectionOrder = [
             value={newSelfMed.startDate}
             maximumDate={new Date()}
             disabled={formDisabled}
-            onChange={(date) => setNewSelfMed(prev => ({ ...prev, startDate: date }))}
+            onChange={(date) =>
+              setNewSelfMed((prev) => ({ ...prev, startDate: date }))
+            }
           />
 
           <TouchableOpacity
             style={styles.addButtonLarge}
             onPress={() => {
               if (newSelfMed.name.trim()) {
-                setSelfMeds(prev => ({
+                setSelfMeds((prev) => ({
                   ...prev,
-                  items: [...prev.items, { ...newSelfMed }]
+                  items: [...prev.items, { ...newSelfMed }],
                 }));
                 setNewSelfMed({
                   name: "",
@@ -1033,7 +1822,7 @@ const sectionOrder = [
                   frequency: "",
                   duration: "",
                   durationUnit: "days",
-                  startDate: null
+                  startDate: null,
                 });
               }
             }}
@@ -1044,14 +1833,16 @@ const sectionOrder = [
           {selfMeds.items.map((item, index) => (
             <View key={index} style={styles.medicationItem}>
               <Text style={styles.medicationText}>
-                {item.name} - {item.dosage}{item.dosageUnit}, {item.frequency}/day, {item.duration} {item.durationUnit}
+                {item.name} - {item.dosage}
+                {item.dosageUnit}, {item.frequency}/day, {item.duration}{" "}
+                {item.durationUnit}
                 {item.startDate && `, Started: ${formatDate(item.startDate)}`}
               </Text>
               <TouchableOpacity
                 onPress={() => {
-                  setSelfMeds(prev => ({
+                  setSelfMeds((prev) => ({
                     ...prev,
-                    items: prev.items.filter((_, i) => i !== index)
+                    items: prev.items.filter((_, i) => i !== index),
                   }));
                 }}
               >
@@ -1066,6 +1857,7 @@ const sectionOrder = [
 
   const renderHealthSection = () => (
     <View style={styles.section}>
+      {/* Chest Condition */}
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Any Chest Condition?</Text>
         <View style={styles.row}>
@@ -1073,13 +1865,21 @@ const sectionOrder = [
             label="Yes"
             selected={chestCondition.istrue}
             disabled={formDisabled}
-            onPress={() => setChestCondition(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setChestCondition((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!chestCondition.istrue}
             disabled={formDisabled}
-            onPress={() => setChestCondition(prev => ({ ...prev, istrue: false, conditions: [] }))}
+            onPress={() =>
+              setChestCondition((prev) => ({
+                ...prev,
+                istrue: false,
+                items: [],
+              }))
+            }
           />
         </View>
         {chestCondition.istrue && (
@@ -1091,33 +1891,91 @@ const sectionOrder = [
                   style={[styles.input, { flex: 1 }]}
                   value={newChestCondition}
                   onChangeText={setNewChestCondition}
-                  placeholder="Enter chest condition"
+                  placeholder="Enter or select condition"
                   placeholderTextColor="#9ca3af"
                 />
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => {
-                    if (newChestCondition.trim()) {
-                      setChestCondition(prev => ({
+                    const v = newChestCondition.trim();
+                    if (
+                      v &&
+                      !chestCondition.items.some(
+                        (item) =>
+                          item.name.toLowerCase() === v.toLowerCase()
+                      )
+                    ) {
+                      setChestCondition((prev) => ({
                         ...prev,
-                        conditions: [...prev.conditions, newChestCondition.trim()]
+                        items: [...prev.items, { name: v, date: null }],
                       }));
-                      setNewChestCondition("");
                     }
+                    setNewChestCondition("");
                   }}
                 >
                   <Text style={styles.addButtonText}>Add</Text>
                 </TouchableOpacity>
               </View>
             </View>
-            {chestCondition.conditions.map((condition, index) => (
+
+            {/* Dropdown-style suggestions */}
+            {!formDisabled &&
+              filteredChestConditionOptions.length > 0 &&
+              newChestCondition.trim().length > 0 && (
+                <View style={styles.suggestionsWrap}>
+                  {filteredChestConditionOptions.map((item) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={styles.suggestionPill}
+                      onPress={() => {
+                        if (
+                          !chestCondition.items.some(
+                            (c) =>
+                              c.name.toLowerCase() === item.toLowerCase()
+                          )
+                        ) {
+                          setChestCondition((prev) => ({
+                            ...prev,
+                            items: [
+                              ...prev.items,
+                              { name: item, date: null },
+                            ],
+                          }));
+                        }
+                      }}
+                    >
+                      <Text style={styles.suggestionText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+            {chestCondition.items.map((condition, index) => (
               <View key={index} style={styles.selectedItem}>
-                <Text style={styles.selectedItemText}>{condition}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.selectedItemText}>
+                    {condition.name}
+                  </Text>
+                  <DateField
+                    label="Condition Since"
+                    value={condition.date}
+                    maximumDate={new Date()}
+                    disabled={formDisabled}
+                    onChange={(date) => {
+                      setChestCondition((prev) => ({
+                        ...prev,
+                        items: prev.items.map((it, i) =>
+                          i === index ? { ...it, date } : it
+                        ),
+                      }));
+                    }}
+                  />
+                </View>
                 <TouchableOpacity
                   onPress={() => {
-                    setChestCondition(prev => ({
+                    setChestCondition((prev) => ({
                       ...prev,
-                      conditions: prev.conditions.filter((_, i) => i !== index)
+                      items: prev.items.filter((_, i) => i !== index),
                     }));
                   }}
                 >
@@ -1129,20 +1987,31 @@ const sectionOrder = [
         )}
       </View>
 
+      {/* Neurological */}
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Epilepsy or other Neurological Disorder?</Text>
+        <Text style={styles.label}>
+          Epilepsy or other Neurological Disorder?
+        </Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
             selected={neurologicalDisorder.istrue}
             disabled={formDisabled}
-            onPress={() => setNeurologicalDisorder(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setNeurologicalDisorder((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!neurologicalDisorder.istrue}
             disabled={formDisabled}
-            onPress={() => setNeurologicalDisorder(prev => ({ ...prev, istrue: false, conditions: [] }))}
+            onPress={() =>
+              setNeurologicalDisorder((prev) => ({
+                ...prev,
+                istrue: false,
+                items: [],
+              }))
+            }
           />
         </View>
         {neurologicalDisorder.istrue && (
@@ -1154,33 +2023,90 @@ const sectionOrder = [
                   style={[styles.input, { flex: 1 }]}
                   value={newNeurologicalCondition}
                   onChangeText={setNewNeurologicalCondition}
-                  placeholder="Enter neurological disorder"
+                  placeholder="Enter or select disorder"
                   placeholderTextColor="#9ca3af"
                 />
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => {
-                    if (newNeurologicalCondition.trim()) {
-                      setNeurologicalDisorder(prev => ({
+                    const v = newNeurologicalCondition.trim();
+                    if (
+                      v &&
+                      !neurologicalDisorder.items.some(
+                        (item) =>
+                          item.name.toLowerCase() === v.toLowerCase()
+                      )
+                    ) {
+                      setNeurologicalDisorder((prev) => ({
                         ...prev,
-                        conditions: [...prev.conditions, newNeurologicalCondition.trim()]
+                        items: [...prev.items, { name: v, date: null }],
                       }));
-                      setNewNeurologicalCondition("");
                     }
+                    setNewNeurologicalCondition("");
                   }}
                 >
                   <Text style={styles.addButtonText}>Add</Text>
                 </TouchableOpacity>
               </View>
             </View>
-            {neurologicalDisorder.conditions.map((condition, index) => (
+
+            {!formDisabled &&
+              filteredNeurologicalOptions.length > 0 &&
+              newNeurologicalCondition.trim().length > 0 && (
+                <View style={styles.suggestionsWrap}>
+                  {filteredNeurologicalOptions.map((item) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={styles.suggestionPill}
+                      onPress={() => {
+                        if (
+                          !neurologicalDisorder.items.some(
+                            (c) =>
+                              c.name.toLowerCase() === item.toLowerCase()
+                          )
+                        ) {
+                          setNeurologicalDisorder((prev) => ({
+                            ...prev,
+                            items: [
+                              ...prev.items,
+                              { name: item, date: null },
+                            ],
+                          }));
+                        }
+                      }}
+                    >
+                      <Text style={styles.suggestionText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+            {neurologicalDisorder.items.map((condition, index) => (
               <View key={index} style={styles.selectedItem}>
-                <Text style={styles.selectedItemText}>{condition}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.selectedItemText}>
+                    {condition.name}
+                  </Text>
+                  <DateField
+                    label="Condition Since"
+                    value={condition.date}
+                    maximumDate={new Date()}
+                    disabled={formDisabled}
+                    onChange={(date) => {
+                      setNeurologicalDisorder((prev) => ({
+                        ...prev,
+                        items: prev.items.map((it, i) =>
+                          i === index ? { ...it, date } : it
+                        ),
+                      }));
+                    }}
+                  />
+                </View>
                 <TouchableOpacity
                   onPress={() => {
-                    setNeurologicalDisorder(prev => ({
+                    setNeurologicalDisorder((prev) => ({
                       ...prev,
-                      conditions: prev.conditions.filter((_, i) => i !== index)
+                      items: prev.items.filter((_, i) => i !== index),
                     }));
                   }}
                 >
@@ -1192,6 +2118,7 @@ const sectionOrder = [
         )}
       </View>
 
+      {/* Heart Problems from API list */}
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Any Heart Problems?</Text>
         <View style={styles.row}>
@@ -1199,13 +2126,21 @@ const sectionOrder = [
             label="Yes"
             selected={heartProblems.istrue}
             disabled={formDisabled}
-            onPress={() => setHeartProblems(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setHeartProblems((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!heartProblems.istrue}
             disabled={formDisabled}
-            onPress={() => setHeartProblems(prev => ({ ...prev, istrue: false, conditions: [] }))}
+            onPress={() =>
+              setHeartProblems((prev) => ({
+                ...prev,
+                istrue: false,
+                items: [],
+              }))
+            }
           />
         </View>
         {heartProblems.istrue && (
@@ -1217,33 +2152,90 @@ const sectionOrder = [
                   style={[styles.input, { flex: 1 }]}
                   value={newHeartProblem}
                   onChangeText={setNewHeartProblem}
-                  placeholder="Enter heart problem"
+                  placeholder="Search or enter heart problem"
                   placeholderTextColor="#9ca3af"
                 />
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => {
-                    if (newHeartProblem.trim()) {
-                      setHeartProblems(prev => ({
+                    const v = newHeartProblem.trim();
+                    if (
+                      v &&
+                      !heartProblems.items.some(
+                        (item) =>
+                          item.name.toLowerCase() === v.toLowerCase()
+                      )
+                    ) {
+                      setHeartProblems((prev) => ({
                         ...prev,
-                        conditions: [...prev.conditions, newHeartProblem.trim()]
+                        items: [...prev.items, { name: v, date: null }],
                       }));
-                      setNewHeartProblem("");
                     }
+                    setNewHeartProblem("");
                   }}
                 >
                   <Text style={styles.addButtonText}>Add</Text>
                 </TouchableOpacity>
               </View>
             </View>
-            {heartProblems.conditions.map((condition, index) => (
+
+            {!formDisabled &&
+              filteredHeartProblemOptions.length > 0 &&
+              newHeartProblem.trim().length > 0 && (
+                <View style={styles.suggestionsWrap}>
+                  {filteredHeartProblemOptions.map((item) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={styles.suggestionPill}
+                      onPress={() => {
+                        if (
+                          !heartProblems.items.some(
+                            (c) =>
+                              c.name.toLowerCase() === item.toLowerCase()
+                          )
+                        ) {
+                          setHeartProblems((prev) => ({
+                            ...prev,
+                            items: [
+                              ...prev.items,
+                              { name: item, date: null },
+                            ],
+                          }));
+                        }
+                      }}
+                    >
+                      <Text style={styles.suggestionText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+            {heartProblems.items.map((condition, index) => (
               <View key={index} style={styles.selectedItem}>
-                <Text style={styles.selectedItemText}>{condition}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.selectedItemText}>
+                    {condition.name}
+                  </Text>
+                  <DateField
+                    label="Problem Since"
+                    value={condition.date}
+                    maximumDate={new Date()}
+                    disabled={formDisabled}
+                    onChange={(date) => {
+                      setHeartProblems((prev) => ({
+                        ...prev,
+                        items: prev.items.map((it, i) =>
+                          i === index ? { ...it, date } : it
+                        ),
+                      }));
+                    }}
+                  />
+                </View>
                 <TouchableOpacity
                   onPress={() => {
-                    setHeartProblems(prev => ({
+                    setHeartProblems((prev) => ({
                       ...prev,
-                      conditions: prev.conditions.filter((_, i) => i !== index)
+                      items: prev.items.filter((_, i) => i !== index),
                     }));
                   }}
                 >
@@ -1255,6 +2247,7 @@ const sectionOrder = [
         )}
       </View>
 
+      {/* Mental Health from master list */}
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Any Mental Health Problems?</Text>
         <View style={styles.row}>
@@ -1262,13 +2255,21 @@ const sectionOrder = [
             label="Yes"
             selected={mentalHealth.istrue}
             disabled={formDisabled}
-            onPress={() => setMentalHealth(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setMentalHealth((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!mentalHealth.istrue}
             disabled={formDisabled}
-            onPress={() => setMentalHealth(prev => ({ ...prev, istrue: false, conditions: [] }))}
+            onPress={() =>
+              setMentalHealth((prev) => ({
+                ...prev,
+                istrue: false,
+                items: [],
+              }))
+            }
           />
         </View>
         {mentalHealth.istrue && (
@@ -1280,33 +2281,90 @@ const sectionOrder = [
                   style={[styles.input, { flex: 1 }]}
                   value={newMentalHealth}
                   onChangeText={setNewMentalHealth}
-                  placeholder="Enter mental health problem"
+                  placeholder="Search or enter mental health problem"
                   placeholderTextColor="#9ca3af"
                 />
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => {
-                    if (newMentalHealth.trim()) {
-                      setMentalHealth(prev => ({
+                    const v = newMentalHealth.trim();
+                    if (
+                      v &&
+                      !mentalHealth.items.some(
+                        (item) =>
+                          item.name.toLowerCase() === v.toLowerCase()
+                      )
+                    ) {
+                      setMentalHealth((prev) => ({
                         ...prev,
-                        conditions: [...prev.conditions, newMentalHealth.trim()]
+                        items: [...prev.items, { name: v, date: null }],
                       }));
-                      setNewMentalHealth("");
                     }
+                    setNewMentalHealth("");
                   }}
                 >
                   <Text style={styles.addButtonText}>Add</Text>
                 </TouchableOpacity>
               </View>
             </View>
-            {mentalHealth.conditions.map((condition, index) => (
+
+            {!formDisabled &&
+              filteredMentalHealthOptions.length > 0 &&
+              newMentalHealth.trim().length > 0 && (
+                <View style={styles.suggestionsWrap}>
+                  {filteredMentalHealthOptions.map((item) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={styles.suggestionPill}
+                      onPress={() => {
+                        if (
+                          !mentalHealth.items.some(
+                            (c) =>
+                              c.name.toLowerCase() === item.toLowerCase()
+                          )
+                        ) {
+                          setMentalHealth((prev) => ({
+                            ...prev,
+                            items: [
+                              ...prev.items,
+                              { name: item, date: null },
+                            ],
+                          }));
+                        }
+                      }}
+                    >
+                      <Text style={styles.suggestionText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+            {mentalHealth.items.map((condition, index) => (
               <View key={index} style={styles.selectedItem}>
-                <Text style={styles.selectedItemText}>{condition}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.selectedItemText}>
+                    {condition.name}
+                  </Text>
+                  <DateField
+                    label="Problem Since"
+                    value={condition.date}
+                    maximumDate={new Date()}
+                    disabled={formDisabled}
+                    onChange={(date) => {
+                      setMentalHealth((prev) => ({
+                        ...prev,
+                        items: prev.items.map((it, i) =>
+                          i === index ? { ...it, date } : it
+                        ),
+                      }));
+                    }}
+                  />
+                </View>
                 <TouchableOpacity
                   onPress={() => {
-                    setMentalHealth(prev => ({
+                    setMentalHealth((prev) => ({
                       ...prev,
-                      conditions: prev.conditions.filter((_, i) => i !== index)
+                      items: prev.items.filter((_, i) => i !== index),
                     }));
                   }}
                 >
@@ -1323,19 +2381,25 @@ const sectionOrder = [
   const renderInfectiousSection = () => (
     <View style={styles.section}>
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Do You Have/Had Hepatitis B, Hepatitis C or HIV?</Text>
+        <Text style={styles.label}>
+          Do You Have/Had Hepatitis B, Hepatitis C or HIV?
+        </Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
             selected={infections.istrue}
             disabled={formDisabled}
-            onPress={() => setInfections(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setInfections((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!infections.istrue}
             disabled={formDisabled}
-            onPress={() => setInfections(prev => ({ ...prev, istrue: false, items: [] }))}
+            onPress={() =>
+              setInfections((prev) => ({ ...prev, istrue: false, items: [] }))
+            }
           />
         </View>
       </View>
@@ -1346,35 +2410,42 @@ const sectionOrder = [
             <View key={infection} style={styles.fieldBlock}>
               <CheckboxRow
                 label={infection}
-                checked={infections.items.some(item => item.name === infection)}
+                checked={infections.items.some((item) => item.name === infection)}
                 disabled={formDisabled}
                 onToggle={() => {
-                  const exists = infections.items.some(item => item.name === infection);
+                  const exists = infections.items.some(
+                    (item) => item.name === infection
+                  );
                   if (exists) {
-                    setInfections(prev => ({
+                    setInfections((prev) => ({
                       ...prev,
-                      items: prev.items.filter(item => item.name !== infection)
+                      items: prev.items.filter(
+                        (item) => item.name !== infection
+                      ),
                     }));
                   } else {
-                    setInfections(prev => ({
+                    setInfections((prev) => ({
                       ...prev,
-                      items: [...prev.items, { name: infection, date: null }]
+                      items: [...prev.items, { name: infection, date: null }],
                     }));
                   }
                 }}
               />
-              {infections.items.some(item => item.name === infection) && (
+              {infections.items.some((item) => item.name === infection) && (
                 <DateField
                   label={`${infection} Date`}
-                  value={infections.items.find(item => item.name === infection)?.date || null}
+                  value={
+                    infections.items.find((item) => item.name === infection)
+                      ?.date || null
+                  }
                   maximumDate={new Date()}
                   disabled={formDisabled}
                   onChange={(date) => {
-                    setInfections(prev => ({
+                    setInfections((prev) => ({
                       ...prev,
-                      items: prev.items.map(item =>
+                      items: prev.items.map((item) =>
                         item.name === infection ? { ...item, date } : item
-                      )
+                      ),
                     }));
                   }}
                 />
@@ -1393,19 +2464,29 @@ const sectionOrder = [
       ) : (
         <>
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Drug, Tobacco or Alcohol addiction?</Text>
+            <Text style={styles.label}>
+              Drug, Tobacco or Alcohol addiction?
+            </Text>
             <View style={styles.row}>
               <ChipButton
                 label="Yes"
                 selected={addiction.istrue}
                 disabled={formDisabled}
-                onPress={() => setAddiction(prev => ({ ...prev, istrue: true }))}
+                onPress={() =>
+                  setAddiction((prev) => ({ ...prev, istrue: true }))
+                }
               />
               <ChipButton
                 label="No"
                 selected={!addiction.istrue}
                 disabled={formDisabled}
-                onPress={() => setAddiction(prev => ({ ...prev, istrue: false, items: [] }))}
+                onPress={() =>
+                  setAddiction((prev) => ({
+                    ...prev,
+                    istrue: false,
+                    items: [],
+                  }))
+                }
               />
             </View>
           </View>
@@ -1416,35 +2497,42 @@ const sectionOrder = [
                 <View key={item} style={styles.fieldBlock}>
                   <CheckboxRow
                     label={item}
-                    checked={addiction.items.some(add => add.name === item)}
+                    checked={addiction.items.some((add) => add.name === item)}
                     disabled={formDisabled}
                     onToggle={() => {
-                      const exists = addiction.items.some(add => add.name === item);
+                      const exists = addiction.items.some(
+                        (add) => add.name === item
+                      );
                       if (exists) {
-                        setAddiction(prev => ({
+                        setAddiction((prev) => ({
                           ...prev,
-                          items: prev.items.filter(add => add.name !== item)
+                          items: prev.items.filter(
+                            (add) => add.name !== item
+                          ),
                         }));
                       } else {
-                        setAddiction(prev => ({
+                        setAddiction((prev) => ({
                           ...prev,
-                          items: [...prev.items, { name: item, date: null }]
+                          items: [...prev.items, { name: item, date: null }],
                         }));
                       }
                     }}
                   />
-                  {addiction.items.some(add => add.name === item) && (
+                  {addiction.items.some((add) => add.name === item) && (
                     <DateField
                       label={`${item} Start Date`}
-                      value={addiction.items.find(add => add.name === item)?.date || null}
+                      value={
+                        addiction.items.find((add) => add.name === item)
+                          ?.date || null
+                      }
                       maximumDate={new Date()}
                       disabled={formDisabled}
                       onChange={(date) => {
-                        setAddiction(prev => ({
+                        setAddiction((prev) => ({
                           ...prev,
-                          items: prev.items.map(add =>
+                          items: prev.items.map((add) =>
                             add.name === item ? { ...add, date } : add
-                          )
+                          ),
                         }));
                       }}
                     />
@@ -1460,7 +2548,8 @@ const sectionOrder = [
 
   const renderFamilySection = () => (
     <View style={styles.section}>
-      {currentPatient?.gender === 2 && (
+      {/* 🔹 Hide pregnancy completely for neonates (category 1) */}
+      {currentPatient?.gender === 2 && currentPatient?.category !== 1 && (
         <View style={styles.fieldBlock}>
           <Text style={styles.label}>Pregnant / Been Pregnant?</Text>
           <View style={styles.row}>
@@ -1484,7 +2573,9 @@ const sectionOrder = [
                 value={pregnancyDetails.date}
                 maximumDate={new Date()}
                 disabled={formDisabled}
-                onChange={(date) => setPregnancyDetails(prev => ({ ...prev, date }))}
+                onChange={(date) =>
+                  setPregnancyDetails((prev) => ({ ...prev, date }))
+                }
               />
               <View style={styles.row}>
                 <View style={[styles.fieldBlock, { flex: 1 }]}>
@@ -1492,7 +2583,12 @@ const sectionOrder = [
                   <TextInput
                     style={styles.input}
                     value={pregnancyDetails.numberOfPregnancies}
-                    onChangeText={(text) => setPregnancyDetails(prev => ({ ...prev, numberOfPregnancies: text }))}
+                    onChangeText={(text) =>
+                      setPregnancyDetails((prev) => ({
+                        ...prev,
+                        numberOfPregnancies: text,
+                      }))
+                    }
                     placeholder="Number"
                     placeholderTextColor="#9ca3af"
                     keyboardType="numeric"
@@ -1503,7 +2599,12 @@ const sectionOrder = [
                   <TextInput
                     style={styles.input}
                     value={pregnancyDetails.liveBirths}
-                    onChangeText={(text) => setPregnancyDetails(prev => ({ ...prev, liveBirths: text }))}
+                    onChangeText={(text) =>
+                      setPregnancyDetails((prev) => ({
+                        ...prev,
+                        liveBirths: text,
+                      }))
+                    }
                     placeholder="Live births"
                     placeholderTextColor="#9ca3af"
                     keyboardType="numeric"
@@ -1516,19 +2617,29 @@ const sectionOrder = [
       )}
 
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Any Known Disease Mother/Father is Suffering / Suffered?</Text>
+        <Text style={styles.label}>
+          Any Known Disease Mother/Father is Suffering / Suffered?
+        </Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
             selected={hereditaryDisease.istrue}
             disabled={formDisabled}
-            onPress={() => setHereditaryDisease(prev => ({ ...prev, istrue: true }))}
+            onPress={() =>
+              setHereditaryDisease((prev) => ({ ...prev, istrue: true }))
+            }
           />
           <ChipButton
             label="No"
             selected={!hereditaryDisease.istrue}
             disabled={formDisabled}
-            onPress={() => setHereditaryDisease(prev => ({ ...prev, istrue: false, items: [] }))}
+            onPress={() =>
+              setHereditaryDisease((prev) => ({
+                ...prev,
+                istrue: false,
+                items: [],
+              }))
+            }
           />
         </View>
       </View>
@@ -1539,35 +2650,49 @@ const sectionOrder = [
             <View key={disease} style={styles.fieldBlock}>
               <CheckboxRow
                 label={disease}
-                checked={hereditaryDisease.items.some(item => item.disease === disease)}
+                checked={hereditaryDisease.items.some(
+                  (item) => item.disease === disease
+                )}
                 disabled={formDisabled}
                 onToggle={() => {
-                  const exists = hereditaryDisease.items.some(item => item.disease === disease);
+                  const exists = hereditaryDisease.items.some(
+                    (item) => item.disease === disease
+                  );
                   if (exists) {
-                    setHereditaryDisease(prev => ({
+                    setHereditaryDisease((prev) => ({
                       ...prev,
-                      items: prev.items.filter(item => item.disease !== disease)
+                      items: prev.items.filter(
+                        (item) => item.disease !== disease
+                      ),
                     }));
                   } else {
-                    setHereditaryDisease(prev => ({
+                    setHereditaryDisease((prev) => ({
                       ...prev,
-                      items: [...prev.items, { disease, name: "" }]
+                      items: [...prev.items, { disease, name: "" }],
                     }));
                   }
                 }}
               />
-              {hereditaryDisease.items.some(item => item.disease === disease) && (
+              {hereditaryDisease.items.some(
+                (item) => item.disease === disease
+              ) && (
                 <View style={styles.fieldBlock}>
                   <Text style={styles.label}>Disease Name</Text>
                   <TextInput
                     style={styles.input}
-                    value={hereditaryDisease.items.find(item => item.disease === disease)?.name || ""}
+                    value={
+                      hereditaryDisease.items.find(
+                        (item) => item.disease === disease
+                      )?.name || ""
+                    }
                     onChangeText={(text) => {
-                      setHereditaryDisease(prev => ({
+                      setHereditaryDisease((prev) => ({
                         ...prev,
-                        items: prev.items.map(item =>
-                          item.disease === disease ? { ...item, name: text } : item
-                        )
+                        items: prev.items.map((item) =>
+                          item.disease === disease
+                            ? { ...item, name: text }
+                            : item
+                        ),
                       }));
                     }}
                     placeholder={`Enter ${disease} details`}
@@ -1585,19 +2710,31 @@ const sectionOrder = [
   const renderPhysicalSection = () => (
     <View style={styles.section}>
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Any Lumps Found in Physical Examination?</Text>
+        <Text style={styles.label}>
+          Any Lumps Found in Physical Examination?
+        </Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
             selected={lumps.istrue}
             disabled={formDisabled}
-            onPress={() => setLumps(prev => ({ ...prev, istrue: true }))}
+            onPress={() => setLumps((prev) => ({ ...prev, istrue: true }))}
           />
           <ChipButton
             label="No"
             selected={!lumps.istrue}
             disabled={formDisabled}
-            onPress={() => setLumps({ istrue: false, details: { location: "", size: "", consistency: "", date: null } })}
+            onPress={() =>
+              setLumps({
+                istrue: false,
+                details: {
+                  location: "",
+                  size: "",
+                  consistency: "",
+                  date: null,
+                },
+              })
+            }
           />
         </View>
       </View>
@@ -1609,7 +2746,12 @@ const sectionOrder = [
             value={lumps.details.date}
             maximumDate={new Date()}
             disabled={formDisabled}
-            onChange={(date) => setLumps(prev => ({ ...prev, details: { ...prev.details, date } }))}
+            onChange={(date) =>
+              setLumps((prev) => ({
+                ...prev,
+                details: { ...prev.details, date },
+              }))
+            }
           />
 
           <View style={styles.fieldBlock}>
@@ -1617,14 +2759,28 @@ const sectionOrder = [
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={lumps.details.location}
-                onValueChange={(value) => setLumps(prev => ({ ...prev, details: { ...prev.details, location: value } }))}
+                onValueChange={(value) =>
+                  setLumps((prev) => ({
+                    ...prev,
+                    details: { ...prev.details, location: value },
+                  }))
+                }
                 style={styles.picker}
               >
                 <Picker.Item label="Select Location" value="" />
                 <Picker.Item label="Thyroid" value="Thyroid" />
-                <Picker.Item label="Lymph nodes - neck" value="Lymph nodes - neck" />
-                <Picker.Item label="Lymph nodes - jaw" value="Lymph nodes - jaw" />
-                <Picker.Item label="Lymph nodes - ear" value="Lymph nodes - ear" />
+                <Picker.Item
+                  label="Lymph nodes - neck"
+                  value="Lymph nodes - neck"
+                />
+                <Picker.Item
+                  label="Lymph nodes - jaw"
+                  value="Lymph nodes - jaw"
+                />
+                <Picker.Item
+                  label="Lymph nodes - ear"
+                  value="Lymph nodes - ear"
+                />
                 <Picker.Item label="Salivary glands" value="Salivary glands" />
                 <Picker.Item label="Breast" value="Breast" />
                 <Picker.Item label="Lung" value="Lung" />
@@ -1632,8 +2788,14 @@ const sectionOrder = [
                 <Picker.Item label="Spleen" value="Spleen" />
                 <Picker.Item label="Kidneys" value="Kidneys" />
                 <Picker.Item label="Ovaries" value="Ovaries" />
-                <Picker.Item label="Lymph nodes - abdominal" value="Lymph nodes - abdominal" />
-                <Picker.Item label="Lymph nodes - axillary" value="Lymph nodes - axillary" />
+                <Picker.Item
+                  label="Lymph nodes - abdominal"
+                  value="Lymph nodes - abdominal"
+                />
+                <Picker.Item
+                  label="Lymph nodes - axillary"
+                  value="Lymph nodes - axillary"
+                />
                 <Picker.Item label="Arms" value="Arms" />
                 <Picker.Item label="Legs" value="Legs" />
               </Picker>
@@ -1645,7 +2807,12 @@ const sectionOrder = [
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={lumps.details.size}
-                onValueChange={(value) => setLumps(prev => ({ ...prev, details: { ...prev.details, size: value } }))}
+                onValueChange={(value) =>
+                  setLumps((prev) => ({
+                    ...prev,
+                    details: { ...prev.details, size: value },
+                  }))
+                }
                 style={styles.picker}
               >
                 <Picker.Item label="Select Size" value="" />
@@ -1661,7 +2828,12 @@ const sectionOrder = [
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={lumps.details.consistency}
-                onValueChange={(value) => setLumps(prev => ({ ...prev, details: { ...prev.details, consistency: value } }))}
+                onValueChange={(value) =>
+                  setLumps((prev) => ({
+                    ...prev,
+                    details: { ...prev.details, consistency: value },
+                  }))
+                }
                 style={styles.picker}
               >
                 <Picker.Item label="Select Consistency" value="" />
@@ -1685,13 +2857,18 @@ const sectionOrder = [
             label="Yes"
             selected={cancer.istrue}
             disabled={formDisabled}
-            onPress={() => setCancer(prev => ({ ...prev, istrue: true }))}
+            onPress={() => setCancer((prev) => ({ ...prev, istrue: true }))}
           />
           <ChipButton
             label="No"
             selected={!cancer.istrue}
             disabled={formDisabled}
-            onPress={() => setCancer({ istrue: false, details: { type: "", stage: "", date: null } })}
+            onPress={() =>
+              setCancer({
+                istrue: false,
+                details: { type: "", stage: "", date: null },
+              })
+            }
           />
         </View>
       </View>
@@ -1703,7 +2880,12 @@ const sectionOrder = [
             value={cancer.details.date}
             maximumDate={new Date()}
             disabled={formDisabled}
-            onChange={(date) => setCancer(prev => ({ ...prev, details: { ...prev.details, date } }))}
+            onChange={(date) =>
+              setCancer((prev) => ({
+                ...prev,
+                details: { ...prev.details, date },
+              }))
+            }
           />
 
           <View style={styles.fieldBlock}>
@@ -1711,14 +2893,25 @@ const sectionOrder = [
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={cancer.details.type}
-                onValueChange={(value) => setCancer(prev => ({ ...prev, details: { ...prev.details, type: value } }))}
+                onValueChange={(value) =>
+                  setCancer((prev) => ({
+                    ...prev,
+                    details: { ...prev.details, type: value },
+                  }))
+                }
                 style={styles.picker}
               >
                 <Picker.Item label="Select Type" value="" />
                 <Picker.Item label="Breast Cancer" value="Breast Cancer" />
                 <Picker.Item label="Lung Cancer" value="Lung Cancer" />
-                <Picker.Item label="Prostate Cancer" value="Prostate Cancer" />
-                <Picker.Item label="Colorectal Cancer" value="Colorectal Cancer" />
+                <Picker.Item
+                  label="Prostate Cancer"
+                  value="Prostate Cancer"
+                />
+                <Picker.Item
+                  label="Colorectal Cancer"
+                  value="Colorectal Cancer"
+                />
                 <Picker.Item label="Leukemia" value="Leukemia" />
                 <Picker.Item label="Lymphoma" value="Lymphoma" />
                 <Picker.Item label="Other" value="Other" />
@@ -1731,7 +2924,12 @@ const sectionOrder = [
             <TextInput
               style={styles.input}
               value={cancer.details.stage}
-              onChangeText={(text) => setCancer(prev => ({ ...prev, details: { ...prev.details, stage: text } }))}
+              onChangeText={(text) =>
+                setCancer((prev) => ({
+                  ...prev,
+                  details: { ...prev.details, stage: text },
+                }))
+              }
               placeholder="Enter cancer stage"
               placeholderTextColor="#9ca3af"
             />
@@ -1771,78 +2969,99 @@ const sectionOrder = [
         return renderBasicSection();
     }
   };
+  const isLastSection = sectionOrder[sectionOrder.length - 1] === section;  
 
   return (
     <View style={styles.screen}>
-      
-
-      {/* Header */}
-      
-     
-      {/* Body */}
       <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={{ flex: 1 }}
-            > 
-      <ScrollView
-  showsVerticalScrollIndicator={true}
-  style={{ flex: 1 }}
-  contentContainerStyle={{ padding: 16, paddingBottom: 120, flexGrow: 1 }}
->
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={true}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: 120,
+            flexGrow: 1,
+          }}
+        >
+          {renderSection()}
 
-        {renderSection()}
-<View style={styles.header}>
-       
-       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-  
-  {/* PREV */}
-  <TouchableOpacity
-    style={[styles.navButton]}
-     onPress={() => {
-      const idx = sectionOrder.indexOf(section);
-      if (idx > 0) {
-        navigation.navigate("MedicalHistoryForm", {
-          section: sectionOrder[idx - 1],
-          medicalHistoryData: formData,
-          onDataUpdate,
-        });
-      }
-    }}
-  >
-    <Text style={styles.navButtonText}>Prev</Text>
-  </TouchableOpacity>
+          {/* Prev / Next navigation (same order as web flow) */}
+          <View style={styles.header}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              {/* PREV */}
+              <TouchableOpacity
+                style={[styles.navButton]}
+                onPress={() => {
+                  const idx = sectionOrder.indexOf(section);
+                  if (idx > 0) {
+                    navigation.navigate("MedicalHistoryForm", {
+                      section: sectionOrder[idx - 1],
+                      medicalHistoryData: formData,
+                      onDataUpdate,
+                    });
+                  }
+                }}
+              >
+                <Text style={styles.navButtonText}>Prev</Text>
+              </TouchableOpacity>
 
-  {/* NEXT */}
-  <TouchableOpacity
-    style={[styles.navButton]}
-    onPress={() => {
-      const order = [
-        "basic","surgical","lipid","allergies","prescribed","selfmeds",
-        "health","infectious","addiction","family","physical","cancer"
-      ];
-      const idx = order.indexOf(section);
-      if (idx < order.length - 1) {
-        navigation.navigate("MedicalHistoryForm", {
-          section: order[idx + 1],
-          medicalHistoryData,
-          onDataUpdate
-        });
-      }
-    }}
-  >
-    <Text style={styles.navButtonText}>Next</Text>
-  </TouchableOpacity>
+              {/* NEXT – disabled until basic details are filled */}
+               {isLastSection ? (
+                <TouchableOpacity
+                  style={[
+                    styles.navButton,
+                    formDisabled && styles.navButtonDisabled,
+                  ]}
+                  disabled={formDisabled}
+                  onPress={() => {
+                    if (formDisabled) return;
+                    onDataUpdate(formData); // ensure latest data
+                   handleSave();
+                  }}
+                >
+                  <Text style={styles.navButtonText}>Save</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.navButton,
+                    formDisabled && styles.navButtonDisabled,
+                  ]}
+                  disabled={formDisabled}
+                  onPress={() => {
+                    if (formDisabled) return;
+                    const idx = sectionOrder.indexOf(section);
+                    if (idx < sectionOrder.length - 1) {
+                      navigation.navigate("MedicalHistoryForm", {
+                        section: sectionOrder[idx + 1],
+                        medicalHistoryData: formData,
+                        onDataUpdate,
+                      });
+                    }
+                  }}
+                >
+                  <Text style={styles.navButtonText}>Next</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-</View>
-
-      </View>
-      </ScrollView>
-       </KeyboardAvoidingView>
+      {/* Footer fixed above navigation bar */}
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
       {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+        <View
+          pointerEvents="none"
+          style={[styles.navShield, { height: insets.bottom }]}
+        />
       )}
     </View>
   );
@@ -1864,13 +3083,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-    justifyContent: "center",
-    alignItems: "center",
+    marginTop: 16,
+    borderRadius: 12,
   },
   headerTitle: {
     flex: 1,
@@ -1892,9 +3106,6 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
   },
   section: {
     backgroundColor: "#ffffff",
@@ -2036,7 +3247,7 @@ const styles = StyleSheet.create({
   selectedItem: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: 12,
     backgroundColor: "#f3f4f6",
     borderRadius: 8,
@@ -2075,23 +3286,25 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   navButton: {
-  paddingHorizontal: 16,
-  paddingVertical: 8,
-  borderRadius: 8,
-  backgroundColor: "#14b8a6",
-},
-navButtonText: {
-  color: "#fff",
-  fontWeight: "600",
-  fontSize: 14,
-},
- footerWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#14b8a6",
+  },
+  navButtonDisabled: {
+    opacity: 0.4,
+  },
+  navButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  footerWrap: {
     position: "absolute",
     left: 0,
     right: 0,
     height: 70,
     justifyContent: "center",
-    // Footer itself should render full width
   },
   navShield: {
     position: "absolute",
@@ -2100,7 +3313,24 @@ navButtonText: {
     bottom: 0,
     backgroundColor: "transparent",
   },
-
+  suggestionsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  suggestionPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    backgroundColor: "#f9fafb",
+  },
+  suggestionText: {
+    fontSize: 12,
+    color: "#374151",
+  },
 });
 
 export default MedicalHistoryFormScreen;

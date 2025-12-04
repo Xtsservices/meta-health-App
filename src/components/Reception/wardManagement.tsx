@@ -66,12 +66,12 @@ const WardManagementMobile: React.FC = () => {
 
         const res = await AuthFetch(`ward/${user?.hospitalID}`, token);
 
-        if (res?.status === "success" && Array.isArray(res?.data?.wards)) {
+        if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.wards)) {
           setWards(res?.data?.wards);
         } else if (Array.isArray(res)) {
           setWards(res);
         } else {
-          setError(res?.message || "Failed to fetch wards");
+          setError("message" in res && res?.message || "Failed to fetch wards");
         }
       } catch (e) {
         setError("Failed to fetch wards");

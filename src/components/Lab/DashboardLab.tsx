@@ -994,10 +994,10 @@ const DashboardLab: React.FC = () => {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         userName={`${user?.firstName} ${user?.lastName}`}
-        userImage={user?.avatarUrl || user?.profileImage}
+        userImage={user?.avatarUrl || user?.profileImage  ||user?.imageURL}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("Profile" as never);
+          navigation.navigate("DoctorProfile" as never);
         }}
         items={getSidebarItems()}
         bottomItems={bottomItems}

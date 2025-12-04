@@ -252,7 +252,7 @@ const AllAlerts: React.FC<AllAlertsProps> = ({
 
   const handleViewPatient = (patientID: number) => {
     setShowModal(false);
-    navigation.navigate("PatientDetails", { patientId: patientID });
+    navigation.navigate("PatientProfile", { id: patientID });
   };
 
   const handleMarkSeen = (id: number) => {

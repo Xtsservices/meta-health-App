@@ -47,17 +47,66 @@ function yesNo(flag: boolean | string | undefined): string {
   return flag ? "Yes" : "No";
 }
 
-function splitValueAndDate(source?: string): { text: string; date: string } {
-  if (!source) return { text: "", date: "" };
-  const parts = source.split(",");
-  const text = parts[0]?.trim() || "";
-  const dateRaw = parts
-    .find((p) => p.includes("Date:"))
-    ?.replace("Date:", "")
-    .trim();
-  const date =
-    dateRaw && !isNaN(Date.parse(dateRaw)) ? formatDate(new Date(dateRaw)) : "";
-  return { text, date };
+function extractTextAndDate(source?: string): { text: string; date: string } {
+  if (!source || source.trim() === "" || source.toLowerCase() === "none") {
+    return { text: "No", date: "" };
+  }
+
+  const raw = source.trim();
+
+  // Common patterns:
+  // "Yes:15 Oct 2024"
+  // "Breast cancer:2023"
+  // "Lump in breast: 01 Jan 2025"
+  // "Pregnant: 8 weeks, Due: 10 Sep 2025"
+  // "No"
+
+  // First, check if it's just "No" / "None"
+  if (/^no$|^none$/i.test(raw)) {
+    return { text: "No", date: "" };
+  }
+
+  // Try to find a date pattern anywhere in the string
+  // Matches: 01 Dec 2025, 15 Oct 2024, 2023, 10/05/2024, etc.
+  const dateRegex = /(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})|(\d{4})|(\d{1,2}\/\d{1,2}\/\d{4})/g;
+  const datesFound = raw.match(dateRegex);
+
+  // Extract the first valid date (prefer full date over year-only)
+  let date = "";
+  if (datesFound) {
+    const fullDate = datesFound.find(d => d.includes(" ")) || datesFound[0];
+    date = fullDate.trim();
+  }
+
+  // Now extract the main text (remove date parts if needed for cleaner display)
+  let text = raw;
+
+  if (date) {
+    // Remove the date from text if it's at the end or after colon
+    text = raw
+      .replace(/:\s*\d{1,2}\s+[A-Za-z]{3}\s+\d{4}/, "")   // "Yes: 01 Dec 2025" → "Yes"
+      .replace(/:\s*\d{4}/, "")                             // "Cancer:2023" → "Cancer"
+      .replace(/\s*,\s*(Due|Date)?:?.*$/i, "")              // Remove ", Due: 10 Sep 2025"
+      .replace(dateRegex, "")                               // Remove any remaining dates
+      .replace(/[:\-–—]\s*$/, "")                           // Clean trailing colon/dashes
+      .trim();
+  }
+
+  // Final cleanup
+  if (!text || text === "Yes" || text === "No") {
+    text = text || (raw.toLowerCase().includes("no") || raw.toLowerCase().includes("none") ? "No" : "Yes");
+  }
+
+  // If text is still empty but we have raw, use cleaned raw
+  if (!text && raw) {
+    text = raw.split(/[:\-–—]/)[0].trim() || "Yes";
+  }
+
+  // Capitalize common answers
+  if (text.toLowerCase() === "yes") text = "Yes";
+  if (text.toLowerCase() === "no") text = "No";
+
+  return { text: text || "Yes", date };
 }
 
 function parseHealthCondition(source?: string): { text: string; date: string } {
@@ -133,10 +182,16 @@ const dispatch = useDispatch()
         token
       );
       if (response.status === "success") {
-        setMedicalHistory(response?.data?.medicalHistory);
+        setMedicalHistory(response && "data" in response && response?.data?.medicalHistory);
       }
     } catch (error) {
-      dispatch(showError(error?.message || error || "Error fetching medical history"))
+      const errorMessage =
+        error && typeof error === "object" && "message" in error
+          ? (error as { message?: string }).message
+          : typeof error === "string"
+          ? error
+          : "Error fetching medical history";
+      dispatch(showError(errorMessage ?? "Error fetching medical history"));
       
     } finally {
       setLoading(false);
@@ -159,11 +214,48 @@ const dispatch = useDispatch()
   const infections = listFrom(medicalHistory?.infections);
   const drugs = listFrom(medicalHistory?.drugs);
 
-  const infectionDates = parseInfections(medicalHistory?.infections);
-  const drugDates = parseInfections(medicalHistory?.drugs);
+  /**
+ * Parses strings like:
+ * "Alcohol:01 Dec 2025, Tobacco:01 Dec 2025, Drugs:None"
+ * "HIV:Positive 01 Dec 2025, Tuberculosis:Negative, Hepatitis C:None"
+ * "Diabetes:01 Dec 2025, Hypertension:15 Mar 2024"
+ *
+ * Returns: { Alcohol: "01 Dec 2025", Tobacco: "01 Dec 2025", ... }
+ */
+const parseMedicalHistoryDates = (
+  input: string | undefined | null
+): Record<string, string> => {
+  if (!input || typeof input !== "string") return {};
+
+  const result: Record<string, string> = {};
+
+  // Split by comma, then by colon
+  const pairs = input.split(",").map((p) => p.trim());
+
+  for (const pair of pairs) {
+    if (!pair) continue;
+
+    // Handle both "Key:Date" and "Key: Date" (with space)
+    const firstColonIndex = pair.indexOf(":");
+    if (firstColonIndex === -1) continue;
+
+    const key = pair.substring(0, firstColonIndex).trim();
+    const value = pair.substring(firstColonIndex + 1).trim();
+
+    if (key) {
+      // Store even if value is "None", "Negative", etc. — useful for display
+      result[key] = value || "";
+    }
+  }
+
+  return result;
+};
+
+ const drugDates     = parseMedicalHistoryDates(medicalHistory?.drugs);
+const infectionDates = parseMedicalHistoryDates(medicalHistory?.infections);
 
   const hasTobacco =
-    drugs.some((d) => d.includes("Tobbaco")) || !!drugDates["Tobbaco"];
+    drugs.some((d) => d.includes("Tobacco")) || !!drugDates["Tobacco"];
   const hasDrugs =
     drugs.some((d) => d.includes("Drugs")) || !!drugDates["Drugs"];
   const hasAlcohol =
@@ -178,17 +270,38 @@ const dispatch = useDispatch()
     infections.some((inf) => inf.includes(infectionList[0])) ||
     infectionDates[infectionList[0]];
 
-  const cancer = splitValueAndDate(medicalHistory?.cancer);
-  const lumps = splitValueAndDate(medicalHistory?.lumps);
-  const pregnant = splitValueAndDate(medicalHistory?.pregnant);
+  const cancer = extractTextAndDate(medicalHistory?.cancer);
+  const lumps = extractTextAndDate(medicalHistory?.lumps);
+  const pregnant = extractTextAndDate(medicalHistory?.pregnant);
   const hereditary = listFrom(medicalHistory?.hereditaryDisease);
 
-  const familyDiseases = parseFamilyDiseases(medicalHistory?.familyDisease);
+  const hasFatherDisease = hereditary.some(
+    (item) =>
+      item === heriditaryList[0] ||
+      item.toLowerCase().startsWith(`${heriditaryList[0].toLowerCase()}:`)
+  );
+  const hasMotherDisease = hereditary.some(
+    (item) =>
+      item === heriditaryList[1] ||
+      item.toLowerCase().startsWith(`${heriditaryList[1].toLowerCase()}:`)
+  );
+  const hasSiblingDisease = hereditary.some(
+    (item) =>
+      item === heriditaryList[2] ||
+      item.toLowerCase().startsWith(`${heriditaryList[2].toLowerCase()}:`)
+  );
+
+// ✅ if familyDisease not present, fall back to hereditaryDisease ("Father:Diabetes" etc.)
+  const familyDiseases = parseFamilyDiseases(
+    medicalHistory?.familyDisease || medicalHistory?.hereditaryDisease
+  );
+
   const familyDateRaw = medicalHistory?.hereditaryDisease
     ?.split(",")
     .find((i) => i.includes("Date:"))
     ?.replace("Date:", "")
     .trim();
+
   const familyDate =
     familyDateRaw && !isNaN(Date.parse(familyDateRaw))
       ? formatDate(new Date(familyDateRaw))
@@ -429,7 +542,7 @@ const dispatch = useDispatch()
             <InfoRowWithDate
               label="Tobacco"
               value={yesNo(hasTobacco)}
-              date={drugDates["Tobbaco"]}
+              date={drugDates["Tobacco"]}
             />
             <InfoRowWithDate
               label="Drugs"
@@ -495,13 +608,14 @@ const dispatch = useDispatch()
             <View style={styles.familyHeader}>
               <Text style={styles.familyTitle}>Father</Text>
               <Text
-                style={[
-                  styles.familyStatus,
-                  hereditary.includes(heriditaryList[0]) && styles.familyStatusYes,
-                ]}
-              >
-                {yesNo(hereditary.includes(heriditaryList[0]))}
-              </Text>
+  style={[
+    styles.familyStatus,
+    hasFatherDisease && styles.familyStatusYes,
+  ]}
+>
+  {yesNo(hasFatherDisease)}
+</Text>
+
             </View>
             {(familyDiseases.father || familyDiseases.Father) && (
               <Text style={styles.familyDisease} numberOfLines={0}>
@@ -516,14 +630,15 @@ const dispatch = useDispatch()
           <View style={styles.familyMember}>
             <View style={styles.familyHeader}>
               <Text style={styles.familyTitle}>Mother</Text>
-              <Text
-                style={[
-                  styles.familyStatus,
-                  hereditary.includes(heriditaryList[1]) && styles.familyStatusYes,
-                ]}
-              >
-                {yesNo(hereditary.includes(heriditaryList[1]))}
-              </Text>
+             <Text
+  style={[
+    styles.familyStatus,
+    hasMotherDisease && styles.familyStatusYes,
+  ]}
+>
+  {yesNo(hasMotherDisease)}
+</Text>
+
             </View>
             {(familyDiseases.mother || familyDiseases.Mother) && (
               <Text style={styles.familyDisease} numberOfLines={0}>
@@ -539,13 +654,14 @@ const dispatch = useDispatch()
             <View style={styles.familyHeader}>
               <Text style={styles.familyTitle}>Siblings</Text>
               <Text
-                style={[
-                  styles.familyStatus,
-                  hereditary.includes(heriditaryList[2]) && styles.familyStatusYes,
-                ]}
-              >
-                {yesNo(hereditary.includes(heriditaryList[2]))}
-              </Text>
+  style={[
+    styles.familyStatus,
+    hasSiblingDisease && styles.familyStatusYes,
+  ]}
+>
+  {yesNo(hasSiblingDisease)}
+</Text>
+
             </View>
             {(familyDiseases.siblings ||
               familyDiseases.Siblings ||

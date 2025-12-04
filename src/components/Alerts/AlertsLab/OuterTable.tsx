@@ -35,6 +35,13 @@ import { showSuccess, showError } from "../../../store/toast.slice";
 import { patientCategory } from "../../../utils/role";
 
 const PAGE_SIZE = isTablet ? 15 : 10;
+interface SelectedNurse {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phoneNo?: string;
+}
+
 
 interface PatientOuterTableProps {
   title: string;
@@ -87,6 +94,11 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   const [rejectReasons, setRejectReasons] = useState<{ [key: string]: string }>(
     {}
   );
+
+    const [orderNurseMap, setOrderNurseMap] = useState<{
+    [orderId: string]: SelectedNurse;
+  }>({});
+
   const [selectedRejectId, setSelectedRejectId] = useState<string | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [departmentNames, setDepartmentNames] = useState<{
@@ -184,8 +196,9 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
               `department/singledpt/${departmentID}`,
               token
             );
+            
             const departmentName =
-              departmentData?.department?.[0]?.name ||
+             departmentData?.department?.[0]?.name ||
               departmentData?.data?.department?.[0]?.name ||
               departmentData?.name ||
               departmentData?.data?.name ||
@@ -334,42 +347,100 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         dispatch(showError("Order not found"));
         return;
       }
-
+const selectedNurseForOrder = orderNurseMap[String(orderId)];
+      const nurseIdForPayload =
+        selectedNurseForOrder?.id ?? order?.nurseID ?? null;
       const patientID = getPatientId(order);
       const patientTimeLineID = getTimelineId(order);
       let res;
 
-      if (isReceptionUser) {
-        // 👇 Reception approve API – both tests & medicines are already in order
-        let payload
-        if (order?.testsList?.length > 0 && order?.medicinesList?.length > 0) {
-         payload = {
-          updateMedicines:true,
-          updateTests: true,
-        };
-        }else if (order?.testsList?.length > 0 && (order?.medicinesList?.length === 0 || !order?.medicinesList)) {
-          payload = {
-          updateTests: true,
-        };
-        }else {
-           payload = {
-          updateMedicines: true,
-        };
+           if (isReceptionUser) {
+        // 🔹 Determine if this order has tests / medicines
+                 const hasTests =
+          Array.isArray(order?.testsList) && order.testsList.length > 0;
+        const hasMedicines =
+          Array.isArray(order?.medicinesList) &&
+          order.medicinesList.length > 0;
+
+
+        // 🔹 For IPD/Emergency medicine orders, nurse is mandatory
+        if ( hasMedicines && !nurseIdForPayload) {
+          dispatch(
+            showError(
+              "Please select a nurse for this medicine order before approving"
+            )
+          );
+          return;
         }
+
+
+
+        // 👇 Reception approve API – include which parts to update
+        let payload: any = {};
+
+        if (hasTests && hasMedicines) {
+          payload = {
+            updateMedicines: true,
+            updateTests: true,
+          };
+        } else if (hasTests && !hasMedicines) {
+          payload = {
+            updateTests: true,
+          };
+        } else if (!hasTests && hasMedicines) {
+          payload = {
+            updateMedicines: true,
+          };
+        }
+
+        // 🔹 Send nurseID when medicines are present
+                if (hasMedicines && nurseIdForPayload) {
+          payload.nurseID = nurseIdForPayload;
+        }
+
 
         res = await AuthPost(
           `reception/${user?.hospitalID}/completed/${patientID}/${patientTimeLineID}/updateReceptionAlerts`,
           payload,
           token
         );
-      } else if (isPharmacy) {
-        // 👇 Pharmacy approve API
+            } else if (isPharmacy) {
+        // 🔹 Pharmacy approve API – nurse required if medicines exist
+               const hasMedicines =
+          Array.isArray(order?.medicinesList) &&
+          order.medicinesList.length > 0;
+
+        const isIpdOrEmergencyOrder =
+          order?.ptype === 2 ||
+          order?.ptype === 3 ||
+          order?.departmemtType === 2 ||
+          order?.departmemtType === 3;
+
+        if (isIpdOrEmergencyOrder && hasMedicines && !nurseIdForPayload) {
+          dispatch(
+            showError(
+              "Please select a nurse for this medicine order before approving"
+            )
+          );
+          // Optional: open details so nurse can be picked
+          navigateToPharmacyOrderDetails(order);
+          return;
+        }
+
+        const payload: any = {};
+
+        if (hasMedicines && nurseIdForPayload) {
+          payload.nurseID = nurseIdForPayload;
+        }
+
+
         res = await AuthPost(
           `medicineInventoryPatientsOrder/${user?.hospitalID}/completed/${patientTimeLineID}/updatePatientOrderStatus`,
-          {},
+          payload,
           token
         );
       } else {
+
         // 👇 Existing Lab approve API
         res = await AuthPost(
           `test/${user?.roleName}/${user?.hospitalID}/approved/${
@@ -380,9 +451,9 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         );
       }
 
-      if (res?.data?.status === "success" || res?.status === 200) {
+      if (res?.data?.status === 200 ) {
         setActionValues((prev) => ({ ...prev, [orderId]: "Accepted" }));
-        dispatch(showSuccess("Order approved successfully"));
+        dispatch(showSuccess(res?.data?.message || "Order approved successfully"));
         if (onRefresh) {
           onRefresh();
         }
@@ -562,6 +633,15 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
     const currentAction = actionValues[patient?.id] || "Pending";
     const statusStyle = getStatusColor(currentAction);
     const departmentName = patient?.location || getDepartmentName(patient);
+  const handleNurseSelectedForOrder = (
+    orderId: string | number,
+    nurse: SelectedNurse
+  ) => {
+    setOrderNurseMap((prev) => ({
+      ...prev,
+      [String(orderId)]: nurse,
+    }));
+  };
 
     return (
       <View
@@ -703,11 +783,11 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
                     Tests Total: ₹{testsAmount.toFixed(2)}
                   </Text>
                 )}
-                {medicinesAmount > 0 && (
+                {/* {medicinesAmount > 0 && (
                   <Text style={styles.summaryExpandedText}>
                     Medicines Total: ₹{medicinesAmount.toFixed(2)}
                   </Text>
-                )}
+                )} */}
               </View>
             )}
 
@@ -746,10 +826,10 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
             )}
 
             {/* 🔹 Pass both tests & medicines to InnerTable */}
-            <InnerTable
+                       <InnerTable
               patientID={patient?.patientID}
               patientTimeLineID={patient?.timeLineID || patient?.id}
-              data={patient?.testsList || []} // backward compatibility
+              data={patient?.testsList || []}
               testsList={patient?.testsList || []}
               medicinesList={patient?.medicinesList || []}
               isButton={isButton}
@@ -759,17 +839,20 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
               paidAmount={patient?.paidAmount}
               dueAmount={dueAmount.toString()}
               grossAmount={(testsAmount + medicinesAmount).toString()}
-              gstAmount={"0"} // You'll need to calculate this properly
+              gstAmount={"0"}
               totalAmount={(testsAmount + medicinesAmount).toString()}
               isRejected={isRejectedTab}
               rejectedReason={patient?.rejectedReason}
-              // sale={sale}
-              // isRejectReason={isRejectReason}
               isPharmacyOrder={isPharmacy}
               alertFrom={isPharmacy ? "Pharmacy" : undefined}
               patientData={patient}
               nurseID={patient?.nurseID}
+              // 🔹 NEW: wire nurse selection state
+              orderId={patient?.id}
+              selectedNurse={orderNurseMap[String(patient?.id)]}
+              onNurseSelect={handleNurseSelectedForOrder}
             />
+
           </View>
         )}
       </View>

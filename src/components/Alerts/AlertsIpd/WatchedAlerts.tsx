@@ -113,6 +113,7 @@ const AlertDetailModal: React.FC<{
   onClose: () => void;
   onViewPatient: (patientID: number) => void;
 }> = ({ visible, alert, onClose, onViewPatient }) => {
+ 
   if (!alert) return null;
 
   const getPriorityColor = (priority: string) => {
@@ -245,9 +246,9 @@ const WatchedAlerts: React.FC<WatchedAlertsProps> = ({
   };
 
   const handleViewPatient = (patientID: number) => {
-    setShowModal(false);
-    navigation.navigate("PatientDetails", { patientId: patientID });
-  };
+  setShowModal(false);
+  navigation.navigate("PatientProfile", { id: patientID });
+};
 
   const totalAlerts = filteredHighPriority.length + filteredMediumPriority.length + filteredLowPriority.length;
 

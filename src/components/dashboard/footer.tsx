@@ -9,20 +9,17 @@ import {
   Dimensions,
 } from "react-native";
 import {
-  LayoutDashboard,
   UserPlus2,
-  List as ListIcon,
-  Settings,
-  Package, // For inventory icon
-  ShoppingCart, // For sales icon
 } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store/store";
+import { zoneType } from "../../utils/role";
+import {UserPlusIcon, LayoutDashboardIcon, ListIcon,  Package2Icon, SettingsIcon, ShoppingCartIcon } from "../../utils/SvgIcons";
 
 const { width: W } = Dimensions.get("window");
 
-export type TabKey = "dashboard" | "addPatient" | "patients" | "management";
+export type TabKey = "dashboard" | "addPatient" | "patients" | "management" | "alerts" | "billing" | "PatientList";
 
 type Props = {
   active?: TabKey;                     // default 'dashboard'
@@ -35,7 +32,6 @@ const Footer: React.FC<Props> = ({
 }) => {
   const navigation = useNavigation<any>();
   const user = useSelector((state: RootState) => state.currentUser);
-
   const handleTabPress = (k: TabKey) => {
     if (k === "dashboard") {
       if (user?.roleName === "surgeon" || user?.roleName === "anesthetist") {
@@ -46,8 +42,8 @@ const Footer: React.FC<Props> = ({
         navigation.navigate("DashboardOpd");
       } else if (user?.patientStatus === 2) {
         navigation.navigate("DashboardIpd");
-      } else if (user?.patientStatus === 2) {
-        navigation.navigate("TriageDashboard");
+      } else if (user?.patientStatus === 3 && user?.roleName !== "emergency") {
+        navigation.navigate("DashboardTriage");
       } else if (user?.roleName === "reception") {
         navigation.navigate("DashboardReception");
       } else if (user?.roleName === "pharmacy") {
@@ -75,6 +71,8 @@ const Footer: React.FC<Props> = ({
         navigation.navigate("PatientListLab");
       }else if (user?.roleName === "reception") {
         navigation.navigate("ReceptionPatientsList");
+      }else if (user?.roleName === "emergency") {
+         navigation.navigate("PatientList", { zone: zoneType[user?.emergencyType as keyof typeof zoneType] });
       }
        else {
         navigation.navigate("PatientList");
@@ -98,6 +96,8 @@ const Footer: React.FC<Props> = ({
     // Pathology/Radiology specific labels
     if (k === "addPatient" && (user?.roleName === "pathology" || user?.roleName === "radiology")) {
       return "Walk-in";
+    }else if (k=== "addPatient" && user?.roleName === "emergency"){
+      return "Discharge List";
     }
     
     const labels = {
@@ -114,19 +114,25 @@ const Footer: React.FC<Props> = ({
     // Pharmacy specific icons
     if (user?.roleName === "pharmacy") {
       if (k === "addPatient") {
-        return ShoppingCart; // Sales icon
+        return ShoppingCartIcon; // Sales icon
       }
       if (k === "patients") {
-        return Package; // Inventory icon
+        return Package2Icon; // Inventory icon
+      }
+    }
+
+    if (user?.roleName === "emergency") {
+      if (k === "addPatient") {
+        return ListIcon; // Sales icon
       }
     }
     
     // Default icons for other roles
     const icons = {
-      dashboard: LayoutDashboard,
-      addPatient: UserPlus2,
+      dashboard: LayoutDashboardIcon,
+      addPatient: UserPlusIcon,
       patients: ListIcon,
-      management: Settings,
+      management: SettingsIcon,
     };
     
     return icons[k];

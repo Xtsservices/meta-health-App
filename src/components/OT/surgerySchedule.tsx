@@ -109,7 +109,7 @@ const ScheduleScreen: React.FC<Props> = ({ type = "standalone" }) => {
         token
       );
 
-      if (res?.status === 'success') {
+      if (res?.status === 'success' && "data" in res) {
         const arr: EventItem[] = (res?.data?.data || []).map((eventData: any) => ({
           id: String(eventData.pID),
           title:

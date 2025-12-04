@@ -69,7 +69,7 @@ const AppointmentListScreen: React.FC = () => {
         `patient/${user?.hospitalID}/patients/recent/${patientStatus?.outpatient}?userID=${user?.id}&role=${user?.role}`,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         const list: PatientType[] = res?.data?.patients ?? [];
         setPatients(list);
         if (filterType === "All" && !startDate && !endDate) {
@@ -96,7 +96,7 @@ const AppointmentListScreen: React.FC = () => {
         `patient/${user.hospitalID}/patients/nurseRecent/${patientStatus.outpatient}?userID=${user.id}&role={user.role}`,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         const list: PatientType[] = res?.data?.patients ?? [];
         setPatients(list);
         if (filterType === "All" && !startDate && !endDate) {

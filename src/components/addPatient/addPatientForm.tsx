@@ -29,12 +29,13 @@ import { AuthFetch, UploadFiles } from "../../auth/auth";
 import Footer from "../dashboard/footer";
 import { RootState } from "../../store/store";
 import { city, state } from "../../utils/stateCity";
-import { Category, genderList, getUniqueId } from "../../utils/addPatientFormHelper";
+import { Category, genderList, getEmailValidationMessage, getPhoneValidationMessage, getUniqueId, getValidationMessage } from "../../utils/addPatientFormHelper";
 import { Role_NAME, patientStatus } from "../../utils/role";
 import {
   validateAgeAndUnit as validateAgeAndUnitUtil,
   ageFromDOB,
   AgeUnit,
+  validateAgeAndUnit,
 } from "../../utils/age";
 import {
   patientOPDbasicDetailType,
@@ -44,8 +45,15 @@ import {
 import { showError, showSuccess } from "../../store/toast.slice";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 import { COLORS } from "../../utils/colour";
+import { formatDate } from "../../utils/dateTime";
 
 type Department = { id: number; name: string };
+type PatientField = {
+  value: any;
+  valid: boolean;
+  showError: boolean;
+  message: string;
+};
 
 const { height } = Dimensions.get("window");
 
@@ -131,12 +139,32 @@ const AddPatientForm: React.FC = () => {
   // ---------- Prefill hospitalID / pID / ptype ----------
   useEffect(() => {
     const value = getUniqueId();
-    setFormData(prev => ({
-      ...prev,
-      hospitalID: { value: user?.hospitalID ?? null, valid: !!user?.hospitalID, showError: !user?.hospitalID, message: "" },
-      pID: { valid: true, showError: false, value, message: "" },
-      ptype: { valid: true, showError: false, value: patientStatusFromRoute, message: "" },
-    }));
+   setFormData((prev) => ({
+  ...prev,
+  hospitalID: {
+    ...prev.hospitalID,
+    value: user?.hospitalID ?? null,
+    valid: !!user?.hospitalID,
+    showError: !user?.hospitalID,
+    message: "",
+  },
+  pID: {
+    ...prev.pID,
+    valid: true,
+    showError: false,
+    value,
+    message: "",
+  },
+  ptype: {
+    ...prev.ptype,
+    valid: true,
+    showError: false,
+    // 🔹 ensure it's always a number (no undefined)
+    value: Number(patientStatusFromRoute ?? 1),
+    message: "",
+  },
+}));
+
   }, [user?.hospitalID, patientStatusFromRoute]);
 
   // ---------- Fetch departments, doctors, and wards ----------
@@ -148,9 +176,9 @@ const AddPatientForm: React.FC = () => {
         AuthFetch(`user/${user?.hospitalID}/list/${Role_NAME.doctor}`, token),
         AuthFetch(`ward/${user?.hospitalID}`, token), // NEW: Fetch wards
       ]);
-      if (deptRes?.status === "success") setDepartmentList(deptRes?.data?.departments || []);
-      if (docRes?.status === "success") setDoctorList(docRes?.data?.users || []);
-      if (wardRes?.status === "success") setWardList(wardRes?.data?.wards || []); // NEW: Set ward list
+      if (deptRes?.status === "success" && "data" in deptRes) setDepartmentList(deptRes?.data?.departments || []);
+      if (docRes?.status === "success" && "data" in docRes) setDoctorList(docRes?.data?.users || []);
+      if (wardRes?.status === "success" && "data" in wardRes) setWardList(wardRes?.data?.wards || []); // NEW: Set ward list
     } catch {
       Alert.alert("Error", "Failed to load data");
     }
@@ -159,28 +187,78 @@ const AddPatientForm: React.FC = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // ---------- HOD prefill ----------
-  useEffect(() => {
-    if (user?.role === 4000 && user?.departmentID && departmentList?.length > 0) {
-      const dept = departmentList.find((d) => d.id === user.departmentID);
-      if (dept) {
-        const hodEntry: staffType = {
-          id: user?.id,
-          firstName: user.firstName || "",
-          lastName: user.lastName || "",
-          departmentID: user.departmentID,
-        };
-        const filtered = [hodEntry, ...doctorList.filter((d) => d.departmentID === user.departmentID)];
-        setFilteredDoctors(filtered);
-        setSelectedDepartmentID(user.departmentID);
-        setFormData((prev) => ({
-          ...prev,
-          department: { value: String(user.departmentID), valid: true, showError: false, message: "" },
-          departmentID: { value: user.departmentID, valid: true, showError: false, message: "" },
-          userID: { value: user.id, valid: true, showError: false, message: "" },
-        }));
-      }
-    }
-  }, [user, departmentList, doctorList]);
+useEffect(() => {
+  if (user?.role === 4000 && user?.departmentID && departmentList?.length > 0) {
+    const dept = departmentList.find((d) => d.id === user.departmentID);
+    if (!dept) return;
+
+    // 🔹 Ensure these are number | undefined (no string in union)
+    const userId: number | undefined =
+      user?.id != null ? Number(user.id) : undefined;
+
+    const deptId: number | undefined =
+      user?.departmentID != null ? Number(user.departmentID) : undefined;
+
+    // 🔹 Build FULL staffType object
+    const hodEntry: staffType = {
+      id: userId,
+      email: user?.email ?? "",
+      firstName: user?.firstName ?? "",
+      lastName: user?.lastName ?? "",
+      photo: user?.photo ?? null,
+      pinCode: user?.pinCode ?? null,
+      phoneNo: user?.phoneNo ?? null,
+      address: user?.address ?? null,
+      city: user?.city ?? null,
+      state: user?.state ?? null,
+      role: user?.role ?? null,
+      dob: user?.dob ?? null,
+      gender: user?.gender ?? null,
+      countryCode: user?.countryCode ?? null,
+      departmentID: deptId,
+      addedOn: user?.addedOn ?? "",
+      imageURL: user?.imageURL ?? "",
+      scope: user?.scope ?? "",
+      reportTo: user?.reportTo ?? null,
+      image: user?.image ?? null,
+    };
+
+    const filtered = [
+      hodEntry,
+      ...doctorList.filter((d) => d.departmentID === deptId),
+    ];
+
+    setFilteredDoctors(filtered);
+    setSelectedDepartmentID(deptId ?? null);
+
+    setFormData((prev) => ({
+      ...prev,
+      department: {
+        ...prev.department,
+        value: String(deptId ?? ""),
+        valid: true,
+        showError: false,
+        message: "",
+      },
+      departmentID: {
+        ...prev.departmentID,
+        value: deptId,
+        valid: true,
+        showError: false,
+        message: "",
+      },
+      userID: {
+        ...prev.userID,
+        value: userId ?? null,
+        valid: true,
+        showError: false,
+        message: "",
+      },
+    }));
+  }
+}, [user, departmentList, doctorList]);
+
+
 
   // ---------- Filter doctors by department ----------
   useEffect(() => {
@@ -197,34 +275,77 @@ const AddPatientForm: React.FC = () => {
     setCityList(idx >= 0 ? city[idx] : []);
   }, [formData.state.value]);
 
-  // ---------- DOB -> Age ----------
-  useEffect(() => {
-    if (!selectedDate) return;
-    const dobStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+  const [agePickerEnabled, setAgePickerEnabled] = useState(true);
 
-    setFormData((prev) => ({ ...prev, dob: { ...prev.dob, value: dobStr, valid: true } }));
 
-    const a = ageFromDOB(dobStr);
-    let effectiveUnit: AgeUnit = a.unit;
-    if (category === "1") effectiveUnit = "days";
-    else if (category === "3") effectiveUnit = "years";
+useEffect(() => {
+  if (!selectedDate) return;
 
-    setAgeUnit(effectiveUnit);
-    const rule = validateAgeAndUnitUtil(
-      category === "1" ? "neonate" : category === "2" ? "child" : "adult",
-      a.n,
-      effectiveUnit
-    );
-    setFormData((prev) => ({
-      ...prev,
-      age: {
-        value: `${a.n} ${effectiveUnit}`,
-        valid: rule.ok,
-        showError: !rule.ok,
-        message: rule.ok ? "" : (rule.msg || ""),
-      },
-    }));
-  }, [selectedDate, category]);
+  const dobStr = `${selectedDate.getFullYear()}-${String(
+    selectedDate.getMonth() + 1
+  ).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+
+  // Convert DOB → age
+  const { n, unit } = ageFromDOB(dobStr);
+
+  // Determine category
+  const catLabel =
+    category === "1" ? "neonate" : category === "2" ? "child" : "adult";
+
+  // ✅ Validate age by category
+  const rule = validateAgeAndUnit(catLabel, n, unit);
+
+if (!rule.ok) {
+  dispatch(showError(rule.msg || "Invalid age"));
+  setFormData((prev) => ({
+    ...prev,
+    dob: {
+      ...(prev.dob as PatientField),
+      value: "",
+      valid: false,
+      showError: true,
+      message: rule.msg || "Invalid age",
+    },
+    age: {
+       ...(prev.age as PatientField),
+      value: "",
+      valid: false,
+      showError: true,
+      message: rule.msg || "Invalid age",
+    },
+  }));
+  setSelectedDate(null);
+  return;
+}
+
+
+  // ✅ Force proper display unit
+  let displayUnit: AgeUnit = unit;
+
+  if (category === "1") displayUnit = "days";
+  else if (category === "2") {
+    if (n > 31 && unit === "days") displayUnit = "months"; // 1+ month → show months
+    if (n > 365 && unit === "days") displayUnit = "years"; // 1+ year → show years
+  } else if (category === "3") displayUnit = "years";
+
+  // ✅ Update UI
+  setAgeUnit(displayUnit);
+  setFormData((prev) => ({
+    ...prev,
+    dob: { ...prev.dob, value: dobStr, valid: true },
+    age: {
+      value: `${n} ${displayUnit}`,
+      valid: true,
+      showError: false,
+      message: "",
+    },
+  }));
+
+  // ✅ Disable manual age unit change (since auto-calculated)
+  setAgePickerEnabled(false);
+}, [selectedDate, category]);
+
+
 
   // ---------- Camera Permission ----------
   const requestCameraPermission = async () => {
@@ -241,10 +362,15 @@ const AddPatientForm: React.FC = () => {
           }
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err) {
-        dispatch(showError(err?.message || err?.status))
-        return false;
-      }
+      } catch (err: any) {
+  dispatch(
+    showError(
+      err?.message || err?.status || "Camera permission error"
+    )
+  );
+  return false;
+}
+
     }
     return true;
   };
@@ -282,37 +408,58 @@ const AddPatientForm: React.FC = () => {
 
   const validateForm = () => {
     let valid = true;
-    const updated = { ...formData };
+    const updated: patientOPDbasicDetailType = { ...formData };
 
     if (!formData.pUHID.value || String(formData.pUHID.value).replace(/-/g, "").length !== 14) {
-      updated.pUHID = { ...updated.pUHID, valid: false, showError: true };
+      updated.pUHID = {...(updated.pUHID as PatientField), valid: false, showError: true };
       valid = false;
     }
 
     if (!formData.departmentID.value) {
-      updated.departmentID = { ...updated.departmentID, valid: false, showError: true };
+      updated.departmentID = { ...(updated.departmentID as PatientField), valid: false, showError: true };
       valid = false;
     }
 
     // Doctor is ALWAYS required for ALL patient statuses
     if (!formData.userID.value) {
-      updated.userID = { ...updated.userID, valid: false, showError: true };
+      updated.userID = { ...(updated.userID as PatientField), valid: false, showError: true };
       valid = false;
     }
 
     // Ward is required ONLY for inpatient (status 2)
     if (user?.patientStatus == 2 && !formData.wardID.value) {
-      updated.wardID = { ...updated.wardID, valid: false, showError: true };
+      updated.wardID = { ...(updated.wardID as PatientField), valid: false, showError: true };
       valid = false;
     }
 
-    (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach((key) => {
-      const field = formData[key];
+     (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach(
+    (key) => {
+      const field = formData[key] as PatientField;
+
       if (!field.valid && field.value !== null && field.value !== "") {
-        updated[key] = { ...field, showError: true };
+        (updated as any)[key] = {
+          ...field,
+          showError: true,
+        } as PatientField;
         valid = false;
       }
-    });
+    }
+  );
+
+    const w = Number(formData.weight.value);
+const weightError = getValidationMessage(w, category, "weight");
+if (weightError) {
+  updated.weight = { ...updated.weight, valid: false, showError: true, message: weightError };
+  valid = false;
+}
+
+const h = Number(formData.height.value);
+const heightError = getValidationMessage(h, category, "height");
+if (heightError) {
+  updated.height = { ...updated.height, valid: false, showError: true, message: heightError };
+  valid = false;
+}
+
 
     setFormData(updated);
     return valid;
@@ -326,15 +473,16 @@ const AddPatientForm: React.FC = () => {
     const numHospitalID = Number(user?.hospitalID ?? 0);
     const numCategory = Number(route.params?.category ?? 1);
     const numAddedBy = Number(user?.id ?? 0);
-    const numPtype = Number(typeof route.params?.ptype !== "undefined"
+    const numPtype = Number(
+  user?.roleName === "reception" && typeof route.params?.ptype !== "undefined"
     ? route.params.ptype
-    : patientStatusFromRoute);
+    : patientStatusFromRoute
+);
     const numPUHID = Number(String(formData.pUHID.value || "").replace(/\D/g, ""));
     const numGender = Number(formData.gender.value);
     const numWeight = Number(formData.weight.value);
     const numHeight = Number(formData.height.value);
     const numInsurance = Number(formData.insurance.value);
-
     data.append("hospitalID", numHospitalID as any);
     data.append("category", numCategory as any);
     data.append("addedBy", numAddedBy as any);
@@ -397,7 +545,7 @@ const AddPatientForm: React.FC = () => {
           navigation.navigate("AddPatient");
         }
       } else {
-        dispatch(showError(res?.message || res?.status || res?.data?.message || "Patient registration failed"))
+        dispatch(showError("message" in res && res?.message || res?.status || "data" in res && res?.data?.message || "Patient registration failed"))
       }
     } catch (err: any) {
       dispatch(showError(err?.message || "Patient registration failed"))
@@ -447,7 +595,7 @@ const AddPatientForm: React.FC = () => {
   const renderInput = (
     label: string,
     name: keyof patientOPDbasicDetailType,
-    opts: { multiline?: boolean; keyboardType?: any; maxLength?: number; placeholder?: string } = {}
+    opts: { multiline?: boolean; keyboardType?: any; maxLength?: number; placeholder?: string; editable?: boolean; } = {}
   ) => {
     const field = formData[name];
     const placeholder = opts.placeholder || `Enter ${label.toLowerCase()}`;
@@ -455,7 +603,7 @@ const AddPatientForm: React.FC = () => {
     return (
       <View style={styles.inputBlock}>
         <Text style={[styles.label, { color: COLORS.sub }]}>
-          {label} {["pName", "phoneNumber", "address", "state", "city", "pinCode", "pUHID"].includes(name as any) && <Text style={{ color: COLORS.danger }}>*</Text>}
+          {label} {["pName", "phoneNumber", "address", "state", "city", "pinCode", "pUHID"].includes(name as any) && <Text style={{ color: COLORS.sub }}>*</Text>}
         </Text>
         <TextInput
           style={[
@@ -467,6 +615,7 @@ const AddPatientForm: React.FC = () => {
           placeholder={placeholder}
           placeholderTextColor={COLORS.placeholder}
           value={String(field.value || "")}
+          editable={opts.editable !== false}
           onChangeText={(text) => {
             let formatted = text;
             let valid = true;
@@ -481,12 +630,68 @@ const AddPatientForm: React.FC = () => {
               formatted = [g1, g2, g3, g4].filter(Boolean).join("-");
               valid = digits.length === 14;
               message = valid ? "" : "UHID must be 14 digits";
-            } else if (name === "phoneNumber" || name === "pinCode") {
-              formatted = text.replace(/\D/g, "").slice(0, name === "pinCode" ? 6 : 10);
-              valid = formatted.length === (name === "pinCode" ? 6 : 10);
-            } else if (name === "pName") {
-              valid = /^[A-Za-z\s]{0,50}$/.test(text);
+            } 
+           else if (name === "phoneNumber") {
+  const onlyDigits = text.replace(/\D/g, "");
+  formatted = onlyDigits;
+  const error = getPhoneValidationMessage(onlyDigits);
+  valid = !error;
+  message = error || "";
+}
+else if (name === "pinCode") {
+  const onlyDigits = text.replace(/\D/g, "");
+  formatted = onlyDigits;
+
+  if (!onlyDigits) {
+    valid = false;
+    message = "PIN code is required";
+  } else if (onlyDigits.length !== 6) {
+    valid = false;
+    message = "PIN code must be 6 digits";
+  } else {
+    valid = true;
+    message = "";
+  }
+}
+
+           else if (name === "pName") {
+            formatted = text;
+            if (!text.trim()) {
+              valid = false;
+              message = "Patient name is required";
+            } else if (!/^[A-Za-z\s]+$/.test(text)) {
+              valid = false;
+              message = "Only alphabets are allowed in name";
+            } else {
+              valid = true;
+              message = "";
             }
+          }
+else if (name === "email") {
+  formatted = text.trim();
+  const error = getEmailValidationMessage(formatted);
+  valid = !error;
+  message = error || "";
+}
+
+          // 🔹 Manual AGE validation (when DOB not selected)
+          else if (name === "age") {
+            const digits = text.replace(/\D/g, "");
+            formatted = digits;
+
+            if (!digits) {
+              valid = false;
+              message = "Age is required";
+            } else {
+              const n = Number(digits);
+              const catLabel =
+                category === "1" ? "neonate" : category === "2" ? "child" : "adult";
+
+              const rule = validateAgeAndUnitUtil(catLabel, n, ageUnit);
+              valid = rule.ok;
+              message = rule.msg || "";
+            }
+          }
 
             setFormData((prev) => ({
               ...prev,
@@ -517,7 +722,6 @@ const AddPatientForm: React.FC = () => {
   const capitalizeFirstLetter = (str: string) => {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   };
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -571,7 +775,7 @@ const AddPatientForm: React.FC = () => {
                 {renderInput("Patient Name", "pName", { placeholder: "Enter full name" })}
               </View>
             </View>
-            {renderInput("Patient ID (Auto)", "pID", { placeholder: "Auto-generated" })}
+            {renderInput("Patient ID (Auto)", "pID", { placeholder: "Auto-generated", editable: false})}
             {renderInput("UHID", "pUHID", { keyboardType: "numeric", maxLength: 18, placeholder: "XXXX-XXX-XXX-XXXX" })}
           </View>
 
@@ -583,7 +787,7 @@ const AddPatientForm: React.FC = () => {
               <Text style={[styles.label, { color: COLORS.sub }]}>Date of Birth *</Text>
               <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[styles.dateButton, { borderColor: COLORS.border }]}>
                 <Text style={{ color: selectedDate ? COLORS.text : COLORS.placeholder, fontSize: 15 }}>
-                  {selectedDate ? selectedDate.toLocaleDateString() : "Select DOB"}
+                  {selectedDate ? formatDate(selectedDate) : "Select DOB"}
                 </Text>
               </TouchableOpacity>
               {showDatePicker && (
@@ -594,7 +798,10 @@ const AddPatientForm: React.FC = () => {
                   maximumDate={new Date()}
                   onChange={(e, date) => {
                     setShowDatePicker(false);
-                    if (date) setSelectedDate(date);
+                     if (date) {
+    setSelectedDate(date);
+    setAgePickerEnabled(false);
+  }
                   }}
                 />
               )}
@@ -602,7 +809,7 @@ const AddPatientForm: React.FC = () => {
 
             <View style={styles.row}>
               <View style={{ flex: 0.6 }}>
-                {renderInput("Age", "age", { keyboardType: "numeric", placeholder: "Enter age" })}
+                {renderInput("Age", "age", { keyboardType: "numeric", placeholder: "Enter age",editable: agePickerEnabled, })}
               </View>
               <View style={{ flex: 0.4, marginLeft: 8 }}>
                 <Text style={[styles.label, { color: COLORS.sub }]}>Unit</Text>
@@ -627,6 +834,7 @@ const AddPatientForm: React.FC = () => {
                   }}
                   items={allowedUnits.map(u => ({ label: u[0].toUpperCase() + u.slice(1), value: u }))}
                   placeholder="Unit"
+                   enabled={agePickerEnabled} 
                 />
               </View>
             </View>
@@ -670,7 +878,7 @@ const AddPatientForm: React.FC = () => {
           {/* Contact */}
           <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
             <Text style={[styles.cardTitle, { color: COLORS.text }]}>Contact</Text>
-            {renderInput("Mobile Number", "phoneNumber", { keyboardType: "phone-pad", placeholder: "10-digit mobile" })}
+            {renderInput("Mobile Number", "phoneNumber", { keyboardType: "phone-pad", placeholder: "10-digit mobile" , maxLength: 10})}
             {renderInput("Email ID", "email", { keyboardType: "email-address", placeholder: "example@domain.com" })}
           </View>
 
@@ -679,8 +887,8 @@ const AddPatientForm: React.FC = () => {
             <Text style={[styles.cardTitle, { color: COLORS.text }]}>Address</Text>
             {renderInput("Complete Address", "address", { multiline: true, placeholder: "House no., street, area" })}
 
-            <View style={styles.row}>
-              <View style={styles.col}>
+           
+              <View style={styles.inputBlock}>
                 <Text style={[styles.label, { color: COLORS.sub }]}>State *</Text>
                 <CustomPicker
                   selectedValue={formData.state.value}
@@ -695,7 +903,7 @@ const AddPatientForm: React.FC = () => {
                   placeholder="Select State"
                 />
               </View>
-              <View style={styles.col}>
+              <View style={styles.inputBlock}>
                 <Text style={[styles.label, { color: COLORS.sub }]}>City *</Text>
                 <CustomPicker
                   selectedValue={formData.city.value}
@@ -710,7 +918,7 @@ const AddPatientForm: React.FC = () => {
                   enabled={cityList.length > 0}
                 />
               </View>
-            </View>
+            
 
             {renderInput("PIN Code", "pinCode", { keyboardType: "numeric", placeholder: "6-digit PIN" })}
           </View>
@@ -747,10 +955,10 @@ const AddPatientForm: React.FC = () => {
               </View>
 
               {/* Ward - SHOW ONLY for inpatient (status 2) */}
-              {user?.patientStatus == 2 || route.params.ptype === "2" && (
+              {(user?.patientStatus == 2 || route?.params?.ptype === "2") && (
                 <View style={styles.col}>
                   <Text style={[styles.label, { color: COLORS.sub }]}>
-                    Ward <Text style={{ color: COLORS.danger }}>*</Text>
+                    Ward <Text style={{ color: COLORS.sub }}>*</Text>
                   </Text>
                   <CustomPicker
                     selectedValue={formData.wardID.value}

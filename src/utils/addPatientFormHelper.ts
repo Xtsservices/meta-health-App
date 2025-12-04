@@ -1,3 +1,4 @@
+
 export type Category = "1" | "2" | "3";
 
 export const genderList = [
@@ -41,3 +42,25 @@ export const getUniqueId = () => {
     now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
     return value;
 }
+
+export const getPhoneValidationMessage = (raw: string): string | undefined => {
+  const digits = raw.replace(/\D/g, "");
+
+  if (!digits) return "Mobile number is required";
+  if (digits.length !== 10) return "Mobile number must be exactly 10 digits";
+  if (!/^[6-9]/.test(digits)) return "Mobile number must start with 6, 7, 8, or 9";
+
+  return undefined;
+};
+
+export const getEmailValidationMessage = (value: string): string | undefined => {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return undefined; // optional field
+
+  const gmailRegex = /^[a-z0-9._%+-]+@gmail\.com$/;
+  if (!gmailRegex.test(trimmed)) {
+    return "Enter a valid Email ID (example@gmail.com)";
+  }
+
+  return undefined;
+};

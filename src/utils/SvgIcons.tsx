@@ -797,4 +797,20 @@ export const BoxIcon = ({ size = 24, color = "#000000" }) => (
       strokeLinejoin="round"
     />
   </Svg>
+
+  
+);
+
+export const ListIcon = ({ size = 24, color = "#000000" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    {/* bullets */}
+    <Circle cx="5" cy="6" r="1" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    <Circle cx="5" cy="12" r="1" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    <Circle cx="5" cy="18" r="1" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+
+    {/* lines */}
+    <Line x1="9" y1="6" x2="20" y2="6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    <Line x1="9" y1="12" x2="20" y2="12" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    <Line x1="9" y1="18" x2="20" y2="18" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
 );

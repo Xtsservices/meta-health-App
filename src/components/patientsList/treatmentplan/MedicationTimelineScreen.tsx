@@ -10,7 +10,7 @@ import {
   StatusBar,
   ActivityIndicator,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -47,6 +47,7 @@ import {
 import { COLORS } from '../../../utils/colour';
 import { medicineCategory } from '../../../utils/medicines';
 import { Reminder } from '../../../store/zustandstore';
+import { showError } from '../../../store/toast.slice';
 
 // Import colors
 
@@ -73,7 +74,7 @@ const MedicationTimelineScreen: React.FC = () => {
   const [groupedReminders, setGroupedReminders] = useState<GroupedReminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<number | null>(null);
-
+const dispatch = useDispatch()
   const getMedicineReminderApi = useRef(true);
 
   const getMedicineReminder = async () => {
@@ -136,7 +137,7 @@ const MedicationTimelineScreen: React.FC = () => {
       
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        Alert.alert('Error', 'Authentication token not found');
+        dispatch(showError('Authentication token not found'));
         return;
       }
 

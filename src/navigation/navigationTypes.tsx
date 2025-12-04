@@ -135,5 +135,6 @@ DischargeSummaryDownload: undefined;
   InventoryDetail:undefined;
   AddInventoryItem:undefined;
   InvoiceDetailsLab:undefined;
-  PharmacyOrderDetails:undefined
+  PharmacyOrderDetails:undefined;
+  DoctorProfile:undefined;
 };

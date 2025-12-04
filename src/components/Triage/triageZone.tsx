@@ -91,7 +91,7 @@ const TriageZoneFinalMobile: React.FC = () => {
         }
 
         const res = await AuthFetch(`ward/${user.hospitalID}`, token);
-        if (res?.status === "success" && Array.isArray(res?.data?.wards)) {
+        if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.wards)) {
           setWards(res.data.wards);
         } else {
           setWards([]);
@@ -156,10 +156,10 @@ const TriageZoneFinalMobile: React.FC = () => {
         token
       );
 
-      if (res?.status === "success" || res?.message === "success") {
+      if (res?.status === "success" && "data" in res) {
         navigation.navigate("PatientList"); // your list screen
       } else {
-        dispatch(showError(res?.message?.message || "Failed to save triage"));
+        dispatch(showError("message" in res && res?.message?.message || "Failed to save triage"));
         triagePostRef.current = false;
       }
     } catch (err) {

@@ -53,14 +53,14 @@ endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${
         endpoint += `&zone=${zone}`;
       }
       const response = await AuthFetch(endpoint, token);
-      if (response?.status === 'success' && Array.isArray(response?.data?.patients)) {
+      if (response?.status === 'success' && "data" in response && Array.isArray(response?.data?.patients)) {
         const latestFive = response?.data?.patients.slice(0, 5);
         setPatients(latestFive);
       } else {
         setPatients([]);
       }
     } catch (error) {
-      dispatch(showError(error?.message || error || 'Error fetching patients' ))
+      dispatch(showError(typeof error === 'object' && error !== null && 'message' in error ? (error as any).message : String(error) || 'Error fetching patients'))
     } finally {
       setLoading(false);
     }
@@ -86,7 +86,11 @@ endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${
         navigation.navigate('PatientProfile', { id: id });
       }
     } catch (error) {
-       dispatch(showError(error?.message || error || 'Error navigating to patient' ))
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'message' in error
+          ? (error as any).message
+          : String(error) || 'Error navigating to patient';
+      dispatch(showError(errorMessage));
     }
   };
 
@@ -157,7 +161,7 @@ endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${
       <FlatList
         data={patients}
         renderItem={renderPatientCard}
-        keyExtractor={(item) => item?.id.toString()}
+        keyExtractor={(item) => (item?.id != null ? item.id.toString() : 'unknown')}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}

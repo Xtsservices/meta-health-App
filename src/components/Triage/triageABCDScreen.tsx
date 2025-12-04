@@ -126,7 +126,7 @@ const TriageABCDScreen: React.FC = () => {
     options: string[]
   ) => (
     <View style={styles.fieldHalf}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>{label}<Text> *</Text></Text>
       <View style={styles.chipRow}>
         {options.map((opt) => (
           <TouchableOpacity
@@ -162,7 +162,7 @@ const TriageABCDScreen: React.FC = () => {
           styles.scrollContent,
           {
             // enough space so Back/Next scroll above footer
-            paddingBottom: FOOTER_HEIGHT + SPACING.xxl + insets.bottom,
+            paddingBottom: FOOTER_HEIGHT * 2 + SPACING.xxl + insets.bottom,
           },
         ]}
         extraScrollHeight={Platform.OS === "ios" ? SPACING.lg : SPACING.xl}
@@ -182,28 +182,28 @@ const TriageABCDScreen: React.FC = () => {
           {renderChipRow("Active Bleeding", "activeBleeding", yesNo)}
           {abcd.activeBleeding === "yes" && (
             <View style={styles.fieldHalf}>
-              <Text style={styles.label}>Active Bleeding Type</Text>
+              <Text style={styles.label}>Active Bleeding Type<Text style={styles.requiredMark}> *</Text></Text>
               <View style={styles.pickerWrap}>
                 <Picker
                   selectedValue={abcd.activeBleedingType}
                   onValueChange={(v) => updateField("activeBleedingType", v)}
                   style={styles.pickerText}
                   dropdownIconColor={"#0f172a"}
+                  
                 >
                   <Picker.Item
                     label="Select Type"
                     value=""
-                    color="#9ca3af"
+                    
                   />
                   <Picker.Item
                     label="Major"
                     value="major"
-                    color={"#0f172a"}
+                    
                   />
                   <Picker.Item
                     label="Minor"
                     value="minor"
-                    color={ "#0f172a"}
                   />
                 </Picker>
               </View>
@@ -235,7 +235,7 @@ const TriageABCDScreen: React.FC = () => {
 
         <View style={styles.rowWrap}>
           <View style={styles.fieldHalf}>
-            <Text style={styles.label}>Capillary Refill</Text>
+            <Text style={styles.label}>Capillary Refill<Text style={styles.requiredMark}> *</Text></Text>
             <View style={styles.pickerWrap}>
               <Picker
                 selectedValue={abcd.capillaryRefill}
@@ -246,7 +246,7 @@ const TriageABCDScreen: React.FC = () => {
                 <Picker.Item
                   label="Select Refill"
                   value=""
-                  color="#9ca3af"
+                  
                 />
                 {capRefillOpts.map((opt) => (
                   <Picker.Item
@@ -255,7 +255,7 @@ const TriageABCDScreen: React.FC = () => {
                       opt === "<2s" ? "less than 2s" : "more than 2s"
                     }
                     value={opt}
-                    color={ "#0f172a"}
+                    
                   />
                 ))}
               </Picker>
@@ -282,6 +282,7 @@ const TriageABCDScreen: React.FC = () => {
             <Text style={styles.primaryText}>Next</Text>
           </TouchableOpacity>
         </View>
+         <View style={{ height: FOOTER_HEIGHT + insets.bottom + SPACING.lg }} />
       </KeyboardAwareScrollView>
 
       {/* Fixed footer at bottom using dynamic FOOTER_HEIGHT */}
@@ -429,5 +430,8 @@ function createStyles(isDark: boolean) {
       bottom: 0,
       backgroundColor: "#ffffff",
     },
+    requiredMark: {
+   color: "#dc2626",
+ },
   });
 }

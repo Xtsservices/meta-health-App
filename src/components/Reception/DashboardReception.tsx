@@ -24,7 +24,8 @@ import {
   Calendar,
   Users,
   UserPlus,
-  ChevronDown,
+ ChevronLeft,
+  ChevronRight,
   Menu as MenuIcon,
   LayoutDashboard,
   FileText,
@@ -61,6 +62,7 @@ import {
 } from "../../utils/responsive";
 import { COLORS } from "../../utils/colour";
 import MyTasks from '../../pages/nurseDashboard/MyTasks';
+import { MONTH_OPTIONS } from '../../utils/yearMonth';
 
 interface DeptCount {
   department: string;
@@ -165,86 +167,87 @@ const StatCard: React.FC<{
 };
 
 /* -------------------------- Filter Select -------------------------- */
-const FilterSelect: React.FC<{
-  value: string;
-  options: Array<{ value: string; label: string }>;
-  onValueChange: (value: string) => void;
-  compact?: boolean;
-}> = ({ value, options, onValueChange, compact = false }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<View>(null);
+// const FilterSelect: React.FC<{
+//   value: string;
+//   options: Array<{ value: string; label: string }>;
+//   onValueChange: (value: string) => void;
+//   compact?: boolean;
+// }> = ({ value, options, onValueChange, compact = false }) => {
+//   const [isOpen, setIsOpen] = useState(false);
+//   const dropdownRef = useRef<View>(null);
 
-  const selectedOption = options.find(opt => opt.value === value) || options[0];
+//   const selectedOption = options.find(opt => opt.value === value) || options[0];
 
-  useEffect(() => {
-    const closeDropdown = () => setIsOpen(false);
-    if (isOpen) {
-      // Add a small delay to ensure the dropdown is rendered
-      setTimeout(() => {
-        dropdownRef.current?.measure((x, y, width, height, pageX, pageY) => {
-          // This ensures the dropdown stays within screen bounds
-        });
-      }, 100);
-    }
-  }, [isOpen]);
+//   useEffect(() => {
+//     const closeDropdown = () => setIsOpen(false);
+//     if (isOpen) {
+//       // Add a small delay to ensure the dropdown is rendered
+//       setTimeout(() => {
+//         dropdownRef.current?.measure((x, y, width, height, pageX, pageY) => {
+//           // This ensures the dropdown stays within screen bounds
+//         });
+//       }, 100);
+//     }
+//   }, [isOpen]);
 
-  return (
-    <View style={styles.filterSelectContainer} ref={dropdownRef}>
-      <TouchableOpacity 
-        style={[styles.filterSelect,compact && styles.filterSelectCompact]}
-        onPress={() => setIsOpen(!isOpen)}
-        activeOpacity={0.7}
-      >
-        <Text style={[
-          styles.filterSelectText,
-          compact && styles.filterSelectTextCompact
-        ]} numberOfLines={1}>
-          {selectedOption.label}
-        </Text>
-        <ChevronDown 
-          size={compact ? 12 : (isSmallDevice ? 14 : 16)} 
-          color={COLORS.sub} 
-        />
-      </TouchableOpacity>
+//   return (
+//     <View style={styles.filterSelectContainer} ref={dropdownRef}>
+//       <TouchableOpacity 
+//         style={[styles.filterSelect,compact && styles.filterSelectCompact]}
+//         onPress={() => setIsOpen(!isOpen)}
+//         activeOpacity={0.7}
+//       >
+//         <Text style={[
+//           styles.filterSelectText,
+//           compact && styles.filterSelectTextCompact
+//         ]} numberOfLines={1}>
+//           {selectedOption.label}
+//         </Text>
+//         <ChevronDown 
+//           size={compact ? 12 : (isSmallDevice ? 14 : 16)} 
+//           color={COLORS.sub} 
+//         />
+//       </TouchableOpacity>
 
-      {isOpen && (
-        <View style={[
-          styles.filterDropdown,
-          compact && styles.filterDropdownCompact
-        ]}>
-          <ScrollView 
-            style={compact ? styles.filterDropdownScrollCompact : styles.filterDropdownScroll} 
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={true}
-          >
-            {options.map((option, index) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.filterOption,
-                  compact && styles.filterOptionCompact,
-                  index === options.length - 1 && styles.filterOptionLast
-                ]}
-                onPress={() => {
-                  onValueChange(option.value);
-                  setIsOpen(false);
-                }}
-              >
-                <Text style={[
-                  styles.filterOptionText,
-                  compact && styles.filterOptionTextCompact,
-                  value === option.value && styles.filterOptionTextSelected
-                ]} numberOfLines={1}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
-};
+//       {isOpen && (
+//         <View style={[
+//           styles.filterDropdown,
+//           compact && styles.filterDropdownCompact
+//         ]}>
+//           <ScrollView 
+//             style={compact ? styles.filterDropdownScrollCompact : styles.filterDropdownScroll} 
+//             nestedScrollEnabled
+//             showsVerticalScrollIndicator={true}
+//           >
+//             {options.map((option, index) => (
+//               <TouchableOpacity
+//                 key={option.value}
+//                 style={[
+//                   styles.filterOption,
+//                   compact && styles.filterOptionCompact,
+//                   index === options.length - 1 && styles.filterOptionLast
+//                 ]}
+//                 onPress={() => {
+//                   onValueChange(option.value);
+//                   setIsOpen(false);
+//                 }}
+//               >
+//                 <Text style={[
+//                   styles.filterOptionText,
+//                   compact && styles.filterOptionTextCompact,
+//                   value === option.value && styles.filterOptionTextSelected
+//                 ]} numberOfLines={1}>
+//                   {option.label}
+//                 </Text>
+//               </TouchableOpacity>
+//             ))}
+//           </ScrollView>
+//         </View>
+//       )}
+//     </View>
+//   );
+// };
+
 
 /* -------------------------- Chart Card -------------------------- */
 const ChartCard: React.FC<{ 
@@ -266,70 +269,126 @@ const ChartCard: React.FC<{
   selectedYear, 
   selectedMonth 
 }) => {
-  const yearOptions = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const startYear = 2015;
-    return Array.from({ length: currentYear - startYear + 1 }, (_, i) => ({
-      value: String(currentYear - i),
-      label: String(currentYear - i)
-    }));
-  }, []);
-
-  const monthOptions = useMemo(() => [
-    { value: '', label: 'All' },
-    ...Array.from({ length: 12 }, (_, i) => ({
-      value: String(i + 1).padStart(2, '0'),
-      label: new Date(2000, i, 1).toLocaleString('en', { month: 'short' }),
-    })),
-  ], []);
-
   const showFilters = onYearChange || onMonthChange;
   const isCompactMode = SCREEN_WIDTH < 375;
 
+  // YEAR
+  const fallbackYear = new Date().getFullYear().toString();
+  const currentYear = selectedYear || fallbackYear;
+
+  // MONTH ('' | '1'..'12')
+  const currentMonthValue = selectedMonth ?? "";
+  const monthIndex =
+    MONTH_OPTIONS.findIndex(m => m.value === currentMonthValue) ?? 0;
+  const safeMonthIndex = monthIndex >= 0 ? monthIndex : 0;
+  const currentMonthLabel = MONTH_OPTIONS[safeMonthIndex]?.label ?? "All";
+
+  const handleYearChange = (dir: 1 | -1) => {
+    if (!onYearChange) return;
+
+    // Optional: keep within YEAR_OPTIONS if you want, otherwise just +/- 1
+    const yearNum = Number(currentYear || fallbackYear);
+    const next = yearNum + dir;
+    onYearChange(String(next));
+  };
+
+  const handleMonthChange = (dir: 1 | -1) => {
+    if (!onMonthChange) return;
+
+    const len = MONTH_OPTIONS.length; // 13 (All + 12 months)
+    let idx = safeMonthIndex;
+
+    idx += dir;         // move left/right
+    if (idx < 0) idx = len - 1;    // wrap: All <- Dec
+    if (idx >= len) idx = 0;       // wrap: Dec -> All
+
+    const nextOpt = MONTH_OPTIONS[idx];
+    onMonthChange(nextOpt.value);  // value: "" | "1".."12"
+  };
+
   return (
     <View style={styles.chartCard}>
-      <View style={[
-        styles.chartHeader,
-        isCompactMode && styles.chartHeaderCompact
-      ]}>
+      <View
+        style={[
+          styles.chartHeader,
+          isCompactMode && styles.chartHeaderCompact,
+        ]}
+      >
+        {/* LEFT: Icon + Title */}
         <View style={styles.chartTitleContainer}>
-          <View style={[styles.chartIcon, { backgroundColor: `${iconColor}20` }]}>
+          <View
+            style={[
+              styles.chartIcon,
+              { backgroundColor: `${iconColor}20` },
+            ]}
+          >
             <Icon size={isSmallDevice ? 18 : 20} color={iconColor} />
           </View>
-          <Text style={[
-            styles.chartTitle,
-            isCompactMode && styles.chartTitleCompact
-          ]}>{title}</Text>
+          <Text
+            style={[
+              styles.chartTitle,
+              isCompactMode && styles.chartTitleCompact,
+            ]}
+          >
+            {title}
+          </Text>
         </View>
-        
+
+        {/* RIGHT: Year / Month pills */}
         {showFilters && (
-          <View style={[
-            styles.filterGroup,
-            isCompactMode && styles.filterGroupCompact
-          ]}>
+          <View
+            style={[
+              styles.chartPillsRow,
+              isCompactMode && styles.chartPillsRowCompact,
+            ]}
+          >
             {onYearChange && (
-              <FilterSelect
-                value={selectedYear || new Date().getFullYear().toString()}
-                options={yearOptions}
-                onValueChange={onYearChange}
-                compact={isCompactMode}
-              />
+              <View style={styles.pill}>
+                <Text style={styles.pillLabel}>Year</Text>
+                <TouchableOpacity
+                  onPress={() => handleYearChange(-1)}
+                  style={styles.pillBtn}
+                >
+                  <ChevronLeft size={12} color={COLORS.sub} />
+                </TouchableOpacity>
+                <Text style={styles.pillValue}>{currentYear}</Text>
+                <TouchableOpacity
+                  onPress={() => handleYearChange(1)}
+                  style={styles.pillBtn}
+                >
+                  <ChevronRight size={12} color={COLORS.sub} />
+                </TouchableOpacity>
+              </View>
             )}
+
             {onMonthChange && (
-              <FilterSelect
-                value={selectedMonth || ''}
-                options={monthOptions}
-                onValueChange={onMonthChange}
-                compact={isCompactMode}
-              />
+              <View style={styles.pill}>
+                <Text style={styles.pillLabel}>Month</Text>
+                <TouchableOpacity
+                  onPress={() => handleMonthChange(-1)}
+                  style={styles.pillBtn}
+                >
+                  <ChevronLeft size={12} color={COLORS.sub} />
+                </TouchableOpacity>
+                <Text style={styles.pillValue}>{currentMonthLabel}</Text>
+                <TouchableOpacity
+                  onPress={() => handleMonthChange(1)}
+                  style={styles.pillBtn}
+                >
+                  <ChevronRight size={12} color={COLORS.sub} />
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         )}
       </View>
+
       {children}
     </View>
   );
 };
+
+
 
 /* -------------------------- Bar Chart -------------------------- */
 const BarChartComponent: React.FC<{
@@ -898,7 +957,7 @@ const DashboardReception: React.FC = () => {
   const user = useSelector((state: RootState) => state.currentUser);
   const insets = useSafeAreaInsets();
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl ?? user?.profileImage;
+  const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
@@ -991,8 +1050,8 @@ const DashboardReception: React.FC = () => {
       const monthlyData = await fetchData(1, String(currentYear), String(currentMonth).padStart(2, '0'));
       const yearlyData = await fetchData(1, String(currentYear));
       
-      const monthlyCounts =  monthlyData?.data ? extractCounts(monthlyData) : [];
-      const yearlyCounts = yearlyData?.data ? extractCounts(yearlyData) : [];
+      const monthlyCounts = monthlyData && 'data' in monthlyData && monthlyData.data ? extractCounts(monthlyData) : [];
+      const yearlyCounts = yearlyData && 'data' in yearlyData && yearlyData.data ? extractCounts(yearlyData) : [];
       
       const thisMonthTotal = monthlyCounts.reduce((sum, item) => sum + item.count, 0);
       const thisYearTotal = yearlyCounts.reduce((sum, item) => sum + item.count, 0);
@@ -1259,7 +1318,7 @@ const DashboardReception: React.FC = () => {
         userImage={userImg}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("Profile" as never);
+          navigation.navigate("DoctorProfile" as never);
         }}
         items={sidebarItems}
         bottomItems={bottomItems}
@@ -1403,11 +1462,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   chartHeader: {
-    flexDirection: SCREEN_WIDTH < 375 ? "column" : "row",
+    flexDirection: "column",
     justifyContent: "space-between",
-    alignItems: SCREEN_WIDTH < 375 ? "flex-start" : "center",
+    alignItems:  "flex-start" ,
     marginBottom: SPACING.sm,
-    gap: SCREEN_WIDTH < 375 ? SPACING.xs : 0,
+    gap: SCREEN_WIDTH < 375 ? SPACING.xs : 10,
   },
   chartHeaderCompact: {
     gap: SPACING.xs,
@@ -1991,6 +2050,46 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: FONT_SIZE.md,
   },
+    chartPillsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  chartPillsRowCompact: {
+    alignSelf: "stretch",
+    justifyContent: "flex-start",
+    marginTop: SPACING.xs,
+    flexWrap: "wrap",
+  },
+
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.pill,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.xs,
+    height: 32,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pillLabel: {
+    color: COLORS.sub,
+    fontSize: FONT_SIZE.xs - 1,
+    fontWeight: "600",
+    textTransform: "uppercase",
+  },
+  pillBtn: {
+    padding: 4,
+  },
+  pillValue: {
+    color: COLORS.text,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "700",
+    minWidth: 32,
+    textAlign: "center",
+  },
+
 });
 
 export default DashboardReception;

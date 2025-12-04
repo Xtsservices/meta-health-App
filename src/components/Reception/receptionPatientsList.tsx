@@ -168,7 +168,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
 
       const res = await AuthFetch(`ward/${user?.hospitalID}`, token);
 
-      if (res?.status === "success" && Array.isArray(res?.data?.wards)) {
+      if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.wards)) {
         setWards(res.data.wards);
       } else if (Array.isArray(res)) {
         setWards(res as Ward[]);
@@ -219,7 +219,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
       const res = await AuthFetch(url, token);
 
       let list: Patient[] = [];
-      if (res?.status === "success" && Array.isArray(res?.data?.patients)) {
+      if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.patients)) {
         list = res?.data?.patients;
       } else if (Array.isArray(res)) {
         list = res;
@@ -276,7 +276,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
         );
 
         let list: Patient[] = [];
-        if (res?.status === "success" && Array.isArray(res?.data?.patients)) {
+        if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.patients)) {
           list = res?.data?.patients;
         } else if (Array.isArray(res)) {
           list = res;

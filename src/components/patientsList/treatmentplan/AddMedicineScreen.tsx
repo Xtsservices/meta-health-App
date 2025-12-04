@@ -13,7 +13,7 @@ import {
   Platform,
   FlatList,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,6 +50,7 @@ import {
 
 // Import colors
 import { COLORS } from '../../../utils/colour';
+import { showError, showSuccess } from '../../../store/toast.slice';
 
 // Medicine Category Options
 const medicineCategories = [
@@ -104,6 +105,7 @@ const getCategoryFromType = (type: number) => {
 
 
 const AddMedicineScreen: React.FC = () => {
+  const dispatch = useDispatch();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
@@ -230,14 +232,12 @@ if (activeTab === "PostOpRecord") {
   const existing = postOpMeds[category] || [];
   setPostMedications(category, [...existing, newEntry]);
 }
-
-        Alert.alert('Success', 'Medicine added successfully');
-        navigation.goBack();
+dispatch(showSuccess('Medicine added successfully'));    
       } else {
-        Alert.alert('Error', response?.message || 'Failed to add medicine');
+        dispatch(showError(response?.message || 'Failed to add medicine'));
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to add medicine');
+      dispatch(showError(error?.message || 'Failed to add medicine'));
     } finally {
       setLoading(false);
     }

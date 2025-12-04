@@ -59,7 +59,7 @@ export default function SymptomsScreen() {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       const res = await AuthFetch(`symptom/${currentpatient.id}`, token);
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         const rows: SymptomRow[] = (res?.data?.symptoms || []).map((s: any) => ({
           id: Number(s?.id),
           conceptID: s?.conceptID ?? s?.concept_id ?? null,
@@ -102,14 +102,18 @@ export default function SymptomsScreen() {
 
             const url = `symptom/${timeline}/${row.id}`
             const res = await AuthDelete(url, token);
-            if (res?.status === "success") {
+            if (res?.status === "success" && "data" in res) {
               dispatch(showSuccess(res?.data?.message))
               setList((prev) => prev.filter((x) => x.id !== row.id));
             } else {
-              dispatch(showError(res?.message || res?.status || "Failed to delete symptom."))
+              dispatch(showError("message" in res && res?.message || res?.status || "Failed to delete symptom."))
             }
-          } catch (error) {
-            dispatch(showError(error?.message || error?.status || "Failed to delete symptom."))
+          } catch (error: any) {
+            dispatch(showError(
+              (typeof error === "object" && error !== null && "message" in error ? (error as any).message : undefined) ||
+              (typeof error === "object" && error !== null && "status" in error ? (error as any).status : undefined) ||
+              "Failed to delete symptom."
+            ));
 
           }
         },
@@ -129,9 +133,10 @@ export default function SymptomsScreen() {
         </Text>
         <Text style={[styles.sub, { color: COLORS.sub }]}>{formatDateTime(item.addedOn)}</Text>
       </View>
+      {!isOt && user?.roleName !== "reception" && currentpatient.ptype != 21 && (
       <Pressable onPress={() => onDelete(item)} style={styles.deleteBtn} hitSlop={8}>
         <Trash2 size={18} color={COLORS.danger} />
-      </Pressable>
+      </Pressable>)}
     </View>
   );
 

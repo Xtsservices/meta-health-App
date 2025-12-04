@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,8 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useDispatch, useSelector } from 'react-redux';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
@@ -34,6 +34,7 @@ import { AuthFetch } from '../../../auth/auth';
 import Footer from '../../dashboard/footer';
 import usePreOpForm from '../../../utils/usePreOpForm';
 import usePostOPStore from '../../../utils/usePostopForm';
+import { showError } from '../../../store/toast.slice';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -181,7 +182,7 @@ const MedicineDataTable = ({ medicines, category }: { medicines: MedicineType[];
           </View>
           <View style={[styles.tableCell, styles.dosageCell]}>
             <Text style={styles.dosageText}>
-              {medicine?.doseCount || '0'} {getDosageUnit(medicine?.medicineType || 1)}
+              {medicine?.doseCount || medicine?.dosage} {getDosageUnit(medicine?.medicineType || 1)}
             </Text>
           </View>
         </View>
@@ -270,13 +271,13 @@ const FilterBar = ({
 const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const bottomPadding = insets.bottom > 0 ? insets.bottom : 16; 
   const route = useRoute<any>();        
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
   const { medications: preOpMedications } = usePreOpForm();
 const { medications: postOpMedications } = usePostOPStore();
-
-  
+const dispatch = useDispatch();
   
   const activetab = route.params?.currentTab;
   const shouldShowPreOpTests = activetab === "PreOpRecord";
@@ -341,7 +342,7 @@ if (shouldShowPreOpTests || shouldShowPostOpTests) {
 
       const response = await AuthFetch(`medicine/${currentPatient.patientTimeLineID}`, token);
 
-      if (response && response.status === "success") {
+      if (response && response.status === "success" && "data" in response) {
         setMedicineList(response?.data?.medicines || []);
       } else {
         setError(response?.message || 'Failed to load medicines');
@@ -355,15 +356,16 @@ if (shouldShowPreOpTests || shouldShowPostOpTests) {
     }
   };
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     if (currentPatient?.patientTimeLineID) {
       getAllMedicine();
     } else if (!currentPatient?.patientTimeLineID) {
       setLoading(false);
       setError('No patient selected');
     }
-  }, [currentPatient]);
-
+  }, [currentPatient]))
+  
   // Also update when medications from pre-op form change
 // Also update when pre-op / post-op medications change
 useEffect(() => {
@@ -378,20 +380,24 @@ useEffect(() => {
 
 
   const handleAddMedicine = () => {
-    navigation.navigate('AddMedicineScreen' as never, {currentTab: activetab});
+    navigation.navigate('AddMedicineScreen', { currentTab: activetab });
   };
 
   const handleViewTimeline = () => {
     if (!currentPatient?.patientTimeLineID) {
-      Alert.alert('Error', 'No timeline available for this patient');
+      dispatch(showError("No timeline available for this patient"));
       return;
     }
     
-    navigation.navigate('NotificationScreen' as never, {
-      timelineID: currentPatient.patientTimeLineID,
-      patientName: currentPatient.pName,
-      patientId: currentPatient.patientid
-    } as never);
+    navigation.navigate(
+  "NotificationScreen" as never,
+  {
+    timelineID: currentPatient.patientTimeLineID,
+    patientName: currentPatient.pName,
+    patientId: currentPatient.patientid,
+    title: "Medicine Timeline",
+  } as never
+);
   };
 
   const retryFetch = () => {
@@ -469,7 +475,7 @@ useEffect(() => {
                 <PlusIcon size={18} color="#fff" />
                 <Text style={styles.primaryButtonTextSmall}>Add Medicine</Text>
               </TouchableOpacity>}
-            </View>}
+            </View>
           </View>
 
           {/* Main Content */}
@@ -509,7 +515,7 @@ useEffect(() => {
       )}
 
       {/* Footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
+      <View style={[styles.footer, { paddingBottom: bottomPadding }]}>
         <Footer active="patients" brandColor="#14b8a6" />
       </View>
     </SafeAreaView>

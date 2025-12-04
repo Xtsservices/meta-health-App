@@ -297,7 +297,7 @@ const { setScreenType } = useOTConfig();
       );
       if (alertsReqSeqRef.current !== seq) return;
 
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res ) {
         const rawList = Array.isArray(res.data) ? res.data : [];
         setTotalAlertsCount(rawList.length);
         const latestFive = [...rawList].reverse().slice(0, 5);
@@ -324,7 +324,7 @@ const { setScreenType } = useOTConfig();
         token
       );
 
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         // assuming { data: { elective, emergency } }
         const d = res.data?.data || res.data || {};
         setElectiveCount(Number(d.elective || 0));
@@ -347,7 +347,7 @@ const { setScreenType } = useOTConfig();
         token
       );
 
-      if (res?.status === "success" && res?.data) {
+      if (res?.status === "success" && "data" in res && res?.data) {
         const d = res?.data?.data || res.data;
         setSurgeonCounts({
           totalSurgeries: Number(d.totalSurgeries || 0),
@@ -384,7 +384,7 @@ const { setScreenType } = useOTConfig();
         `ot/${user?.hospitalID}/approvedRejected?year=${year}&month=${month}`,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         const row =
           res.data?.data?.[0] || res.data?.[0] || res.data || {};
         const a = Number(row.ApprovedCount || row.approved || 0);
@@ -683,7 +683,7 @@ const { setScreenType } = useOTConfig();
         userImage={userImg}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("Profile" as never);
+          navigation.navigate("DoctorProfile" as never);
         }}
         items={sidebarItems}
         bottomItems={bottomItems}

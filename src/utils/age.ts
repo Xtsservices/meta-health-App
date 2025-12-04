@@ -87,26 +87,41 @@ export function formatageFromDOB(
 
 
 /** Age from DOB on a given "today" (defaults to now) */
+/** Age from DOB on a given "today" (defaults to now) */
 export function ageFromDOB(dobISO: string, today = new Date()): { n: number; unit: AgeUnit } {
   const dob = parseYMD(dobISO);
   if (!dob) return { n: 0, unit: "years" };
 
-  // total days
-  const ms = today.setHours(0, 0, 0, 0) - dob.setHours(0, 0, 0, 0);
-  const days = Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+  // normalize both dates to midnight
+  const start = new Date(dob.getFullYear(), dob.getMonth(), dob.getDate());
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // < 1y => "days", otherwise "years"
-  if (days < 365) return { n: days, unit: "days" };
+  const ms = end.getTime() - start.getTime();
+  const days = Math.max(0, Math.floor(ms / 86400000));
 
-  // years (floor, birthday passed?)
-  let years = today.getFullYear() - dob.getFullYear();
-  const hadBirthday =
-    today.getMonth() > dob.getMonth() ||
-    (today.getMonth() === dob.getMonth() && today.getDate() >= dob.getDate());
-  if (!hadBirthday) years -= 1;
+  // --- CASE 1: 0–31 days -> days ---
+  if (days <= 31) {
+    return { n: days, unit: "days" };
+  }
 
+  // --- CASE 2: 1–12 months -> months ---
+  let months =
+    (end.getFullYear() - start.getFullYear()) * 12 +
+    (end.getMonth() - start.getMonth());
+
+  if (end.getDate() < start.getDate()) months -= 1;
+  months = Math.max(0, months);
+
+  if (months <= 12) {
+    const m = months === 0 ? 1 : months; // 0 months -> treat as 1 month
+    return { n: m, unit: "months" };
+  }
+
+  // --- CASE 3: > 12 months -> years ---
+  const years = Math.floor(months / 12);
   return { n: Math.max(0, years), unit: "years" };
 }
+
 
 /** DOB from an age (value+unit) on a given "today" (defaults to now) */
 export function dobFromAge(nRaw: number, unit: AgeUnit, today = new Date()): string {

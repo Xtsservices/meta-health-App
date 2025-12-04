@@ -26,6 +26,7 @@ import { COLORS } from "../../../utils/colour";
 import { FONT_SIZE,  responsiveHeight, responsiveWidth, SCREEN_WIDTH, SPACING } from "../../../utils/responsive";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
+import { getEmailValidationMessage, getPhoneValidationMessage } from "../../../utils/addPatientFormHelper";
 
 interface SlotInfo {
   id: number;
@@ -111,7 +112,7 @@ const BookAppointment: React.FC = () => {
           `department/${user?.hospitalID}`,
           token
         );
-        if (response?.status === "success") {
+        if (response?.status === "success" && "data" in response) {
           setDepartments(response?.data?.departments || response.data?.departments || []);
         }
       } catch (err) {
@@ -126,7 +127,7 @@ const BookAppointment: React.FC = () => {
           `user/${user?.hospitalID}/list/${Role_NAME.doctor}`,
           token
         );
-        if (doctorResponse?.status === "success") {
+        if (doctorResponse?.status === "success" && "users" in doctorResponse && "data" in doctorResponse ) {
           const docs = doctorResponse?.users || doctorResponse.data?.users || [];
           setDoctorList(docs);
           setFilteredDoctors(docs);
@@ -272,7 +273,7 @@ const BookAppointment: React.FC = () => {
           `doctor/${user?.hospitalID}/${selectedDoctorID}/${formattedDate}/getDoctorAppointmentsSlotsByDate`,
           token
         );
-        if (response?.status === "success") {
+        if (response?.status === "success" && "data" in response) {
           const slots: SlotInfo[] =
             response?.data?.data?.map((slot: any) => ({
               id: slot.id,
@@ -353,6 +354,26 @@ const BookAppointment: React.FC = () => {
       dispatch(showError("Please select appointment date"));
       return;
     }
+     const mobileError = getPhoneValidationMessage(
+      String(appointmentFormData.mobileNumber.value || "")
+    );
+    if (mobileError) {
+      dispatch(showError(mobileError));
+      return;
+    }
+     if (!/^\d+[DMY]$/.test(String(appointmentFormData.age.value))) {
+      dispatch(showError("Age must be in format: 10D, 5M, or 2Y"));
+      return;
+    }
+
+    const emailError = getEmailValidationMessage(
+      String(appointmentFormData.email.value || "")
+    );
+    if (emailError) {
+      dispatch(showError(emailError));
+      return;
+    }
+    
 
     const reqBody: Record<string, unknown> = {
       departmentID: appointmentFormData.department.value,
@@ -364,7 +385,7 @@ const BookAppointment: React.FC = () => {
         (appointmentFormData.timeSlot.value as any as string) ||
         "",
       patientName: appointmentFormData.pName.value,
-      age: Number(appointmentFormData.age.value),
+      age: String(appointmentFormData.age.value),
       gender: appointmentFormData.gender.value,
       mobileNumber: appointmentFormData.mobileNumber.value,
       email: appointmentFormData.email.value,
@@ -390,11 +411,11 @@ const BookAppointment: React.FC = () => {
         token
       );
       setSubmitting(false);
-if (res?.status === "success"){
+if (res?.status === "success" && "data" in res) {
     dispatch(showSuccess("Appointment booked successfully"));
 }
       else {
-        dispatch(showError(res?.data?.message || "Unable to book appointment"));
+        dispatch(showError("data" in res && res?.data?.message || "Unable to book appointment"));
         return;
       }
       resetAppointmentForm();
@@ -462,7 +483,7 @@ const debouncedSubmit = useMemo(
               placeholder="Enter age"
               placeholderTextColor={COLORS.placeholder}
               value={String(appointmentFormData.age.value || "")}
-              keyboardType="numeric"
+              
               onChangeText={(text) => handleTextChange("age", text)}
             />
           </View>
@@ -608,7 +629,7 @@ const debouncedSubmit = useMemo(
                  value={selectedDate || new Date()}
                  mode="date"
                  display={Platform.OS === "android" ? "spinner" : "default"}
-                  maximumDate={new Date()}
+                  
                  minimumDate={new Date(1900, 0, 1)}
                   onChange={handleDateChange}
               />

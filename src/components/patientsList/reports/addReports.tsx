@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   ActivityIndicator,
+  PermissionsAndroid,
 } from "react-native";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import { pick, types } from '@react-native-documents/picker';
@@ -22,6 +23,8 @@ import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 // import { ArrowLeft, Upload, Trash2 } from "lucide-react-native";
 import { useReportStore } from "../../../store/zustandstore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { DeleteIcon } from "../../../utils/SvgIcons";
+import { COLORS } from "../../../utils/colour";
 
 type FileItem = {
   uri: string;
@@ -49,30 +52,59 @@ const ReportUploadScreen: React.FC<Props> = ({ navigation, route }) => {
   // --------------------------
   // PICK FROM CAMERA
   // --------------------------
-  const openCamera = async () => {
-    try {
-      const res = await launchCamera({
-        mediaType: "photo",
-        quality: 0.8,
-      });
+const requestCameraPermission = async () => {
+  if (Platform.OS !== "android") return true;
 
-      if (!res.didCancel && res.assets?.length) {
-        const file = res.assets[0];
-
-        setFiles((prev) => [
-          ...prev,
-          {
-            uri: file.uri!,
-            name: file.fileName || `photo_${Date.now()}.jpg`,
-            type: file.type || "image/jpeg",
-            size: file.fileSize,
-          },
-        ]);
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {
+        title: "Camera Permission",
+        message: "App needs access to your camera to take photos.",
+        buttonNeutral: "Ask Me Later",
+        buttonNegative: "Cancel",
+        buttonPositive: "OK",
       }
-    } catch (err) {
-      dispatch(showError("Camera error"));
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch (err) {
+    dispatch(showError("Camera permission error"));
+    return false;
+  }
+};
+
+
+  const openCamera = async () => {
+  try {
+    const hasPermission = await requestCameraPermission();
+    if (!hasPermission) {
+      dispatch(showError("Camera permission denied"));
+      return;
     }
-  };
+
+    const res = await launchCamera({
+      mediaType: "photo",
+      quality: 0.8,
+    });
+
+    if (!res.didCancel && res.assets?.length) {
+      const file = res.assets[0];
+
+      setFiles((prev) => [
+        ...prev,
+        {
+          uri: file.uri!,
+          name: file.fileName || `photo_${Date.now()}.jpg`,
+          type: file.type || "image/jpeg",
+          size: file.fileSize,
+        },
+      ]);
+    }
+  } catch (err) {
+    dispatch(showError("Camera error"));
+  }
+};
+
 
   // --------------------------
   // PICK FROM GALLERY
@@ -101,18 +133,16 @@ const ReportUploadScreen: React.FC<Props> = ({ navigation, route }) => {
   // --------------------------
   // FILE PICKER (PDF, DOC, ZIP)
   // --------------------------
- const pickDocuments = async () => {
+const pickDocuments = async () => {
   try {
     const results = await pick({
       allowMultiSelection: true,
       type: [types.allFiles],
     });
 
-    const mapped = await Promise.all(
-      results.map(async file => {
+    const mapped: FileItem[] = await Promise.all(
+      results.map(async (file): Promise<FileItem> => {
         let uri = file.uri;
-
-        // No need for old GuardedResultAsyncTask fix — this lib is compatible
 
         // For Android convert content:// → file:// using RNFS if needed
         if (Platform.OS === "android" && uri.startsWith("content://")) {
@@ -123,20 +153,23 @@ const ReportUploadScreen: React.FC<Props> = ({ navigation, route }) => {
 
         return {
           uri,
-          name: file.name,
+          name: file.name ?? `file_${Date.now()}`,
           type: file.type || "application/octet-stream",
-          size: file.size,
+          size: file.size as number | undefined,  // 👈 cast to match FileItem
         };
       })
     );
 
-    setFiles(prev => [...prev, ...mapped]);
+    setFiles((prev) => [...prev, ...mapped]);
   } catch (error) {
-    if (!error?.message?.includes("cancelled")) {
-      console.log("Document picking error:", error);
-    }
+  if (error instanceof Error && !error.message.includes("cancelled")) {
+    dispatch(showError(error.message || "Document picking error"));
+  } else if (!String(error).includes("cancelled")) {
+    dispatch(showError(String(error) || "Document picking error"));
   }
 }
+};
+
 
   // --------------------------
   // SUBMIT UPLOAD
@@ -166,7 +199,7 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
         form,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         dispatch(showSuccess("Report successfully uploaded"));
 
         setNewReport(
@@ -178,7 +211,7 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
 
         navigation.goBack();
       } else {
-        dispatch(showError(res?.message || "Upload failed"));
+        dispatch(showError("message" in res ? res.message : "Upload failed"));
       }
     } catch (err) {
       dispatch(showError("Upload error"));
@@ -238,7 +271,8 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"))
             <Text style={styles.fileName}>{file.name}</Text>
 
             <TouchableOpacity onPress={() => removeFile(i)}>
-               <Text style={styles.fileName}>Delete</Text>
+              <DeleteIcon size={16} color={COLORS.error}/>
+               {/* <Text style={styles.fileName}>Delete</Text> */}
             </TouchableOpacity>
           </View>
         ))}

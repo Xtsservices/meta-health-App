@@ -88,7 +88,6 @@ export default function PrescriptionScreen() {
 
   // read-only details modal (simple & fast)
   const [detail, setDetail] = useState<Prescription | null>(null);
-
   const patientID = cp?.currentPatient?.id ?? cp?.id;
   const timelineID = typeof timeline === "object" ? timeline?.id : timeline;
 
@@ -177,6 +176,15 @@ export default function PrescriptionScreen() {
       </Pressable>
     );
   };
+const testNote =
+  detail?.test
+    ?.split("#")
+    .map((s) => s.split("|")[1]?.trim())
+    .filter(Boolean)
+    .join(", ") || "";
+
+const notesToShow =
+  detail?.medicineNotes  || testNote || "-";
 
   return (
     <View style={[styles.screen, { backgroundColor: COLORS.bg }]}>
@@ -286,7 +294,7 @@ export default function PrescriptionScreen() {
                 <View style={styles.chipsWrap}>
                   {parseTests(detail?.test).map((t, i) => (
                     <View key={`${t}-${i}`} style={styles.chip}>
-                      <Text style={styles.chipText}>{t}</Text>
+                      <Text style={styles.chipText}>{t.split("|")[0]}</Text>
                     </View>
                   ))}
                 </View>
@@ -294,11 +302,9 @@ export default function PrescriptionScreen() {
                 <Text style={styles.value}>-</Text>
               )}
 
-              <Text style={styles.label}>Instructions</Text>
-              <Text style={styles.value}>{detail?.advice || "-"}</Text>
 
               <Text style={styles.label}>Notes</Text>
-              <Text style={styles.value}>{detail?.medicineNotes || "-"}</Text>
+              <Text style={styles.value}>{notesToShow}</Text>
 
               <Text style={styles.label}>Follow Up</Text>
               <Text style={styles.value}>

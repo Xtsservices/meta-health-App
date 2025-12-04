@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   FlatList,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -73,7 +72,7 @@ const fetchSymptomsList = useCallback(async (val: string) => {
   try {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     const res = await AuthPost("data/symptoms", { text: val }, token);
-    if (res?.status === "success" && Array.isArray(res?.data?.symptoms)) {
+    if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.symptoms)) {
       setSuggestions(removeDuplicatesAndFilter(res.data?.symptoms, val));
     } else {
       setSuggestions([]);
@@ -115,11 +114,11 @@ useEffect(() => {
 
   const addToList = () => {
     if (!symptom.trim() || !duration.trim()) {
-      Alert.alert("Missing", "Please enter symptom and duration.");
+      dispatch(showError("Please enter symptom and duration."));
       return;
     }
     if (unit === "year" && parseInt(duration, 10) > 5) {
-      Alert.alert("Limit", "Year should be less than or equal to 5.");
+      dispatch(showError("Year should be less than or equal to 5."));
       return;
     }
     // Require choosing from dropdown (to get concept_id)
@@ -129,7 +128,7 @@ useEffect(() => {
     | undefined;
 
 if (!match) {
-  Alert.alert("Select from suggestions", "Please pick a symptom from the suggestions list.");
+  dispatch(showError("Please pick a symptom from the suggestions list."));
   return;
 }
 
@@ -149,7 +148,7 @@ if (!match) {
 
   const submit = async () => {
     if (!bag.length) {
-      Alert.alert("Empty", "Add at least one symptom to the list.");
+      dispatch(showError("Add at least one symptom to the list."));
       return;
     }
 
@@ -158,7 +157,7 @@ if (!match) {
     const patientID = cp?.currentPatient?.id ?? cp?.id;
 
     if (!timeLineID || !patientID) {
-      Alert.alert("Error", "Missing patient timeline.");
+      dispatch(showError("Missing patient timeline."));
       return;
     }
 
@@ -173,19 +172,22 @@ if (!match) {
           duration: symptom.duration,
           durationParameter: symptom.durationParameter,
           conceptID: symptom.conceptID,
-        //   notes: symptom.notes,
         })),
         patientID,
       };
       const res = await AuthPost("symptom", body, token);
-      if (res?.status === "success" || res?.status === "success") {
+      if (res?.status === "success" && "message" in res ) {
          dispatch( showSuccess(res?.message || "Symptoms added successfully"));
         navigation.goBack(); 
       } else {
-         dispatch( showError(res?.message || "Failed to submit symptoms."));
+         dispatch(showError("message" in res && res.message ? res.message : "Failed to submit symptoms."));
       }
     } catch (e) {
-       dispatch(showError(e?.message || "Failed to submit symptoms."));
+       const errorMessage =
+         typeof e === "object" && e !== null && "message" in e
+           ? (e as { message?: string }).message
+           : undefined;
+       dispatch(showError(errorMessage || "Failed to submit symptoms."));
     } finally {
       setSaving(false);
     }
@@ -291,26 +293,6 @@ onChangeText={(t) => {
               );
             })}
           </View>
-
-          {/* Notes */}
-          <Text style={[styles.label, { color: COLORS.sub, marginTop: 10 }]}>Additional Notes (optional)</Text>
-          <TextInput
-            placeholder="Describe the symptom in detail..."
-            placeholderTextColor={COLORS.sub}
-            style={[
-              styles.input,
-              {
-                height: 90,
-                textAlignVertical: "top",
-                borderColor: COLORS.border,
-                color: COLORS.text,
-                backgroundColor: COLORS.field,
-              },
-            ]}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-          />
 
           {/* Add to list */}
           <Pressable

@@ -18,7 +18,7 @@ import {
   Modal,
   useColorScheme,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
@@ -138,7 +138,7 @@ const isOt = user?.roleName === "surgeon" || user?.roleName === "anesthesist"
     try {
       setLoading(true);
       let url = "";
-if (user?.roleName !== "surgeon" && user?.roleName !== "anesthesia"){
+if (user?.roleName !== "surgeon" && user?.roleName !== "anesthetist"){
 if (user?.patientStatus === 1) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseopdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
@@ -169,9 +169,8 @@ if (user?.patientStatus === 1) {
 }else{
   url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
 }
-      
       const response = await AuthFetch(url, token);
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response?.data?.patients
           : [];
@@ -245,7 +244,7 @@ if (user?.patientStatus === 1) {
 
     try {
       const response = await AuthFetch(`ward/${user.hospitalID}`, token);
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         setWardList(response?.data?.wards || []);
       }
     } catch (e) {
@@ -265,7 +264,7 @@ if (user?.patientStatus === 1) {
         token11
       );
 
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         let surgeryArray: FullSurgeryData[] = [];
 
         if (Array.isArray(response.data?.data)) {
@@ -282,15 +281,23 @@ if (user?.patientStatus === 1) {
           surgeryType: item.surgeryType || "",
           rejectReason: item.rejectReason || "N/A",
         }));
-
+const patientId = patient?.id
+if (patientId === null) return
         setSurgeryData(prev => ({
           ...prev,
-          [patient?.id]: formattedData
+          [patientId]: formattedData
         }));
       }
-    } catch (error) {
-      dispatch(showError(e?.response?.data?.message || 'Failed to load patients'));
-    }
+    } catch (error: any) {
+  dispatch(
+    showError(
+      error?.response?.data?.message ||
+      error?.message ||
+      "Something went wrong"
+    )
+  );
+}
+
   }, []);
 
   const debouncedSurgeryFetchRef = useRef(
@@ -325,12 +332,14 @@ if (user?.patientStatus === 1) {
         `followup/${user.hospitalID}/active`,
         token
       );
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
+      if (response?.status === "success" ) {
         setAllPatients(response.data?.followUps as PatientType[]);
       } else {
         setAllPatients([]);
       }
-    } catch (e) {
+    } 
+  }catch (e) {
       setAllPatients([]);
     } finally {
       setLoading(false);
@@ -338,7 +347,8 @@ if (user?.patientStatus === 1) {
   }, [user?.hospitalID]);
 
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     if (filterValue === 1) {
       // Follow-up filter – use followup API
       fetchFollowupPatients();
@@ -349,7 +359,7 @@ if (user?.patientStatus === 1) {
     if (user?.patientStatus === 2 || user?.patientStatus === 3) {
       fetchWards();
     }
-  }, [fetchPatients, fetchWards, user?.patientStatus, fetchFollowupPatients, filterValue]);
+  }, [fetchPatients, fetchWards, user?.patientStatus, fetchFollowupPatients, filterValue]))
 
   const filteredAndSearched = useMemo(() => {
     let base: PatientType[] = allPatients;
@@ -417,11 +427,13 @@ if (user?.patientStatus === 1) {
   };
 
   const handleNotificationClick = (patient: PatientType) => {
-    navigation.navigate("NotificationScreen", {
-      timelineID: patient.patientTimeLineID,
-      patientName: patient.pName || "Unknown Patient",
-      patientId: patient.id
-    });
+   navigation.navigate("NotificationScreen" as never, {
+  timelineID: patient.patientTimeLineID,
+  patientName: patient.pName || "Unknown Patient",
+  patientId: patient.id,
+  title: "Notification",
+} as never);
+
   };
 
   const handleAddPatient = () => {
@@ -443,7 +455,9 @@ if (user?.patientStatus === 1) {
   };
 
   const handleSurgeryWarningClick = (patient: PatientType) => {
-    const patientSurgeries = surgeryData[patient?.id] || [];
+      const patientId = patient.id;
+  if (patientId == null) return; // guard against null / undefined
+    const patientSurgeries = surgeryData[patientId ] || [];
     const rejectedSurgeries = patientSurgeries.filter(item =>
       item.status?.toLowerCase() === "rejected"
     );
@@ -646,11 +660,11 @@ const patientStatusKey =
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
     const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—").toString();
-    const age = getAgeLabel(item?.dob);
+    const age =item?.age || getAgeLabel(item?.dob);
     const hasNotification = item.notificationCount && item.notificationCount > 0;
     const wardName = (user?.patientStatus === 2 || user?.patientStatus === 3) ? wardList.find(w => w.id === item.wardID)?.name || "—" : "—";
 const approvedDate = formatDate(item?.approvedTime)
-    const patientSurgeries = surgeryData[item.id] || [];
+    const patientSurgeries = surgeryData[item?.id] || [];
     const hasRejectedSurgery = patientSurgeries.some(surgery =>
       surgery.status?.toLowerCase() === "rejected"
     );

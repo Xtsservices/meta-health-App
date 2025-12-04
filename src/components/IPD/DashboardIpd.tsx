@@ -151,7 +151,7 @@ const DashboardIpd: React.FC = () => {
   const user = useSelector((s: RootState) => s.currentUser);
   const insets = useSafeAreaInsets();
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl || user?.profileImage;
+  const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;
   const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
   const id = route.params?.id;
 
@@ -189,7 +189,6 @@ const DashboardIpd: React.FC = () => {
         `patient/${user.hospitalID}/patients/calendarCards?date=${currentDate}`,
         token
       );
-
       if (patientCountData?.status === "success") {
         setDischargedCount(patientCountData.data?.Discharged_Patients ?? 0);
         setInPatientCount(patientCountData.data?.Total_InPatients ?? 0);
@@ -512,7 +511,7 @@ const DashboardIpd: React.FC = () => {
         userImage={userImg}
         onProfile={() => {
           setMenuOpen(false);
-          navigation.navigate("EditPatientProfile" as never, { id } as never);
+          navigation.navigate("DoctorProfile" as never, { id } as never);
         }}
         items={sidebarItems}
         bottomItems={bottomItems}

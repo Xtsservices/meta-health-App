@@ -80,7 +80,7 @@ const OTPatientTable: React.FC<Props> = (props) => {
         token
       );
 
-      if (response?.status === "success") {
+      if (response?.status === "success" && "data" in response) {
         const list: OTAlert[] = response.data?.data ?? [];
         setPatients(list.reverse());
       } else {

@@ -38,7 +38,6 @@ const InvoiceDetailsMobile: React.FC = () => {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   const { invoice, source, nurses }: RouteParams = route.params;
-  
   const getNurseName = (nurseId: number) => {
     const nurse = nurses?.find(n => n.id === nurseId);
     return nurse ? `${nurse.firstName} ${nurse.lastName}` : `Nurse #${nurseId}`;
@@ -50,10 +49,14 @@ const InvoiceDetailsMobile: React.FC = () => {
 const isBillingSource = source === "billing";
 const isReceptionUser = user?.roleName?.toLowerCase() === 'reception';
 const isPharmacyUser = user?.roleName?.toLowerCase() === 'pharmacy';
-
+let displayTotal = 0;
+let payableAmount = 0;
+let numericPaid = 0;
+let numericDue = 0;
+let useApiDueAmount = false;
 const medsTotal = useMemo(() => {
   return (invoice.medicinesList || []).reduce(
-    (sum, m) => sum + (m.amount || 0), // Remove the multiplication by quantity since amount should already be total
+    (sum, m) => sum + (m.amount  || 0), // Remove the multiplication by quantity since amount should already be total
     0
   );
 }, [invoice.medicinesList]);
@@ -66,7 +69,6 @@ const testsTotal = useMemo(() => {
 }, [invoice.testList]);
 
 const grandTotal = medsTotal + testsTotal;
-
 // Get payment amounts from API
 const rawPaid = (invoice as any)?.paidAmount || 
                 (invoice as any)?.paymentDetails?.[0]?.paidAmount || 
@@ -76,34 +78,46 @@ const rawTotal = (invoice as any)?.totalAmount || grandTotal;
 
 // For pharmacy users in billing mode, always show total amount only
 if (isBillingSource && isPharmacyUser) {
-  var payableAmount = grandTotal;
-  var displayTotal = grandTotal;
-  var numericPaid = 0;
-  var numericDue = 0;
-  var useApiDueAmount = false;
+  payableAmount = rawDue;
+  displayTotal = grandTotal;
+  numericPaid = rawPaid;
+  numericDue = rawDue;
+  useApiDueAmount = false;
 } else {
   // Original logic for other users
-  var useApiDueAmount = isBillingSource && !isReceptionUser && 
+  let useApiDueAmount = isBillingSource  && 
                        rawDue !== undefined && rawDue !== null && !isNaN(Number(rawDue));
+                       
 
-  var numericPaid = useApiDueAmount ? Number(rawPaid) : (Number(rawPaid) || 0);
-  var numericDue = useApiDueAmount ? Number(rawDue) : Math.max(0, grandTotal - numericPaid);
-
-  var payableAmount = useApiDueAmount ? numericDue : (numericPaid > 0 ? numericDue : grandTotal);
-  var displayTotal = useApiDueAmount ? (numericPaid + numericDue) : grandTotal;
+   numericPaid = useApiDueAmount ? Number(rawPaid) : (Number(rawPaid) || 0);
+   numericDue = useApiDueAmount ? Number(rawDue) : Math.max(0, grandTotal - numericPaid);
+   payableAmount = useApiDueAmount ? numericDue : (numericPaid > 0 ? numericDue : grandTotal);
+   displayTotal = useApiDueAmount ? (numericPaid + numericDue) : grandTotal;
 }
   const handlePayPress = () => {
-    navigation.navigate("PaymentScreen", {
-      amount: payableAmount,
-      receptionData: invoice,
-      department: invoice.dept,
-      orderData: {
-        patientID: invoice.patientID,
-        ptype: invoice.pType,
-      },
-      user,
-    });
+  const payload: any = {
+    amount: numericDue,
+    department: invoice.dept,
+    orderData: {
+      patientID: invoice.patientID,
+      ptype: invoice.pType,
+    },
+    user,
   };
+
+  const role = user?.roleName?.toLowerCase();
+
+  if (role === "pharmacy") {
+    payload.pharmacyData = invoice;
+    payload. type = "medicine"
+  } else if (role === "lab") {
+    payload.labData = invoice;
+  } else {
+    payload.receptionData = invoice;
+  }
+
+  navigation.navigate("PaymentScreen", payload);
+};
 
   return (
     <View
@@ -250,7 +264,7 @@ if (isBillingSource && isPharmacyUser) {
                 </View>
                 <View style={{ flex: 1, alignItems: "flex-end" }}>
                   <Text style={styles.tdMain}>
-                    ₹{(m.amount * (m.qty || 1)).toFixed(2)}
+                    ₹{(m.amount ).toFixed(2)}
                   </Text>
                 </View>
               </View>
@@ -300,96 +314,71 @@ if (isBillingSource && isPharmacyUser) {
           </View>
         )}
 
-        {/* Grand total */}
-                {/* Grand total */}<View style={[styles.card, { backgroundColor: COLORS.card }]}>
+       {/* Grand total */}
+<View style={[styles.card, { backgroundColor: COLORS.card }]}>
   <Text style={styles.sectionTitle}>
-    {isBillingSource ? 'Payment Summary' : 'Invoice Total'}
+    {isBillingSource ? "Payment Summary" : "Invoice Total"}
   </Text>
 
   {isBillingSource ? (
-    useApiDueAmount ? (
-      <>
-        <View style={styles.breakdownRow}>
-          <Text style={styles.breakdownLabel}>Total Amount:</Text>
-          <Text style={styles.breakdownValue}>₹{displayTotal.toFixed(2)}</Text>
-        </View>
-        
-        <View style={styles.breakdownRow}>
-          <Text style={styles.breakdownLabel}>Paid Amount:</Text>
-          <Text style={styles.breakdownValue}>₹{numericPaid.toFixed(2)}</Text>
-        </View>
-        
-        <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Due Amount:</Text>
-          <Text style={[styles.totalValue, { color: numericDue > 0 ? COLORS.error : COLORS.success }]}>
-            ₹{numericDue.toFixed(2)}
-          </Text>
-        </View>
-      </>
-    ) : (
-      numericPaid > 0 ? (
-            <>
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total Amount</Text>
-                <Text style={styles.totalValue}>
-                  ₹{displayTotal.toFixed(2)}
-                </Text>
-              </View>
+    <>
+      {/* Total Amount */}
+      <View style={styles.breakdownRow}>
+        <Text style={styles.breakdownLabel}>Total Amount:</Text>
+        <Text style={styles.breakdownValue}>
+          ₹{displayTotal.toFixed(2)}
+        </Text>
+      </View>
 
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Paid Amount</Text>
-                <Text style={styles.totalValue}>
-                  ₹{numericPaid.toFixed(2)}
-                </Text>
-              </View>
+      {/* Payable Amount (what we intend to charge now) */}
+      <View style={styles.breakdownRow}>
+        <Text style={styles.breakdownLabel}>Payable Amount:</Text>
+        <Text style={styles.breakdownValue}>
+          ₹{payableAmount.toFixed(2)}
+        </Text>
+      </View>
 
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Due Amount</Text>
-                <Text style={styles.totalValue}>
-                  ₹{payableAmount.toFixed(2)}
-                </Text>
-              </View>
-            </>
-          ) : (
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>
-                Payable Amount
-              </Text>
-          <Text style={styles.totalValue}>
-            ₹{grandTotal.toFixed(2)}
-          </Text>
-        </View>
-      )
-    )
+      {/* Due Amount (outstanding) */}
+      <View style={styles.totalRow}>
+        <Text style={styles.totalLabel}>Due Amount:</Text>
+        <Text
+          style={[
+            styles.totalValue,
+            { color: numericDue > 0 ? COLORS.error : COLORS.success },
+          ]}
+        >
+          ₹{numericDue.toFixed(2)}
+        </Text>
+      </View>
+    </>
   ) : (
     // TAX INVOICE mode - Always show total amount
     <View style={styles.totalRow}>
       <Text style={styles.totalLabel}>Total Amount</Text>
-              <Text style={styles.totalValue}>
-                ₹{grandTotal.toFixed(2)}
-              </Text>
-            </View>
-          )}
-        </View>
+      <Text style={styles.totalValue}>₹{grandTotal.toFixed(2)}</Text>
+    </View>
+  )}
+</View>
+
 
 
         {/* Pay button for Billing source */}
-        {isBillingSource && payableAmount > 0 && (
-          <View style={styles.payButtonContainer}>
-            <TouchableOpacity
-              style={[styles.payButton, { backgroundColor: COLORS.brand }]}
-              onPress={handlePayPress}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.payButtonText}>
-                Pay ₹{payableAmount.toFixed(2)}
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.payHint}>
-              You'll be redirected to the secure payment screen.
-            </Text>
-          </View>
-        )}
+       {isBillingSource && numericDue > 0 && (
+  <View style={styles.payButtonContainer}>
+    <TouchableOpacity
+      style={[styles.payButton, { backgroundColor: COLORS.brand }]}
+      onPress={handlePayPress}
+      activeOpacity={0.85}
+    >
+      <Text style={styles.payButtonText}>
+        Pay ₹{numericDue.toFixed(2)}
+      </Text>
+    </TouchableOpacity>
+    <Text style={styles.payHint}>
+      You'll be redirected to the secure payment screen.
+    </Text>
+  </View>
+)}
       </ScrollView>
 
       {/* Download PDF modal */}

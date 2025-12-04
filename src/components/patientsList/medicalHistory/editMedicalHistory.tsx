@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
-import { useRoute, useNavigation } from "@react-navigation/native";
+import { useRoute, useNavigation, useFocusEffect } from "@react-navigation/native";
 import { RootState } from "../../../store/store";
 import { AuthFetch, AuthPatch, AuthPut } from "../../../auth/auth";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
@@ -91,7 +91,7 @@ const EditMedicalHistoryScreen: React.FC = () => {
         token
       );
       
-      if (res?.status === "success" && res?.data?.medicalHistory) {
+      if (res?.status === "success" && "data" in res && res?.data?.medicalHistory) {
         setMedicalHistory(res.data?.medicalHistory);
       }
     } catch (e: any) {
@@ -101,9 +101,10 @@ const EditMedicalHistoryScreen: React.FC = () => {
     }
   }, [user?.token, user?.hospitalID, patientId, dispatch]);
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     getMedicalHistory();
-  }, [getMedicalHistory]);
+  }, [getMedicalHistory]))
 
   const canSave =
     !!medicalHistory?.givenName &&
@@ -125,9 +126,9 @@ const EditMedicalHistoryScreen: React.FC = () => {
       );
       if (res?.status === "success") {
         dispatch(showSuccess("Medical history successfully updated"));
-        navigation.goBack();
+        navigation.navigate("MedicalHistory");
       } else {
-        dispatch(showError(res?.message || "Failed to update history"));
+        dispatch(showError( res && "message" in res && res?.message || "Failed to update history"));
       }
     } catch (e: any) {
       dispatch(showError("Failed to update history"));

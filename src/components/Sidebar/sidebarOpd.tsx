@@ -169,6 +169,9 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#e2e8f0",
+     flexDirection: "row",       // 👈 add
+  alignItems: "center",       // 👈 add
+  position: "relative",
   },
   closeBtn: {
     position: "absolute",
@@ -180,6 +183,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#f1f5f9",
+    zIndex: 10, 
   },
   userRow: {
     flexDirection: "row",

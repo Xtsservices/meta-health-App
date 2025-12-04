@@ -12,6 +12,7 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -30,6 +31,8 @@ import {
 } from "../../../utils/medicines";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { COLORS } from "../../../utils/colour";
+import { Picker } from "@react-native-picker/picker";
+import { formatDate } from "../../../utils/dateTime";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
@@ -97,9 +100,14 @@ const createEmptyRow = (
 const UNIT_BY_TYPE: Record<number, string> = {
   1: "mg", // Tablet
   2: "ml", // Syrup
-  3: "ml", // Injection
+  3: "mg", // Injection
   4: "ml", // IV Line
-  5: "μg", // Inhaler
+  5: "ml", // Inhaler
+  6:"g",
+  7:"ml",
+  8:"ml",
+  9:"ml",
+  10:"ml",
 };
 
 /* ------------------------------------------------------------------ */
@@ -255,11 +263,11 @@ export default function AddMedicineScreen() {
 
         // Auto-select unit when medicine type changes
         if (field === "medicineType" && value) {
-          const mt = value as unknown as number;
-          const unit = UNIT_BY_TYPE[mt];
-          if (unit && !updated.doseUnit) {
+          const type = Number(value);
+          const unit = UNIT_BY_TYPE[type] ?? "";
+         
             updated.doseUnit = unit;
-          }
+          
         }
         return updated;
       });
@@ -684,33 +692,53 @@ export default function AddMedicineScreen() {
               }}
             />
           </View>
-          <View style={styles.col}>
-            <Text style={styles.label}>Unit</Text>
-            <View style={styles.pickerWrap}>
-              {["μg", "mg", "g", "ml", "l"].map((u) => {
-                const active = row.doseUnit === u;
-                return (
-                  <Pressable
-                    key={u}
-                    onPress={() => updateRow(rowId, "doseUnit", u)}
-                    style={[
-                      styles.pill,
-                      active && styles.pillActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        active && styles.pillTextActive,
-                      ]}
-                    >
-                      {u}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
+         <View style={styles.col}>
+  <Text style={styles.label}>Unit</Text>
+
+  {row.medicineType ? (
+    // 🔒 Type selected → show read-only unit based on type
+    <TextInput
+      style={[
+        styles.input,
+        { backgroundColor: "#f1f5f9" }, // subtle readonly look
+      ]}
+      value={row.doseUnit || UNIT_BY_TYPE[Number(row.medicineType)] || ""}
+      editable={false}
+      placeholder="Unit"
+      placeholderTextColor={COLORS.placeholderText}
+    />
+  ) : (
+    // 🔓 No type selected → user can choose unit via Picker
+    <View
+      style={{
+        borderWidth: 1.5,
+        borderColor: COLORS.border,
+        borderRadius: 12,
+        overflow: "hidden",
+        backgroundColor: "#fff",
+      }}
+    >
+      <Picker
+        selectedValue={row.doseUnit || ""}
+        onValueChange={(val) => {
+          if (!val) return;
+          updateRow(rowId, "doseUnit", val as any);
+        }}
+        dropdownIconColor={COLORS.text}
+      >
+        <Picker.Item label="Select unit" value="" />
+        <Picker.Item label="μg" value="μg" />
+        <Picker.Item label="mg" value="mg" />
+        <Picker.Item label="g" value="g" />
+        <Picker.Item label="ml" value="ml" />
+        <Picker.Item label="l" value="l" />
+      </Picker>
+    </View>
+  )}
+</View>
+
+
+
         </View>
 
         {/* Frequency & Duration */}
@@ -791,32 +819,39 @@ export default function AddMedicineScreen() {
             }
             style={styles.input}
           >
-            <Text
-              style={{
-                color: row.medicineStartDate ? COLORS.text : COLORS.sub,
-              }}
-            >
-              {row.medicineStartDate || todayYMD()}
-            </Text>
+           <Text
+  style={{
+    color: row.medicineStartDate ? COLORS.text : COLORS.sub,
+  }}
+>
+  {row.medicineStartDate
+    ? formatDate(row.medicineStartDate)
+    : formatDate(todayYMD())}
+</Text>
+
           </Pressable>
-          {showStartDatePicker[rowId] && (
-            <DateTimePicker
-              mode="date"
-              value={
-                row.medicineStartDate
-                  ? new Date(row.medicineStartDate)
-                  : new Date()
-              }
-              minimumDate={new Date()}
-              onChange={(_, d) => {
-                setShowStartDatePicker((p) => ({
-                  ...p,
-                  [rowId]: false,
-                }));
-                if (d) updateRow(rowId, "medicineStartDate", formatYMD(d));
-              }}
-            />
-          )}
+         {showStartDatePicker[rowId] && (
+  <DateTimePicker
+    value={
+      row.medicineStartDate
+        ? new Date(row.medicineStartDate)
+        : new Date()
+    }
+    mode="date"
+    display={Platform.OS === "android" ? "spinner" : "default"}
+    minimumDate={new Date()}
+    onChange={(_, d) => {
+      setShowStartDatePicker((p) => ({
+        ...p,
+        [rowId]: false,
+      }));
+      if (d) {
+        updateRow(rowId, "medicineStartDate", formatYMD(d)); // keep API format YYYY-MM-DD
+      }
+    }}
+  />
+)}
+
         </View>
 
         {/* Tests */}
@@ -826,6 +861,7 @@ export default function AddMedicineScreen() {
             style={styles.input}
             placeholder="Enter 3+ letters"
             placeholderTextColor={COLORS.placeholderText}
+           
             value={testSearch}
             onChangeText={(t) => {
               setSearchTest((p) => ({ ...p, [rowId]: t }));
@@ -863,7 +899,7 @@ export default function AddMedicineScreen() {
                     }}
                     style={styles.autoItem}
                   >
-                    <Text style={styles.autoText}>{opt}</Text>
+                    <Text style={styles.autoText}  >{opt}</Text>
                   </Pressable>
                 ))}
             </ScrollView>
@@ -969,31 +1005,37 @@ export default function AddMedicineScreen() {
                 style={styles.input}
               >
                 <Text
-                  style={{
-                    color: row.followUpDate ? COLORS.text : COLORS.sub,
-                  }}
-                >
-                  {row.followUpDate || "Select date"}
-                </Text>
+  style={{
+    color: row.followUpDate ? COLORS.text : COLORS.sub,
+  }}
+>
+  {row.followUpDate ? formatDate(row.followUpDate) : "Select date"}
+</Text>
+
               </Pressable>
               {showFollowUpPicker[rowId] && (
-                <DateTimePicker
-                  mode="date"
-                  value={
-                    row.followUpDate
-                      ? new Date(row.followUpDate)
-                      : new Date()
-                  }
-                  minimumDate={new Date()}
-                  onChange={(_, d) => {
-                    setShowFollowUpPicker((p) => ({
-                      ...p,
-                      [rowId]: false,
-                    }));
-                    if (d) updateRow(rowId, "followUpDate", formatYMD(d));
-                  }}
-                />
-              )}
+  <DateTimePicker
+    value={
+      row.followUpDate
+        ? new Date(row.followUpDate)
+        : new Date()
+    }
+    mode="date"
+    display={Platform.OS === "android" ? "spinner" : "default"}
+    minimumDate={new Date()}
+    onChange={(_, d) => {
+      setShowFollowUpPicker((p) => ({
+        ...p,
+        [rowId]: false,
+      }));
+      if (d) {
+        updateRow(rowId, "followUpDate", formatYMD(d)); // keep YYYY-MM-DD for API
+      }
+    }}
+  />
+)}
+
+
             </View>
           )}
         </View>
@@ -1019,7 +1061,6 @@ export default function AddMedicineScreen() {
   const hasCopySource = existingPrescriptions.some(
     (p) => p.status === 1 && p.medicine
   );
-
   return (
     <View style={styles.screen}>
       <KeyboardAwareScrollView

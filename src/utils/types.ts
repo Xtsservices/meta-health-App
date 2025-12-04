@@ -39,7 +39,7 @@ export interface transferTypes {
   external: number;
 }
 export interface staffType {
-  id: number;
+  id: number| undefined;
   email: string;
   firstName: string | null;
   lastName: string | null;
@@ -555,6 +555,7 @@ export interface basicPatientSkeleton {
 export interface PatientType {
   patientid: number | null;
   contact: number | string | null;
+  mobile: number| string;
   age: string | number | null;
   status: null;
   id: number | null;
@@ -692,7 +693,8 @@ export type SurgeryDetail = {
   completedTime?: string | null;
   key?: number; 
   patientAddedon?: string; 
-  rejectedTime?:string | null
+  rejectedTime?:string | null;
+  age: string | number | null;
 };
 
 export interface symptompstype {
@@ -779,7 +781,7 @@ export interface MedicineReminderType {
 
 export interface medicalHistoryFormType {
   patientID: number | null;
-  userID: number | null;
+  userID:  number | null;
   givenName: string;
   givenPhone: string;
   givenRelation: string;
@@ -940,6 +942,7 @@ export type vitalFunctionType = {
 };
 
 export type AlertType = {
+  priority(priority: any): import("react-native").ColorValue | undefined;
   id: number;
   patientName: string;
   doctorName: string;

@@ -70,7 +70,7 @@ export default function AddDoctorScreen() {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       const res = await AuthFetch(`user/${hospitalID}/list/${Role_NAME.doctor}`, token);
-      if (res?.status === "success" || res?.message === "success") {
+      if (res?.status === "success" && "data" in res) {
         setDoctors(res?.data?.users || []);
       } else {
         setDoctors([]);

@@ -48,10 +48,16 @@ const dispatch = useDispatch()
         `attachment/${user?.hospitalID}/all/${currentPatient?.id}/consentform`,
         token
       );
-      if (res?.status === "success") setReports(res?.data?.attachments);
-    } catch(error) {
-      dispatch(showError( error?.status || "Failed to load reports"))
-    }
+      if (res?.status === "success" && "data" in res) setReports(res?.data?.attachments);
+    } catch (error: any) {
+  dispatch(
+    showError(
+      error?.message ||
+      String(error?.status || "") ||
+      "Failed to load reports"
+    )
+  );
+}
   }, [user?.hospitalID, user?.token, currentPatient?.patientID, setReports]);
 
   useEffect(() => {
@@ -148,9 +154,15 @@ const dispatch = useDispatch()
     } else {
          dispatch(showError( res?.message || "Failed to upload consent form"))
     }
-  } catch (error) {
-    dispatch(showError( error?.status || "Failed to upload consent form"))
-  }
+  } catch (error: any) {
+  const message =
+    (error?.message as string) ||
+    String(error?.status || "") ||
+    "Failed to upload consent form";
+
+  dispatch(showError(message));
+}
+
 };
 
 

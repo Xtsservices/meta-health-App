@@ -354,7 +354,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
             </View>
             
             {/* Nurse Information for IPD/Emergency */}
-            {isIpdOrEmergency && (
+            
               <View style={styles.nurseSection}>
                 <View style={styles.row}>
                   <Text style={styles.label}>Nurse</Text>
@@ -392,7 +392,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
                   </Text>
                 )}
               </View>
-            )}
+           
           </View>
 
           {/* Medicines List */}
@@ -490,6 +490,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
 
         {/* Action Buttons - Fixed at bottom above footer */}
         <View style={styles.actionButtons}>
+          {getDepartmentName(orderData?.departmemtType || orderData?.ptype) === "OPD" && (
           <TouchableOpacity
             style={[styles.actionButton, styles.rejectButton]}
             onPress={() => setShowRejectModal(true)}
@@ -498,7 +499,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
             <Text style={styles.rejectButtonText}>
               {isProcessing ? "Processing..." : "✗ Reject Order"}
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity>)}
           <TouchableOpacity
             style={[styles.actionButton, styles.approveButton]}
             onPress={handleApproveOrder}

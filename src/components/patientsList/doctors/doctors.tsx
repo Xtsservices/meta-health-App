@@ -66,9 +66,9 @@ export default function DoctorsScreen() {
         `doctor/${user?.hospitalID}/${timelineId}/all`,
         token
       );
-      if (res?.status === "success") {
+      if (res?.status === "success" && "data" in res) {
         // your API shape showed data.data
-        setList(res?.data?.data ?? res?.data ?? []);
+        setList( res?.data?.data ?? res?.data ?? []);
       } else {
         setList([]);
       }
