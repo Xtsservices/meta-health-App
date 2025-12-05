@@ -12,12 +12,9 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   StyleSheet,
-  PermissionsAndroid,
-  Modal,
-  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { launchCamera, launchImageLibrary } from "react-native-image-picker";
+import { launchImageLibrary } from "react-native-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -26,15 +23,16 @@ import { useDispatch, useSelector } from "react-redux";
 
 import Footer from "../../dashboard/footer";
 import { currentPatient, RootState } from "../../../store/store";
-import { AuthFetch, UpdateFiles } from "../../../auth/auth";
+import { AuthFetch, AuthPatch, UpdateFiles } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 
 import { state as STATE_LIST, city as CITY_LIST } from "../../../utils/stateCity";
-import { AgeUnit, dobFromAge } from "../../../utils/age";
+import { AgeUnit } from "../../../utils/age";
+import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import { COLORS } from "../../../utils/colour";
 import { formatDate } from "../../../utils/dateTime";
-
 const FOOTER_H = 64;
+
 
 const EditPatientMobile = () => {
   const navigation = useNavigation<any>();
@@ -51,7 +49,6 @@ const EditPatientMobile = () => {
 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<any | null>(null);
-  const [imagePickerModal, setImagePickerModal] = useState(false);
 
   const [pName, setPName] = useState("");
   const [pID, setPID] = useState("");
@@ -96,11 +93,7 @@ const EditPatientMobile = () => {
         token
       );
 
-      const patient =
-        (res && "patient" in res && res?.patient) ||
-        (res && "data" in res && res?.data?.patient) ||
-        (res && "data" in res && res?.data) ||
-        res;
+      const patient =res && "patient" in res &&  res?.patient || res && "data" in res && res?.data?.patient || res && "data" in res && res?.data || res;
 
       if (!patient) {
         dispatch(showError("Failed to load patient"));
@@ -111,14 +104,12 @@ const EditPatientMobile = () => {
       setPName(patient.pName || "");
       setPID(patient.pID || "");
       setPUHID(patient.pUHID ? String(patient.pUHID) : "");
-
       if (patient.dob) {
         const d = new Date(patient.dob);
-        const iso = patient.dob.split("T")[0] || "";
-        setDob(iso);
+        setDob(patient.dob.split("T")[0] || "");
         setDobDate(d);
 
-        // derive age from DOB
+        // derive age here as well
         const today = new Date();
         const diff = Math.floor(
           (today.getTime() - d.getTime()) / (1000 * 3600 * 24)
@@ -170,98 +161,23 @@ const EditPatientMobile = () => {
     fetchPatient();
   }, [fetchPatient]);
 
-  // ---------- Camera Permission ----------
-  const requestCameraPermission = async () => {
-    if (Platform.OS === "android") {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: "Camera Permission",
-            message: "App needs access to your camera to take photos.",
-            buttonNeutral: "Ask Me Later",
-            buttonNegative: "Cancel",
-            buttonPositive: "OK",
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err: any) {
-        dispatch(
-          showError(err?.message || err?.status || "Camera permission error")
-        );
-        return false;
-      }
-    }
-    return true;
-  };
-
-  // --------- Image Picker (Camera + Gallery with modal) ----------
-  const pickImage = async (type: "camera" | "gallery") => {
-    const hasPermission =
-      type === "camera" ? await requestCameraPermission() : true;
-
-    if (!hasPermission) {
-      Alert.alert(
-        "Permission Denied",
-        "Camera access is required to take photos."
-      );
-      setImagePickerModal(false);
-      return;
-    }
-
-    const options: any = {
+  // --------- Image Picker (ONLY upload from gallery) ----------
+  const pickImage = async () => {
+    const result = await launchImageLibrary({
       mediaType: "photo",
-      includeBase64: false,
-      maxHeight: 800,
-      maxWidth: 800,
       quality: 0.8,
-    };
-
-    const launcher = type === "camera" ? launchCamera : launchImageLibrary;
-
-    launcher(options, (response: any) => {
-      if (response?.didCancel) {
-        setImagePickerModal(false);
-        return;
-      }
-
-      if (response?.errorCode) {
-        dispatch(
-          showError(response.errorMessage || "Failed to pick image")
-        );
-        setImagePickerModal(false);
-        return;
-      }
-
-      const asset = response.assets?.[0];
-      if (asset?.uri) {
-        setPhotoUri(asset.uri);
-        setPhotoFile({
-          uri: asset.uri,
-          type: asset.type || "image/jpeg",
-          name: asset.fileName || "photo.jpg",
-        });
-      }
-
-      setImagePickerModal(false);
     });
-  };
 
-  // --------- Recompute DOB from Age + Unit ----------
-  const recomputeDobFromAge = (rawAge: string, unit: AgeUnit) => {
-    const n = Number(rawAge);
-    if (!Number.isFinite(n) || n <= 0) {
-      setDob("");
-      setDobDate(null);
-      return;
+    if (result.didCancel) return;
+    const asset = result.assets?.[0];
+    if (asset?.uri) {
+      setPhotoUri(asset.uri);
+      setPhotoFile({
+        uri: asset.uri,
+        type: asset.type || "image/jpeg",
+        name: asset.fileName || "photo.jpg",
+      });
     }
-
-    const dobStr = dobFromAge(n, unit); // uses same helper as Add Patient
-    const [y, m, d] = dobStr.split("-").map(Number);
-    const dobObj = new Date(y, (m || 1) - 1, d || 1);
-
-    setDob(dobStr);
-    setDobDate(dobObj);
   };
 
   // --------- DOB change handler ----------
@@ -271,9 +187,9 @@ const EditPatientMobile = () => {
     }
     if (!date) return;
 
+    setDobDate(date);
     const iso = date.toISOString().split("T")[0];
     setDob(iso);
-    setDobDate(date);
 
     const today = new Date();
     const diff = Math.floor(
@@ -294,92 +210,50 @@ const EditPatientMobile = () => {
     setAgeUnit(unit);
   };
 
-  // --------- Save Handler / Validation ----------
+  // --------- Save Handler ----------
   const validateForm = () => {
     if (!pName.trim()) {
-      dispatch(showError("Patient Name is required"));
+      dispatch(showError("Name required"));
       return false;
     }
-
-    if (!dob) {
-      dispatch(showError("Date of Birth is required"));
+    if (!weight) {
+      dispatch(showError("Weight required"));
       return false;
     }
-
-    if (!ageNumber.trim()) {
-      dispatch(showError("Age is required"));
+    if (!height) {
+      dispatch(showError("Height required"));
       return false;
     }
-
-    if (!weight.trim()) {
-      dispatch(showError("Weight is required"));
+    if (!phoneNumber || phoneNumber.length !== 10) {
+      dispatch(showError("Valid mobile required"));
       return false;
     }
-
-    if (!height.trim()) {
-      dispatch(showError("Height is required"));
-      return false;
-    }
-
-    const phoneDigits = phoneNumber.replace(/\D/g, "");
-    if (!phoneDigits) {
-      dispatch(showError("Mobile Number is required"));
-      return false;
-    }
-    if (phoneDigits.length !== 10 || !/^[6-9]/.test(phoneDigits)) {
-      dispatch(showError("Enter a valid 10-digit mobile number"));
-      return false;
-    }
-
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      dispatch(showError("Email is required"));
-      return false;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      dispatch(showError("Enter a valid email address"));
-      return false;
-    }
-
-    if (!address.trim()) {
-      dispatch(showError("Address is required"));
-      return false;
-    }
-
     if (!stateName) {
-      dispatch(showError("State is required"));
+      dispatch(showError("State required"));
       return false;
     }
-
     if (!cityName) {
-      dispatch(showError("City is required"));
+      dispatch(showError("City required"));
       return false;
     }
-
-    const pinDigits = pinCode.replace(/\D/g, "");
-    if (!pinDigits) {
-      dispatch(showError("PIN Code is required"));
+    if (!address.trim()) {
+      dispatch(showError("Address required"));
       return false;
     }
-    if (pinDigits.length !== 6) {
-      dispatch(showError("PIN Code must be 6 digits"));
+    if (!pinCode || pinCode.length !== 6) {
+      dispatch(showError("Valid pincode required"));
       return false;
     }
-
     if (insurance === 1) {
       if (!insuranceNumber.trim()) {
         setInsuranceNumError("Required");
-        dispatch(showError("Insurance Number is required"));
         return false;
       }
       if (!insuranceCompany.trim()) {
         setInsuranceCompError("Required");
-        dispatch(showError("Insurance Company is required"));
         return false;
       }
     }
-
     return true;
   };
 
@@ -392,29 +266,27 @@ const EditPatientMobile = () => {
       const data = new FormData();
 
       data.append("pName", pName);
-      if (dob) {
-        data.append("dob", dob);
+       if (dob) {
+        data.append("dob", dob);              // e.g. "2025-11-26"
       }
       if (ageNumber) {
-        data.append("age", ageNumber);
-        // data.append("ageUnit", ageUnit);
+        data.append("age", ageNumber);        // numeric string
+        // data.append("ageUnit", ageUnit);      // "days" | "months" | "years"
       }
       data.append("weight", weight);
       data.append("height", height);
-      data.append("phoneNumber", phoneNumber.replace(/\D/g, ""));
-      data.append("email", email.trim());
+      data.append("phoneNumber", phoneNumber);
+      data.append("email", email);
       data.append("address", address);
       data.append("state", stateName);
       data.append("city", cityName);
-      data.append("pinCode", pinCode.replace(/\D/g, ""));
+      data.append("pinCode", pinCode);
       data.append("referredBy", referredBy);
       data.append("insurance", String(insurance));
-
       if (insurance === 1) {
         data.append("insuranceNumber", insuranceNumber);
         data.append("insuranceCompany", insuranceCompany);
       }
-
       if (photoFile) data.append("photo", photoFile);
 
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
@@ -425,11 +297,7 @@ const EditPatientMobile = () => {
       );
       if (res?.status === "success") {
         dispatch(showSuccess("Updated successfully"));
-        dispatch(
-          currentPatient(
-            res && "data" in res && (res as any).data?.patient
-          )
-        );
+        dispatch(currentPatient(res && "data" in res && res?.data?.patient))
         navigation.goBack();
       } else {
         dispatch(showError("message" in res ? res.message : "Update failed"));
@@ -446,23 +314,13 @@ const EditPatientMobile = () => {
     value: string,
     setter: (t: string) => void,
     readonly = false,
-    opts: {
-      placeholder?: string;
-      keyboardType?: any;
-      required?: boolean;
-      onChangeText?: (t: string) => void;
-     maxLength?: number; 
-
-    } = {}
+    opts: any = {}
   ) => (
     <View style={styles.inputBlock}>
-      <Text style={styles.label}>
-        {label}
-        {opts.required && <Text style={{ color: COLORS.sub }}> *</Text>}
-      </Text>
+      <Text style={styles.label}>{label}</Text>
       <TextInput
         value={value}
-        onChangeText={opts.onChangeText ?? setter}
+        onChangeText={setter}
         editable={!readonly}
         style={[
           styles.input,
@@ -470,7 +328,6 @@ const EditPatientMobile = () => {
         ]}
         placeholder={opts.placeholder}
         keyboardType={opts.keyboardType}
-        maxLength={opts.maxLength}
       />
     </View>
   );
@@ -481,20 +338,15 @@ const EditPatientMobile = () => {
     setSelected,
     items,
     disabled,
-    required,
   }: {
     label: string;
     selected: any;
     setSelected: (val: any) => void;
     items: { label: string; value: any }[];
     disabled?: boolean;
-    required?: boolean;
   }) => (
     <View style={styles.inputBlock}>
-      <Text style={styles.label}>
-        {label}
-        {required && <Text style={{ color: COLORS.sub }}> *</Text>}
-      </Text>
+      <Text style={styles.label}>{label}</Text>
       <View style={[styles.pickerWrap, disabled && { opacity: 0.4 }]}>
         <Picker
           selectedValue={selected}
@@ -531,11 +383,12 @@ const EditPatientMobile = () => {
           showsVerticalScrollIndicator={false}
           style={{ padding: 16 }}
         >
+
           {/* PHOTO */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Patient Photo</Text>
             <View style={styles.photoRow}>
-              <TouchableOpacity onPress={() => setImagePickerModal(true)}>
+              <TouchableOpacity onPress={pickImage}>
                 <View style={styles.photoWrap}>
                   {photoUri ? (
                     <Image source={{ uri: photoUri }} style={styles.photo} />
@@ -545,7 +398,7 @@ const EditPatientMobile = () => {
                 </View>
               </TouchableOpacity>
               <View>
-                <Text style={styles.photoHint}>Tap to upload (optional)</Text>
+                <Text style={styles.photoHint}>Tap to upload</Text>
                 <Text style={[styles.photoHint, { fontSize: 11 }]}>
                   JPG/PNG • Max 5MB
                 </Text>
@@ -557,9 +410,7 @@ const EditPatientMobile = () => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Identity</Text>
 
-            {renderInput("Patient Name", pName, setPName, false, {
-              required: true,
-            })}
+            {renderInput("Patient Name", pName, setPName)}
 
             {renderInput("Patient ID", pID, setPID, true)}
 
@@ -572,10 +423,7 @@ const EditPatientMobile = () => {
 
             {/* DOB EDITABLE WITH PICKER */}
             <View style={styles.inputBlock}>
-              <Text style={styles.label}>
-                Date of Birth
-                <Text style={{ color: COLORS.sub }}> *</Text>
-              </Text>
+              <Text style={styles.label}>Date of Birth</Text>
               <TouchableOpacity
                 style={styles.dateButton}
                 onPress={() => setShowDobPicker(true)}
@@ -586,7 +434,7 @@ const EditPatientMobile = () => {
                     fontSize: 15,
                   }}
                 >
-                  {dob ? formatDate(dob) : "Select DOB"}
+                  {formatDate(dob) || "Select DOB"}
                 </Text>
               </TouchableOpacity>
               {showDobPicker && (
@@ -600,50 +448,30 @@ const EditPatientMobile = () => {
               )}
             </View>
 
-            {/* AGE (editable, recalculates DOB) */}
+            {/* AGE (editable) */}
             <View style={styles.row}>
               <View style={styles.col}>
                 {renderInput("Age", ageNumber, setAgeNumber, false, {
                   keyboardType: "numeric",
-                  required: true,
-                  onChangeText: (txt: string) => {
-                    const digits = txt.replace(/\D/g, "");
-                    setAgeNumber(digits);
-                    if (digits) {
-                      recomputeDobFromAge(digits, ageUnit);
-                    } else {
-                      setDob("");
-                      setDobDate(null);
-                    }
-                  },
                 })}
               </View>
               <View style={styles.col}>
                 <CustomPicker
                   label="Unit"
                   selected={ageUnit}
-                  setSelected={(val: AgeUnit) => {
-                    setAgeUnit(val);
-                    if (ageNumber) {
-                      recomputeDobFromAge(ageNumber, val);
-                    }
-                  }}
+                  setSelected={setAgeUnit}
                   items={[
                     { label: "Days", value: "days" },
                     { label: "Months", value: "months" },
                     { label: "Years", value: "years" },
                   ]}
-                  required
                 />
               </View>
             </View>
 
-            {/* GENDER READ ONLY (still mandatory but non-editable) */}
+            {/* GENDER READ ONLY */}
             <View style={styles.inputBlock}>
-              <Text style={styles.label}>
-                Gender
-                <Text style={{ color: COLORS.sub }}> *</Text>
-              </Text>
+              <Text style={styles.label}>Gender</Text>
               <TextInput
                 value={
                   gender === 1 ? "Male" : gender === 2 ? "Female" : "Others"
@@ -654,18 +482,15 @@ const EditPatientMobile = () => {
             </View>
 
             <View style={styles.row}>
-              <View style={styles.col}>
+              <View 
+              >
                 {renderInput("Weight (kg)", weight, setWeight, false, {
                   keyboardType: "numeric",
-                  required: true,
-                  maxLength: 4,
                 })}
               </View>
               <View style={styles.col}>
                 {renderInput("Height (cm)", height, setHeight, false, {
                   keyboardType: "numeric",
-                  required: true,
-                 maxLength: 4,
                 })}
               </View>
             </View>
@@ -676,53 +501,43 @@ const EditPatientMobile = () => {
             <Text style={styles.cardTitle}>Contact</Text>
             {renderInput("Mobile Number", phoneNumber, setPhoneNumber, false, {
               keyboardType: "phone-pad",
-              required: true,
             })}
-            {renderInput("Email", email, setEmail, false, {
-              required: true,
-            })}
+            {renderInput("Email", email, setEmail)}
           </View>
 
           {/* ADDRESS */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Address</Text>
 
-            {renderInput("Complete Address", address, setAddress, false, {
-              required: true,
-            })}
+            {renderInput("Complete Address", address, setAddress)}
 
-            <View>
-              <View style={styles.row}>
-                <View  style={styles.col}>
-                  <CustomPicker
-                    label="State"
-                    selected={stateName}
-                    setSelected={(val: string) => {
-                      setStateName(val);
-                      const i = STATE_LIST.indexOf(val);
-                      setCityList(i >= 0 ? CITY_LIST[i] : []);
-                      setCityName("");
-                    }}
-                    items={STATE_LIST.map((s) => ({ label: s, value: s }))}
-                    required
-                  />
-                </View>
-                <View style={styles.col}>
-                  <CustomPicker
-                    label="City"
-                    selected={cityName}
-                    setSelected={setCityName}
-                    items={cityList.map((c) => ({ label: c, value: c }))}
-                    disabled={cityList.length === 0}
-                    required
-                  />
-                </View>
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <CustomPicker
+                  label="State"
+                  selected={stateName}
+                  setSelected={(val: string) => {
+                    setStateName(val);
+                    const i = STATE_LIST.indexOf(val);
+                    setCityList(i >= 0 ? CITY_LIST[i] : []);
+                    setCityName("");
+                  }}
+                  items={STATE_LIST.map((s) => ({ label: s, value: s }))}
+                />
+              </View>
+              <View style={styles.col}>
+                <CustomPicker
+                  label="City"
+                  selected={cityName}
+                  setSelected={setCityName}
+                  items={cityList.map((c) => ({ label: c, value: c }))}
+                  disabled={cityList.length === 0}
+                />
               </View>
             </View>
 
             {renderInput("PIN Code", pinCode, setPinCode, false, {
               keyboardType: "numeric",
-              required: true,
             })}
             {renderInput("Referred By", referredBy, setReferredBy)}
           </View>
@@ -734,45 +549,27 @@ const EditPatientMobile = () => {
             <CustomPicker
               label="Insurance"
               selected={insurance}
-              setSelected={(val: 0 | 1) => {
-                setInsurance(val);
-                if (val === 0) {
-                  setInsuranceNumber("");
-                  setInsuranceCompany("");
-                  setInsuranceNumError("");
-                  setInsuranceCompError("");
-                }
-              }}
+              setSelected={setInsurance}
               items={[
                 { label: "No", value: 0 },
                 { label: "Yes", value: 1 },
               ]}
             />
-
-            {insurance === 1 && (
+{/* TODO */}
+            {/* {insurance === 1 && (
               <>
                 {renderInput(
                   "Insurance Number",
                   insuranceNumber,
-                  setInsuranceNumber,
-                  false,
-                  { required: true }
+                  setInsuranceNumber
                 )}
-                {insuranceNumError ? (
-                  <Text style={styles.errorText}>{insuranceNumError}</Text>
-                ) : null}
                 {renderInput(
                   "Insurance Company",
                   insuranceCompany,
-                  setInsuranceCompany,
-                  false,
-                  { required: true }
+                  setInsuranceCompany
                 )}
-                {insuranceCompError ? (
-                  <Text style={styles.errorText}>{insuranceCompError}</Text>
-                ) : null}
               </>
-            )}
+            )} */}
           </View>
 
           {/* SAVE BUTTON */}
@@ -792,33 +589,6 @@ const EditPatientMobile = () => {
         <View style={[styles.footer, { bottom: insets.bottom }]}>
           <Footer active="patients" brandColor={COLORS.brand} />
         </View>
-
-        {/* Image Picker Modal */}
-        <Modal visible={imagePickerModal} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: COLORS.card }]}>
-              <Text style={styles.modalTitle}>Choose Photo</Text>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: COLORS.brand }]}
-                onPress={() => pickImage("camera")}
-              >
-                <Text style={styles.modalButtonText}>Take Photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: COLORS.brand }]}
-                onPress={() => pickImage("gallery")}
-              >
-                <Text style={styles.modalButtonText}>Choose from Gallery</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#6b7280" }]}
-                onPress={() => setImagePickerModal(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -915,40 +685,6 @@ const styles = StyleSheet.create({
   saveText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 
   footer: { position: "absolute", left: 0, right: 0 },
-
-  errorText: {
-    fontSize: 12,
-    color: COLORS.danger,
-    marginTop: -4,
-    marginBottom: 6,
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    borderRadius: 16,
-    padding: 24,
-    width: "88%",
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 16,
-    color: COLORS.text,
-  },
-  modalButton: {
-    padding: 14,
-    borderRadius: 12,
-    width: "100%",
-    alignItems: "center",
-    marginVertical: 6,
-  },
-  modalButtonText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 });
 
 export default EditPatientMobile;

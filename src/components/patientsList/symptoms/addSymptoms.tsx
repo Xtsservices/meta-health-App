@@ -176,8 +176,8 @@ if (!match) {
         patientID,
       };
       const res = await AuthPost("symptom", body, token);
-      if (res?.status === "success"  ) {
-         dispatch( showSuccess( "Symptoms added successfully"));
+      if (res?.status === "success" && "message" in res ) {
+         dispatch( showSuccess(res?.message || "Symptoms added successfully"));
         navigation.goBack(); 
       } else {
          dispatch(showError("message" in res && res.message ? res.message : "Failed to submit symptoms."));
