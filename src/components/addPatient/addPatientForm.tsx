@@ -29,13 +29,14 @@ import { AuthFetch, UploadFiles } from "../../auth/auth";
 import Footer from "../dashboard/footer";
 import { RootState } from "../../store/store";
 import { city, state } from "../../utils/stateCity";
-import { Category, genderList, getEmailValidationMessage, getPhoneValidationMessage, getUniqueId, getValidationMessage } from "../../utils/addPatientFormHelper";
+import { Category, genderList, getEmailValidationMessage, getPhoneValidationMessage, getUniqueId, getValidationMessage, validateAddPatientForm } from "../../utils/addPatientFormHelper";
 import { Role_NAME, patientStatus } from "../../utils/role";
 import {
   validateAgeAndUnit as validateAgeAndUnitUtil,
   ageFromDOB,
   AgeUnit,
   validateAgeAndUnit,
+  dobFromAge,
 } from "../../utils/age";
 import {
   patientOPDbasicDetailType,
@@ -334,7 +335,7 @@ if (!rule.ok) {
     ...prev,
     dob: { ...prev.dob, value: dobStr, valid: true },
     age: {
-      value: `${n} ${displayUnit}`,
+      value: String(n),
       valid: true,
       showError: false,
       message: "",
@@ -405,65 +406,42 @@ if (!rule.ok) {
       setImagePickerModal(false);
     });
   };
+const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
+  pName: "Patient Name",
+  phoneNumber: "Mobile Number",
+  address: "Address",
+  state: "State",
+  city: "City",
+  pinCode: "PIN Code",
+  pUHID: "UHID",
+  weight: "Weight (kg)",
+  height: "Height (cm)",
+  email: "Email",
+  dob: "Date of Birth",
+  gender: "Gender",
+  departmentID: "Department",
+  userID: "Doctor",
+  wardID: "Ward",
+};
 
-  const validateForm = () => {
-    let valid = true;
-    const updated: patientOPDbasicDetailType = { ...formData };
-
-    if (!formData.pUHID.value || String(formData.pUHID.value).replace(/-/g, "").length !== 14) {
-      updated.pUHID = {...(updated.pUHID as PatientField), valid: false, showError: true };
-      valid = false;
-    }
-
-    if (!formData.departmentID.value) {
-      updated.departmentID = { ...(updated.departmentID as PatientField), valid: false, showError: true };
-      valid = false;
-    }
-
-    // Doctor is ALWAYS required for ALL patient statuses
-    if (!formData.userID.value) {
-      updated.userID = { ...(updated.userID as PatientField), valid: false, showError: true };
-      valid = false;
-    }
-
-    // Ward is required ONLY for inpatient (status 2)
-    if (user?.patientStatus == 2 && !formData.wardID.value) {
-      updated.wardID = { ...(updated.wardID as PatientField), valid: false, showError: true };
-      valid = false;
-    }
-
-     (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach(
-    (key) => {
-      const field = formData[key] as PatientField;
-
-      if (!field.valid && field.value !== null && field.value !== "") {
-        (updated as any)[key] = {
-          ...field,
-          showError: true,
-        } as PatientField;
-        valid = false;
-      }
-    }
+ const validateForm = () => {
+  const { isValid, updatedForm, errorMessage } = validateAddPatientForm(
+    formData,
+    category,
+    user?.patientStatus ?? null
   );
 
-    const w = Number(formData.weight.value);
-const weightError = getValidationMessage(w, category, "weight");
-if (weightError) {
-  updated.weight = { ...updated.weight, valid: false, showError: true, message: weightError };
-  valid = false;
-}
+  setFormData(updatedForm);
 
-const h = Number(formData.height.value);
-const heightError = getValidationMessage(h, category, "height");
-if (heightError) {
-  updated.height = { ...updated.height, valid: false, showError: true, message: heightError };
-  valid = false;
-}
+  if (!isValid && errorMessage) {
+    dispatch(showError(errorMessage));
+  }
+
+  return isValid;
+};
 
 
-    setFormData(updated);
-    return valid;
-  };
+
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
@@ -599,16 +577,19 @@ if (heightError) {
   ) => {
     const field = formData[name];
     const placeholder = opts.placeholder || `Enter ${label.toLowerCase()}`;
-
+const isEditable = opts.editable !== false;
     return (
       <View style={styles.inputBlock}>
         <Text style={[styles.label, { color: COLORS.sub }]}>
-          {label} {["pName", "phoneNumber", "address", "state", "city", "pinCode", "pUHID"].includes(name as any) && <Text style={{ color: COLORS.sub }}>*</Text>}
+          {label} {["pName", "phoneNumber", "address", "state", "city", "pinCode", "pUHID",  "weight", "height","email",].includes(name as any) && <Text style={{ color: COLORS.sub }}>*</Text>}
         </Text>
         <TextInput
           style={[
             styles.input,
-            { borderColor: COLORS.border, color: COLORS.text },
+            { borderColor: COLORS.border,
+               color: isEditable ? COLORS.text : COLORS.sub,
+              },
+              !isEditable && { backgroundColor: "#f3f4f6" },
             field.showError && { borderColor: COLORS.danger },
             opts.multiline && styles.inputMultiline,
           ]}
@@ -675,23 +656,59 @@ else if (name === "email") {
 }
 
           // 🔹 Manual AGE validation (when DOB not selected)
-          else if (name === "age") {
-            const digits = text.replace(/\D/g, "");
-            formatted = digits;
+        else if (name === "age") {
+          const digits = text.replace(/\D/g, "");
+          formatted = digits;
 
-            if (!digits) {
-              valid = false;
-              message = "Age is required";
-            } else {
-              const n = Number(digits);
-              const catLabel =
-                category === "1" ? "neonate" : category === "2" ? "child" : "adult";
+          if (!digits) {
+            valid = false;
+            message = "Age is required";
+          } else {
+            const n = Number(digits);
+            const catLabel =
+              category === "1" ? "neonate" : category === "2" ? "child" : "adult";
 
-              const rule = validateAgeAndUnitUtil(catLabel, n, ageUnit);
-              valid = rule.ok;
-              message = rule.msg || "";
+            const rule = validateAgeAndUnitUtil(catLabel, n, ageUnit);
+            valid = rule.ok;
+            message = rule.msg || "";
+
+            // ✅ If age is valid → calculate DOB from age + unit
+            if (rule.ok) {
+              const dobStr = dobFromAge(n, ageUnit);
+
+              // Convert "YYYY-MM-DD" → Date for DOB display
+              const [y, m, d] = dobStr.split("-").map(Number);
+              const dobDate = new Date(y, (m || 1) - 1, d || 1);
+
+              setSelectedDate(dobDate);
+
+              setFormData((prev) => ({
+                ...prev,
+                age: {
+                  ...prev.age,
+                  value: String(n), // 👈 only number
+                  valid: true,
+                  showError: false,
+                  message: "",
+                },
+                dob: {
+                  ...prev.dob,
+                  value: dobStr,
+                  valid: true,
+                  showError: false,
+                  message: "",
+                },
+              }));
+
+              return; // ⛔ skip generic setFormData below for this case
             }
           }
+        }
+
+ else if (name === "weight" || name === "height") {   // 👈 NEW
+          const onlyDigits = text.replace(/\D/g, "").slice(0, 4);
+          formatted = onlyDigits;
+        }
 
             setFormData((prev) => ({
               ...prev,
@@ -813,29 +830,66 @@ else if (name === "email") {
               </View>
               <View style={{ flex: 0.4, marginLeft: 8 }}>
                 <Text style={[styles.label, { color: COLORS.sub }]}>Unit</Text>
-                <CustomPicker
+                                <CustomPicker
                   selectedValue={ageUnit}
                   onValueChange={(u: AgeUnit) => {
                     if (!allowedUnits.includes(u)) return;
                     setAgeUnit(u);
+
                     const raw = String(formData.age.value || "").split(" ")[0];
                     const n = Number(raw);
-                    if (Number.isFinite(n)) {
-                      const rule = validateAgeAndUnitUtil(
-                        category === "1" ? "neonate" : category === "2" ? "child" : "adult",
-                        n,
-                        u
-                      );
-                      setFormData(prev => ({
+
+                    if (!Number.isFinite(n) || !n) return;
+
+                    const rule = validateAgeAndUnitUtil(
+                      category === "1" ? "neonate" : category === "2" ? "child" : "adult",
+                      n,
+                      u
+                    );
+
+                    if (!rule.ok) {
+                      setFormData((prev) => ({
                         ...prev,
-                        age: { value: `${n} ${u}`, valid: rule.ok, showError: !rule.ok, message: rule.msg || "" }
+                        age: {
+                          ...prev.age,
+                          value: raw,
+                          valid: false,
+                          showError: true,
+                          message: rule.msg || "",
+                        },
                       }));
+                      return;
                     }
+
+                    const dobStr = dobFromAge(n, u);
+                    const [y, m, d] = dobStr.split("-").map(Number);
+                    const dobDate = new Date(y, (m || 1) - 1, d || 1);
+
+                    setSelectedDate(dobDate);
+
+                    setFormData((prev) => ({
+                      ...prev,
+                      age: {
+                        ...prev.age,
+                        value: String(n), // 👈 still only number
+                        valid: true,
+                        showError: false,
+                        message: "",
+                      },
+                      dob: {
+                        ...prev.dob,
+                        value: dobStr,
+                        valid: true,
+                        showError: false,
+                        message: "",
+                      },
+                    }));
                   }}
                   items={allowedUnits.map(u => ({ label: u[0].toUpperCase() + u.slice(1), value: u }))}
                   placeholder="Unit"
-                   enabled={agePickerEnabled} 
+                  enabled={agePickerEnabled}
                 />
+
               </View>
             </View>
 
@@ -870,8 +924,8 @@ else if (name === "email") {
             </View>
 
             <View style={styles.row}>
-              <View style={styles.col}>{renderInput("Weight (kg)", "weight", { keyboardType: "numeric", placeholder: "e.g. 65" })}</View>
-              <View style={styles.col}>{renderInput("Height (cm)", "height", { keyboardType: "numeric", placeholder: "e.g. 170" })}</View>
+              <View style={styles.col}>{renderInput("Weight (kg)", "weight", { keyboardType: "numeric", placeholder: "e.g. 65", maxLength: 4, })}</View>
+              <View style={styles.col}>{renderInput("Height (cm)", "height", { keyboardType: "numeric", placeholder: "e.g. 170", maxLength: 4, })}</View>
             </View>
           </View>
 

@@ -1,47 +1,56 @@
+// utils/addPatientFormHelper.ts
+
+import { patientOPDbasicDetailType } from "./types";
 
 export type Category = "1" | "2" | "3";
 
 export const genderList = [
-    { value: "Male", key: 1 },
-    { value: "Female", key: 2 },
-    { value: "Others", key: 3 }
+  { value: "Male", key: 1 },
+  { value: "Female", key: 2 },
+  { value: "Others", key: 3 },
 ];
 
 export const getValidationMessage = (
-    inputValue: number, 
-    category: string, 
-    type: "weight" | "height"
+  inputValue: number,
+  category: string,
+  type: "weight" | "height"
 ): string | undefined => {
-    if (type === "weight") {
-      if (category === "3" && inputValue > 300) return "Weight should be under 300 kgs";
-      if (category === "2" && inputValue > 175) return "Weight should be under 175 kgs";
-      if (category === "1" && inputValue > 8) return "Weight should be under 8 kgs";
-    } else if (type === "height") {
-      if (category === "3" && inputValue > 305) return "Height should be under 305 cms";
-      if (category === "2" && inputValue > 200) return "Height should be under 200 cms";
-      if (category === "1" && inputValue > 60) return "Height should be under 60 cms";
-    }
-    return undefined;
+  if (type === "weight") {
+    if (category === "3" && inputValue > 300) return "Weight should be under 300 kgs";
+    if (category === "2" && inputValue > 175) return "Weight should be under 175 kgs";
+    if (category === "1" && inputValue > 8) return "Weight should be under 8 kgs";
+  } else if (type === "height") {
+    if (category === "3" && inputValue > 305) return "Height should be under 305 cms";
+    if (category === "2" && inputValue > 200) return "Height should be under 200 cms";
+    if (category === "1" && inputValue > 60) return "Height should be under 60 cms";
+  }
+  return undefined;
 };
 
 export const getMaxValue = (
-    category: Category,
-    type: "weight" | "height"
+  category: Category,
+  type: "weight" | "height"
 ): number => {
-    const values = {
-      "3": { weight: 300, height: 305 },
-      "2": { weight: 175, height: 200 },
-      "1": { weight: 8, height: 60 }
-    };
-    return values[category]?.[type];
+  const values = {
+    "3": { weight: 300, height: 305 },
+    "2": { weight: 175, height: 200 },
+    "1": { weight: 8, height: 60 },
+  };
+  return values[category]?.[type];
 };
 
 export const getUniqueId = () => {
-    const now = new Date();
-    const value = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2,"0")}${String(now.getDate()).padStart(2, "0")}${String(
-    now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
-    return value;
-}
+  const now = new Date();
+  const value = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}${String(now.getDate()).padStart(2, "0")}${String(
+    now.getHours()
+  ).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(
+    now.getSeconds()
+  ).padStart(2, "0")}`;
+  return value;
+};
 
 export const getPhoneValidationMessage = (raw: string): string | undefined => {
   const digits = raw.replace(/\D/g, "");
@@ -63,4 +72,212 @@ export const getEmailValidationMessage = (value: string): string | undefined => 
   }
 
   return undefined;
+};
+
+// ---------------- NEW VALIDATION HELPERS BELOW ----------------
+
+type PatientField = {
+  value: any;
+  valid: boolean;
+  showError: boolean;
+  message: string;
+};
+
+const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
+  pName: "Patient Name",
+  phoneNumber: "Mobile Number",
+  address: "Address",
+  state: "State",
+  city: "City",
+  pinCode: "PIN Code",
+  pUHID: "UHID",
+  weight: "Weight (kg)",
+  height: "Height (cm)",
+  email: "Email",
+  dob: "Date of Birth",
+  gender: "Gender",
+  departmentID: "Department",
+  userID: "Doctor",
+  wardID: "Ward",
+};
+
+export interface AddPatientValidationResult {
+  isValid: boolean;
+  updatedForm: patientOPDbasicDetailType;
+  errorMessage?: string;
+}
+
+/**
+ * Central validation for AddPatientForm
+ * - Checks all mandatory fields
+ * - Validates UHID, department, doctor, ward (for IPD)
+ * - Validates weight / height ranges
+ * - Returns updated form + aggregated error message
+ */
+export const validateAddPatientForm = (
+  formData: patientOPDbasicDetailType,
+  category: Category | string,
+  userPatientStatus?: number | string | null
+): AddPatientValidationResult => {
+  let valid = true;
+  const updated: patientOPDbasicDetailType = { ...formData };
+
+  const errorFields: string[] = [];
+
+  const addFieldLabel = (key: keyof patientOPDbasicDetailType) => {
+    const label = FIELD_LABELS[key] || String(key);
+    if (!errorFields.includes(label)) {
+      errorFields.push(label);
+    }
+  };
+
+  const isInpatient = Number(userPatientStatus ?? 0) === 2;
+
+  // --- UHID strict check ---
+  if (
+    !formData.pUHID.value ||
+    String(formData.pUHID.value).replace(/-/g, "").length !== 14
+  ) {
+    updated.pUHID = {
+      ...(updated.pUHID as PatientField),
+      valid: false,
+      showError: true,
+      message: updated.pUHID.message || "UHID must be 14 digits",
+    };
+    addFieldLabel("pUHID");
+    valid = false;
+  }
+
+  // --- Department required ---
+  if (!formData.departmentID.value) {
+    updated.departmentID = {
+      ...(updated.departmentID as PatientField),
+      valid: false,
+      showError: true,
+      message: updated.departmentID.message || "Please select a department",
+    };
+    addFieldLabel("departmentID");
+    valid = false;
+  }
+
+  // --- Doctor ALWAYS required ---
+  if (!formData.userID.value) {
+    updated.userID = {
+      ...(updated.userID as PatientField),
+      valid: false,
+      showError: true,
+      message: updated.userID.message || "Please select a doctor",
+    };
+    addFieldLabel("userID");
+    valid = false;
+  }
+
+  // --- Ward required ONLY for inpatients ---
+  if (isInpatient && !formData.wardID.value) {
+    updated.wardID = {
+      ...(updated.wardID as PatientField),
+      valid: false,
+      showError: true,
+      message: updated.wardID.message || "Please select a ward",
+    };
+    addFieldLabel("wardID");
+    valid = false;
+  }
+
+  // ⭐ All starred text fields (including new ones)
+  const requiredKeys: (keyof patientOPDbasicDetailType)[] = [
+    "pName",
+    "phoneNumber",
+    "address",
+    "state",
+    "city",
+    "pinCode",
+    "pUHID",
+    "weight",
+    "height",
+    "email",
+    "dob",
+    "gender",
+  ];
+
+  requiredKeys.forEach((key) => {
+    const field = formData[key] as PatientField;
+
+    const isEmpty =
+      field.value === null ||
+      field.value === "" ||
+      // special case: gender not selected (-1 / 0)
+      (key === "gender" && (field.value === -1 || field.value === 0));
+
+    if (isEmpty) {
+      (updated as any)[key] = {
+        ...field,
+        valid: false,
+        showError: true,
+        message: field.message || "Required",
+      } as PatientField;
+      addFieldLabel(key);
+      valid = false;
+    }
+  });
+
+  // 🔁 Show error for any field that is already invalid
+  (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach(
+    (key) => {
+      const field = formData[key] as PatientField;
+
+      if (!field.valid && field.value !== null && field.value !== "") {
+        (updated as any)[key] = {
+          ...field,
+          showError: true,
+        } as PatientField;
+        addFieldLabel(key);
+        valid = false;
+      }
+    }
+  );
+
+  // ⚖️ Weight validation
+  const w = Number(formData.weight.value);
+  const weightError = getValidationMessage(w, String(category), "weight");
+  if (weightError) {
+    updated.weight = {
+      ...updated.weight,
+      valid: false,
+      showError: true,
+      message: weightError,
+    };
+    addFieldLabel("weight");
+    valid = false;
+  }
+
+  // 📏 Height validation
+  const h = Number(formData.height.value);
+  const heightError = getValidationMessage(h, String(category), "height");
+  if (heightError) {
+    updated.height = {
+      ...updated.height,
+      valid: false,
+      showError: true,
+      message: heightError,
+    };
+    addFieldLabel("height");
+    valid = false;
+  }
+
+  // 🚨 FINAL MESSAGE: exact field names
+  let errorMessage: string | undefined;
+  if (!valid && errorFields.length > 0) {
+    const uniqueFields = Array.from(new Set(errorFields));
+    errorMessage =
+      uniqueFields.length === 1
+        ? `${uniqueFields[0]} is required .`
+        : `${uniqueFields.join(", ")} are required .`;
+  }
+
+  return {
+    isValid: valid,
+    updatedForm: updated,
+    errorMessage,
+  };
 };
