@@ -1,5 +1,5 @@
 // Dashboard_Outpatient.tsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -11,24 +11,20 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  Animated,
+  Pressable,
+  Easing,
+  Image,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import {
   Users,
   Calendar,
   Clock,
   Activity as ActivityIcon,
   Plus,
-  Menu as MenuIcon,
-  LayoutDashboard,
-  List as ListIcon,
-  UserPlus2,
-  Settings,
-  HelpCircle,
-  LogOut,
-  PanelRightOpen,
 } from "lucide-react-native";
 
 import { patientStatus } from "../../utils/role";
@@ -38,10 +34,38 @@ import { AuthFetch } from "../../auth/auth";
 import LineChartActualScheduled from "../dashboard/lineGraph";
 import WeeklyBarChart from "../dashboard/barGraph";
 import PatientsList from "../dashboard/patientsList";
-import Sidebar, { SidebarItem } from "../Sidebar/sidebarOpd";
 import Footer from "../dashboard/footer";
 import { showError } from "../../store/toast.slice";
 
+// Import custom SVG icons
+import {
+  LayoutDashboardIcon,
+  ListIcon,
+  UserPlusIcon,
+  SettingsIcon,
+  HelpCircleIcon,
+  LogOutIcon,
+  PanelRightOpenIcon,
+  BellIcon,
+  MenuIcon,
+  XIcon,
+} from "../../utils/SvgIcons";
+
+// Import responsive utilities
+import { 
+  SCREEN_WIDTH, 
+  SCREEN_HEIGHT, 
+  isTablet, 
+  isSmallDevice, 
+  isExtraSmallDevice,
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  FOOTER_HEIGHT
+} from "../../utils/responsive";
+
+// Import Sidebar component and types
+import type { SidebarItem } from "../Sidebar/sidebarIpd";
 
 // ---- Types ----
 type XY = { x: number | string; y: number };
@@ -53,9 +77,6 @@ type PatientRow = {
   date?: string;
   department?: string;
 };
-
-const { width: W } = Dimensions.get("window");
-const isTablet = W >= 768;
 
 /* -------------------------- Confirm dialog -------------------------- */
 const ConfirmDialog: React.FC<{
@@ -90,10 +111,277 @@ const ConfirmDialog: React.FC<{
 const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onMenu }) => {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
-        <MenuIcon size={30} color="#ffffffff" />
-      </TouchableOpacity>
+      <View style={styles.headerContent}>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>
+          {title}
+        </Text>
+        <TouchableOpacity 
+          onPress={onMenu} 
+          style={styles.menuBtn} 
+          accessibilityLabel="Open menu"
+          hitSlop={{ 
+            top: SPACING.xs, 
+            bottom: SPACING.xs, 
+            left: SPACING.xs, 
+            right: SPACING.xs 
+          }}
+        >
+          <MenuIcon size={ICON_SIZE.lg} color="#ffffffff" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+/* -------------------------- Sidebar Components -------------------------- */
+const SidebarButton: React.FC<{
+  item: SidebarItem;
+  isActive?: boolean;
+  onPress: () => void;
+}> = ({ item, isActive = false, onPress }) => {
+  const Icon = item.icon;
+  const color = item.variant === "danger" ? "#b91c1c" : 
+                item.variant === "muted" ? "#475569" : 
+                isActive ? "#14b8a6" : "#0b1220";
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.sidebarButton,
+        isActive && styles.sidebarButtonActive,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={styles.buttonContent}>
+        <Icon size={20} color={color} />
+        <Text style={[styles.buttonText, { color }]}>{item.label}</Text>
+        {item.isAlert && (item.alertCount ?? 0) > 0 && (
+          <View style={styles.alertBadge}>
+            <Text style={styles.alertText}>{item.alertCount}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const Avatar: React.FC<{ name?: string; uri?: string; size?: number }> = ({
+  name = "",
+  uri,
+  size = 46,
+}) => {
+  const initial = (name || "").trim().charAt(0).toUpperCase() || "U";
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={styles.avatarText}>{initial}</Text>
+    </View>
+  );
+};
+
+/* -------------------------- Sidebar Component -------------------------- */
+const Sidebar: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  userName?: string;
+  userImage?: string;
+  onProfile: () => void;
+  items: SidebarItem[];
+  bottomItems: SidebarItem[];
+  onAlertPress?: () => void;
+}> = ({
+  open,
+  onClose,
+  userName,
+  userImage,
+  onProfile,
+  items,
+  bottomItems,
+  onAlertPress,
+}) => {
+  const user = useSelector((state: RootState) => state.currentUser);
+  const slide = useRef(new Animated.Value(-Math.min(320, SCREEN_WIDTH * 0.82))).current;
+  const [alertCount, setAlertCount] = useState(0);
+  const width = Math.min(320, SCREEN_WIDTH * 0.82);
+
+
+
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: open ? 0 : -width,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [open, slide, width]);
+
+  // Group items by section
+  const overviewItems = items?.filter(item => 
+    item.key === "dash"
+  ) ?? [];
+  
+  const patientManagementItems = items?.filter(item => 
+    ["plist", "addp", "app"].includes(item.key)
+  ) ?? [];
+  
+  const operationsItems = items?.filter(item => 
+    item.key === "mgmt"
+  ) ?? [];
+  
+  const supportItems = items?.filter(item => 
+    item.key === "help"
+  ) ?? [];
+
+  return (
+    <Modal transparent visible={open} animationType="none" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <Animated.View style={[styles.sidebarContainer, { width, transform: [{ translateX: slide }] }]}>
+        
+        {/* Header */}
+        <View style={styles.sidebarHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <XIcon size={24} color="#0b1220" />
+          </TouchableOpacity>
+
+          {/* User Profile Section */}
+          <TouchableOpacity style={styles.userProfileSection} onPress={onProfile}>
+            <Avatar name={userName} uri={userImage} size={50} />
+            <View style={styles.userInfo}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {userName || "User"}
+              </Text>
+              <Text style={styles.userMetaId}>
+                Meta Health ID: {user?.id || "N/A"}
+              </Text>
+              <Text style={styles.userDepartment}>Outpatient Care</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Navigation Sections */}
+        <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
+          
+          {/* Overview Section */}
+          {overviewItems?.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Overview</Text>
+              {overviewItems?.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Patient Management Section */}
+          {(patientManagementItems?.length > 0 || alertCount > 0) && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Patient Management</Text>
+              {patientManagementItems?.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Operations Section */}
+          {operationsItems?.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Operations</Text>
+              {operationsItems.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Support Section */}
+          {supportItems?.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Support</Text>
+              {supportItems?.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Bottom Actions */}
+        <View style={styles.bottomActions}>
+          {bottomItems?.map((item) => (
+            <TouchableOpacity 
+              key={item.key}
+              style={[
+                styles.bottomButton,
+                item.variant === "danger" ? styles.logoutButton : styles.modulesButton
+              ]}
+              onPress={() => {
+                onClose();
+                item.onPress();
+              }}
+            >
+              <item.icon size={20} color={item.variant === "danger" ? "#b91c1c" : "#14b8a6"} />
+              <Text style={[
+                styles.bottomButtonText,
+                { color: item.variant === "danger" ? "#b91c1c" : "#14b8a6" }
+              ]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+};
+
+/* -------------------------- KPI Card -------------------------- */
+const KpiCard: React.FC<{
+  title: string;
+  value: number | string | null | undefined;
+  icon: React.ReactNode;
+  bg: string;
+}> = ({ title, value, icon, bg }) => {
+  return (
+    <View style={[styles.card, { backgroundColor: bg }]}>
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardValue}>{value ?? "—"}</Text>
+      </View>
+      <View style={styles.iconWrap}>{icon}</View>
     </View>
   );
 };
@@ -102,10 +390,12 @@ const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onM
 const Dashboard_Outpatient: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
-const insets = useSafeAreaInsets();
-  const userName =
-    `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl || user?.profileImage|| user?.imageURL
+  const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
+  
+  const userName = `${user?.firstName} ${user?.lastName}` || "User";
+  const userImg = user?.avatarUrl || user?.profileImage || user?.imageURL;
+
   // Sidebar & logout
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
@@ -124,8 +414,10 @@ const insets = useSafeAreaInsets();
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [latestRows, setLatestRows] = useState<PatientRow[]>([]);
   const [latestLoading, setLatestLoading] = useState<boolean>(false);
-const FOOTER_HEIGHT = 70;
-const dispatch = useDispatch()
+  const [loading, setLoading] = useState(true);
+
+  const fetchOnce = useRef(true);
+
   const getTotalCount = useCallback(async () => {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
@@ -143,16 +435,15 @@ const dispatch = useDispatch()
         setThisYearCount(c?.patient_count_year ?? 0);
       }
     } catch (e) {
-  const msg =
-    (typeof e === "object" && e !== null && "message" in e && typeof (e as any).message === "string")
-      ? (e as any).message
-      : (typeof e === "string"
-          ? e
-          : "getTotalCount error");
+      const msg =
+        (typeof e === "object" && e !== null && "message" in e && typeof (e as any).message === "string")
+          ? (e as any).message
+          : (typeof e === "string"
+              ? e
+              : "getTotalCount error");
 
-  dispatch(showError(msg));
-}
-
+      dispatch(showError(msg));
+    }
   }, [user?.hospitalID, user?.token]);
 
   const getWeekly = useCallback(async () => {
@@ -246,14 +537,23 @@ const dispatch = useDispatch()
     }
   }, [user?.hospitalID, user?.token]);
 
-  useEffect(() => {
-    if (user?.hospitalID) {
-      getTotalCount();
-      getWeekly();
-      getLatestPatients();
-      getPatientsVisit(filterYear, filterMonth);
-    }
-  }, [user?.hospitalID, getTotalCount, getWeekly, getLatestPatients, getPatientsVisit, filterYear, filterMonth]);
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.hospitalID && fetchOnce.current) {
+        fetchOnce.current = false;
+        setLoading(true);
+        Promise.all([
+          getTotalCount(),
+          getWeekly(),
+          getLatestPatients(),
+          getPatientsVisit(filterYear, filterMonth)
+        ]).finally(() => setLoading(false));
+      }
+      return () => {
+        fetchOnce.current = true;
+      };
+    }, [user?.hospitalID, getTotalCount, getWeekly, getLatestPatients, getPatientsVisit, filterYear, filterMonth])
+  );
 
   const onAddPatient = () => navigation.navigate("AddPatient" as never);
 
@@ -266,13 +566,13 @@ const dispatch = useDispatch()
   const onLogoutPress = () => setConfirmVisible(true);
   const confirmLogout = async () => {
     try {
-      await AsyncStorage.multiRemove(["token", "userID"]); // clear session
-   } catch (e: any) {
-  dispatch(
-    showError(
-      e?.message || String(e) || "Logout storage cleanup error"
-    )
-  );
+      await AsyncStorage.multiRemove(["token", "userID"]);
+    } catch (e: any) {
+      dispatch(
+        showError(
+          e?.message || String(e) || "Logout storage cleanup error"
+        )
+      );
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);
@@ -281,17 +581,31 @@ const dispatch = useDispatch()
   };
 
   const sidebarItems: SidebarItem[] = [
-    { key: "dash", label: "Dashboard", icon: LayoutDashboard, onPress: () => go("DashboardOPD") },
+    { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, onPress: () => go("DashboardOPD") },
     { key: "app", label: "Appointments List", icon: ListIcon, onPress: () => go("AppointmentsList") },
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
-    { key: "addp", label: "Add Patient", icon: UserPlus2, onPress: () => go("AddPatient") },
-    { key: "mgmt", label: "Management", icon: Settings, onPress: () => go("Management") },
-    { key: "help", label: "Help", icon: HelpCircle, onPress: () => go("HelpScreen") },
+    { key: "addp", label: "Add Patient", icon: UserPlusIcon, onPress: () => go("AddPatient") },
+    { key: "mgmt", label: "Management", icon: SettingsIcon, onPress: () => go("Management") },
+    { key: "help", label: "Help", icon: HelpCircleIcon, onPress: () => go("HelpScreen") },
   ];
+
   const bottomItems: SidebarItem[] = [
-    { key: "modules", label: "Go to Modules", icon: PanelRightOpen, onPress: () => go("Home") },
-    { key: "logout", label: "Logout", icon: LogOut, onPress: onLogoutPress, variant: "danger" },
+    { key: "modules", label: "Go to Modules", icon: PanelRightOpenIcon, onPress: () => go("Home") },
+    { key: "logout", label: "Logout", icon: LogOutIcon, onPress: onLogoutPress, variant: "danger" },
   ];
+
+  if (loading) {
+    return (
+      <View style={styles.safeArea}>
+        <StatusBar barStyle={Platform.OS === "android" ? "dark-content" : "dark-content"} />
+        <HeaderBar title="Outpatient Care" onMenu={() => setMenuOpen(true)} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#14b8a6" />
+          <Text style={styles.loadingText}>Loading Dashboard...</Text>
+        </View>
+      </View>
+    );
+  }
 
   /* ----------- Render ----------- */
   return (
@@ -301,21 +615,27 @@ const dispatch = useDispatch()
 
       <ScrollView
         style={styles.container}
-       contentContainerStyle={[styles.containerContent, { paddingBottom: FOOTER_HEIGHT + insets.bottom + 16 }]}
+        contentContainerStyle={[
+          styles.containerContent, 
+          { 
+            paddingBottom: FOOTER_HEIGHT + (insets.bottom > 0 ? insets.bottom + SPACING.md : SPACING.md),
+            minHeight: SCREEN_HEIGHT - (isSmallDevice ? 120 : 160)
+          }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* KPI cards */}
         <View style={styles.statsGrid}>
-          <KpiCard title="Today's Patients" value={todayCount} icon={<Users size={22} color="#2563EB" />} bg="#ffffffff" />
-          <KpiCard title="Appointments" value={appointmentsToday} icon={<Calendar size={22} color="#10B981" />} bg="#ffffffff" />
-          <KpiCard title="This Month" value={thisMonthCount} icon={<Clock size={22} color="#F59E0B" />} bg="#ffffffff" />
-          <KpiCard title="This Year" value={thisYearCount} icon={<ActivityIcon size={22} color="#7C3AED" />} bg="#ffffffff" />
+          <KpiCard title="Today's Patients" value={todayCount} icon={<Users size={ICON_SIZE.md} color="#2563EB" />} bg="#ffffffff" />
+          <KpiCard title="Appointments" value={appointmentsToday} icon={<Calendar size={ICON_SIZE.md} color="#10B981" />} bg="#ffffffff" />
+          <KpiCard title="This Month" value={thisMonthCount} icon={<Clock size={ICON_SIZE.md} color="#F59E0B" />} bg="#ffffffff" />
+          <KpiCard title="This Year" value={thisYearCount} icon={<ActivityIcon size={ICON_SIZE.md} color="#7C3AED" />} bg="#ffffffff" />
         </View>
 
         {/* Primary action */}
         <View style={styles.controlPanel}>
           <TouchableOpacity style={styles.primaryBtn} onPress={onAddPatient} activeOpacity={0.85}>
-            <Plus size={18} color="#fff" />
+            <Plus size={ICON_SIZE.sm} color="#fff" />
             <Text style={styles.primaryBtnText}>New Appointments</Text>
           </TouchableOpacity>
         </View>
@@ -334,17 +654,19 @@ const dispatch = useDispatch()
           <WeeklyBarChart data={weeklyData} />
         </View>
 
-        {/* Latest table (your existing component) */}
+        {/* Latest table */}
         <PatientsList navigation={navigation} patientType={patientStatus.outpatient} />
          
       </ScrollView>
 
-    <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
-  <Footer  active={"dashboard"}  brandColor="#14b8a6" />
-</View>
-{insets.bottom > 0 && (
-  <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
-)}
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer  active={"dashboard"}  brandColor="#14b8a6" />
+      </View>
+      
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
+
       {/* Slide-in Sidebar */}
       <Sidebar
         open={menuOpen}
@@ -372,146 +694,177 @@ const dispatch = useDispatch()
   );
 };
 
-/* -------------------------- KPI Card -------------------------- */
-const KpiCard: React.FC<{
-  title: string;
-  value: number | string | null | undefined;
-  icon: React.ReactNode;
-  bg: string;
-}> = ({ title, value, icon, bg }) => {
-  return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: bg, width: (W - 16 * 2 - 12) / 2 },
-        isTablet && { width: (W - 16 * 2 - 12 * 3) / 4 },
-      ]}
-    >
-      <View>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardValue}>{value ?? "—"}</Text>
-      </View>
-      <View style={styles.iconWrap}>{icon}</View>
-    </View>
-  );
-};
-
 export default Dashboard_Outpatient;
 
 /* -------------------------- Styles -------------------------- */
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
-
-  /* Header */
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: "#fff" 
+  },
   header: {
-    height: 100,
-    paddingHorizontal: 16,
+    height: Platform.OS === 'ios' 
+      ? (isExtraSmallDevice ? 90 : isSmallDevice ? 100 : 110)
+      : (isExtraSmallDevice ? 70 : isSmallDevice ? 80 : 90),
+    paddingHorizontal: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#e2e8f0",
+    backgroundColor: "#14b8a6",
+    paddingTop: Platform.OS === 'ios' 
+      ? (isExtraSmallDevice ? 30 : 40) 
+      : (isExtraSmallDevice ? 15 : 20),
+    justifyContent: 'center',
+  },
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#14b8a6",
-    // padding:95,
-    
+    width: '100%',
   },
-  headerTitle: { fontSize: 24, fontWeight: "700", color: "#fdfdfdff" },
+  headerTitle: { 
+    fontSize: FONT_SIZE.xxl,
+    fontWeight: "700", 
+    color: "#fdfdfdff",
+    flex: 1,
+    textAlign: 'center',
+    marginRight: SPACING.md,
+  },
   menuBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.xs,
     alignItems: "center",
     justifyContent: "center",
-    color:"white"
+    position: 'absolute',
+    right: 0,
   },
-
-  container: { flex: 1, backgroundColor: "#fff" },
-  containerContent: { padding: 16, paddingBottom: 32, gap: 16 },
-
-  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "space-between" },
- card: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: 14,
-  borderRadius: 16,
-  borderWidth: 1,
-  borderColor: "#e2e8f0", // light gray border
-  // no backgroundColor here → no colored card bg
-  shadowColor: "#000",
-  shadowOpacity: 0.08,
-  shadowRadius: 6,
-  elevation: 2,
-},
+  container: { 
+    flex: 1, 
+    backgroundColor: "#fff" 
+  },
+  containerContent: { 
+    padding: SPACING.sm, 
+    gap: SPACING.sm 
+  },
+  statsGrid: { 
+    flexDirection: "row", 
+    flexWrap: "wrap", 
+    gap: SPACING.xs, 
+    justifyContent: "space-between" 
+  },
+  card: {
+    width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: SPACING.sm,
+    borderRadius: SPACING.md,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    minHeight: isExtraSmallDevice ? 70 : 80,
+  },
+  cardContent: {
+    flex: 1,
+  },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.05)",
+    marginLeft: SPACING.xs,
   },
-  cardTitle: { color: "#0f172a", fontSize: 13, opacity: 0.75, marginBottom: 4 },
-  cardValue: { color: "#0b1220", fontSize: 22, fontWeight: "700" },
-
-  controlPanel: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end" },
+  cardTitle: { 
+    color: "#0f172a", 
+    fontSize: FONT_SIZE.xs, 
+    opacity: 0.75, 
+    marginBottom: 4 
+  },
+  cardValue: { 
+    color: "#0b1220", 
+    fontSize: FONT_SIZE.lg, 
+    fontWeight: "700" 
+  },
+  controlPanel: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "flex-end" 
+  },
   primaryBtn: {
     backgroundColor: "#1C7C6B",
-    height: 44,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    height: isExtraSmallDevice ? 40 : 44,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: SPACING.xs,
+    minWidth: SCREEN_WIDTH * 0.4,
+    maxWidth: SCREEN_WIDTH * 0.6,
+    justifyContent: 'center',
   },
-  primaryBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
-
-  chartsRow: { gap: 12 },
-
-  /* Patients list card (keep if your PatientsList uses dark theme) */
-  tableCard: { backgroundColor: "#0F1C3F", borderRadius: 16, padding: 12 },
-  sectionTitle: { color: "#E8ECF5", fontSize: 16, fontWeight: "700", marginBottom: 8 },
-  patientRow: {
-    paddingVertical: 10,
-    flexDirection: "row",
+  primaryBtnText: { 
+    color: "#fff", 
+    fontWeight: "700", 
+    fontSize: FONT_SIZE.sm 
+  },
+  chartsRow: { 
+    gap: SPACING.sm 
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    backgroundColor: "#fff",
+    paddingBottom: SCREEN_HEIGHT * 0.1,
   },
-  patientName: { color: "#E8ECF5", fontSize: 14, fontWeight: "600" },
-  patientSub: { color: "#9FB2D9", fontSize: 12, marginTop: 2 },
-  patientDept: { color: "#C8D3EA", fontSize: 12, fontWeight: "600", textAlign: "right" },
-  patientDate: { color: "#7B90BE", fontSize: 11, marginTop: 2, textAlign: "right" },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: "#1E2B4F" },
-  noDataText: { color: "#9FB2D9", fontSize: 12, paddingVertical: 12, textAlign: "center" },
-
-  /* Modal */
+  loadingText: {
+    marginTop: SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    color: "#14b8a6",
+  },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
   modalCard: {
-    width: "100%",
+    width: SCREEN_WIDTH * 0.85,
     maxWidth: 380,
     backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: SPACING.md,
+    padding: SPACING.sm,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
-  modalTitle: { fontSize: 17, fontWeight: "800", color: "#0b1220" },
-  modalMsg: { fontSize: 14, color: "#334155", marginTop: 8 },
+  modalTitle: { 
+    fontSize: FONT_SIZE.lg, 
+    fontWeight: "800", 
+    color: "#0b1220" 
+  },
+  modalMsg: { 
+    fontSize: FONT_SIZE.sm, 
+    color: "#334155", 
+    marginTop: SPACING.xs,
+    lineHeight: 20,
+  },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 16,
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   modalBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: SPACING.xs,
+    minWidth: SCREEN_WIDTH * 0.2,
+    alignItems: 'center',
   },
   modalBtnGhost: {
     backgroundColor: "#ecfeff",
@@ -521,26 +874,168 @@ const styles = StyleSheet.create({
   },
   modalBtnText: {
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
   },
- footerWrap: {
-  position: "absolute",
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "#fff",
-  borderTopWidth: StyleSheet.hairlineWidth,
-  borderTopColor: "#e2e8f0",
-  zIndex: 10,
-  elevation: 6,
-},
-navShield: {
-  position: "absolute",
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "#fff", // same as footer/bg
-  zIndex: 9,               // just under the footer
-},
-
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#e2e8f0",
+    zIndex: 10,
+    elevation: 6,
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    zIndex: 9,
+  },
+  /* Sidebar Styles */
+  sidebarContainer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 16,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 2, height: 0 },
+  },
+  sidebarHeader: {
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+  },
+  closeButton: {
+    position: "absolute",
+    right: 0,
+    top: -10,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f1f5f9",
+    zIndex: 10,
+  },
+  userProfileSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 50,
+    flex: 1
+  },
+  userInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0b1220",
+    marginBottom: 2,
+  },
+  userMetaId: {
+    fontSize: 12,
+    color: "#64748b",
+    marginBottom: 2,
+  },
+  userDepartment: {
+    fontSize: 12,
+    color: "#14b8a6",
+    fontWeight: "600",
+  },
+  sidebarContent: {
+    flex: 1,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748b",
+    marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sidebarButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  sidebarButtonActive: {
+    backgroundColor: "#f0fdfa",
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  buttonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    flex: 1,
+  },
+  alertBadge: {
+    backgroundColor: "#ef4444",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  alertText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  bottomActions: {
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    gap: 8,
+  },
+  bottomButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  modulesButton: {
+    backgroundColor: "#f0fdfa",
+  },
+  logoutButton: {
+    backgroundColor: "#fef2f2",
+  },
+  bottomButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  avatar: {
+    backgroundColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontWeight: "800",
+    color: "#0b1220",
+    fontSize: 16,
+  },
 });

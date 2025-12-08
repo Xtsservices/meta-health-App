@@ -200,7 +200,7 @@ if (!match) {
           <Text style={[styles.title, { color: COLORS.text }]}>Add Patient Symptoms</Text>
 
           {/* Symptom (type-ahead) */}
-          <Text style={[styles.label, { color: COLORS.sub }]}>Symptom</Text>
+          <Text style={[styles.label, { color: COLORS.sub }]}>Symptom *</Text>
           <View style={{ position: "relative" }}>
             <TextInput
               placeholder="e.g., Fever, Cough"
@@ -253,7 +253,7 @@ onChangeText={(t) => {
           </View>
 
           {/* Duration */}
-          <Text style={[styles.label, { color: COLORS.sub }]}>Duration</Text>
+          <Text style={[styles.label, { color: COLORS.sub }]}>Duration *</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
             <TextInput
               placeholder="e.g., 3"
@@ -314,8 +314,8 @@ onChangeText={(t) => {
                   <Text style={{ color: COLORS.text, fontWeight: "700", fontSize: 12 }}>
                     {it.name}: {it.duration} {it.durationParameter}
                   </Text>
-                  <Pressable onPress={() => removeFromList(idx)} hitSlop={6}>
-                    <X size={14} color={COLORS.sub} />
+                  <Pressable onPress={() => removeFromList(idx)} hitSlop={6} style={{ marginLeft: 15 }}>
+                    <X size={20} color={COLORS.sub} />
                   </Pressable>
                 </View>
               ))}
@@ -388,11 +388,13 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: 'space-between',
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
+    maxWidth: '90%',
   },
   sheetBtn: {
     flex: 1,

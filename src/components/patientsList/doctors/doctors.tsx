@@ -100,10 +100,13 @@ export default function DoctorsScreen() {
         <View
           style={[
             styles.catTag,
-            { backgroundColor: COLORS.chip, borderColor: COLORS.border },
+            {
+              backgroundColor: item.category === "primary" ? "#ffe8d6" : "#d6eaff",
+              borderColor: item.category === "primary" ? "#ff9a3c" : "#3b82f6",
+            },
           ]}
         >
-          <Text style={{ fontSize: 11, fontWeight: "800", color: COLORS.chipText }}>
+          <Text style={{ fontSize: 12, fontWeight: "900", color: item.category === "primary" ? "#d35400" : "#1d4ed8", }}>
             {cap(item.category)}
           </Text>
         </View>
@@ -226,10 +229,15 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   catTag: {
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderWidth: 1.5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 999,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
 
   fab: {

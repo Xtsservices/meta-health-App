@@ -281,12 +281,9 @@ const MyTasks: React.FC = () => {
                   }
                 ]}
               >
-                <View style={styles.pin} />
+                {/* <View style={styles.pin} /> */}
 
                 <View style={styles.taskHeader}>
-                  <Text style={styles.taskTime}>
-                    {getTaskDate(task)}
-                  </Text>
                   <View style={styles.actionButtons}>
                     <TouchableOpacity
                       style={styles.iconButton}
@@ -303,9 +300,17 @@ const MyTasks: React.FC = () => {
                   </View>
                 </View>
 
+                {/* Content area */}
                 <View style={styles.taskContent}>
                   <Text style={styles.taskText}>
                     {truncateText(task.task)}
+                  </Text>
+                </View>
+
+                {/* Date moved to bottom */}
+                <View style={styles.taskFooter}>
+                  <Text style={styles.taskTime}>
+                    {getTaskDate(task)}
                   </Text>
                 </View>
               </View>
@@ -419,6 +424,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
+    taskFooter: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0, 0, 0, 0.1)",
+    alignItems: "center", // Center the date
+  },
   title: {
     fontSize: 24,
     fontWeight: "700",
@@ -487,6 +499,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     marginBottom: 16,
+        justifyContent: "space-between", 
   },
   pin: {
     position: "absolute",
@@ -499,9 +512,9 @@ const styles = StyleSheet.create({
   },
   taskHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     alignItems: "flex-start",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   taskTime: {
     fontSize: 12,
@@ -526,6 +539,7 @@ const styles = StyleSheet.create({
   taskContent: {
     flex: 1,
     justifyContent: "center",
+    marginBottom: 8,
   },
   taskText: {
     fontSize: 14,

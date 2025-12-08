@@ -350,7 +350,7 @@ export default function AddMedicineScreen() {
       return;
     }
 
-    if (!selectedTest[rowId] && testOptions.length > 0) {
+    if (!testOptions.includes(term)) {
       dispatch(showError("Please select a test from the dropdown list."));
       return;
     }
@@ -382,6 +382,7 @@ export default function AddMedicineScreen() {
     setSearchTest((p) => ({ ...p, [rowId]: "" }));
     setTestNote((p) => ({ ...p, [rowId]: "" }));
     setSelectedTest((p) => ({ ...p, [rowId]: false }));
+    setTestOptions([]); // Clear dropdown after adding
   };
 
   /* --------------------------------------------------------------- */
@@ -401,15 +402,13 @@ export default function AddMedicineScreen() {
       // Validate medicine selected from dropdown
       for (const row of rows) {
         if (row.medicineName && !selectedMedicine[row.id]) {
-          const opts = medicineOptions[row.id] || [];
-          if (opts.length > 0 && !opts.includes(row.medicineName)) {
             dispatch(
               showError(
                 `Please select "${row.medicineName}" from the medicine dropdown.`
               )
             );
             return;
-          }
+            
         }
       }
 
@@ -682,14 +681,20 @@ export default function AddMedicineScreen() {
             <Text style={styles.label}>Dosage</Text>
             <TextInput
               style={styles.input}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               placeholder="250"
-            placeholderTextColor={COLORS.placeholderText}
+              placeholderTextColor={COLORS.placeholderText}
               value={row.doseCount?.toString() ?? ""}
               onChangeText={(t) => {
-                const n = t === "" ? null : Number(t);
+                // Allow only numbers and one decimal point
+                const clean = t.replace(/[^0-9.]/g, '');
+                const parts = clean.split('.');
+                if (parts.length > 2) return;
+                if (clean.length > 6) return;
+                const n = clean === "" ? null : Number(clean);
                 updateRow(rowId, "doseCount", n);
               }}
+              maxLength={4}
             />
           </View>
          <View style={styles.col}>
@@ -769,9 +774,15 @@ export default function AddMedicineScreen() {
               editable={!row.medicationTime.includes("As Per Need")}
               value={row.daysCount?.toString() ?? ""}
               onChangeText={(t) => {
-                const n = t === "" ? null : Number(t);
+                // Allow only numbers
+                const clean = t.replace(/[^0-9]/g, '');
+                // Limit to 3 characters (max 365 days)
+                if (clean.length > 3) return;
+                
+                const n = clean === "" ? null : Number(clean);
                 updateRow(rowId, "daysCount", n);
               }}
+              maxLength={3}
             />
           </View>
         </View>

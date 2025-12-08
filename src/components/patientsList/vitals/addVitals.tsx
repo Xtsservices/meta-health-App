@@ -410,6 +410,36 @@ const onChange = (name: keyof VitalsForm, value: string) => {
   const submit = async () => {
     if (!hasAnyVital) return dispatch(showError("Please enter at least one vital measurement"));
     if (applyAll && !givenTime) return dispatch(showError("Please provide a time when applying to all"));
+  
+  if (!applyAll) {
+    const errors = [];
+    
+    if (form.temperature && !form.temperatureTime) {
+      errors.push("Temperature");
+    }
+    if (form.pulse && !form.pulseTime) {
+      errors.push("Heart Rate");
+    }
+    if (form.oxygen && !form.oxygenTime) {
+      errors.push("Oxygen Saturation");
+    }
+    if (form.respiratoryRate && !form.respiratoryRateTime) {
+      errors.push("Respiratory Rate");
+    }
+    if ((form.bpH || form.bpL) && !form.bpTime) {
+      errors.push("Blood Pressure");
+    }
+    if (form.hrv && !form.hrvTime) {
+      errors.push("Heart Rate Variability");
+    }
+    
+    if (errors.length > 0) {
+      return dispatch(
+        showError(`Please provide time for ${errors.join(", ")}`)
+      );
+    }
+  }
+  
     if (!timeLineID || !patientID) return dispatch(showError("Missing patient timeline."));
 
     if (form.bpH && form.bpL && Number(form.bpL) > Number(form.bpH)) {

@@ -101,10 +101,9 @@ const EditMedicalHistoryScreen: React.FC = () => {
     }
   }, [user?.token, user?.hospitalID, patientId, dispatch]);
 
-  useFocusEffect(
-    useCallback(() => {
+  useEffect(() => {
     getMedicalHistory();
-  }, [getMedicalHistory]))
+  }, []);
 
   const canSave =
     !!medicalHistory?.givenName &&
@@ -141,13 +140,18 @@ const EditMedicalHistoryScreen: React.FC = () => {
     handleSubmit,
   ]);
 
-  const handleSectionSelect = (sectionKey: string) => {
+  const handleSectionSelect = useCallback((sectionKey: string) => {
    navigation.navigate('MedicalHistoryForm', {
       section: sectionKey,
       medicalHistoryData: medicalHistory,
-      onDataUpdate: setMedicalHistory
-    });
-  };
+      onDataUpdate: (updatedData: medicalHistoryFormType) => {
+      setMedicalHistory(prev => ({
+        ...prev,
+        ...updatedData
+      }));
+    }
+  });
+}, [navigation, medicalHistory]);
 
   const renderSectionIcons = () => (
     <View style={styles.iconsContainer}>

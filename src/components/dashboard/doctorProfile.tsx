@@ -14,14 +14,18 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
+  Alert,
+  ActionSheetIOS,
+  PermissionsAndroid,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
-import {SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
-import { launchImageLibrary } from "react-native-image-picker";
-import { Building2, Calendar, IdCard, History, User as UserIcon, Eye, EyeOff } from "lucide-react-native";
+import { launchImageLibrary, launchCamera } from "react-native-image-picker";
+import { Building2, Calendar, IdCard, History, User as UserIcon, Eye, EyeOff,
+} from "lucide-react-native";
 
 import { currentUser, RootState } from "../../store/store";
 
@@ -80,6 +84,7 @@ type ProfileFormState = {
 };
 
 type PasswordFormState = {
+  oldPassword: FieldState<string>;
   password: FieldState<string>;
   confirmPassword: FieldState<string>;
 };
@@ -88,6 +93,28 @@ type RNImageFile = {
   uri: string;
   name: string;
   type: string;
+};
+
+// -------- CAMERA PERMISSION (ANDROID) --------
+const requestCameraPermission = async (): Promise<boolean> => {
+  if (Platform.OS !== "android") return true;
+
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {
+        title: "Camera Permission",
+        message: "We need access to your camera to take your profile photo.",
+        buttonPositive: "OK",
+        buttonNegative: "Cancel",
+      }
+    );
+
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch (err) {
+    console.warn("Camera permission error:", err);
+    return false;
+  }
 };
 
 const doctorProfile: React.FC = () => {
@@ -145,10 +172,13 @@ const doctorProfile: React.FC = () => {
 
   // password form
   const [passwordForm, setPasswordForm] = useState<PasswordFormState>({
+    oldPassword: { valid: false, showError: false, value: "", message: "" }, // Add this
     password: { valid: false, showError: false, value: "", message: "" },
     confirmPassword: { valid: false, showError: false, value: "", message: "" },
   });
- const [showPassword, setShowPassword] = useState(false);
+  
+const [showOldPassword, setShowOldPassword] = useState(false);
+const [showPassword, setShowPassword] = useState(false);
 const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // date picker for DOB
@@ -197,6 +227,7 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"));
           `hospital/${user?.hospitalID}`,
         token
         );
+        console.log("333",response)
         if (response.status === "success" && "data" in response && response?.data?.hospital?.name) {
           const fetchedImageURL = response.data.hospital.logoURL || null;
 
@@ -245,24 +276,32 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"));
   }, [activeTab]);
 
   // ---------------- HANDLERS ----------------
-
-  const handlePickImage = (type: "profile" | "hospital") => {
-    launchImageLibrary(
-      {
-        mediaType: "photo",
-        quality: 0.8,
-      },
-      (response) => {
+  // ---------- IMAGE HELPERS (CAMERA + GALLERY) ----------
+  const handleImageResponse = (response: any, type: "profile" | "hospital") => {
         if (response.didCancel || !response.assets || !response.assets[0]) {
           return;
         }
+
+    if (response.errorCode) {
+      console.log(
+        "Image picker error:",
+        response.errorCode,
+        response.errorMessage
+      );
+      Alert.alert(
+        "Image error",
+        response.errorMessage || "Unable to select image"
+      );
+      return;
+    }
+
         const asset = response.assets[0];
         if (!asset.uri) return;
 
         const file: RNImageFile = {
           uri: asset.uri,
           type: asset.type || "image/jpeg",
-          name: asset.fileName || `${type}.jpg`,
+          name: asset.fileName || `${type}_${Date.now()}.jpg`,
         };
 
         if (type === "profile") {
@@ -272,9 +311,69 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"));
           setHospitalImageFile(file);
           setHospitalImagePreview(asset.uri);
         }
+  };
+
+  const handleLaunchCamera = async (type: "profile" | "hospital") => {
+    const hasPermission = await requestCameraPermission();
+    if (!hasPermission) {
+      Alert.alert(
+        "Permission required",
+        "Please allow camera access in Settings to take a photo."
+      );
+      return;
+    }
+
+    launchCamera(
+      {
+        mediaType: "photo",
+        quality: 0.8,
+        cameraType: "front",
+        saveToPhotos: true,
+      },
+      (response) => {
+        console.log("CAMERA RESPONSE:", response);
+        handleImageResponse(response, type);
       }
     );
   };
+
+  const handleLaunchImageLibrary = (type: "profile" | "hospital") => {
+    launchImageLibrary(
+      {
+        mediaType: "photo",
+        quality: 0.8,
+      },
+      (response) => {
+        console.log("LIBRARY RESPONSE:", response);
+        handleImageResponse(response, type);
+      }
+    );
+  };
+
+  const handlePickImage = (type: "profile" | "hospital") => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Cancel", "Take Photo", "Choose from Library"],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            handleLaunchCamera(type);
+          } else if (buttonIndex === 2) {
+            handleLaunchImageLibrary(type);
+          }
+        }
+      );
+    } else {
+      Alert.alert("Select Image", "Choose image source", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Camera", onPress: () => handleLaunchCamera(type) },
+        { text: "Gallery", onPress: () => handleLaunchImageLibrary(type) },
+      ]);
+    }
+  };
+
 
   const handleFormFieldChange = (name: keyof ProfileFormState, value: any) => {
     setFormData((prev) => ({
@@ -557,6 +656,19 @@ const validateProfileForm = (): boolean => {
       return;
     }
 
+if (!passwordForm.oldPassword.value.trim()) {
+  setPasswordForm((prev) => ({
+    ...prev,
+    oldPassword: {
+      ...prev.oldPassword,
+      valid: false,
+      showError: true,
+      message: "Current password is required",
+    },
+  }));
+  dispatch(showError("Please enter your current password"));
+  return;
+}
     const strongPasswordRegex =
       /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
@@ -579,21 +691,23 @@ const validateProfileForm = (): boolean => {
       return;
     }
 
-    if (!user?.id ) {
-      dispatch(showError("Cannot change password: Missing user or token"));
-      return;
-    }
- const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
     try {
-      const response = await AuthPatch(
-        `user/${user?.hospitalID}/changePassword/admin`,
-        { password: passwordForm.password.value, id: user?.id },
+      const response = await AuthPost(
+        `user/change-password`, // Changed endpoint
+        { 
+          oldPassword: passwordForm.oldPassword.value, // FIXED: Use the value from form, not undefined variable
+          newPassword: passwordForm.password.value 
+        },
         token
       );
+      console.log("Password change response:", response);
 
       if (response.status === "success") {
         dispatch(showSuccess("Password changed successfully"));
+        // Also reset the old password field
         setPasswordForm({
+          oldPassword: { valid: false, value: "", showError: false, message: "" }, // Reset this too
           password: { valid: false, value: "", showError: false, message: "" },
           confirmPassword: {
             valid: false,
@@ -603,16 +717,19 @@ const validateProfileForm = (): boolean => {
           },
         });
       } else {
-        dispatch(showError(response && "message" in response && response.message || "Failed to change password"));
-      }
-    } catch (err: any) {
       dispatch(
         showError(
-          err.message || "An error occurred while changing the password"
+          (response && "message" in response && response.message) ||
+            "Failed to change password"
         )
       );
     }
-  };
+  } catch (err: any) {
+    dispatch(
+      showError(err.message || "An error occurred while changing the password")
+    );
+  }
+};
 
   const debouncedPasswordSubmit = useCallback(
     debounce(handlePasswordSubmit, DEBOUNCE_DELAY),
@@ -631,6 +748,7 @@ const validateProfileForm = (): boolean => {
         `user/${user?.hospitalID}/${user?.id}/getEditLogs`,
         token
       );
+      console.log("444",response)
       if (response.status === "success" && "data" in response && response?.data?.logs) {
         setEditLogs(response.data.logs);
       } else {
@@ -1239,6 +1357,39 @@ const validateProfileForm = (): boolean => {
                   <Text style={styles.cardTitle}>Password & Security</Text>
                 </View>
 
+      {/* Add Old Password Field */}
+      <View style={styles.formGroup}>
+        <Text style={styles.label}>Current Password *</Text>
+        <View style={styles.passwordRow}>
+          <TextInput
+            style={[styles.input, styles.passwordInput]}
+            placeholder="Enter current password"
+            placeholderTextColor={COLORS.sub}
+            secureTextEntry={!showOldPassword}
+            value={passwordForm.oldPassword.value}
+            onChangeText={(text) =>
+              handlePasswordFieldChange("oldPassword", text)
+            }
+          />
+          <TouchableOpacity
+            style={styles.eyeButton}
+            onPress={() => setShowOldPassword((prev) => !prev)}
+          >
+            {showOldPassword ? (
+              <Eye size={18} color={COLORS.sub} />
+            ) : (
+              <EyeOff size={18} color={COLORS.sub} />
+            )}
+          </TouchableOpacity>
+        </View>
+        {passwordForm.oldPassword.showError && (
+          <Text style={styles.errorText}>
+            {passwordForm.oldPassword.message}
+          </Text>
+        )}
+      </View>
+
+      {/* Rest of your existing password fields */}
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>New Password *</Text>
                   <View style={styles.passwordRow}>
@@ -1257,9 +1408,8 @@ const validateProfileForm = (): boolean => {
                       onPress={() => setShowPassword((prev) => !prev)}
                     >
                       {showPassword ? (
-                         <Eye size={18} color={COLORS.sub} />
+                        <Eye size={18} color={COLORS.sub} />
                       ) : (
-                       
                         <EyeOff size={18} color={COLORS.sub} />
                       )}
                     </TouchableOpacity>
@@ -1278,23 +1428,20 @@ const validateProfileForm = (): boolean => {
                       style={[styles.input, styles.passwordInput]}
                       placeholder="Confirm password"
                       placeholderTextColor={COLORS.sub}
-                      secureTextEntry={!showPassword}
+                      secureTextEntry={!showConfirmPassword}
                       value={passwordForm.confirmPassword.value}
                       onChangeText={(text) =>
-                        handlePasswordFieldChange(
-                          "confirmPassword",
-                          text
-                        )
+                        handlePasswordFieldChange("confirmPassword", text)
                       }
                     />
                     <TouchableOpacity
                       style={styles.eyeButton}
-                      onPress={() => setShowPassword((prev) => !prev)}
+                      onPress={() => setShowConfirmPassword((prev) => !prev)}
                     >
-                      {showPassword ? (
-                        <EyeOff size={18} color={COLORS.sub} />
-                      ) : (
+                      {showConfirmPassword ? (
                         <Eye size={18} color={COLORS.sub} />
+                      ) : (
+                        <EyeOff size={18} color={COLORS.sub} />
                       )}
                     </TouchableOpacity>
                   </View>

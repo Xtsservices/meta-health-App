@@ -54,6 +54,24 @@ function extractTextAndDate(source?: string): { text: string; date: string } {
 
   const raw = source.trim();
 
+  const dateIndex = raw.toLowerCase().indexOf("date:");
+  if (dateIndex !== -1) {
+    const textPart = raw.slice(0, dateIndex).trim().replace(/[ ,;]+$/, "");
+    const dateRaw = raw.slice(dateIndex + "date:".length).trim();
+    let formattedDate = "";
+    const parsed = new Date(dateRaw);
+    if (!isNaN(parsed.getTime())) {
+      formattedDate = formatDate(parsed);
+    } else {
+      // Fallback: just keep a trimmed part before "GMT"
+      formattedDate = dateRaw.split("GMT")[0].trim();
+    }
+
+    return {
+      text: textPart || "Yes",
+      date: formattedDate,
+    };
+  }
   // Common patterns:
   // "Yes:15 Oct 2024"
   // "Breast cancer:2023"
@@ -74,7 +92,7 @@ function extractTextAndDate(source?: string): { text: string; date: string } {
   // Extract the first valid date (prefer full date over year-only)
   let date = "";
   if (datesFound) {
-    const fullDate = datesFound.find(d => d.includes(" ")) || datesFound[0];
+    const fullDate = datesFound.find((d) => d.includes(" ")) || datesFound[0];
     date = fullDate.trim();
   }
 
@@ -108,6 +126,39 @@ function extractTextAndDate(source?: string): { text: string; date: string } {
 
   return { text: text || "Yes", date };
 }
+
+// Convert "...|1|days|..." → "...|1|day|" (and the opposite for >1)
+function normalizeDurationUnits(raw: string): string {
+  if (!raw) return raw;
+
+  const parts = raw.split("|");
+  if (parts.length < 2) return raw;
+
+  const unitWords = ["day", "days", "month", "months", "year", "years"];
+  const unitIndex = parts.findIndex((p) => unitWords.includes(p));
+
+  if (unitIndex > 0) {
+    const countIndex = unitIndex - 1;
+    const count = parts[countIndex];
+    let unit = parts[unitIndex];
+
+    if (count === "1") {
+      if (unit === "days") unit = "day";
+      if (unit === "months") unit = "month";
+      if (unit === "years") unit = "year";
+    } else {
+      if (unit === "day") unit = "days";
+      if (unit === "month") unit = "months";
+      if (unit === "year") unit = "years";
+    }
+
+    parts[unitIndex] = unit;
+    return parts.join("|");
+  }
+
+  return raw;
+}
+
 
 function parseHealthCondition(source?: string): { text: string; date: string } {
   if (!source) return { text: "", date: "" };
@@ -209,8 +260,8 @@ const dispatch = useDispatch()
   const diseases = listFrom(medicalHistory?.disease);
   const foodAllergy = listFrom(medicalHistory?.foodAllergy);
   const medicineAllergy = listFrom(medicalHistory?.medicineAllergy);
-  const meds = listFrom(medicalHistory?.meds);
-  const selfMeds = listFrom(medicalHistory?.selfMeds);
+  const meds = listFrom(medicalHistory?.meds).map(normalizeDurationUnits);
+  const selfMeds = listFrom(medicalHistory?.selfMeds).map(normalizeDurationUnits);
   const infections = listFrom(medicalHistory?.infections);
   const drugs = listFrom(medicalHistory?.drugs);
 
@@ -255,7 +306,7 @@ const parseMedicalHistoryDates = (
 const infectionDates = parseMedicalHistoryDates(medicalHistory?.infections);
 
   const hasTobacco =
-    drugs.some((d) => d.includes("Tobacco")) || !!drugDates["Tobacco"];
+    drugs.some((d) => d.includes("Tobacco")) || !!drugDates["Tobbaco"];
   const hasDrugs =
     drugs.some((d) => d.includes("Drugs")) || !!drugDates["Drugs"];
   const hasAlcohol =
@@ -542,7 +593,7 @@ const infectionDates = parseMedicalHistoryDates(medicalHistory?.infections);
             <InfoRowWithDate
               label="Tobacco"
               value={yesNo(hasTobacco)}
-              date={drugDates["Tobacco"]}
+              date={drugDates["Tobacco"] || drugDates["Tobbaco"]}
             />
             <InfoRowWithDate
               label="Drugs"

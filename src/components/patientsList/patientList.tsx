@@ -651,8 +651,8 @@ if (patientId === null) return
 const patientStatusKey =
             patient?.status?.toUpperCase() as keyof typeof OTPatientStages;
           setPatientStage(OTPatientStages[patientStatusKey]);
-        
- navigation.navigate("PatientProfile", { id: patient.id });
+ const isFromPreviousPatients = filterValue === 2;       
+ navigation.navigate("PatientProfile", { id: patient.id,isFromPreviousPatients: isFromPreviousPatients });
   }
 
   const renderItem = ({ item }: { item: PatientType }) => {

@@ -276,7 +276,7 @@ useEffect(() => {
     setCityList(idx >= 0 ? city[idx] : []);
   }, [formData.state.value]);
 
-  const [agePickerEnabled, setAgePickerEnabled] = useState(true);
+  // const [agePickerEnabled, setAgePickerEnabled] = useState(true);
 
 
 useEffect(() => {
@@ -343,7 +343,7 @@ if (!rule.ok) {
   }));
 
   // ✅ Disable manual age unit change (since auto-calculated)
-  setAgePickerEnabled(false);
+  // setAgePickerEnabled(false);
 }, [selectedDate, category]);
 
 
@@ -581,7 +581,7 @@ const isEditable = opts.editable !== false;
     return (
       <View style={styles.inputBlock}>
         <Text style={[styles.label, { color: COLORS.sub }]}>
-          {label} {["pName", "phoneNumber", "address", "state", "city", "pinCode", "pUHID",  "weight", "height","email",].includes(name as any) && <Text style={{ color: COLORS.sub }}>*</Text>}
+          {label} {["pName", "phoneNumber", "address", "state", "city", "pinCode", "pUHID",  "weight", "height"].includes(name as any) && <Text style={{ color: COLORS.sub }}>*</Text>}
         </Text>
         <TextInput
           style={[
@@ -650,14 +650,73 @@ else if (name === "pinCode") {
           }
 else if (name === "email") {
   formatted = text.trim();
-  const error = getEmailValidationMessage(formatted);
+  if (!formatted) {
+    valid = true;
+    message = "";
+  } else {
+    const error = getEmailValidationMessage(formatted);
   valid = !error;
   message = error || "";
+  }
 }
 
           // 🔹 Manual AGE validation (when DOB not selected)
         else if (name === "age") {
-          const digits = text.replace(/\D/g, "");
+          const input = text.trim();
+          formatted = input;
+
+          if (!input) {
+            valid = false;
+            message = "Age is required";
+          } else {
+            const match = input.match(/^(\d+)\s*([dmyDMyY])$/);
+            if (match) {
+              const n = Number(match[1]);
+              let unit: AgeUnit =
+                match[2].toLowerCase() === "d"
+                  ? "days"
+                  : match[2].toLowerCase() === "m"
+                  ? "months"
+                  : "years";
+
+              const catLabel =
+                category === "1" ? "neonate" : category === "2" ? "child" : "adult";
+
+              const rule = validateAgeAndUnitUtil(catLabel, n, unit);
+              valid = rule.ok;
+              message = rule.msg || "";
+
+              if (rule.ok) {
+                const dobStr = dobFromAge(n, unit);
+                const [y, m, d] = dobStr.split("-").map(Number);
+                const dobDate = new Date(y, (m || 1) - 1, d || 1);
+
+                setSelectedDate(dobDate);
+                setAgeUnit(unit);
+                // setAgePickerEnabled(false);
+
+                setFormData((prev) => ({
+                  ...prev,
+                  age: {
+                    ...prev.age,
+                    value: String(n),
+                    valid: true,
+                    showError: false,
+                    message: "",
+                  },
+                  dob: {
+                    ...prev.dob,
+                    value: dobStr,
+                    valid: true,
+                    showError: false,
+                    message: "",
+                  },
+                }));
+
+                return;
+              }
+            } else {
+              const digits = input.replace(/\D/g, "");
           formatted = digits;
 
           if (!digits) {
@@ -671,7 +730,6 @@ else if (name === "email") {
             const rule = validateAgeAndUnitUtil(catLabel, n, ageUnit);
             valid = rule.ok;
             message = rule.msg || "";
-
             // ✅ If age is valid → calculate DOB from age + unit
             if (rule.ok) {
               const dobStr = dobFromAge(n, ageUnit);
@@ -701,6 +759,8 @@ else if (name === "email") {
               }));
 
               return; // ⛔ skip generic setFormData below for this case
+                }
+              }
             }
           }
         }
@@ -708,6 +768,13 @@ else if (name === "email") {
  else if (name === "weight" || name === "height") {   // 👈 NEW
           const onlyDigits = text.replace(/\D/g, "").slice(0, 4);
           formatted = onlyDigits;
+          if (!onlyDigits) {
+            valid = false;
+            message = name === "weight" ? "Weight is required" : "Height is required";
+          } else {
+            valid = true;
+            message = "";
+          }
         }
 
             setFormData((prev) => ({
@@ -817,7 +884,7 @@ else if (name === "email") {
                     setShowDatePicker(false);
                      if (date) {
     setSelectedDate(date);
-    setAgePickerEnabled(false);
+    // setAgePickerEnabled(false);
   }
                   }}
                 />
@@ -826,7 +893,7 @@ else if (name === "email") {
 
             <View style={styles.row}>
               <View style={{ flex: 0.6 }}>
-                {renderInput("Age", "age", { keyboardType: "numeric", placeholder: "Enter age",editable: agePickerEnabled, })}
+                {renderInput("Age", "age", { keyboardType: "default", placeholder: "Enter age",editable: true, })}
               </View>
               <View style={{ flex: 0.4, marginLeft: 8 }}>
                 <Text style={[styles.label, { color: COLORS.sub }]}>Unit</Text>
@@ -887,7 +954,7 @@ else if (name === "email") {
                   }}
                   items={allowedUnits.map(u => ({ label: u[0].toUpperCase() + u.slice(1), value: u }))}
                   placeholder="Unit"
-                  enabled={agePickerEnabled}
+                  enabled={category !== "1"}
                 />
 
               </View>
@@ -924,7 +991,7 @@ else if (name === "email") {
             </View>
 
             <View style={styles.row}>
-              <View style={styles.col}>{renderInput("Weight (kg)", "weight", { keyboardType: "numeric", placeholder: "e.g. 65", maxLength: 4, })}</View>
+              <View style={styles.col}>{renderInput("Weight (kg)", "weight", { keyboardType: "numeric", placeholder: "e.g. 65", maxLength: 3, })}</View>
               <View style={styles.col}>{renderInput("Height (cm)", "height", { keyboardType: "numeric", placeholder: "e.g. 170", maxLength: 4, })}</View>
             </View>
           </View>
@@ -956,6 +1023,11 @@ else if (name === "email") {
                   items={state.map(s => ({ label: s, value: s }))}
                   placeholder="Select State"
                 />
+                {formData.state.showError && (
+                  <Text style={[styles.errorText, { color: COLORS.danger }]}>
+                    Please select a state
+                  </Text>
+                )}
               </View>
               <View style={styles.inputBlock}>
                 <Text style={[styles.label, { color: COLORS.sub }]}>City *</Text>
@@ -971,6 +1043,11 @@ else if (name === "email") {
                   placeholder="Select City"
                   enabled={cityList.length > 0}
                 />
+                {formData.city.showError && (
+                  <Text style={[styles.errorText, { color: COLORS.danger }]}>
+                    Please select a city
+                  </Text>
+                )}
               </View>
             
 
@@ -1234,7 +1311,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   navShield: {
-    position: "absolute",
+    // position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
