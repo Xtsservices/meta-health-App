@@ -423,7 +423,6 @@ const EditPatientMobile = () => {
         data,
         token
       );
-      console.log("111res", res);
       if (res?.status === "success") {
         dispatch(showSuccess("Updated successfully"));
         dispatch(

@@ -227,7 +227,6 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"));
           `hospital/${user?.hospitalID}`,
         token
         );
-        console.log("333",response)
         if (response.status === "success" && "data" in response && response?.data?.hospital?.name) {
           const fetchedImageURL = response.data.hospital.logoURL || null;
 
@@ -283,11 +282,6 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"));
         }
 
     if (response.errorCode) {
-      console.log(
-        "Image picker error:",
-        response.errorCode,
-        response.errorMessage
-      );
       Alert.alert(
         "Image error",
         response.errorMessage || "Unable to select image"
@@ -331,7 +325,6 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"));
         saveToPhotos: true,
       },
       (response) => {
-        console.log("CAMERA RESPONSE:", response);
         handleImageResponse(response, type);
       }
     );
@@ -344,7 +337,6 @@ const token = user?.token ?? (await AsyncStorage.getItem("token"));
         quality: 0.8,
       },
       (response) => {
-        console.log("LIBRARY RESPONSE:", response);
         handleImageResponse(response, type);
       }
     );
@@ -701,7 +693,6 @@ if (!passwordForm.oldPassword.value.trim()) {
         },
         token
       );
-      console.log("Password change response:", response);
 
       if (response.status === "success") {
         dispatch(showSuccess("Password changed successfully"));
@@ -748,7 +739,6 @@ if (!passwordForm.oldPassword.value.trim()) {
         `user/${user?.hospitalID}/${user?.id}/getEditLogs`,
         token
       );
-      console.log("444",response)
       if (response.status === "success" && "data" in response && response?.data?.logs) {
         setEditLogs(response.data.logs);
       } else {
