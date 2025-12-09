@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { 
   View, 
   Text, 
@@ -57,19 +57,28 @@ const ScrollArrow = ({ direction, onPress, visible }: {
   onPress: () => void; 
   visible: boolean 
 }) => {
-  if (!visible) return null;
-  
   return (
     <TouchableOpacity 
       style={[
         styles.arrowButton,
-        direction === 'left' ? styles.arrowLeft : styles.arrowRight
+        direction === 'left' ? styles.arrowLeft : styles.arrowRight,
+        !visible && styles.arrowDisabled
       ]} 
       onPress={onPress}
+      activeOpacity={0.8}
+      disabled={!visible}
     >
-      <Text style={styles.arrowText}>
-        {direction === 'left' ? '‹' : '›'}
-      </Text>
+      <View style={[
+        styles.arrowIconContainer,
+        !visible && styles.arrowIconDisabled
+      ]}>
+        <Text style={[
+          styles.arrowText,
+          !visible && styles.arrowTextDisabled
+        ]}>
+          {direction === 'left' ? '<' : '>'}
+        </Text>
+      </View>
     </TouchableOpacity>
   );
 };
@@ -78,7 +87,9 @@ const DoctorManagmentTabs: React.FC = () => {
   const user = useSelector(selectCurrentUser);
   const scrollViewRef = useRef<ScrollView>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
-  const [showRightArrow, setShowRightArrow] = useState(false);
+  const [showRightArrow, setShowRightArrow] = useState(true);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [containerWidth, setContainerWidth] = useState(0);
   
   const defaultTab = user?.role === 4000 ? "LeaveManagment" : "MySchedule";
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -86,24 +97,41 @@ const DoctorManagmentTabs: React.FC = () => {
   // Check if tabs need scrolling
   const needsScrolling = screenWidth < TAB_CONFIG.scrollThreshold;
 
+  // Check if content is scrollable on mount
+  useEffect(() => {
+    if (needsScrolling && contentWidth > containerWidth) {
+      setShowRightArrow(true);
+    }
+  }, [needsScrolling, contentWidth, containerWidth]);
+
   // Handle scroll events to show/hide arrows
   const handleScroll = (event: any) => {
     if (!needsScrolling) return;
     
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const scrollX = contentOffset.x;
-    const contentWidth = contentSize.width;
-    const containerWidth = layoutMeasurement.width;
+    const contentW = contentSize.width;
+    const containerW = layoutMeasurement.width;
 
-    setShowLeftArrow(scrollX > 0);
-    setShowRightArrow(scrollX + containerWidth < contentWidth - 10);
+    setShowLeftArrow(scrollX > 5);
+    setShowRightArrow(scrollX + containerW < contentW - 5);
+  };
+
+  // Handle content size change
+  const handleContentSizeChange = (width: number) => {
+    setContentWidth(width);
+  };
+
+  // Handle layout change
+  const handleLayout = (event: any) => {
+    setContainerWidth(event.nativeEvent.layout.width);
   };
 
   // Scroll tab container
   const scrollTabs = (direction: 'left' | 'right') => {
     if (!scrollViewRef.current) return;
     
-    const scrollAmount = 150; // Adjust scroll distance as needed
+    const scrollAmount = 200;
     
     scrollViewRef.current.scrollTo({
       x: direction === 'left' ? -scrollAmount : scrollAmount,
@@ -193,6 +221,8 @@ const DoctorManagmentTabs: React.FC = () => {
           ]}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          onContentSizeChange={handleContentSizeChange}
+          onLayout={handleLayout}
         >
           {availableTabs?.map?.((tab) => (
             <TabButton
@@ -300,7 +330,7 @@ const styles = StyleSheet.create({
   tabHeadersContainer: {
     borderBottomWidth: 2,
     borderBottomColor: "#e2e8f0",
-    backgroundColor: "transparent",
+    backgroundColor: "#ffffff",
     minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
@@ -352,21 +382,47 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f1f5f9",
-    minWidth: 40,
+    backgroundColor: "#ffffff",
+    minWidth: 50,
+    zIndex: 10,
   },
   arrowLeft: {
     borderRightWidth: 1,
-    borderRightColor: "#e2e8f0",
+    borderRightColor: "#cbd5e1",
   },
   arrowRight: {
     borderLeftWidth: 1,
-    borderLeftColor: "#e2e8f0",
+    borderLeftColor: "#cbd5e1",
+  },
+  arrowDisabled: {
+    opacity: 1,
+  },
+  arrowIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(63, 169, 155, 1)",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#14b8a6",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  arrowIconDisabled: {
+    backgroundColor: "#e2e8f0",
+    shadowColor: "#94a3b8",
+    shadowOpacity: 0.2,
   },
   arrowText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#64748b",
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#ffffff",
+    textAlign: "center",
+  },
+  arrowTextDisabled: {
+    color: "#94a3b8",
   },
 });
 

@@ -11,6 +11,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Alert,
+  Modal,
 } from "react-native";
 import { useSelector } from "react-redux";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -23,6 +24,7 @@ import { heriditaryList, infectionList } from "../../../utils/list";
 import { formatDate } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { X } from "lucide-react-native";
 
 // 🔹 Mental problem master list (same as web)
 const mentalProblemList = [
@@ -44,22 +46,59 @@ const mentalProblemList = [
 
 // 🔹 Extra master/suggestion lists for mobile
 const chestConditionList = [
-  "Chest Pain",
-  "Shortness of Breath",
-  "Asthma",
-  "COPD",
-  "Breathing Difficulty",
-  "Palpitations",
+    "Asthma",
+    "Chronic Obstructive Pulmonary Disease (COPD)",
+    "Pneumonia",
+    "Bronchitis",
+    "Tuberculosis",
+    "Pulmonary Embolism",
+    "Pleural Effusion",
+    "Pneumothorax",
+    "Lung Cancer",
+    "Chest Pain (unspecified)",
+    "Cough",
+    "Shortness of breath",
+    "Wheezing",
+    "Hemoptysis",
+    "Chest Wall Pain",
 ];
 
 const neurologicalDisorderList = [
-  "Epilepsy",
-  "Stroke",
-  "Migraine",
-  "Multiple Sclerosis",
-  "Parkinson's Disease",
-  "Peripheral Neuropathy",
-  "Seizure Disorder",
+    "Migraine",
+    "Diabetic neuropathy",
+    "Guillain-Barré syndrome",
+    "Tension headache",
+    "Cluster headache",
+    "Epilepsy",
+    "Febrile seizures",
+    "Parkinson's disease",
+    "Huntington's disease",
+    "Dystonia",
+    "Tremor",
+    "Dementia",
+    "Alzheimer's disease",
+    "Delirium",
+    "Learning disabilities",
+    "Depression",
+    "Bipolar disorder",
+    "Anxiety disorders",
+    "Insomnia",
+    "Sleep apnea",
+    "Narcolepsy",
+    "Multiple Sclerosis",
+    "Brain Tumors",
+    "Stroke",
+    "Meningitis",
+    "Encephalitis",
+    "Muscular dystrophy",
+    "Myasthenia gravis",
+    "Neuralgia",
+    "Fibromyalgia",
+    "Autism Spectrum Disorder (ASD)",
+    "Attention Deficit Hyperactivity Disorder (ADHD)",
+    "Amyotrophic Lateral Sclerosis (ALS)",
+    "Chronic pain",
+    "Back pain",
 ];
 
 // Common type for name + date items
@@ -82,17 +121,25 @@ const parseDateString = (value?: string | null): Date | null => {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
+  if (trimmed.includes("GMT") || trimmed.includes("Standard Time")) {
+    const date = new Date(trimmed);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+  }
+
   // 1) Try native Date first
   const direct = new Date(trimmed);
   if (!isNaN(direct.getTime())) return direct;
 
-  // 2) Try DD-MM-YYYY or DD/MM/YYYY  (already supported)
+  // 2) Try DD-MM-YYYY or DD/MM/YYYY
   let m = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (m) {
     const day = Number(m[1]);
     const month = Number(m[2]) - 1;
     const year = Number(m[3]);
-    return new Date(year, month, day);
+    const date = new Date(year, month, day);
+    return date;
   }
 
   // 3) Try "DD MMM YYYY" or "D MMM YYYY"  👉 "04 Dec 2025"
@@ -119,13 +166,32 @@ const parseDateString = (value?: string | null): Date | null => {
 
     const month = monthMap[monthName];
     if (month !== undefined) {
-      return new Date(year, month, day);
+      const date = new Date(year, month, day);
+      return date;
     }
   }
 
   return null;
 };
 
+const displayDurationUnit = (duration: string, unit: string): string => {
+  const d = duration.trim();
+
+  if (d !== "1") return unit; // plural is fine
+
+  switch (unit.toLowerCase()) {
+    case "days":
+      return "day";
+    case "weeks":
+      return "week";
+    case "months":
+      return "month";
+    case "years":
+      return "year";
+    default:
+      return unit;
+  }
+};
 
 const splitToNamedDateItems = (raw?: string | null): NamedDateItem[] => {
   if (!raw) return [];
@@ -252,30 +318,25 @@ const parsePregnantField = (raw?: string | null) => {
   let liveBirths = "";
   let date: Date | null = null;
 
-  const parts = raw
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const pregMatch = raw.match(/Number of Pregnancies:\s*(\d+)/i);
+  if (pregMatch) numberOfPregnancies = pregMatch[1];
+  const liveMatch = raw.match(/Live Births:\s*(\d+)/i);
+  if (liveMatch) liveBirths = liveMatch[1];
+  const dateMatch = raw.match(/Date:\s*(.+)$/i);
+  if (dateMatch) {
+    const dateStr = dateMatch[1].trim();
+    date = new Date(dateStr);
 
-  parts.forEach((part) => {
-    const lower = part.toLowerCase();
-    const [, valueRaw] = part.split(":");
-    const value = (valueRaw || "").trim();
-
-    if (lower.startsWith("number of pregnancies")) {
-      numberOfPregnancies = value;
-    } else if (lower.startsWith("live births")) {
-      liveBirths = value;
-    } else if (lower.startsWith("date")) {
-      date = parseDateString(value);
+    if (isNaN(date.getTime())) {
+      date = null;
     }
-  });
+  }
 
   return { isPregnant: true, numberOfPregnancies, liveBirths, date };
 };
 
 const parseLumpsField = (raw?: string | null) => {
-  if (!raw || raw === "No") {
+  if (!raw || raw === "No" || raw.trim() === "") {
     return {
       istrue: false,
       details: {
@@ -299,25 +360,23 @@ const parseLumpsField = (raw?: string | null) => {
     date: null,
   };
 
-  raw
-    .split(",")
-    .map((p) => p.trim())
-    .forEach((part) => {
-      const [labelRaw, valueRaw] = part.split(":");
-      const label = (labelRaw || "").toLowerCase();
-      const value = (valueRaw || "").trim();
+  const locationMatch = raw.match(/Location:\s*([^,]+)/i);
+  const sizeMatch = raw.match(/Size:\s*([^,]+)/i);
+  const consistencyMatch = raw.match(/Consistency:\s*([^,]+)/i);
+  const dateMatch = raw.match(/Date:\s*([^,]+)/i);
 
-      if (label.startsWith("location")) details.location = value;
-      else if (label.startsWith("size")) details.size = value;
-      else if (label.startsWith("consistency")) details.consistency = value;
-      else if (label.startsWith("date")) details.date = parseDateString(value);
-    });
-
+  if (locationMatch) details.location = locationMatch[1].trim();
+  if (sizeMatch) details.size = sizeMatch[1].trim();
+  if (consistencyMatch) details.consistency = consistencyMatch[1].trim();
+  if (dateMatch) {
+    const dateStr = dateMatch[1].trim();
+    details.date = parseDateString(dateStr);
+  }
   return { istrue: true, details };
 };
 
 const parseCancerField = (raw?: string | null) => {
-  if (!raw || raw === "No") {
+  if (!raw || raw === "No" || raw.trim() === "") {
     return {
       istrue: false,
       details: {
@@ -334,39 +393,73 @@ const parseCancerField = (raw?: string | null) => {
     date: null,
   };
 
-  raw
-    .split(",")
-    .map((p) => p.trim())
-    .forEach((part) => {
-      const [labelRaw, valueRaw] = part.split(":");
-      const label = (labelRaw || "").toLowerCase();
-      const value = (valueRaw || "").trim();
+  const typeMatch = raw.match(/Type:\s*([^,]+)/i);
+  const stageMatch = raw.match(/Stage:\s*([^,]+)/i);
+  const dateMatch = raw.match(/Date:\s*([^,]+)/i);
 
-      if (label.startsWith("type")) details.type = value;
-      else if (label.startsWith("stage")) details.stage = value;
-      else if (label.startsWith("date")) details.date = parseDateString(value);
-    });
-
+  if (typeMatch) details.type = typeMatch[1].trim();
+  if (stageMatch) details.stage = stageMatch[1].trim();
+  if (dateMatch) {
+    const dateStr = dateMatch[1].trim();
+ details.date = parseDateString(dateStr);
+  }
   return { istrue: true, details };
 };
 
-const parseHereditaryField = (raw?: string | null) => {
-  if (!raw) {
-    return { istrue: false, items: [] as { disease: string; name: string }[] };
-  }
-
-  const items = raw
+const parseHereditaryField = (
+  familyDiseaseRaw?: string | null,
+  hereditaryDiseaseRaw?: string | null
+) => {
+  if (familyDiseaseRaw && familyDiseaseRaw.trim()) {
+    const items = familyDiseaseRaw
     .split(",")
     .map((chunk) => chunk.trim())
     .filter(Boolean)
     .map((chunk) => {
-      const [diseasePart, namePart] = chunk.split(":");
+      const colonIndex = chunk.indexOf(":");
+        if (colonIndex === -1) {
+          return { disease: chunk, name: "" };
+        }
       return {
-        disease: (diseasePart || "").trim(),
-        name: (namePart || "").trim(),
+        disease: chunk.substring(0, colonIndex).trim(),
+        name: chunk.substring(colonIndex + 1).trim(),
       };
     });
+    return {
+      istrue: items.length > 0,
+      items,
+    };
+  }
 
+  if (!hereditaryDiseaseRaw || hereditaryDiseaseRaw.trim() === "") {
+    return { istrue: false, items: [] as { disease: string; name: string }[] };
+  }
+
+  const trimmed = hereditaryDiseaseRaw.trim();
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return {
+        istrue: parsed.length > 0,
+        items: parsed.map((item) => ({
+          disease: item.disease || item.relation || "",
+          name: item.name || "",
+        })),
+      };
+    }
+  } catch (e) {
+    // ignore JSON errors
+  }
+  const diseaseNames = trimmed
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .filter((chunk) => chunk && !chunk.startsWith("Date:"));
+
+  const items = diseaseNames.map((disease) => ({
+    disease,
+    name: "",
+  }));
   return {
     istrue: items.length > 0,
     items,
@@ -456,7 +549,7 @@ const DateField: React.FC<{
           display={Platform.OS === "android" ? "spinner" : "default"}
           maximumDate={maximumDate ?? new Date()}
           minimumDate={new Date(1900, 0, 1)}
-          onChange={(_, selectedDate) => {
+          onChange={(event, selectedDate) => {
             setShow(false);
             if (selectedDate) {
               onChange(selectedDate);
@@ -478,10 +571,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const { section, medicalHistoryData, onDataUpdate } = route.params;
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
-
-  const [formData, setFormData] = useState<medicalHistoryFormType>(
-    medicalHistoryData
-  );
 
   // Basic Section State
   const [giveBy, setGiveBy] = useState(medicalHistoryData?.givenName || "");
@@ -720,7 +809,11 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const [hereditaryDisease, setHereditaryDisease] = useState<{
     istrue: boolean;
     items: { disease: string; name: string }[];
-  }>(() => parseHereditaryField(medicalHistoryData?.hereditaryDisease));
+  }>(() => parseHereditaryField(
+      medicalHistoryData?.familyDisease,
+      medicalHistoryData?.hereditaryDisease
+    )
+  );
 
   // Physical Examination State
   const [lumps, setLumps] = useState<{ istrue: boolean; details: any }>(
@@ -899,8 +992,8 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
     [newNeurologicalCondition]
   );
 
-  // Update form data and notify parent
-  useEffect(() => {
+  // 🔹 Build final data ONLY when needed (no auto-save)
+  const buildUpdatedData = useCallback((): medicalHistoryFormType => {
     const medsString = prescribedMeds.items
       .map((item) =>
         [
@@ -929,8 +1022,8 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
       )
       .join(",");
 
-    const updatedData: medicalHistoryFormType = {
-      ...formData,
+    return {
+      ...medicalHistoryData,
       givenName: giveBy,
       givenPhone: phoneNumber,
       givenRelation: relation,
@@ -989,15 +1082,26 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
             pregnancyDetails.date ? formatDate(pregnancyDetails.date) : ""
           }`
         : "No",
+      familyDisease: hereditaryDisease.items
+        ?.map((item) => `${item.disease}: ${item.name}`.trim())
+        ?.filter((item) => item.endsWith(":") === false)
+        .join(", "),
       hereditaryDisease: hereditaryDisease.items
-        .map((item) => `${item.disease}:${item.name}`)
+        .map((item) => item.disease)
+        .concat(
+          hereditaryDisease.items.length > 0
+            ? `Date: ${formatDate(new Date())}`
+            : ""
+        )
         .join(", "),
       lumps: lumps.istrue
         ? `Location: ${lumps.details.location}, Size: ${
             lumps.details.size
           }, Consistency: ${
             lumps.details.consistency
-          }, Date: ${lumps.details.date ? formatDate(lumps.details.date) : ""}`
+          }, Date: ${
+            lumps.details.date ? formatDate(lumps.details.date) : ""
+          }`
         : "",
       cancer: cancer.istrue
         ? `Type: ${cancer.details.type}, Stage: ${
@@ -1007,10 +1111,8 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
           }`
         : "",
     };
-
-    setFormData(updatedData);
-    onDataUpdate(updatedData);
   }, [
+    medicalHistoryData,
     giveBy,
     phoneNumber,
     relation,
@@ -1036,8 +1138,17 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   ]);
 
   const handleSave = () => {
+    const updatedData = buildUpdatedData();
+    onDataUpdate(updatedData);
     navigation.goBack();
   };
+
+  const handleClose = () => {
+  // Save current form data before closing
+  const updatedData = buildUpdatedData();
+  onDataUpdate(updatedData);  // This saves to parent state
+  navigation.goBack();
+};
 
   const getSectionTitle = () => {
     const sectionsMap: { [key: string]: string } = {
@@ -1828,7 +1939,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
               <Text style={styles.medicationText}>
                 {item.name} - {item.dosage}
                 {item.dosageUnit}, {item.frequency}/day, {item.duration}{" "}
-                {item.durationUnit}
+                {displayDurationUnit(item.duration, item.durationUnit)}
                 {item.startDate && `, Started: ${formatDate(item.startDate)}`}
               </Text>
               <TouchableOpacity
@@ -2062,7 +2173,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
               <Text style={styles.medicationText}>
                 {item.name} - {item.dosage}
                 {item.dosageUnit}, {item.frequency}/day, {item.duration}{" "}
-                {item.durationUnit}
+                {displayDurationUnit(item.duration, item.durationUnit)}
                 {item.startDate && `, Started: ${formatDate(item.startDate)}`}
               </Text>
               <TouchableOpacity
@@ -2725,7 +2836,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
           {addiction.istrue && (
             <>
-              {["Alcohol", "Tobacco", "Drugs"].map((item) => (
+              {["Alcohol", "Tobbaco", "Drugs"].map((item) => (
                 <View key={item} style={styles.fieldBlock}>
                   <CheckboxRow
                     label={item}
@@ -3211,6 +3322,15 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
   return (
     <View style={styles.screen}>
+      {/* Header with Close button and Title */}
+      <View style={styles.modalHeader}>
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+          <X size={24} color="#0f172a" />
+        </TouchableOpacity>
+        <Text style={styles.modalTitle}>{getSectionTitle()}</Text>
+        <View style={styles.headerPlaceholder} />
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -3226,8 +3346,8 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         >
           {renderSection()}
 
-          {/* Prev / Next navigation */}
-          <View style={styles.header}>
+          {/* Prev / Next / Save navigation */}
+          <View style={styles.navContainer}>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
             >
@@ -3237,9 +3357,11 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                 onPress={() => {
                   const idx = sectionOrder.indexOf(section);
                   if (idx > 0) {
+                    const updatedData = buildUpdatedData();
+                    onDataUpdate(updatedData);
                     navigation.navigate("MedicalHistoryForm", {
                       section: sectionOrder[idx - 1],
-                      medicalHistoryData: formData,
+                      medicalHistoryData: updatedData,
                       onDataUpdate,
                     });
                   }
@@ -3253,16 +3375,16 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                 <TouchableOpacity
                   style={[
                     styles.navButton,
+                    styles.saveButton,
                     formDisabled && styles.navButtonDisabled,
                   ]}
                   disabled={formDisabled}
                   onPress={() => {
                     if (formDisabled) return;
-                    onDataUpdate(formData);
                     handleSave();
                   }}
                 >
-                  <Text style={styles.navButtonText}>Save</Text>
+                  <Text style={styles.navButtonText}>Close</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
@@ -3275,9 +3397,11 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                     if (formDisabled) return;
                     const idx = sectionOrder.indexOf(section);
                     if (idx < sectionOrder.length - 1) {
+                      const updatedData = buildUpdatedData();
+                      onDataUpdate(updatedData);
                       navigation.navigate("MedicalHistoryForm", {
                         section: sectionOrder[idx + 1],
-                        medicalHistoryData: formData,
+                        medicalHistoryData: updatedData,
                         onDataUpdate,
                       });
                     }
@@ -3310,6 +3434,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f3f4f6",
   },
+  // Modal-style header
+  modalHeader: {
+    height: 56,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f3f4f6",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#0f172a",
+    textAlign: "center",
+    flex: 1,
+  },
+  headerPlaceholder: {
+    width: 40,
+  },
+  navContainer: {
+    padding: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    marginTop: 16,
+  },
   header: {
     height: 56,
     paddingHorizontal: 12,
@@ -3332,9 +3496,6 @@ const styles = StyleSheet.create({
     color: "#0f172a",
   },
   saveButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
     backgroundColor: "#14b8a6",
   },
   saveButtonText: {
@@ -3527,16 +3688,18 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   navButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 8,
     backgroundColor: "#14b8a6",
+    flex: 1,
+    alignItems: "center",
   },
   navButtonDisabled: {
     opacity: 0.4,
   },
   navButtonText: {
-    color: "#fff",
+    color: "#ffffff",
     fontWeight: "600",
     fontSize: 14,
   },

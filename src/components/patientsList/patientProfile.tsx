@@ -66,6 +66,7 @@ type RouteParams = {
   staffRole?: string; 
   reception?: boolean;
   fromDischargeList?: boolean;
+   isFromPreviousPatients?: boolean; 
 };
 
 const followUpStatus = { active: 1 };
@@ -223,7 +224,7 @@ const PatientProfileOPD: React.FC = () => {
   const staffRole = route.params?.staffRole ?? "";
   const isReceptionView = !!route.params?.reception;
   const fromDischargeList = !!route.params?.fromDischargeList;
-  
+  const isFromPreviousPatients = !!route.params?.isFromPreviousPatients; 
 
   // Get patient start status
   const startStatus = currentPatient?.patientStartStatus ?? 0;
@@ -245,6 +246,7 @@ if (startStatus === 1) {
   // Check if patient is discharged
   const isDischargedPatient = fromDischargeList || endStatus === 21;
   const isSurgeonOrAnesthetist = user?.roleName === "surgeon" || user?.roleName === "anesthetist";
+  const shouldShowPatientRevisit = isDischargedPatient || isFromPreviousPatients;
 
   const fetchPatientAndTimeline = async () => {
     if (!id) return;
@@ -478,7 +480,7 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
     ];
   }
 
-  if (isDischargedPatient) {
+  if (shouldShowPatientRevisit) {
     // For discharged patients - only show reports
     return [
       { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
@@ -596,7 +598,7 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
             {/* top-right actions */}
             {user?.roleName !== "triage" && 
             <View style={styles.cardActions}>
-              {!isDischargedPatient  && (
+              {!shouldShowPatientRevisit  && (
                 <TouchableOpacity
                   onPress={() => !isReceptionView && navigation.navigate("EditPatientProfile" as never, { id } as never)}
                   disabled={isReceptionView}
@@ -680,8 +682,8 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
               </View>
             </View>
 
-            {/* Action Buttons for Discharged Patients */}
-            {isDischargedPatient && (
+            {/* Action Buttons for Discharged OR Previous Patients */}
+            {(shouldShowPatientRevisit) && (
               <View style={styles.dischargedActionsContainer}>
                 <TouchableOpacity
                   style={[styles.actionButton, { backgroundColor: COLORS.warn }]}

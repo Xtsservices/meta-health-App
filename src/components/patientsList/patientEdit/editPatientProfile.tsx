@@ -658,7 +658,7 @@ const EditPatientMobile = () => {
                 {renderInput("Weight (kg)", weight, setWeight, false, {
                   keyboardType: "numeric",
                   required: true,
-                  maxLength: 4,
+                  maxLength: 3,
                 })}
               </View>
               <View style={styles.col}>
@@ -723,6 +723,7 @@ const EditPatientMobile = () => {
             {renderInput("PIN Code", pinCode, setPinCode, false, {
               keyboardType: "numeric",
               required: true,
+              maxLength: 6,
             })}
             {renderInput("Referred By", referredBy, setReferredBy)}
           </View>

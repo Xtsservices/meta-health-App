@@ -175,7 +175,7 @@ const PatientRevisitScreen: React.FC = () => {
         Alert.alert("Success", "Patient successfully added for revisit");
         
         setTimeout(() => {
-          navigation.goBack();
+          navigation.navigate("PatientList" as never);
         }, 2000);
       } else {
         Alert.alert("Error", response?.message || "Failed to add patient revisit");

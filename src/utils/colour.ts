@@ -74,4 +74,7 @@ export const COLORS = {
   gradientSuccessEnd: "#059669",
   gradientProcessingStart: "#3b82f6",
   gradientProcessingEnd: "#1d4ed8",
+  secondary: '#10B981', // Green for secondary
+  primaryText: '#FFFFFF', // White text on primary
+  secondaryText: '#FFFFFF', // White text on secondary
 };

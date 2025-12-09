@@ -268,7 +268,7 @@ export default function TransferPatientSheet() {
 
       if (res?.status === "success" || res?.message === "success") {
         dispatch(showSuccess("Patient successfully transferred"));
-        navigation.goBack();
+        navigation.navigate("PatientList" as never);
       } else {
         dispatch(showError(res?.message || "Failed to transfer patient"));
       }
@@ -292,14 +292,10 @@ export default function TransferPatientSheet() {
 
   // footer offset = above keyboard OR above app footer + nav area
   const keyboardOpen = kbHeight > 0;
-  const footerOffset = keyboardOpen
-    ? kbHeight
-    : insets.bottom + APP_FOOTER_H;
+  const footerOffset = APP_FOOTER_H + insets.bottom;
 
-  const bottomPad =
-    ACTION_FOOTER_H + 16 + (keyboardOpen ? kbHeight : insets.bottom + APP_FOOTER_H);
-  const indicatorBottom =
-    ACTION_FOOTER_H + (keyboardOpen ? kbHeight : insets.bottom + APP_FOOTER_H);
+  const bottomPad = ACTION_FOOTER_H + 16 + (insets.bottom + APP_FOOTER_H);
+  const indicatorBottom = ACTION_FOOTER_H + (insets.bottom + APP_FOOTER_H);
 
   return (
     <View style={styles.container}>
@@ -313,10 +309,14 @@ export default function TransferPatientSheet() {
             <ActivityIndicator size="large" color={COLORS.brand} />
           </View>
         ) : (
+         <>
           <ScrollView
             ref={scrollRef}
-            contentContainerStyle={{ padding: 12, paddingBottom: bottomPad }}
-            scrollIndicatorInsets={{ bottom: indicatorBottom }}
+            contentContainerStyle={{ padding: 12, paddingBottom: ACTION_FOOTER_H + 16 + APP_FOOTER_H + insets.bottom + (keyboardOpen ? kbHeight : 0)
+              }}
+            scrollIndicatorInsets={{ 
+              bottom: keyboardOpen ? kbHeight + ACTION_FOOTER_H : ACTION_FOOTER_H + APP_FOOTER_H + insets.bottom
+          }}
             keyboardShouldPersistTaps="always"
             keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
             automaticallyAdjustKeyboardInsets={true}
@@ -324,7 +324,7 @@ export default function TransferPatientSheet() {
           >
             {/* Ward */}
             <View onLayout={registerY("ward")}>
-              <Field label="Ward" error={errors.wardID}>
+              <Field label="Ward *" error={errors.wardID}>
                 <Pressable
                   onPress={() => setOpenWard(true)}
                   style={[
@@ -343,7 +343,7 @@ export default function TransferPatientSheet() {
 
             {/* Doctor */}
             <View onLayout={registerY("doctor")}>
-              <Field label="Doctor Name" error={errors.userID || errors.departmentID}>
+              <Field label="Doctor Name *" error={errors.userID || errors.departmentID}>
                 <Pressable
                   onPress={() => setOpenDoctor(true)}
                   style={[
@@ -441,6 +441,7 @@ export default function TransferPatientSheet() {
               </View>
             </View>
 
+
             <View style={{ flexDirection: "row", gap: 10 }}>
               <View style={{ flex: 1 }} onLayout={registerY("bpH")}>
                 <Field label="Blood Pressure High (mmHg)" error={errors.bpH}>
@@ -477,7 +478,7 @@ export default function TransferPatientSheet() {
             </View>
 
             {/* Hospital / Relative */}
-            <View onLayout={registerY("hospitalName")}>
+            {/* <View onLayout={registerY("hospitalName")}>
               <Field label="Hospital Name (if external)">
                 <TextInput
                   value={form.hospitalName}
@@ -488,7 +489,7 @@ export default function TransferPatientSheet() {
                   style={styles.input}
                 />
               </Field>
-            </View>
+            </View> */}
 
             <View onLayout={registerY("relativeName")}>
               <Field label="Relative Name">
@@ -503,8 +504,8 @@ export default function TransferPatientSheet() {
               </Field>
             </View>
           </ScrollView>
-        )}
-      </KeyboardAvoidingView>
+
+
 
       {/* Fixed action footer – ALWAYS above app footer / keyboard */}
       <View style={[styles.footer, { bottom: footerOffset }]}>
@@ -532,6 +533,9 @@ export default function TransferPatientSheet() {
           </Text>
         </Pressable>
       </View>
+          </>
+        )}
+      </KeyboardAvoidingView>
 
       {/* Bottom app footer (global navigation) */}
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
@@ -645,7 +649,7 @@ const styles = StyleSheet.create({
 
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  label: { color: COLORS.sub, fontWeight: "800", marginBottom: 6 },
+  label: { color: COLORS.sub, fontWeight: "700", marginBottom: 6 ,fontSize: 12},
   input: {
     borderWidth: 1.5,
     borderColor: COLORS.border,

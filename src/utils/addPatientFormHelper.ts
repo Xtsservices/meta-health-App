@@ -62,13 +62,42 @@ export const getPhoneValidationMessage = (raw: string): string | undefined => {
   return undefined;
 };
 
+// utils/addPatientFormHelper.ts
 export const getEmailValidationMessage = (value: string): string | undefined => {
   const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return undefined; // optional field
+  if (!trimmed) return undefined;
 
-  const gmailRegex = /^[a-z0-9._%+-]+@gmail\.com$/;
-  if (!gmailRegex.test(trimmed)) {
-    return "Enter a valid Email ID (example@gmail.com)";
+  // ICANN-approved TLDs (common ones + country codes)
+  const validTLDs = [
+    // Indian specific
+    'co.in', 'org.in', 'net.in', 'gov.in', 'ac.in', 'edu.in', 'mil.in',
+    'res.in', 'ind.in', 'firm.in', 'gen.in'
+  ];
+
+  // Basic email validation
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  
+  if (!emailRegex.test(trimmed)) {
+    return "Enter a valid Email ID";
+  }
+
+  // Extract the TLD (last part after last dot)
+  const domain = trimmed.split('@')[1];
+  if (!domain) return "Invalid email domain";
+  
+  const domainParts = domain.split('.');
+  const tld = domainParts[domainParts.length - 1];
+  
+  // For two-part TLDs like co.uk, gov.in
+  const lastTwoParts = domainParts.length > 1 
+    ? domainParts.slice(-2).join('.') 
+    : '';
+  
+  // Check if TLD is valid
+  const isValidTLD = validTLDs.includes(tld) || validTLDs.includes(lastTwoParts);
+  
+  if (!isValidTLD) {
+    return `Email domain .${tld} is not recognized. Please use a valid domain.`;
   }
 
   return undefined;
@@ -195,7 +224,6 @@ export const validateAddPatientForm = (
     "pUHID",
     "weight",
     "height",
-    "email",
     "dob",
     "gender",
   ];
@@ -221,7 +249,6 @@ export const validateAddPatientForm = (
     }
   });
 
-  // 🔁 Show error for any field that is already invalid
   (Object.keys(formData) as (keyof patientOPDbasicDetailType)[]).forEach(
     (key) => {
       const field = formData[key] as PatientField;
@@ -231,11 +258,14 @@ export const validateAddPatientForm = (
           ...field,
           showError: true,
         } as PatientField;
+      if (key !== "email") {
         addFieldLabel(key);
-        valid = false;
+      }
+      valid = false;
       }
     }
   );
+
 
   // ⚖️ Weight validation
   const w = Number(formData.weight.value);

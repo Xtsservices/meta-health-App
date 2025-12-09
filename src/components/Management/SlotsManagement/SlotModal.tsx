@@ -256,7 +256,7 @@ const SlotModal: React.FC<SlotModalProps> = ({
               </View>
 
               {/* Preview Section */}
-              {timeSlots?.length > 0 && (
+              {/* {timeSlots?.length > 0 && (
                 <View style={styles.previewSection}>
                   <Text style={styles.sectionTitle}>Preview Slots</Text>
                   <Text style={styles.previewSubtitle}>
@@ -279,7 +279,7 @@ const SlotModal: React.FC<SlotModalProps> = ({
                     ))}
                   </View>
                 </View>
-              )}
+              )} */}
             </ScrollView>
           </View>
 

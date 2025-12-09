@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +19,7 @@ import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import Footer from "../../dashboard/footer";
 import { Role_NAME } from "../../../utils/role";
 import { COLORS } from "../../../utils/colour";
+import { showError, showSuccess } from "../../../store/toast.slice";
 
 type RootState = any;
 
@@ -57,6 +58,7 @@ export default function AddDoctorScreen() {
   const [doctorId, setDoctorId] = useState<number | null>(null);
   const [category, setCategory] = useState<"primary" | "secondary" | null>(null);
   const [purpose, setPurpose] = useState("");
+  const dispatch = useDispatch()
 
   // dropdown locals
   const [openDocList, setOpenDocList] = useState(false);
@@ -103,9 +105,11 @@ export default function AddDoctorScreen() {
     };
 
     const res = await AuthPost(`doctor/${hospitalID}`, body, token);
-    if (res?.status === "success" ) {
-      // go back to list; DoctorsScreen will refetch on focus
+    if (res?.status === "success") {
+      dispatch(showSuccess("Doctor added successfully!"));
       navigation.goBack();
+    } else if (res?.status === "error") {
+      dispatch(showError(res?.message || "Failed to add doctor"));
     }
   };
 
@@ -134,7 +138,7 @@ export default function AddDoctorScreen() {
             ) : (
               <>
                 {/* Doctor Picker */}
-                <Text style={[styles.label, { color: COLORS.label }]}>Doctor</Text>
+                <Text style={[styles.label, { color: COLORS.label }]}>Doctor *</Text>
                 <Pressable
                   onPress={() => setOpenDocList((v) => !v)}
                   style={[styles.select, { borderColor: COLORS.border, backgroundColor: COLORS.field }]}
@@ -166,7 +170,7 @@ export default function AddDoctorScreen() {
                 )}
 
                 {/* Category Picker */}
-                <Text style={[styles.label, { color: COLORS.label, marginTop: 12 }]}>Category</Text>
+                <Text style={[styles.label, { color: COLORS.label, marginTop: 12 }]}>Category *</Text>
                 <Pressable
                   onPress={() => setOpenCatList((v) => !v)}
                   style={[styles.select, { borderColor: COLORS.border, backgroundColor: COLORS.field }]}
@@ -195,7 +199,7 @@ export default function AddDoctorScreen() {
                 )}
 
                 {/* Purpose */}
-                <Text style={[styles.label, { color: COLORS.label, marginTop: 12 }]}>Reason</Text>
+                <Text style={[styles.label, { color: COLORS.label, marginTop: 12 }]}>Reason *</Text>
                 <TextInput
                   placeholder="Type the purpose..."
                   placeholderTextColor={COLORS.sub}
