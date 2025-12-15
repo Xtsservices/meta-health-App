@@ -103,23 +103,28 @@ const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
       const response = await AuthFetch(`alerts/hospital/${user.hospitalID}`, token);
       
-      if (response?.status === "success" && response?.data?.message === "success") {
+      if (response?.status === "success" && "data" in response && response?.data?.message === "success") {
         const processAlerts = (alerts: any[]): AlertType[] =>
           alerts?.map((el: any) => ({
             id: el.id,
             patientName: el.patientName || "Unknown",
             alertMessage: el.alertMessage || "",
             alertValue: el.alertValue || "",
-            ward: el.ward || "General",
+            ward: el.ward || "",
             datetime: el.datetime || el.addedOn,
             addedOn: el.addedOn,
             seen: el.seen || 0,
             patientID: el.patientID || 0,
             hospitalID: el.hospitalID || user.hospitalID,
-            state: el.state,
-            city: el.city,
-            nurseName: el.nurseName,
+            state: el.state || "",
+            city: el.city || "",
+            nurseName: el.nurseName || "",
             priority: el.priority || "Medium",
+            // Provide defaults for missing properties
+            doctorName: el.doctorName || "",
+            alertType: el.alertType || "",
+            index: el.index || 0,
+            token: el.token || "",
           })) || [];
 
         const highPriorityData = processAlerts(response?.data?.HighPriorityData ?? []);
@@ -144,9 +149,12 @@ const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         setAllCount(allCount);
         setWatchedCount(watchedCount);
       }
-    } catch (error) {
-      dispatch(showError(error?.response?.data?.message || 'Failed to fetch alerts'));
-    } finally {
+    } catch (error: any) {
+  const errorMessage = error?.response?.data?.message || 
+                      error?.message || 
+                      'Failed to fetch alerts';
+  dispatch(showError(errorMessage));
+}finally {
       setLoading(false);
       setRefreshing(false);
     }
@@ -157,9 +165,12 @@ const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       await AuthPatch(`alerts/hospital/${id}`, {}, token);
       getAlertData();
-    } catch (error) {
-      dispatch(showError(error?.response?.data?.message || 'Failed to update alert status'));
-    }
+} catch (error: any) {
+  const errorMessage = error?.response?.data?.message || 
+                      error?.message || 
+                      'Failed to fetch alerts';
+  dispatch(showError(errorMessage));
+}
   };
 
   const onRefresh = () => {

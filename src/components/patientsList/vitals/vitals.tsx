@@ -1,3 +1,4 @@
+// src/screens/.../VitalsTabScreen.tsx
 import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
@@ -20,7 +21,6 @@ import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { COLORS } from "../../../utils/colour";
 
-
 const { width } = Dimensions.get("window");
 
 const FOOTER_H = 70;
@@ -37,7 +37,6 @@ type VitalRow = {
   recordedDate?: string;
 };
 type RouteParams = { ot: boolean };
-
 
 export default function VitalsTabScreen() {
   const navigation = useNavigation<any>();
@@ -125,6 +124,19 @@ export default function VitalsTabScreen() {
   );
 
   const renderItem = ({ item, index }: { item: VitalRow; index: number }) => {
+    // helper to decide presence — treat undefined, null, "", 0, "0" as absent
+    const hasValue = (v: any) =>
+      v !== undefined && v !== null && v !== "" && v !== 0 && v !== "0";
+
+    // Build list of chips dynamically — only include when value is present
+    const chips: { label: string; bg: string }[] = [];
+    if (hasValue(item.temperature)) chips.push({ label: `Temp: ${item.temperature}`, bg: COLORS.chipTemp });
+    if (hasValue(item.pulse)) chips.push({ label: `HR: ${item.pulse}`, bg: COLORS.chipHR });
+    if (hasValue(item.bp)) chips.push({ label: `BP: ${item.bp}`, bg: COLORS.chipBP });
+    if (hasValue(item.respiratoryRate)) chips.push({ label: `RR: ${item.respiratoryRate}`, bg: COLORS.chipRR });
+    if (hasValue(item.oxygen)) chips.push({ label: `SpO₂: ${item.oxygen}`, bg: COLORS.chipSpO2 });
+    if (hasValue(item.hrv)) chips.push({ label: `HRV: ${item.hrv}`, bg: COLORS.chipHRV });
+
     return (
       <View
         style={[
@@ -137,14 +149,14 @@ export default function VitalsTabScreen() {
           <Text style={[styles.date, { color: COLORS.sub }]}>{item.recordedDate}</Text>
         </View>
 
-        <View style={styles.chipsWrap}>
-          <Chip label={`Temp: ${item.temperature || "-"}`} bg={COLORS.chipTemp} />
-          <Chip label={`HR: ${item.pulse || "-"}`} bg={COLORS.chipHR} />
-          <Chip label={`BP: ${item.bp || "-"}`} bg={COLORS.chipBP} />
-          <Chip label={`RR: ${item.respiratoryRate || "-"}`} bg={COLORS.chipRR} />
-          <Chip label={`SpO₂: ${item.oxygen || "-"}`} bg={COLORS.chipSpO2} />
-          <Chip label={`HRV: ${item.hrv || "-"}`} bg={COLORS.chipHRV} />
-        </View>
+        {/* Only render chips wrap when we have at least one chip */}
+        {chips.length > 0 && (
+          <View style={styles.chipsWrap}>
+            {chips.map((c, i) => (
+              <Chip key={`${item.id}-chip-${i}`} label={c.label} bg={c.bg} />
+            ))}
+          </View>
+        )}
       </View>
     );
   };
@@ -153,7 +165,6 @@ export default function VitalsTabScreen() {
     <View style={styles.emptyWrap}>
       <Text style={{ color: COLORS.sub, marginBottom: 12 }}>No vital records found.</Text>
       {currentPatinet.ptype != 21 && !isOt && user?.roleName !== "reception" && (
-
         <Pressable
           onPress={() => navigation.navigate("AddVitals" as never)}
           style={[styles.primaryBtn, { backgroundColor: COLORS.brand }]}
@@ -188,7 +199,7 @@ export default function VitalsTabScreen() {
       )}
 
       {/* FAB */}
-      {!isOt && rows.length > 0 && user?.roleName !== "reception" &&(
+      {!isOt && rows.length > 0 && user?.roleName !== "reception" && (
         currentPatinet.ptype != 21 && (
           <Pressable
             onPress={() => navigation.navigate("AddVitals" as never)}
@@ -266,6 +277,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
+    marginRight: 8,
+    marginBottom: 8,
   },
   emptyWrap: {
     width: width - 32,

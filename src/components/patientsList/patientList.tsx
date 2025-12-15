@@ -45,7 +45,7 @@ import { PatientType, wardType } from "../../utils/types";
 import Footer from "../dashboard/footer";
 import useOTConfig, { OTPatientStages } from "../../utils/otConfig";
 import { showError } from "../../store/toast.slice";
-import { formatageFromDOB } from "../../utils/age";
+import { formatAgeCompact, formatageFromDOB } from "../../utils/age";
 import { formatDate } from "../../utils/dateTime";
 import { COLORS } from "../../utils/colour";
 
@@ -533,7 +533,7 @@ if (patientId === null) return
 
       <View style={styles.actionButtons}>
         {/* Ward Filter - ONLY for IPD (status 2) */}
-        {user?.patientStatus === 2 && (
+        {(user?.patientStatus === 2 || user?.patientStatus === 3) && (
           <View style={[styles.wardFilterContainer, { backgroundColor: COLORS.card, borderColor: wardFilter !== 0 ? COLORS.brand : COLORS.border }]}>
             <View style={styles.wardFilterIcon}>
               <Filter size={14} color={wardFilter !== 0 ? COLORS.brand : COLORS.sub} />
@@ -660,7 +660,7 @@ const patientStatusKey =
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
     const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—").toString();
-    const age =item?.age || getAgeLabel(item?.dob);
+    const age = formatAgeCompact(item?.age, item?.dob);
     const hasNotification = item.notificationCount && item.notificationCount > 0;
     const wardName = (user?.patientStatus === 2 || user?.patientStatus === 3) ? wardList.find(w => w.id === item.wardID)?.name || "—" : "—";
 const approvedDate = formatDate(item?.approvedTime)
@@ -749,7 +749,7 @@ const approvedDate = formatDate(item?.approvedTime)
               {isOt && 
    `Approved Date: ${approvedDate}`
 }
-              • Ward: capitalizeFirstLetter(wardName)
+              • Ward: {wardName}
               
             </Text>}
 
@@ -761,7 +761,7 @@ const approvedDate = formatDate(item?.approvedTime)
                 ID: {paddedId}
               </Text>
               <Text style={[styles.dot, { color: COLORS.sub }]}>•</Text>
-              <Text style={[styles.badge, { color: COLORS.brand }]}>
+              <Text style={[styles.dot, { color: COLORS.sub }]}>
                 Age: {age}
               </Text>
               {item.deviceID && (user?.patientStatus === 2 || user?.patientStatus === 3) && (
@@ -991,16 +991,17 @@ const styles = StyleSheet.create({
     height: 52,
     borderWidth: 1.5,
     borderRadius: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 2,
     paddingVertical: 0,
     flexDirection: "row",
     alignItems: "center",
     overflow: "hidden",
     justifyContent: "flex-start",
     flex: 1,
+    minWidth: 40,
   },
   wardFilterIcon: {
-    marginRight: 8,
+    marginRight: 1,
   },
   wardPickerWrapper: {
     flex: 1,
@@ -1035,7 +1036,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     height: 48,
-    flex: 1,
+    // flex: 1,
   },
   addButtonText: {
     color: "#fff",

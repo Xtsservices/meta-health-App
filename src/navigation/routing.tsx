@@ -301,7 +301,7 @@ const Routing = () => {
         <Stack.Screen
           name="DischargeScreen"
           component={DischargeScreen}
-          options={{ title: "Discharge Screen", headerTitleAlign: "center", headerShown: true }}
+          options={{ title: "Discharge", headerTitleAlign: "center", headerShown: true }}
         />
         <Stack.Screen
           name="PatientRevisitScreen"
@@ -342,10 +342,10 @@ const Routing = () => {
         <Stack.Screen name="TriageFormContext" component={triageFormContext} options={{ headerShown: false }} />
         <Stack.Screen name="TriageABCD" component={triageABCDScreen} options={{ title: "Triage ABCD", headerTitleAlign: "center", headerShown: true }} />
         <Stack.Screen name="TriageGCSForm" component={triageGCSForm} options={{ title: "Triage GCS Form", headerTitleAlign: "center", headerShown: true }} />
-        <Stack.Screen name="TriageType" component={triageType} options={{ title: "Triage type", headerTitleAlign: "center", headerShown: true }} />
-        <Stack.Screen name="TriageTrauma" component={traumaForm} options={{ title: "Triage trauma", headerTitleAlign: "center", headerShown: true }} />
-        <Stack.Screen name="TriageNonTrauma" component={nontraumaForm} options={{ title: "Triage trauma", headerTitleAlign: "center", headerShown: true }} />
-        <Stack.Screen name="TriageZoneForm" component={triageZone} options={{ title: "Triage zone", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageType" component={triageType} options={{ title: "Triage Type", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageTrauma" component={traumaForm} options={{ title: "Triage Trauma", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageNonTrauma" component={nontraumaForm} options={{ title: "Triage Trauma", headerTitleAlign: "center", headerShown: true }} />
+        <Stack.Screen name="TriageZoneForm" component={triageZone} options={{ title: "Triage Zone", headerTitleAlign: "center", headerShown: true }} />
 
 
          {/* labs */}

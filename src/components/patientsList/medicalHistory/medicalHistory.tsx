@@ -520,6 +520,12 @@ const infectionDates = parseMedicalHistoryDates(medicalHistory?.infections);
         {/* Allergies Section */}
         <SectionCard title="Allergies">
           <InfoRow
+            label="Anaesthesia Allergies"
+            value={
+              medicalHistory?.anaesthesia
+            }
+          />
+          <InfoRow
             label="Food Allergies"
             value={
               foodAllergy.length > 0 ? (
@@ -571,19 +577,19 @@ const infectionDates = parseMedicalHistoryDates(medicalHistory?.infections);
             label="Hepatitis B"
             value={yesNo(hasHepB)}
             date={infectionDates[infectionList[1]]}
-            danger={!!hasHepB}
+            // danger={!!hasHepB}
           />
           <InfoRowWithDate
             label="Hepatitis C"
             value={yesNo(hasHepC)}
             date={infectionDates[infectionList[2]]}
-            danger={!!hasHepC}
+            // danger={!!hasHepC}
           />
           <InfoRowWithDate
             label="HIV"
             value={yesNo(hasHIV)}
             date={infectionDates[infectionList[0]]}
-            danger={!!hasHIV}
+            // danger={!!hasHIV}
           />
         </SectionCard>
 

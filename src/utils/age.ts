@@ -187,3 +187,186 @@ export function checkAgeRuleWithCategory(
 ): { ok: boolean; msg?: string } {
   return validateAgeAndUnit(category, n, unit);
 }
+
+// src/utils/age.ts
+
+// Helper function to check if age already has a unit
+export const hasAgeUnit = (ageStr: any): boolean => {
+  if (!ageStr) return false;
+  const str = String(ageStr).toLowerCase();
+  return str.includes('year') || str.includes('month') || str.includes('day') || 
+         str.includes('y') || str.includes('m') || str.includes('d');
+};
+
+// Helper function to normalize age units (convert D/d to days, M/m to months, Y/y to years)
+export const normalizeAgeUnit = (ageStr: string): string => {
+  const str = ageStr.trim().toLowerCase();
+  
+  // Handle patterns like "12D", "12d", "12 days"
+  if (str.includes('d')) {
+    const numMatch = str.match(/(\d+)\s*d/);
+    if (numMatch) {
+      const days = parseInt(numMatch[1]);
+      return `${days} ${days === 1 ? 'day' : 'days'}`;
+    }
+  }
+  
+  // Handle patterns like "12M", "12m", "12 months"
+  if (str.includes('m')) {
+    const numMatch = str.match(/(\d+)\s*m/);
+    if (numMatch) {
+      const months = parseInt(numMatch[1]);
+      return `${months} ${months === 1 ? 'month' : 'months'}`;
+    }
+  }
+  
+  // Handle patterns like "12Y", "12y", "12 years"
+  if (str.includes('y')) {
+    const numMatch = str.match(/(\d+)\s*y/);
+    if (numMatch) {
+      const years = parseInt(numMatch[1]);
+      return `${years} ${years === 1 ? 'year' : 'years'}`;
+    }
+  }
+  
+  // If it already contains full words like "days", "months", "years", return as is
+  if (str.includes('day') || str.includes('month') || str.includes('year')) {
+    return ageStr; // Return original
+  }
+  
+  return ageStr; // Return as is if no recognizable pattern
+};
+
+// For PatientProfileOPD style (full words: 12 years, 3 months, 15 days)
+export const formatAgeDisplay = (ageInput: any, dob?: string): string => {
+  // If age is already formatted with unit, normalize it
+  if (hasAgeUnit(ageInput)) {
+    return normalizeAgeUnit(String(ageInput));
+  }
+  
+  // If age is provided as a number (assuming months)
+  if (ageInput !== undefined && ageInput !== null && ageInput !== "") {
+    const ageNum = typeof ageInput === 'string' ? parseInt(ageInput) : ageInput;
+    
+    if (!isNaN(ageNum)) {
+      // Check if it's exact years (divisible by 12)
+      if (ageNum % 12 === 0) {
+        const years = ageNum / 12;
+        return `${years} ${years === 1 ? 'year' : 'years'}`;
+      } else {
+        // Not exact years - show as total months only
+        return `${ageNum} ${ageNum === 1 ? 'month' : 'months'}`;
+      }
+    }
+  }
+  
+  // Fallback: calculate from DOB
+  if (dob) {
+    return ageFromDOB(dob);
+  }
+  
+  return "";
+};
+
+// For OpdPreviousPatients style (compact: 12y, 3m, 15d)
+export const formatAgeCompact = (ageInput: any, dob?: string): string => {
+  // If age already has unit, normalize to compact format
+  if (hasAgeUnit(ageInput)) {
+    const normalized = normalizeAgeUnit(String(ageInput));
+    const normalizedLower = normalized.toLowerCase();
+    
+    // Convert to compact format
+    if (normalizedLower.includes('year')) {
+      const numMatch = normalized.match(/(\d+)/);
+      if (numMatch) return `${numMatch[1]}y`;
+    }
+    if (normalizedLower.includes('month')) {
+      const numMatch = normalized.match(/(\d+)/);
+      if (numMatch) return `${numMatch[1]}m`;
+    }
+    if (normalizedLower.includes('day')) {
+      const numMatch = normalized.match(/(\d+)/);
+      if (numMatch) return `${numMatch[1]}d`;
+    }
+    
+    // If already in D/M/Y format, keep as is
+    if (/^\d+[dmy]$/i.test(String(ageInput))) {
+      return String(ageInput).toLowerCase();
+    }
+  }
+  
+  // If age is provided as a number (in months)
+  if (ageInput !== undefined && ageInput !== null && ageInput !== "") {
+    const ageNum = typeof ageInput === 'string' ? parseInt(ageInput) : ageInput;
+    
+    if (!isNaN(ageNum)) {
+      if (ageNum % 12 === 0) {
+        const years = ageNum / 12;
+        return `${years}y`;
+      } else {
+        return `${ageNum}m`;
+      }
+    }
+  }
+  
+  // Fallback: calculate from DOB
+  if (dob) {
+    const d = new Date(dob);
+    if (isNaN(d.getTime())) return "—";
+    
+    const now = new Date();
+    let years = now.getFullYear() - d.getFullYear();
+    const m = now.getMonth() - d.getMonth();
+    
+    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) years--;
+    
+    if (years >= 2) return `${years}y`;
+    
+    let months = years * 12 + (now.getMonth() - d.getMonth());
+    if (now.getDate() < d.getDate()) months--;
+    
+    if (months <= 0) {
+      const days = Math.max(
+        0,
+        Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
+      );
+      return `${days}d`;
+    }
+    
+    return `${months}m`;
+  }
+  
+  return "—";
+};
+
+// Keep your existing ageFromDOB function (make sure it's exported)
+export const ageFromDOBList = (dob: string): string => {
+  // Your existing ageFromDOB implementation
+  // Example:
+  const birthDate = new Date(dob);
+  const today = new Date();
+  
+  let years = today.getFullYear() - birthDate.getFullYear();
+  let months = today.getMonth() - birthDate.getMonth();
+  let days = today.getDate() - birthDate.getDate();
+  
+  if (days < 0) {
+    months--;
+    // Get days in previous month
+    const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    days += prevMonth.getDate();
+  }
+  
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  
+  if (years > 0) {
+    return `${years} ${years === 1 ? 'year' : 'years'}`;
+  } else if (months > 0) {
+    return `${months} ${months === 1 ? 'month' : 'months'}`;
+  } else {
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+};

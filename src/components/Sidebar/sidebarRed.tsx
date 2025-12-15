@@ -209,6 +209,11 @@ const CriticalCareSidebar: React.FC<Props> = ({
               <Text style={[styles.userDepartment, { color: "#14b8a6" }]}>
                 Emergency - Critical
               </Text>
+    
+            {/* Add View Profile link here */}
+            <Text style={styles.viewProfileText}>
+              View Profile
+              </Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -400,6 +405,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textTransform: "uppercase",
     letterSpacing: 0.5,
+    
+  },
+    viewProfileText: {
+    fontSize: 12,
+    color: "#007AFF", // iOS blue link color
+    fontStyle: "italic",
+    textDecorationLine: "underline",
+    marginTop: 4,
   },
   sidebarButton: {
     paddingVertical: 12,

@@ -90,6 +90,7 @@ const ConfirmDialog: React.FC<{
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
       <View style={styles.modalBackdrop}>
+      <View style={styles.modalContainer}>
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>{title}</Text>
           <Text style={styles.modalMsg}>{message}</Text>
@@ -100,6 +101,7 @@ const ConfirmDialog: React.FC<{
             <TouchableOpacity onPress={onConfirm} style={[styles.modalBtn, styles.modalBtnDanger]}>
               <Text style={[styles.modalBtnText, { color: "#fff" }]}>{confirmText}</Text>
             </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -263,6 +265,10 @@ const Sidebar: React.FC<{
                 Meta Health ID: {user?.id || "N/A"}
               </Text>
               <Text style={styles.userDepartment}>Outpatient Care</Text>
+                  {/* Add View Profile link here */}
+                  <Text style={styles.viewProfileText}>
+                    View Profile
+                  </Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -789,6 +795,13 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg, 
     fontWeight: "700" 
   },
+      viewProfileText: {
+    fontSize: 12,
+    color: "#007AFF",
+    fontStyle: "italic",
+    textDecorationLine: "underline",
+    marginTop: 4,
+  },
   controlPanel: { 
     flexDirection: "row", 
     alignItems: "center", 
@@ -826,16 +839,25 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     color: "#14b8a6",
   },
+// In the styles object, update these styles:
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.25)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: SPACING.lg,
   },
   modalCard: {
     width: SCREEN_WIDTH * 0.85,
     maxWidth: 380,
     backgroundColor: "#fff",
     borderRadius: SPACING.md,
-    padding: SPACING.sm,
+    padding: SPACING.lg,
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -845,12 +867,13 @@ const styles = StyleSheet.create({
   modalTitle: { 
     fontSize: FONT_SIZE.lg, 
     fontWeight: "800", 
-    color: "#0b1220" 
+    color: "#0b1220",
+    marginBottom: SPACING.sm,
   },
   modalMsg: { 
     fontSize: FONT_SIZE.sm, 
     color: "#334155", 
-    marginTop: SPACING.xs,
+    marginBottom: SPACING.lg,
     lineHeight: 20,
   },
   modalActions: {
@@ -860,8 +883,8 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
   },
   modalBtn: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
     borderRadius: SPACING.xs,
     minWidth: SCREEN_WIDTH * 0.2,
     alignItems: 'center',

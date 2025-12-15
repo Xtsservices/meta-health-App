@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// TreatmentPlanScreen.tsx
+import React, { useState, useEffect, useCallback, JSX } from 'react';
 import {
   View,
   Text,
@@ -9,24 +10,31 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
-  Alert,
+  Modal,
+  Image,
+  Keyboard,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
+import {
+  Droplets as SyrupIcon,
+  PillIcon,
+  FilterIcon,
+  ScissorsLineDashed as TestTubeIcon,
+  Syringe as SyringeIcon, 
+  DropletIcon,
+  BandageIcon,
+  Circle as SquareIcon,
+  WindIcon,
+} from 'lucide-react-native';
 import { 
-  PillIcon, 
-  SyringeIcon, 
-  DropletIcon, 
-  TestTubeIcon, 
-  BandageIcon, 
   ActivityIcon, 
-  WindIcon, 
-  SquareIcon, 
-  SyrupIcon,
   ClockIcon,
   PlusIcon,
+  UserIcon,
 } from '../../../utils/SvgIcons';
 import { MedicineType } from '../../../utils/types';
 import { RootState } from '../../../store/store';
@@ -35,8 +43,13 @@ import Footer from '../../dashboard/footer';
 import usePreOpForm from '../../../utils/usePreOpForm';
 import usePostOPStore from '../../../utils/usePostopForm';
 import { showError } from '../../../store/toast.slice';
+import { COLORS } from '../../../utils/colour';
+import { formatDate } from '../../../utils/dateTime';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
+const moderateScale = (size: number, factor: number = 0.5) =>
+  size + (scale(size) - size) * factor;
 
 // Types
 type TopTabType = 'medication' | 'procedure';
@@ -44,6 +57,32 @@ type MedicineFilter = {
   label: string;
   value: number;
   icon: JSX.Element;
+};
+
+type UserData = {
+  imageURL?: string;
+  firstName: string;
+  lastName: string;
+  phoneNo: string;
+  gender: string;
+  dob: string;
+  state: string;
+  city: string;
+  pinCode: string;
+  email: string;
+  address: string;
+  departmentID: string;
+  role: number;
+};
+
+const RoleList: { [key: number]: string } = {
+  10007: 'sAdmin',
+  9999: 'admin',
+  4001: 'doctor',
+  2003: 'nurse',
+  1003: 'staff',
+  3001: 'management',
+  6001: 'reception',
 };
 
 // Medicine Icon Component
@@ -66,18 +105,16 @@ const MedicineIcon = ({ type, size = 24, color = "#14b8a6" }: { type: number; si
   return icons[type as keyof typeof icons] || <PillIcon {...iconProps} />;
 };
 
-// Helper function to convert pre-op medications object to flat array
+// Helper: convert pre-op / post-op medications object to flat array
 const convertPreOpMedicationsToArray = (medications: any): MedicineType[] => {
   if (!medications) return [];
   
   const flatArray: MedicineType[] = [];
   
-  // Map each category to the flat array
   Object.entries(medications).forEach(([category, meds]) => {
     if (Array.isArray(meds)) {
       meds.forEach((med: any) => {
-        // Convert category name to medicineType number
-        let medicineType = 1; // default to capsules
+        let medicineType = 1; // default capsules
         
         switch (category) {
           case 'capsules': medicineType = 1; break;
@@ -95,7 +132,7 @@ const convertPreOpMedicationsToArray = (medications: any): MedicineType[] => {
         flatArray.push({
           ...med,
           medicineType,
-          id: med.id || Math.random(), // Ensure each item has an id
+          id: med.id || Math.random(),
           medicineName: med.medicineName || med.name || 'Unknown',
           daysCount: med.daysCount || med.days || 0,
           doseCount: med.doseCount || med.dose || 0,
@@ -107,88 +144,19 @@ const convertPreOpMedicationsToArray = (medications: any): MedicineType[] => {
   return flatArray;
 };
 
-// Medicine Data Table Component
-const MedicineDataTable = ({ medicines, category }: { medicines: MedicineType[]; category: number }) => {
-  // Ensure medicines is always an array
-  const safeMedicines = Array.isArray(medicines) ? medicines : [];
-  
-  const filteredMedicines = category === -1 
-    ? safeMedicines 
-    : safeMedicines?.filter(med => med?.medicineType === category);
-  
-
-  const getDosageUnit = (medicineType: number): string => {
-    const units: { [key: number]: string } = {
-      1: 'mg', // Capsules
-      3: 'mg', // Tablets
-      6: 'g',  // Tubing
-      7: 'g',  // Topical
-    };
-    return units[medicineType] || 'ml';
+const getDosageUnit = (medicineType: number): string => {
+  const units: { [key: number]: string } = {
+    1: 'mg', // Capsules
+    3: 'mg', // Tablets
+    6: 'g',  // Tubing
+    7: 'g',  // Topical
   };
+  return units[medicineType] || 'ml';
+};
 
-  if (filteredMedicines?.length === 0) {
-    return (
-      <View style={styles.noDataContainer}>
-        <Text style={styles.noDataTitle}>No Medicines Found</Text>
-        <Text style={styles.noDataText}>Try selecting a different filter</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.tableContainer}>
-      {/* Table Header */}
-      <View style={styles.tableHeader}>
-        <View style={[styles.tableCell, styles.snoCell]}>
-          <Text style={styles.headerText}>#</Text>
-        </View>
-        <View style={[styles.tableCell, styles.nameCell]}>
-          <Text style={styles.headerText}>Medicine Name</Text>
-        </View>
-        <View style={[styles.tableCell, styles.daysCell]}>
-          <Text style={styles.headerText}>Days</Text>
-        </View>
-        <View style={[styles.tableCell, styles.dosageCell]}>
-          <Text style={styles.headerText}>Dosage</Text>
-        </View>
-      </View>
-
-      {/* Table Rows */}
-      {filteredMedicines?.map((medicine, index) => (
-        <View key={medicine?.id || index} style={[
-          styles.tableRow,
-          index % 2 === 0 && styles.tableRowEven
-        ]}>
-          <View style={[styles.tableCell, styles.snoCell]}>
-            <Text style={styles.cellText}>{index + 1}</Text>
-          </View>
-          <View style={[styles.tableCell, styles.nameCell]}>
-            <View style={styles.medicineNameCell}>
-              <MedicineIcon type={medicine?.medicineType || 1} size={20} />
-              <Text style={[styles.cellText, styles.medicineName]} numberOfLines={1}>
-                {medicine?.medicineName ? 
-                  medicine.medicineName.charAt(0).toUpperCase() + 
-                  medicine.medicineName.slice(1).toLowerCase() 
-                  : 'Unknown'
-                }
-              </Text>
-            </View>
-          </View>
-          <View style={[styles.tableCell, styles.daysCell]}>
-            <View style={styles.daysBadge}>
-              <Text style={styles.daysText}>{medicine?.daysCount || '-'}</Text>
-            </View>
-          </View>
-          <View style={[styles.tableCell, styles.dosageCell]}>
-            <Text style={styles.dosageText}>
-              {medicine?.doseCount || medicine?.dosage} {getDosageUnit(medicine?.medicineType || 1)}
-            </Text>
-          </View>
-        </View>
-      ))}
-    </View>
-  );
+const getMedTypeLabel = (type: number, filterOptions: MedicineFilter[]): string => {
+  const found = filterOptions.find(f => f.value === type);
+  return found?.label || 'Unknown';
 };
 
 // Empty State Component
@@ -200,7 +168,7 @@ const EmptyTreatmentPlan = ({
   readOnly: boolean;
 }) => {
   const user = useSelector((s: RootState) => s.currentUser);
-
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>
@@ -213,11 +181,12 @@ const EmptyTreatmentPlan = ({
         <Text style={styles.emptySubtitle}>
           Start by adding medications to create a treatment plan for your patient
         </Text>
-        {!readOnly && user?.roleName !== "reception" && 
-        <TouchableOpacity style={styles.primaryButton} onPress={onAddMedicine}>
-          <PlusIcon size={20} color="#fff" />
-          <Text style={styles.primaryButtonText}>Add Medication</Text>
-        </TouchableOpacity>}
+        {!readOnly && user?.roleName !== "reception" && currentPatient?.ptype != 21 &&
+          <TouchableOpacity style={styles.primaryButton} onPress={onAddMedicine}>
+            <PlusIcon size={20} color="#fff" />
+            <Text style={styles.primaryButtonText}>Add Medication</Text>
+          </TouchableOpacity>
+        }
       </View>
     </View>
   );
@@ -227,106 +196,195 @@ type TreatmentPlanProps = {
   currentTab?: TopTabType;
 };
 
-// Filter Bar Component
-const FilterBar = ({ 
-  filters, 
-  activeFilter, 
-  onFilterChange 
-}: { 
-  filters: MedicineFilter[];
-  activeFilter: number;
-  onFilterChange: (value: number) => void;
+// Medicine Cards List
+const MedicineCardsList = ({
+  medicines,
+  category,
+  medFilterOptions,
+  onAddedByPress,
+}: {
+  medicines: MedicineType[];
+  category: number;
+  medFilterOptions: MedicineFilter[];
+  onAddedByPress: (medicine: MedicineType) => void;
 }) => {
+  const safeMedicines = Array.isArray(medicines) ? medicines : [];
+
+  const filteredMedicines =
+    category === -1
+      ? safeMedicines
+      : safeMedicines.filter((med) => med?.medicineType === category);
+
+  if (!filteredMedicines || filteredMedicines.length === 0) {
+    return (
+      <View style={styles.noDataContainer}>
+        <Text style={styles.noDataTitle}>No Medicines Found</Text>
+        <Text style={styles.noDataText}>Try selecting a different filter</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.filterContainer}>
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterScrollContent}
-      >
-        {filters.map((option) => (
-          <TouchableOpacity
-            key={option.value}
-            style={[
-              styles.filterOption,
-              activeFilter === option.value && styles.filterOptionActive
-            ]}
-            onPress={() => onFilterChange(option.value)}
+    <View style={styles.cardsWrapper}>
+      {filteredMedicines.map((medicine: any, index: number) => {
+        const medName = medicine?.medicineName
+          ? medicine.medicineName.charAt(0).toUpperCase() +
+            medicine.medicineName.slice(1).toLowerCase()
+          : 'Unknown';
+
+        const medTypeLabel = getMedTypeLabel(medicine?.medicineType || 1, medFilterOptions);
+        const dosageUnit = getDosageUnit(medicine?.medicineType || 1);
+        const dosageValue = medicine?.doseCount || medicine?.dosage || '-';
+        const daysValue = medicine?.daysCount ?? '-';
+        const timing = medicine?.medicationTime || medicine?.doseTimings || '';
+        const user = useSelector((s: RootState) => s.currentUser);
+
+        return (
+          <View
+            key={medicine?.id || `${medName}-${index}`}
+            style={styles.medicineCard}
           >
-            {option.icon}
-            <Text style={[
-              styles.filterOptionText,
-              activeFilter === option.value && styles.filterOptionTextActive
-            ]}>
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+            <View style={styles.medicineCardRow}>
+              <View style={styles.medicineAvatar}>
+                <MedicineIcon
+                  type={medicine?.medicineType || 1}
+                  size={20}
+                  color="#14b8a6"
+                />
+              </View>
+
+              <View style={styles.medicineMeta}>
+                <View style={styles.medicineNameRow}>
+                  <Text
+                    style={styles.medicineCardName}
+                    numberOfLines={1}
+                  >
+                    {medName}
+                  </Text>
+                  <Text style={styles.medicineTypeBadge}>
+                    {medTypeLabel}
+                  </Text>
+                </View>
+
+                <View style={styles.medicineInfoRow}>
+                  <Text style={styles.medicineInfoText}>
+                    Days: <Text style={styles.medicineInfoStrong}>{daysValue}</Text>
+                  </Text>
+                  <Text style={styles.medicineDot}>•</Text>
+                  <Text style={styles.medicineInfoText}>
+                    Dosage:{' '}
+                    <Text style={styles.medicineInfoStrong}>
+                      {dosageValue} {dosageUnit}
+                    </Text>
+                  </Text>
+                </View>
+
+                {!!timing && (
+                  <Text style={styles.medicineTimingText}>
+                    {timing.split(',').map((time: string, idx: number, arr: string[]) => (
+                      <Text key={idx}>
+                        {time.trim()}
+                        {idx < arr.length - 1 ? '\n' : ''}
+                      </Text>
+                    ))}
+                  </Text>
+                )}
+
+                <Text style={styles.medicineInfoStrong}>
+                  Note:{' '}
+                  <Text style={styles.medicineInfoText}>
+                    {medicine?.notes || '-'}
+                  </Text>
+                </Text>
+
+                {medicine?.userID && (
+                  <TouchableOpacity
+                    onPress={() => onAddedByPress(medicine)}
+                    style={styles.addedByRow}
+                  >
+                    <View style={styles.userContainer}>
+                      <UserIcon size={moderateScale(12)} color={COLORS.brand} />
+                      <Text style={styles.userText}>
+                        Added By: {user?.firstName} {user?.lastName || ''}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 };
 
 // Main Component
 const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const bottomPadding = insets.bottom > 0 ? insets.bottom : 16; 
   const route = useRoute<any>();        
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
   const { medications: preOpMedications } = usePreOpForm();
-const { medications: postOpMedications } = usePostOPStore();
-const dispatch = useDispatch();
+  const { medications: postOpMedications } = usePostOPStore();
+  const dispatch = useDispatch();
   
   const activetab = route.params?.currentTab;
   const shouldShowPreOpTests = activetab === "PreOpRecord";
-const shouldShowPostOpTests = activetab === "PostOpRecord";
+  const shouldShowPostOpTests = activetab === "PostOpRecord";
 
-const readOnly =
-  (shouldShowPreOpTests && user?.roleName?.toLowerCase() === "surgeon") ||
-  activetab === "PatientFile";
+  const readOnly =
+    (shouldShowPreOpTests && user?.roleName?.toLowerCase() === "surgeon") ||
+    activetab === "PatientFile";
 
   const [medicineList, setMedicineList] = useState<MedicineType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTopTab, setActiveTopTab] = useState<TopTabType>('medication');
   const [medFilter, setMedFilter] = useState<number>(-1);
 
-  // Medicine filter options with icons
+  // User details modal states (same as TestsScreen)
+  const [userModalVisible, setUserModalVisible] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [viewDepartment, setViewDepartment] = useState<string>("");
+  const [viewRole, setViewRole] = useState<string>("");
+  const [viewGender, setViewGender] = useState<string>("");
+  const [loadingUserData, setLoadingUserData] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Medicine filter options with icons:
   const medFilterOptions: MedicineFilter[] = [
     { 
-      label: "All", 
-      value: -1, 
-      icon: <View style={styles.allFilterIcon}><Text style={styles.allFilterText}>All</Text></View>
+      label: "All", value: -1,
+      icon: <View style={[styles.allFilterIcon, { backgroundColor: COLORS.sub }]}></View>
     },
-    { label: "Capsules", value: 1, icon: <PillIcon size={16} color="#64748b" /> },
-    { label: "Syrups", value: 2, icon: <SyrupIcon size={16} color="#64748b" /> },
-    { label: "Tablets", value: 3, icon: <SquareIcon size={16} color="#64748b" /> },
-    { label: "Injections", value: 4, icon: <SyringeIcon size={16} color="#64748b" /> },
-    { label: "IV Line", value: 5, icon: <ActivityIcon size={16} color="#64748b" /> },
-    { label: "Tubing", value: 6, icon: <TestTubeIcon size={16} color="#64748b" /> },
-    { label: "Topical", value: 7, icon: <BandageIcon size={16} color="#64748b" /> },
-    { label: "Drops", value: 8, icon: <DropletIcon size={16} color="#64748b" /> },
-    { label: "Spray", value: 9, icon: <WindIcon size={16} color="#64748b" /> },
-    { label: "Ventilator", value: 10, icon: <WindIcon size={16} color="#64748b" /> },
+    { label: "Capsules", value: 1, icon: <PillIcon size={16} color={COLORS.sub} /> },
+    { label: "Syrups", value: 2, icon: <SyrupIcon size={16} color={COLORS.sub} /> },
+    { label: "Tablets", value: 3, icon: <SquareIcon size={16} color={COLORS.sub} /> },
+    { label: "Injections", value: 4, icon: <SyringeIcon size={16} color={COLORS.sub} /> },
+    { label: "IV Line", value: 5, icon: <ActivityIcon size={16} color={COLORS.sub} /> },
+    { label: "Tubing", value: 6, icon: <TestTubeIcon size={16} color={COLORS.sub} /> },
+    { label: "Topical", value: 7, icon: <BandageIcon size={16} color={COLORS.sub} /> },
+    { label: "Drops", value: 8, icon: <DropletIcon size={16} color={COLORS.sub} /> },
+    { label: "Spray", value: 9, icon: <WindIcon size={16} color={COLORS.sub} /> },
+    { label: "Ventilator", value: 10, icon: <WindIcon size={16} color={COLORS.sub} /> },
   ];
 
   const getAllMedicine = async () => {
     try {
       setError(null);
       
-      // If showing pre-op tests, convert the medications object to flat array
-      // If showing pre-op or post-op meds, convert the medications object to flat array
-if (shouldShowPreOpTests || shouldShowPostOpTests) {
-  const sourceMeds = shouldShowPreOpTests ? preOpMedications : postOpMedications;
-  const mapped = convertPreOpMedicationsToArray(sourceMeds);
-  setMedicineList(mapped || []);
-  setLoading(false);
-  return;
-}
+      // Pre-op / Post-op from local store
+      if (shouldShowPreOpTests || shouldShowPostOpTests) {
+        const sourceMeds = shouldShowPreOpTests ? preOpMedications : postOpMedications;
+        const mapped = convertPreOpMedicationsToArray(sourceMeds);
+        setMedicineList(mapped || []);
+        setLoading(false);
+        return;
+      }
 
-      
       if (!currentPatient?.patientTimeLineID) {
         setError('No patient timeline available');
         setLoading(false);
@@ -340,8 +398,7 @@ if (shouldShowPreOpTests || shouldShowPostOpTests) {
         return;
       }
 
-      const response = await AuthFetch(`medicine/${currentPatient.patientTimeLineID}`, token);
-
+      const response = await AuthFetch(`medicine/${currentPatient.patientTimeLineID}`, token) as any;
       if (response && response.status === "success" && "data" in response) {
         setMedicineList(response?.data?.medicines || []);
       } else {
@@ -356,28 +413,37 @@ if (shouldShowPreOpTests || shouldShowPostOpTests) {
     }
   };
 
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardVisible(true));
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardVisible(false));
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-    if (currentPatient?.patientTimeLineID) {
-      getAllMedicine();
-    } else if (!currentPatient?.patientTimeLineID) {
-      setLoading(false);
-      setError('No patient selected');
-    }
-  }, [currentPatient]))
+      if (currentPatient?.patientTimeLineID || shouldShowPreOpTests || shouldShowPostOpTests) {
+        setLoading(true);
+        getAllMedicine();
+      } else if (!currentPatient?.patientTimeLineID) {
+        setLoading(false);
+        setError('No patient selected');
+      }
+    }, [currentPatient, shouldShowPreOpTests, shouldShowPostOpTests])
+  );
   
-  // Also update when medications from pre-op form change
-// Also update when pre-op / post-op medications change
-useEffect(() => {
-  if (shouldShowPreOpTests && preOpMedications) {
-    const mapped = convertPreOpMedicationsToArray(preOpMedications);
-    setMedicineList(mapped || []);
-  } else if (shouldShowPostOpTests && postOpMedications) {
-    const mapped = convertPreOpMedicationsToArray(postOpMedications);
-    setMedicineList(mapped || []);
-  }
-}, [preOpMedications, postOpMedications, shouldShowPreOpTests, shouldShowPostOpTests]);
-
+  // Also update when pre-op / post-op medications change
+  useEffect(() => {
+    if (shouldShowPreOpTests && preOpMedications) {
+      const mapped = convertPreOpMedicationsToArray(preOpMedications);
+      setMedicineList(mapped || []);
+    } else if (shouldShowPostOpTests && postOpMedications) {
+      const mapped = convertPreOpMedicationsToArray(postOpMedications);
+      setMedicineList(mapped || []);
+    }
+  }, [preOpMedications, postOpMedications, shouldShowPreOpTests, shouldShowPostOpTests]);
 
   const handleAddMedicine = () => {
     navigation.navigate('AddMedicineScreen', { currentTab: activetab });
@@ -390,19 +456,74 @@ useEffect(() => {
     }
     
     navigation.navigate(
-  "NotificationScreen" as never,
-  {
-    timelineID: currentPatient.patientTimeLineID,
-    patientName: currentPatient.pName,
-    patientId: currentPatient.patientid,
-    title: "Medicine Timeline",
-  } as never
-);
+      "NotificationScreen" as never,
+      {
+        timelineID: currentPatient.patientTimeLineID,
+        patientName: currentPatient.pName,
+        patientId: currentPatient.patientid,
+        title: "Medicine Timeline",
+      } as never
+    );
   };
 
   const retryFetch = () => {
     setLoading(true);
     getAllMedicine();
+  };
+
+  // Fetch user details (same logic as TestsScreen)
+  const fetchUserData = async (userId: number) => {
+    if (!userId) return;
+    
+    setLoadingUserData(true);
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const res = await AuthFetch(`user/${userId}`, token)as any;
+      
+      if (res?.data?.message === "success") {
+        const fetchedUser = res?.data?.user as UserData;
+        
+        // Fetch department name
+        if (fetchedUser.departmentID) {
+          const deptRes = await AuthFetch(`department/singledpt/${fetchedUser.departmentID}`, token)as any;
+          if (deptRes?.data?.message === "success") {
+            setViewDepartment(deptRes.data.department[0]?.name || "");
+          }
+        }
+        
+        // Set role
+        setViewRole(RoleList[fetchedUser.role] || "");
+        
+        // Set gender
+        let gender = "others";
+        if (fetchedUser.gender === "1") {
+          gender = "male";
+        } else if (fetchedUser.gender === "2") {
+          gender = "female";
+        }
+        setViewGender(gender);
+        
+        setUserData(fetchedUser);
+        setUserModalVisible(true);
+      }
+    } catch (error: any) {
+      dispatch(showError("Failed to load user details"));
+    } finally {
+      setLoadingUserData(false);
+    }
+  };
+
+  const handleUserPress = (userId: number) => {
+    setSelectedUserId(userId);
+    fetchUserData(userId);
+  };
+
+  const openAddedByModal = (medicine: MedicineType) => {
+    if (!medicine?.userID) {
+      dispatch(showError("User details not available for this medicine."));
+      return;
+    }
+    handleUserPress(medicine.userID as number);
   };
 
   // Loading State
@@ -452,29 +573,23 @@ useEffect(() => {
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.headerContent}>
-              <Text style={styles.headerTitle}>Treatment Plan</Text>
-              <Text style={styles.headerSubtitle}>
-                {currentPatient?.pName ? `For ${currentPatient.pName}` : 'Patient medications'}
-              </Text>
-            </View>
-            
             <View style={styles.headerActions}>
               <TouchableOpacity 
                 style={styles.secondaryButton}
                 onPress={handleViewTimeline}
               >
-                <ClockIcon size={18} color="#14b8a6" />
+                <ClockIcon size={18} color="#000000" />
                 <Text style={styles.secondaryButtonText}>View Timeline</Text>
               </TouchableOpacity>
-                          {!readOnly && user?.roleName !== "reception" &&
-              <TouchableOpacity 
-                style={styles.primaryButtonSmall}
-                onPress={handleAddMedicine}
-              >
-                <PlusIcon size={18} color="#fff" />
-                <Text style={styles.primaryButtonTextSmall}>Add Medicine</Text>
-              </TouchableOpacity>}
+              {!readOnly && user?.roleName !== "reception" && currentPatient?.ptype != 21 &&
+                <TouchableOpacity 
+                  style={styles.primaryButtonSmall}
+                  onPress={handleAddMedicine}
+                >
+                  <PlusIcon size={18} color="#fff" />
+                  <Text style={styles.primaryButtonTextSmall}>Add Medicine</Text>
+                </TouchableOpacity>
+              }
             </View>
           </View>
 
@@ -482,32 +597,51 @@ useEffect(() => {
           <View style={styles.content}>
             {/* Filter Section */}
             <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Filter by Type</Text>
-              <FilterBar 
-                filters={medFilterOptions}
-                activeFilter={medFilter}
-                onFilterChange={setMedFilter}
-              />
+              <View style={styles.filterDropdownContainer}>
+                <View style={styles.filterDropdownIcon}>
+                  <FilterIcon
+                    size={16}
+                    color={medFilter !== -1 ? '#14b8a6' : '#64748b'}
+                  />
+                </View>
+                <View style={styles.filterPickerWrapper}>
+                  <Picker
+                    selectedValue={medFilter}
+                    onValueChange={(value) => setMedFilter(value)}
+                    style={styles.filterPicker}
+                    dropdownIconColor="#14b8a6"
+                  >
+                    {medFilterOptions.map((option) => (
+                      <Picker.Item
+                        key={option.value}
+                        label={option.label}
+                        value={option.value}
+                        color={COLORS.text}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
             </View>
 
-            {/* Medicine List */}
+            {/* Medicine Cards */}
             <View style={styles.medicineSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  {medFilter === -1 ? 'All Medications' : 
-                   medFilterOptions.find(f => f.value === medFilter)?.label + ' Medications'}
-                </Text>
-                <Text style={styles.sectionCount}>
-                  {medicineList.filter(med => medFilter === -1 || med.medicineType === medFilter).length} items
-                </Text>
-              </View>
-              
               <ScrollView 
                 style={styles.scrollView}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
               >
-                <MedicineDataTable medicines={medicineList} category={medFilter} />
+                <View style={styles.headerContent}>
+                  <Text style={styles.headerTitle}>
+                    Treatment Plan {currentPatient?.pName ? `For ${currentPatient.pName}` : 'Patient medications'}
+                  </Text>
+                </View>
+                <MedicineCardsList
+                  medicines={medicineList}
+                  category={medFilter}
+                  medFilterOptions={medFilterOptions}
+                  onAddedByPress={openAddedByModal}
+                />
               </ScrollView>
             </View>
           </View>
@@ -515,14 +649,178 @@ useEffect(() => {
       )}
 
       {/* Footer */}
-      <View style={[styles.footer, { paddingBottom: bottomPadding }]}>
+      <View style={[styles.footerContainer, { bottom: insets.bottom }]}>
         <Footer active="patients" brandColor="#14b8a6" />
       </View>
+
+      {insets.bottom > 0 && !isKeyboardVisible && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
+
+      {/* User Details Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={userModalVisible}
+        onRequestClose={() => setUserModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Added By</Text>
+                <TouchableOpacity onPress={() => setUserModalVisible(false)} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {loadingUserData ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={COLORS.brand} />
+                  <Text style={styles.loadingText}>Loading user details...</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.modalBody}>
+                    {userData?.imageURL ? (
+                      <View style={styles.imageContainer}>
+                        <Image 
+                          source={{ uri: userData.imageURL }} 
+                          style={styles.profileImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    ) : (
+                      <View style={styles.noImageContainer}>
+                        <UserIcon size={moderateScale(40)} color={COLORS.sub} />
+                        <Text style={styles.noImageText}>No profile image</Text>
+                      </View>
+                    )}
+                    
+                    <Text style={styles.userId}>ID: {selectedUserId ?? '—'}</Text>
+                    
+                    <View style={styles.gridContainer}>
+                      {/* First Name */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>First Name</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.firstName || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Last Name */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Last Name</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.lastName || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Department */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Department</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{viewDepartment || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Role */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Role</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{viewRole || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Phone Number */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Phone Number</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.phoneNo || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Gender */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Gender</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{viewGender || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Date of Birth */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Date of Birth</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>
+                            {userData?.dob ? formatDate(userData.dob) : ""}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      {/* State */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>State</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.state || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* City */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>City</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.city || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Pincode */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Pincode</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.pinCode || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Email */}
+                      <View style={[styles.inputContainer, styles.fullWidth]}>
+                        <Text style={styles.inputLabel}>Email</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.email || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Address */}
+                      {userData?.address && (
+                        <View style={[styles.inputContainer, styles.fullWidth]}>
+                          <Text style={styles.inputLabel}>Address</Text>
+                          <View style={styles.inputValue}>
+                            <Text style={styles.inputText}>{userData?.address || ""}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  
+                  <View style={styles.modalFooter}>
+                    <TouchableOpacity
+                      style={[styles.modalButton, { backgroundColor: COLORS.brand }]}
+                      onPress={() => setUserModalVisible(false)}
+                    >
+                      <Text style={[styles.modalButtonText, { color: '#fff' }]}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
-// ... styles remain exactly the same ...
+// Styles (unchanged from your original)
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -545,12 +843,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 8,
   },
-  loadingText: {
-    fontSize: 14,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  // loadingText: {
+  //   fontSize: 14,
+  //   color: '#64748b',
+  //   textAlign: 'center',
+  //   lineHeight: 20,
+  // },
   errorContent: {
     alignItems: 'center',
     padding: 40,
@@ -586,23 +884,20 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingVertical: 12,
     borderBottomColor: '#f1f5f9',
     backgroundColor: '#fff',
   },
   headerContent: {
-    marginBottom: 12,
+    marginBottom: 8,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#64748b',
+    textAlign: 'center',
+    fontStyle: 'italic', 
   },
   headerActions: {
     flexDirection: 'row',
@@ -611,172 +906,144 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+     marginBottom: 80,
   },
   filterSection: {
-    padding: 20,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 5,
     borderBottomColor: '#f1f5f9',
   },
-  filterSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
-  },
-  filterContainer: {
-    marginHorizontal: -4,
-  },
-  filterScrollContent: {
-    gap: 8,
-  },
-  filterOption: {
+  filterDropdownContainer: {
+    minHeight: 54,
+    borderWidth: 1.2,
+    borderRadius: 12,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
     backgroundColor: '#f8fafc',
-    borderWidth: 1,
     borderColor: '#e2e8f0',
-    gap: 8,
-    marginHorizontal: 4,
   },
-  filterOptionActive: {
-    backgroundColor: '#14b8a6',
-    borderColor: '#14b8a6',
+  filterDropdownIcon: {
+    marginRight: 6,
   },
-  filterOptionText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#64748b',
+  filterPickerWrapper: {
+    flex: 1,
   },
-  filterOptionTextActive: {
-    color: '#fff',
+  filterPicker: {
+    flex: 1,
+    height: 40,
+    marginLeft: 2,
+    marginRight: -12,
   },
   allFilterIcon: {
-    width: 16,
-    height: 16,
+    width: 0,
+    height: 0,
     borderRadius: 8,
     backgroundColor: '#64748b',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  allFilterText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#fff',
-  },
   medicineSection: {
     flex: 1,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  sectionCount: {
-    fontSize: 14,
-    color: '#64748b',
-    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 4,
   },
-  tableContainer: {
-    padding: 20,
+  cardsWrapper: {
+    paddingBottom: 20,
   },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f8fafc',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+  medicineCard: {
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    paddingVertical: 12,
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  tableRow: {
+  medicineCardRow: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#f1f5f9',
-    backgroundColor: '#fff',
-    paddingVertical: 8,
+    alignItems: 'center',
   },
-  tableRowEven: {
-    backgroundColor: '#fafafa',
-  },
-  tableCell: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+  medicineAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
+    backgroundColor: '#f8fafc',
   },
-  snoCell: {
-    width: 50,
-    alignItems: 'center',
+  medicineMeta: {
+    flex: 1,
+    minHeight: 60,
   },
-  nameCell: {
-    flex: 2,
-  },
-  daysCell: {
-    width: 70,
-    alignItems: 'center',
-  },
-  dosageCell: {
-    width: 90,
-    alignItems: 'center',
-  },
-  headerText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#374151',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cellText: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  medicineNameCell: {
+  medicineNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-  medicineName: {
+  medicineCardName: {
+    fontSize: SCREEN_WIDTH < 375 ? 15 : 16,
+    fontWeight: '700',
     flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  daysBadge: {
-    backgroundColor: '#f0fdfa',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#ccfbf1',
-  },
-  daysText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#14b8a6',
-  },
-  dosageText: {
-    fontSize: 14,
-    fontWeight: '600',
+    marginRight: 8,
     color: '#0f172a',
+  },
+  medicineTypeBadge: {
+    fontSize: SCREEN_WIDTH < 375 ? 11 : 12,
+    fontWeight: '700',
+    backgroundColor: 'rgba(20, 184, 166, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    color: '#0f766e',
+  },
+  medicineInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  medicineInfoText: {
+    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
+    color: '#64748b',
+  },
+  medicineInfoStrong: {
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  medicineDot: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  medicineTimingText: {
+    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
+    marginTop: 4,
+    color: COLORS.sub,
+    flexWrap: 'wrap',
+    flexDirection: 'row',
+    flex: 1,
+  },
+  addedByRow: {
+    marginTop: 8,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
   },
   noDataContainer: {
     padding: 40,
@@ -819,18 +1086,19 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   emptyTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 12,
     textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#64748b',
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 24,
+    fontStyle: 'italic',
   },
   primaryButton: {
     flexDirection: 'row',
@@ -873,25 +1141,167 @@ const styles = StyleSheet.create({
   secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0fdfa',
+    backgroundColor: '#ffffffff',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ccfbf1',
+    borderColor: '#14b8a6',
     gap: 6,
   },
   secondaryButtonText: {
-    color: '#14b8a6',
+    color: '#000000',
     fontSize: 14,
     fontWeight: '600',
   },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+  footerContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 64,
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  navShield: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+
+  // User "Added By" row (from TestsScreen)
+  userContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(4),
+  },
+  userText: {
+    fontSize: moderateScale(11),
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    color: COLORS.brand,
+  },
+
+  // User Details Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
     backgroundColor: '#fff',
+    borderRadius: moderateScale(12),
+    width: '90%',
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: moderateScale(16),
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: moderateScale(18),
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    padding: moderateScale(8),
+  },
+  closeButtonText: {
+    fontSize: moderateScale(18),
+    color: '#666',
+  },
+  modalBody: {
+    padding: moderateScale(16),
+  },
+  imageContainer: {
+    alignItems: 'center',
+    marginBottom: moderateScale(16),
+  },
+  profileImage: {
+    width: moderateScale(100),
+    height: moderateScale(100),
+    borderRadius: moderateScale(50),
+    borderWidth: 2,
+    borderColor: COLORS.brand,
+  },
+  noImageContainer: {
+    alignItems: 'center',
+    marginBottom: moderateScale(16),
+    padding: moderateScale(20),
+    backgroundColor: '#f5f5f5',
+    borderRadius: moderateScale(50),
+  },
+  noImageText: {
+    fontSize: moderateScale(12),
+    color: COLORS.sub,
+    marginTop: moderateScale(4),
+  },
+  userId: {
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: moderateScale(16),
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  inputContainer: {
+    width: '48%',
+    marginBottom: moderateScale(12),
+  },
+  fullWidth: {
+    width: '100%',
+  },
+  inputLabel: {
+    fontSize: moderateScale(12),
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: moderateScale(4),
+  },
+  inputValue: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: moderateScale(6),
+    padding: moderateScale(8),
+    backgroundColor: '#f9f9f9',
+  },
+  inputText: {
+    fontSize: moderateScale(14),
+    color: '#333',
+  },
+  modalFooter: {
+    padding: moderateScale(16),
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: '#e0e0e0',
+  },
+  modalButton: {
+    paddingVertical: moderateScale(12),
+    borderRadius: moderateScale(8),
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    padding: moderateScale(40),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: moderateScale(12),
+    fontSize: moderateScale(14),
+    color: '#666',
   },
 });
 

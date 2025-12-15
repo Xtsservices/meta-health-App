@@ -103,8 +103,8 @@ export default function PhysicalExaminationScreen() {
       
       let physicalExaminationData: PhysicalExaminationData[] = [];
       
-      if (res?.data?.status === 200) {
-        const payload = Array.isArray(res?.data) 
+      if ("data" in res && res?.data?.status === 200) {
+        const payload = Array.isArray(res?.data)
           ? res.data 
           : Array.isArray(res?.data?.data) 
             ? res.data.data 
@@ -152,52 +152,34 @@ export default function PhysicalExaminationScreen() {
     }, [loadPhysicalExaminationData])
   );
 
-  const onDelete = async (item: PhysicalExaminationData) => {
-    if (!timeline || !item?.id) return;
-    
-    Alert.alert("Delete Physical Examination", "Are you sure you want to delete this physical examination record?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const token = user?.token ?? (await AsyncStorage.getItem("token"));
-            const res = await AuthDelete(
-              `ot/${user?.hospitalID}/${timeline}/redzone/physicalExamination/${item.id}`, 
-              token
-            );
-            
-            if (res?.message === "success" || res?.status === 200) {
-              setList((prev) => prev?.filter((x) => x.id !== item.id) ?? []);
-            }
-          } catch {
-            Alert.alert("Error", "Failed to delete physical examination record.");
-          }
-        },
-      },
-    ]);
-  };
-
-  const renderPhysicalExaminationItem = ({ item }: { item: PhysicalExaminationData }) => (
+  const renderPhysicalExaminationItem = ({
+    item,
+    index,
+  }: {
+    item: PhysicalExaminationData;
+    index: number;
+  }) => (
     <View style={styles.card}>
+      {/* Header row with serial number and title */}
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>Physical Examination #{item.id}</Text>
-        <Pressable
-          style={styles.deleteBtn}
-          onPress={() => onDelete(item)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Trash2Icon size={RESPONSIVE.icon.sm} color={COLORS.danger} />
-        </Pressable>
+        <View style={styles.serialContainer}>
+          <Text style={styles.serialNumber}>
+            {(index + 1).toString().padStart(2, "0")}
+          </Text>
+        </View>
+        <View style={styles.cardTitleRow}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            Physical Examination
+          </Text>
+        </View>
       </View>
-      
+
       <View style={styles.cardContent}>
         <View style={styles.grid}>
           {SECTIONS?.map((section) => {
             const value = item[section.key as keyof PhysicalExaminationData];
-            if (!value || typeof value !== 'string' || !value.trim()) return null;
-            
+            if (!value || typeof value !== "string" || !value.trim()) return null;
+
             return (
               <View key={section.key} style={styles.gridItem}>
                 <Text style={styles.sectionTitle}>{section.label}</Text>
@@ -207,10 +189,11 @@ export default function PhysicalExaminationScreen() {
           })}
         </View>
 
+        {/* Meta section now more subtle, like status row footer */}
         <View style={styles.metaSection}>
-          <Text style={styles.metaText}>Added by: User #{item.userID}</Text>
+          <Text style={styles.metaLabel}>Recorded On</Text>
           <Text style={styles.metaText}>
-            {formatDateTime(item.createdAt || item.addedOn)}
+            {formatDateTime(item.createdAt || item.addedOn) || "—"}
           </Text>
         </View>
       </View>
@@ -220,7 +203,6 @@ export default function PhysicalExaminationScreen() {
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
       <View style={styles.headerWrap}>
-        <Text style={[styles.headerText, { color: COLORS.text }]}>Physical Examination</Text>
         <Text style={[styles.subHeader, { color: COLORS.sub }]}>
           Complete physical examination records for this patient
         </Text>
@@ -235,10 +217,10 @@ export default function PhysicalExaminationScreen() {
           data={list}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderPhysicalExaminationItem}
-          ItemSeparatorComponent={() => <View style={{ height: RESPONSIVE.spacing.sm }} />}
-          contentContainerStyle={{ 
-            padding: RESPONSIVE.spacing.lg, 
-            paddingBottom: bottomPad 
+          ItemSeparatorComponent={() => (<View style={{ height: RESPONSIVE.spacing.sm }} />)}
+          contentContainerStyle={{
+            padding: RESPONSIVE.spacing.lg,
+            paddingBottom: bottomPad,
           }}
           showsVerticalScrollIndicator
           scrollIndicatorInsets={{ bottom: bottomPad }}
@@ -251,26 +233,26 @@ export default function PhysicalExaminationScreen() {
               <Text style={[styles.emptyText, { color: COLORS.sub }]}>
                 No physical examination records found
               </Text>
-              {user?.roleName !== "reception" && 
+              {user?.roleName !== "reception" &&  currentPatient.ptype != 21 && (
               <Pressable
                 style={styles.cta}
                 onPress={() => navigation.navigate("AddPhysicalExamination" as never)}
               >
                 <PlusIcon size={RESPONSIVE.icon.sm} color={COLORS.buttonText} />
                 <Text style={styles.ctaText}>Add Physical Examination</Text>
-              </Pressable>}
+              </Pressable>)}
             </View>
           }
         />
       )}
-{user?.roleName !== "reception" &&
+{user?.roleName !== "reception" &&  currentPatient.ptype != 21 &&  (
       <Pressable
         style={styles.fab}
         onPress={() => navigation.navigate("AddPhysicalExamination" as never)}
       >
         <PlusIcon size={RESPONSIVE.icon.md} color={COLORS.buttonText} />
-      </Pressable>}
-      
+      </Pressable>
+      )}
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
@@ -283,88 +265,124 @@ export default function PhysicalExaminationScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { 
+  safe: {
     flex: 1,
   },
-  center: { 
-    flex: 1, 
-    alignItems: "center", 
+  center: {
+    flex: 1,
+    alignItems: "center",
     justifyContent: "center",
   },
-  headerWrap: { 
-    paddingHorizontal: RESPONSIVE.spacing.lg, 
+  headerWrap: {
+    paddingHorizontal: RESPONSIVE.spacing.lg,
     paddingTop: RESPONSIVE.spacing.md,
   },
-  headerText: { 
-    fontSize: RESPONSIVE.fontSize.lg, 
-    fontWeight: "900",
-  },
-  subHeader: { 
-    fontSize: RESPONSIVE.fontSize.sm, 
-    fontWeight: "700", 
+  subHeader: {
+    fontSize: RESPONSIVE.fontSize.sm,
+    fontWeight: "700",
     marginTop: RESPONSIVE.spacing.xs,
+    fontStyle: "italic",
   },
+
+  // === Card styles aligned with MedicineCard look ===
   card: {
+    borderRadius: 14,
+    padding: RESPONSIVE.spacing.md, // close to 14
+    marginBottom: RESPONSIVE.spacing.sm,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: COLORS.card,
-    overflow: "hidden",
+    borderColor: "#e2e8f0",
+    backgroundColor: "#ffffff",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: RESPONSIVE.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    marginBottom: RESPONSIVE.spacing.sm,
   },
-  cardTitle: {
-    fontSize: RESPONSIVE.fontSize.md,
+  serialContainer: {
+    marginRight: RESPONSIVE.spacing.sm,
+  },
+  serialNumber: {
+    fontSize: SCREEN_WIDTH < 375 ? 11 : 12,
     fontWeight: "800",
-    color: COLORS.text,
+    backgroundColor: "rgba(20, 184, 166, 0.1)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    color: "#0f766e",
+    minWidth: 24,
+    textAlign: "center",
+  },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     flex: 1,
   },
-  cardContent: {
-    padding: RESPONSIVE.spacing.lg,
+  cardTitle: {
+    fontSize: SCREEN_WIDTH < 375 ? 15 : RESPONSIVE.fontSize.md,
+    fontWeight: "700",
+    color: "#0f172a",
+    flex: 1,
+    marginRight: 8,
   },
+  deleteBtn: {
+    padding: RESPONSIVE.spacing.xs,
+    backgroundColor: `${COLORS.danger}10`,
+    borderRadius: 6,
+  },
+  cardContent: {
+    paddingTop: 2,
+  },
+
   grid: {
     flexDirection: RESPONSIVE.isTablet ? "row" : "column",
     flexWrap: "wrap",
-    gap: RESPONSIVE.spacing.md,
+    gap: RESPONSIVE.spacing.sm,
   },
   gridItem: {
     flex: RESPONSIVE.isTablet ? 1 : 0,
-    width: RESPONSIVE.isTablet ? '48%' : '100%',
-    minWidth: RESPONSIVE.isTablet ? 200 : '100%',
+    width: RESPONSIVE.isTablet ? "48%" : "100%",
+    minWidth: RESPONSIVE.isTablet ? 200 : "100%",
     gap: RESPONSIVE.spacing.xs,
   },
   sectionTitle: {
-    fontSize: RESPONSIVE.fontSize.sm,
+    fontSize: SCREEN_WIDTH < 375 ? 12 : RESPONSIVE.fontSize.sm,
     fontWeight: "700",
-    color: COLORS.text,
+    color: "#64748b",
   },
   value: {
-    fontSize: RESPONSIVE.fontSize.md,
+    fontSize: SCREEN_WIDTH < 375 ? 13 : RESPONSIVE.fontSize.md,
     fontWeight: "500",
-    color: COLORS.text,
+    color: "#0f172a",
     lineHeight: 20,
   },
+
   metaSection: {
     marginTop: RESPONSIVE.spacing.md,
-    paddingTop: RESPONSIVE.spacing.md,
+    paddingTop: RESPONSIVE.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    gap: RESPONSIVE.spacing.xs,
+    borderTopColor: "#e5e7eb",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  metaLabel: {
+    fontSize: SCREEN_WIDTH < 375 ? 11 : 12,
+    fontWeight: "600",
+    color: "#64748b",
+    textTransform: "uppercase",
   },
   metaText: {
-    fontSize: RESPONSIVE.fontSize.xs,
-    fontWeight: "500",
-    color: COLORS.sub,
+    fontSize: SCREEN_WIDTH < 375 ? 11 : 12,
+    fontWeight: "600",
+    color: "#0f172a",
   },
-  deleteBtn: { 
-    padding: RESPONSIVE.spacing.sm,
-  },
+
   fab: {
     position: "absolute",
     right: RESPONSIVE.spacing.lg,
@@ -381,10 +399,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   emptyText: {
-    fontWeight: "600", 
+    fontWeight: "600",
     fontSize: RESPONSIVE.fontSize.md,
     marginBottom: RESPONSIVE.spacing.lg,
-    textAlign: 'center',
+    textAlign: "center",
   },
   cta: {
     flexDirection: "row",
@@ -399,8 +417,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
-  ctaText: { 
-    fontWeight: "700", 
+  ctaText: {
+    fontWeight: "700",
     fontSize: RESPONSIVE.fontSize.md,
     color: COLORS.buttonText,
   },

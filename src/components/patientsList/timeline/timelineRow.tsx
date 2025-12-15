@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { formatDateTime } from "../../../utils/dateTime";
+import {  formatDateTimeTL } from "../../../utils/dateTime";
 
 type TimelineType = any; // keep same as screen
 
@@ -151,7 +151,7 @@ export default function TimelineRow({
       list.push({
         tagText: startText,
         tagColor: startColor,
-        when: formatDateTime(timeline?.patientAddedOn),
+        when: formatDateTimeTL(timeline?.patientAddedOn),
         infoBlocks: [
           <Pill key="addedby">
             Patient added by: {timeline?.addedBy ?? "N/A"}
@@ -182,7 +182,7 @@ export default function TimelineRow({
             list.push({
               tagText,
               tagColor,
-              when: formatDateTime(t?.transferDate),
+              when: formatDateTimeTL(t?.transferDate),
               infoBlocks: [
                 <Pill key={`td-main-${i}`}>
                   {sameDept
@@ -191,20 +191,24 @@ export default function TimelineRow({
                         t?.transferFromDepartment
                       )} to ${getDepartment(t?.transferToDepartment)}`}
                 </Pill>,
-                <Pill key={`td-doc-${i}`}>Transfer by: {docName}</Pill>,
+                <Pill key={`td-doc-${i}`}>Transfer to : {docName}</Pill>,
               ],
               actor: docName,
             });
           });
           break;
+          
 
         case "handshakeDetails":
           timeline?.handshakeDetails?.forEach((h: any, i: number) => {
             if (h?.scope === "doctor") {
+              // Determine tag text based on category
+              const tagText = h?.category === "secondary" ? "Secondary Doctor" : "Handshake";
+              
               list.push({
-                tagText: "Handshake",
+                tagText: tagText,  // ← Now shows "Secondary Doctor" when category is secondary
                 isHandshake: true,
-                when: formatDateTime(h?.assignedDate),
+                when: formatDateTimeTL(h?.assignedDate),
                 infoBlocks: [
                   <Pill key={`hs-main-${i}`}>
                     Patient was Referred to Dr. {h?.toDoc || "N/A"}
@@ -244,7 +248,7 @@ export default function TimelineRow({
               );
               blocks.push(
                 <Pill key={`ot-date-${i}`}>
-                  Date Of Surgery: {formatDateTime(ot?.scheduleTime)}
+                  Date Of Surgery: {formatDateTimeTL(ot?.scheduleTime)}
                 </Pill>
               );
               blocks.push(
@@ -260,7 +264,7 @@ export default function TimelineRow({
               );
               blocks.push(
                 <Pill key={`ot-req-${i}`}>
-                  Request Date: {formatDateTime(ot?.addedOn)}
+                  Request Date: {formatDateTimeTL(ot?.addedOn)}
                 </Pill>
               );
             }
@@ -277,7 +281,7 @@ export default function TimelineRow({
                 );
                 blocks.push(
                   <Pill key={`ot-r3-${i}`}>
-                    Rejected Date: {formatDateTime(ot?.rejectedTime)}
+                    Rejected Date: {formatDateTimeTL(ot?.rejectedTime)}
                   </Pill>
                 );
                 blocks.push(
@@ -292,7 +296,7 @@ export default function TimelineRow({
                 );
                 blocks.push(
                   <Pill key={`ot-a2-${i}`}>
-                    Approved Date: {formatDateTime(ot?.approvedTime)}
+                    Approved Date: {formatDateTimeTL(ot?.approvedTime)}
                   </Pill>
                 );
                 blocks.push(
@@ -306,7 +310,7 @@ export default function TimelineRow({
             list.push({
               tagText,
               tagColor: "#A094D9",
-              when: formatDateTime(when),
+              when: formatDateTimeTL(when),
               infoBlocks: blocks,
               actor: ot?.approvedBy || "N/A",
             });
@@ -319,7 +323,7 @@ export default function TimelineRow({
               ? getDepartment(timeline?.patientStartStatus)
               : "N/A",
             tagColor: colorObj[timeline?.patientStartStatus || 1],
-            when: formatDateTime(timeline?.endTime),
+            when: formatDateTimeTL(timeline?.endTime),
             infoBlocks: [
               <Pressable
                 key="diag-press"
@@ -344,7 +348,7 @@ export default function TimelineRow({
               ? getDepartment(timeline?.patientStartStatus)
               : "Revisit",
             tagColor: colorObj[timeline?.patientStartStatus || 1],
-            when: formatDateTime(timeline?.startTime),
+            when: formatDateTimeTL(timeline?.startTime),
             infoBlocks: [
               <Pill key="rv-1">
                 Revisit to: {getDepartment(timeline?.patientStartStatus)}
@@ -363,7 +367,7 @@ export default function TimelineRow({
               ? getDepartment(timeline?.isFollowUp?.patientStartStatus)
               : "Follow Up",
             tagColor: colorObj[timeline?.patientStartStatus || 1],
-            when: formatDateTime(timeline?.isFollowUp?.followUpDate),
+            when: formatDateTimeTL(timeline?.isFollowUp?.followUpDate),
             infoBlocks: [
               <Pill key="fu-1">
                 Follow Up by: {timeline?.addedBy || "N/A"}
@@ -377,7 +381,7 @@ export default function TimelineRow({
           list.push({
             tagText: "Discharged",
             tagColor: colorObj[21],
-            when: formatDateTime(timeline?.endTime),
+            when: formatDateTimeTL(timeline?.endTime),
             infoBlocks: [
               <Pill key="dc-1">Patient Discharged</Pill>,
               <Pill key="dc-2">
@@ -394,7 +398,7 @@ export default function TimelineRow({
             list.push({
               tagText: "External Transfer",
               tagColor: "#D792EE",
-              when: formatDateTime(x?.transferDate),
+              when: formatDateTimeTL(x?.transferDate),
               infoBlocks: [
                 <Pill key="ext-1">
                   Patient Transferred from {x?.fromhospitalName} to{" "}

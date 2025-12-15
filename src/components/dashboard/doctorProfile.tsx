@@ -24,7 +24,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import { launchImageLibrary, launchCamera } from "react-native-image-picker";
-import { Building2, Calendar, IdCard, History, User as UserIcon, Eye, EyeOff,
+import { Building2, Calendar, IdCard, History, User as UserIcon, Eye, EyeOff, Camera,
 } from "lucide-react-native";
 
 import { currentUser, RootState } from "../../store/store";
@@ -112,7 +112,6 @@ const requestCameraPermission = async (): Promise<boolean> => {
 
     return granted === PermissionsAndroid.RESULTS.GRANTED;
   } catch (err) {
-    console.warn("Camera permission error:", err);
     return false;
   }
 };
@@ -442,9 +441,20 @@ const validateProfileForm = (): boolean => {
 
     if (fieldKey === "phoneNo") {
       const valueStr = String(fieldData.value ?? "");
-      isValid = valueStr !== "" && checkLength(Number(valueStr), 10);
-      msg = isValid ? "" : "Mobile number must be 10 digits";
-    } else if (fieldKey === "pinCode") {
+    if (valueStr === "") {
+    isValid = false;
+    msg = "Mobile number is required";
+  } else if (valueStr.length !== 10) {
+    isValid = false;
+    msg = "Mobile number must be 10 digits";
+  } else if (!/^[6-9]/.test(valueStr[0])) {
+    isValid = false;
+    msg = "Mobile number must start with 6, 7, 8, or 9";
+  } else {
+    isValid = true;
+    msg = "";
+  }
+} else if (fieldKey === "pinCode") {
       const valueStr = String(fieldData.value ?? "");
       isValid = valueStr !== "" && checkLength(Number(valueStr), 6);
       msg = isValid ? "" : "Pincode must be 6 digits";
@@ -803,11 +813,11 @@ if (!passwordForm.oldPassword.value.trim()) {
             styles.scrollContent,
             {
               paddingBottom:
-                SPACING.xxl * 2 + (insets.bottom || SPACING.lg) + 80,
+                SPACING.xxl * 3 + (insets.bottom || SPACING.lg) + 100,
             },
           ]}
           enableOnAndroid
-          extraScrollHeight={SPACING.lg}
+          extraScrollHeight={SPACING.xl}
           keyboardOpeningTime={0}
           showsVerticalScrollIndicator={false}
         >
@@ -821,7 +831,7 @@ if (!passwordForm.oldPassword.value.trim()) {
                 />
               ) : (
                 <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarInitials}>{initials || "U"}</Text>
+                  <Text style={styles.avatarInitials}>{initials || ""}</Text>
                 </View>
               )}
             </View>
@@ -951,20 +961,38 @@ if (!passwordForm.oldPassword.value.trim()) {
                       isEditingProfileInfo && handlePickImage("profile")
                     }
                     activeOpacity={0.8}
-                    style={styles.imageTouch}
-                  >
+
+                  style={[
+                    styles.imageTouch,
+                    !isEditingProfileInfo && styles.imageTouchDisabled
+                  ]}
+                  disabled={!isEditingProfileInfo}
+                >
+                  <View style={styles.simpleImageContainer}>
                     {currentProfileImage ? (
                       <Image
                         source={{ uri: currentProfileImage }}
-                        style={styles.largeImage}
+                        style={styles.simpleCircleImage}
                       />
                     ) : (
-                      <View style={styles.imagePlaceholder}>
+                      <View style={styles.simpleCirclePlaceholder}>
                         <UserIcon size={40} color={COLORS.sub} />
                       </View>
                     )}
-                    <Text style={styles.imageHint}>
-                      Tap to {currentProfileImage ? "change" : "add"} image
+
+                <View style={styles.simpleCameraBadge}>
+                  <Camera size={16} color="#fff" />
+                </View>
+    
+                </View>
+                <Text style={[
+                  styles.imageHint,
+                  !isEditingProfileInfo && styles.imageHintDisabled
+                ]}>
+                  {isEditingProfileInfo ? 
+                    `Tap to ${currentProfileImage ? "change" : "add"} image` : 
+                    "Enable edit to change image"
+                  }
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1022,6 +1050,7 @@ if (!passwordForm.oldPassword.value.trim()) {
                     style={[
                       styles.input,
                       !isEditingProfileInfo && styles.inputDisabled,
+                      formData.phoneNo.showError && { borderColor: "#dc2626" },
                     ]}
                     placeholder="Enter phone number"
                     placeholderTextColor={COLORS.sub}
@@ -1030,11 +1059,35 @@ if (!passwordForm.oldPassword.value.trim()) {
                     value={formData.phoneNo.value || ""}
                     editable={isEditingProfileInfo}
                     onChangeText={(text) =>
-                      handleFormFieldChange(
-                        "phoneNo",
-                        text.replace(/\D/g, "")
-                      )
-                    }
+                     {
+                      const digits = text.replace(/\D/g, "");
+                        if (digits.length === 1 && !/^[6-9]/.test(digits)) {
+                        return;
+                      }
+                      
+                      handleFormFieldChange("phoneNo", digits);
+                      if (digits && digits.length === 10 && !/^[6-9]/.test(digits[0])) {
+                        setFormData(prev => ({
+                          ...prev,
+                          phoneNo: {
+                            ...prev.phoneNo,
+                            valid: false,
+                            showError: true,
+                            message: "Mobile number must start with 6, 7, 8, or 9"
+                          }
+                        }));
+                      } else if (digits && digits.length === 10) {
+                        setFormData(prev => ({
+                          ...prev,
+                          phoneNo: {
+                            ...prev.phoneNo,
+                            valid: true,
+                            showError: false,
+                            message: ""
+                          }
+                        }));
+                      }
+                    }}
                   />
                   {formData.phoneNo.showError && (
                     <Text style={styles.errorText}>
@@ -1106,6 +1159,7 @@ if (!passwordForm.oldPassword.value.trim()) {
                             : new Date()
                         }
                         onChange={handleDobChange}
+                        maximumDate={new Date()}
                       />
                     )}
                     {formData.dob.showError && (
@@ -1245,7 +1299,7 @@ if (!passwordForm.oldPassword.value.trim()) {
                 </View>
 
                 {/* Buttons */}
-                <View style={styles.actionsRow}>
+                <View style={[styles.actionsRow, styles.bottomActionsMargin]}>
                   <TouchableOpacity
                     style={[
                       styles.actionButton,
@@ -1442,7 +1496,7 @@ if (!passwordForm.oldPassword.value.trim()) {
                   )}
                 </View>
 
-                <View style={styles.actionsRow}>
+                <View style={[styles.actionsRow, styles.bottomActionsMargin]}>
                   <TouchableOpacity
                     style={[styles.actionButton, styles.actionPrimary]}
                     onPress={debouncedPasswordSubmit}
@@ -1594,6 +1648,48 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
   },
 
+  imageContainer: {
+    position: 'relative',
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  cameraOverlayDisabled: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    opacity: 0.5,
+  },
+  cameraOverlayPlaceholder: {
+    position: 'absolute',
+    bottom: -6,
+    right: -6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  imageTouchDisabled: {
+    opacity: 0.75,
+  },
+  imagePlaceholderDisabled: {
+    opacity: 0.6,
+  },
+  imageHintDisabled: {
+    opacity: 0.6,
+  },
   headerCard: {
     flexDirection: "row",
     padding: SPACING.md,
@@ -1637,6 +1733,43 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.text,
     marginBottom: 4,
+    },
+    simpleCircleImage: {
+    width: responsiveWidth(36),
+    height: responsiveWidth(36),
+    maxWidth: 144,
+    maxHeight: 144,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+  },
+  simpleImageContainer: {
+    position: 'relative',
+  },
+  simpleCameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  simpleCirclePlaceholder: {
+    width: responsiveWidth(36),
+    height: responsiveWidth(36),
+    maxWidth: 144,
+    maxHeight: 144,
+    borderRadius: 999,
+    backgroundColor: COLORS.inputBg,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: COLORS.border,
   },
   headerSubtitle: {
     fontSize: FONT_SIZE.sm,
@@ -1648,6 +1781,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 2,
     gap: 6,
+  },
+    bottomActionsMargin: {
+    marginBottom: SPACING.xxl * 2, // Add substantial bottom margin
   },
   infoText: {
     fontSize: FONT_SIZE.sm,
@@ -1726,7 +1862,27 @@ const styles = StyleSheet.create({
     color: COLORS.fieldText || "#fff",
     fontWeight: "600",
   },
-
+    imageContainerWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleBorder: {
+    // width: responsiveWidth(42), // Slightly larger than the image
+    height: responsiveWidth(42),
+    maxWidth: 168,
+    maxHeight: 168,
+    borderRadius: 999,
+    borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.3)', // Light white circle
+    backgroundColor: 'rgba(255, 255, 255, 0.1)', // Very light background
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   imageRow: {
     alignItems: "center",
     marginBottom: SPACING.md,

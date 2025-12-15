@@ -245,6 +245,10 @@ const Sidebar: React.FC<Props> = ({
                 Meta Health ID: {user?.id || "N/A"}
               </Text>
               <Text style={styles.userDepartment}>Inpatient Care</Text>
+              
+                <Text style={styles.viewProfileText}>
+                    View Profile
+                  </Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -376,6 +380,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 10,
     shadowOffset: { width: 2, height: 0 },
+  },
+      viewProfileText: {
+    fontSize: 12,
+    color: "#007AFF", // iOS blue link color
+    fontStyle: "italic",
+    textDecorationLine: "underline",
+    marginTop: 4,
   },
   sidebarHeader: {
     paddingBottom: 20,

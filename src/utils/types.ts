@@ -942,7 +942,7 @@ export type vitalFunctionType = {
 };
 
 export type AlertType = {
-  priority(priority: any): import("react-native").ColorValue | undefined;
+  // priority(priority: any): import("react-native").ColorValue | undefined;
   id: number;
   patientName: string;
   doctorName: string;
@@ -960,6 +960,7 @@ export type AlertType = {
   state?:string;
   city?:string;
   nurseName?:string;
+   priority: string;
 };
 
 export type statusDictType = {

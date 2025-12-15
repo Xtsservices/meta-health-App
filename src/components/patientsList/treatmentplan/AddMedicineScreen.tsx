@@ -11,12 +11,14 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
-  FlatList,
+  Dimensions,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Picker } from '@react-native-picker/picker';
+
 import { RootState } from '../../../store/store';
 import { MedicineType, PatientType } from '../../../utils/types';
 import { AuthPost } from '../../../auth/auth';
@@ -33,13 +35,15 @@ import {
   SquareIcon, 
   BeakerIcon,
   PlusIcon,
-  SyrupIcon
+  SyrupIcon,
+  ChevronUpIcon,
+  ChevronDownIcon
 } from '../../../utils/SvgIcons';
 import Footer from '../../dashboard/footer';
 import usePreOpForm from '../../../utils/usePreOpForm';
 import usePostOPStore from '../../../utils/usePostopForm';
 
-// Import responsive utilities
+// responsive utilities
 import {
   isTablet,
   SPACING,
@@ -48,7 +52,7 @@ import {
   FOOTER_HEIGHT
 } from '../../../utils/responsive';
 
-// Import colors
+// colors
 import { COLORS } from '../../../utils/colour';
 import { showError, showSuccess } from '../../../store/toast.slice';
 
@@ -68,14 +72,13 @@ const medicineCategories = [
 
 // Medication Time Options
 const medicationTimes = [
-  'Before Breakfast',
-  'After Breakfast',
-  'Before Lunch',
-  'After Lunch',
-  'Before Dinner',
-  'After Dinner',
-  'Before Sleep',
-  'As Per Need',
+    "05:00 AM - 07:00 AM\n(Before Breakfast)",
+    "09:00 AM - 11:00 AM\n(After Breakfast)",
+    "11:30 AM - 12:30 PM\n(Before Lunch)",
+    "02:00 PM - 03:30 PM\n(After Lunch)",
+    "05:00 PM - 06:30 PM\n(Before Dinner)",
+    "09:00 PM - 10:00 PM\n(After Dinner)",
+    "As Per Need"
 ];
 
 const mapToStoreFormat = (med: any) => ({
@@ -85,7 +88,6 @@ const mapToStoreFormat = (med: any) => ({
   time: med.medicationTime,
   notify: false,
 });
-
 
 const getCategoryFromType = (type: number) => {
   switch (type) {
@@ -103,6 +105,7 @@ const getCategoryFromType = (type: number) => {
   }
 };
 
+const { width: WINDOW_WIDTH } = Dimensions.get('window');
 
 const AddMedicineScreen: React.FC = () => {
   const dispatch = useDispatch();
@@ -135,12 +138,11 @@ const { medications: postOpMeds, setPostMedications } = usePostOPStore();
   const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // NEW: State for medicine autocomplete
+  // Medicine autocomplete
   const [medicineSuggestions, setMedicineSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isMedicineSelected, setIsMedicineSelected] = useState(false);
 
-  // NEW: Medicine autocomplete function
   const fetchMedicineSuggestions = async (text: string) => {
     try {
       if (text.length < 3) {
@@ -155,11 +157,13 @@ const { medications: postOpMeds, setPostMedications } = usePostOPStore();
         `medicine/${user?.hospitalID}/getMedicines`,
         { text },
         token
-      );
+      ) as any;
 
-      // Handle different response structures
       if (response?.data?.message === 'success') {
-        const names = response?.data?.medicines?.map((m: any) => m.Medicine_Name).filter(Boolean) || [];
+        const names =
+          response?.data?.medicines
+            ?.map((m: any) => m.Medicine_Name)
+            .filter(Boolean) || [];
         setMedicineSuggestions(names);
         setShowSuggestions(names.length > 0);
       } else {
@@ -172,7 +176,6 @@ const { medications: postOpMeds, setPostMedications } = usePostOPStore();
     }
   };
 
-  // NEW: Debounced version of the function
   const debouncedFetchSuggestions = useCallback(
     debounce((text: string) => {
       fetchMedicineSuggestions(text);
@@ -181,11 +184,21 @@ const { medications: postOpMeds, setPostMedications } = usePostOPStore();
   );
 
   const handleTimeSelect = (time: string) => {
+    // if already selected -> unselect
     if (selectedTimes.includes(time)) {
       setSelectedTimes(selectedTimes.filter(t => t !== time));
-    } else {
-      setSelectedTimes([...selectedTimes, time]);
+      return;
     }
+
+    // Enforce maximum selections equal to Frequency
+    const maxAllowed = medicineData.Frequency || 1;
+    if (selectedTimes.length >= maxAllowed) {
+      dispatch(showError(`You can select only ${maxAllowed} time(s)`));
+      return;
+    }
+
+    // Otherwise add
+    setSelectedTimes([...selectedTimes, time]);
   };
 
   const getDosageUnit = () => {
@@ -196,6 +209,12 @@ const { medications: postOpMeds, setPostMedications } = usePostOPStore();
   };
 
   const handleSubmit = async () => {
+    // Ensure medicine was chosen from suggestions (strict requirement)
+    if (!isMedicineSelected) {
+      dispatch(showError('Please select medicine from dropdown suggestions'));
+      return;
+    }
+
     if (!validateForm()) return;
 
     try {
@@ -203,7 +222,7 @@ const { medications: postOpMeds, setPostMedications } = usePostOPStore();
       
       const token = user?.token || (await AsyncStorage.getItem('token'));
       
-      const finalData = {
+      const finalData: any = {
         timeLineID: medicineData.timeLineID,
         userID: medicineData.userID,
         medicineType: medicineData.medicineType,
@@ -217,22 +236,23 @@ const { medications: postOpMeds, setPostMedications } = usePostOPStore();
         patientID: currentPatient?.id,
       };
 
-      const response = await AuthPost('medicine', { medicines: [finalData] }, token);
+      const response = await AuthPost('medicine', { medicines: [finalData] }, token) as any ;
       if (response?.data?.message === 'success') {
+        const category = getCategoryFromType(finalData?.medicineType);
+        const newEntry = mapToStoreFormat(finalData);
 
-  const category = getCategoryFromType(finalData?.medicineType);
-const newEntry = mapToStoreFormat(finalData);
-if (activeTab === "PreOpRecord") {
-  const existing = preOpMeds[category] || [];
- 
-  setMedications(category, [...existing, newEntry]);
-}
+        if (activeTab === "PreOpRecord") {
+          const existing = preOpMeds[category] || [];
+          setMedications(category, [...existing, newEntry]);
+        }
 
-if (activeTab === "PostOpRecord") {
-  const existing = postOpMeds[category] || [];
-  setPostMedications(category, [...existing, newEntry]);
-}
-dispatch(showSuccess('Medicine added successfully'));    
+        if (activeTab === "PostOpRecord") {
+          const existing = postOpMeds[category] || [];
+          setPostMedications(category, [...existing, newEntry]);
+        }
+
+        dispatch(showSuccess('Medicine added successfully'));
+        navigation.goBack();
       } else {
         dispatch(showError(response?.message || 'Failed to add medicine'));
       }
@@ -245,33 +265,32 @@ dispatch(showSuccess('Medicine added successfully'));
 
   const validateForm = (): boolean => {
     if (!medicineData.medicineType) {
-      Alert.alert('Error', 'Please select medicine type');
+      dispatch(showError('Please select medicine type'));
       return false;
     }
     if (!medicineData.medicineName?.trim()) {
-      Alert.alert('Error', 'Please enter medicine name');
+      dispatch(showError('Please enter medicine name'));
       return false;
     }
     if (!medicineData.doseCount || medicineData.doseCount <= 0) {
-      Alert.alert('Error', 'Please enter valid dosage');
+      dispatch(showError('Please enter valid dosage'));
       return false;
     }
     if (!medicineData.daysCount || medicineData.daysCount <= 0) {
-      Alert.alert('Error', 'Please enter valid number of days');
+      dispatch(showError('Please enter valid number of days'));
       return false;
     }
     if (selectedTimes?.length === 0) {
-      Alert.alert('Error', 'Please select medication time');
+      dispatch(showError('Please select medication time'));
       return false;
     }
     if (selectedTimes?.length > medicineData.Frequency) {
-      Alert.alert('Error', `Please select only ${medicineData.Frequency} time(s) of medication`);
+      dispatch(showError(`Please select only ${medicineData.Frequency} time(s) of medication`));
       return false;
     }
     return true;
   };
 
-  // NEW: Function to handle medicine selection from suggestions
   const handleMedicineSelect = (medicineName: string) => {
     setMedicineData({ ...medicineData, medicineName });
     setIsMedicineSelected(true);
@@ -290,6 +309,7 @@ dispatch(showSuccess('Medicine added successfully'));
           onPress={() => navigation.goBack()}
         >
         </TouchableOpacity>
+
         <TouchableOpacity 
           style={[styles.submitButton, loading && styles.submitButtonDisabled]}
           onPress={handleSubmit}
@@ -307,57 +327,46 @@ dispatch(showSuccess('Medicine added successfully'));
       >
         <ScrollView 
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, {
-            paddingBottom: FOOTER_HEIGHT + SPACING.md + insets.bottom
-          }]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: FOOTER_HEIGHT + SPACING.md + insets.bottom }
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Medicine Type Selection */}
+          {/* Medicine Type - DROPDOWN */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Medicine Type</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryScrollContent}
-            >
-              {medicineCategories?.map((category) => {
-                const Icon = category?.icon;
-                const isSelected = medicineData.medicineType === category?.value;
-                
-                return (
-                  <TouchableOpacity
-                    key={category?.value}
-                    style={[
-                      styles.categoryButton,
-                      isSelected && styles.categoryButtonSelected,
-                    ]}
-                    onPress={() => setMedicineData({ ...medicineData, medicineType: category?.value })}
-                  >
-                    <View style={[
-                      styles.categoryIcon,
-                      isSelected && styles.categoryIconSelected,
-                    ]}>
-                      <Icon 
-                        size={ICON_SIZE.md} 
-                        color={isSelected ? COLORS.brand : COLORS.sub} 
-                      />
-                    </View>
-                    <Text style={[
-                      styles.categoryLabel,
-                      isSelected && styles.categoryLabelSelected,
-                    ]}>
-                      {category?.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            <Text style={styles.sectionTitle}>Medicine Type *</Text>
+            <View style={[styles.typeDropdownContainer, styles.textInputLike]}>
+              <View style={styles.typePickerWrapper}>
+                <Picker
+                  selectedValue={medicineData.medicineType ?? 0}
+                  onValueChange={(value: number) => {
+                    const newValue = value === 0 ? null : value;
+                    setMedicineData({ ...medicineData, medicineType: newValue });
+                  }}
+                  style={styles.typePicker}
+                  dropdownIconColor={COLORS.brand}
+                >
+                  <Picker.Item
+                    label="Select medicine type"
+                    value={0}
+                  />
+                  {medicineCategories.map((category) => (
+                    <Picker.Item
+                      key={category.value}
+                      label={category.label}
+                      value={category.value}
+                    />
+                  ))}
+                </Picker>
+              </View>
+            </View>
           </View>
 
           {/* Medicine Name with Autocomplete */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Medicine Name</Text>
+            <Text style={styles.sectionTitle}>Medicine Name *</Text>
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.textInput}
@@ -367,8 +376,7 @@ dispatch(showSuccess('Medicine added successfully'));
                   setMedicineData({ ...medicineData, medicineName: text });
                   setIsMedicineSelected(false);
                   setShowSuggestions(false);
-                  
-                  // Trigger autocomplete after a short delay
+
                   if (text.length >= 3) {
                     debouncedFetchSuggestions(text);
                   } else {
@@ -377,21 +385,22 @@ dispatch(showSuccess('Medicine added successfully'));
                   }
                 }}
                 onFocus={() => {
-                  if (medicineData.medicineName.length >= 3 && medicineSuggestions.length > 0) {
+                  if (
+                    medicineData.medicineName.length >= 3 &&
+                    medicineSuggestions.length > 0
+                  ) {
                     setShowSuggestions(true);
                   }
                 }}
                 onBlur={() => {
-                  // Delay hiding suggestions to allow for selection
                   setTimeout(() => setShowSuggestions(false), 200);
                 }}
                 placeholderTextColor={COLORS.placeholder}
               />
-              
-              {/* Suggestions Dropdown */}
+
               {showSuggestions && medicineSuggestions.length > 0 && (
                 <View style={styles.suggestionsContainer}>
-                  <ScrollView 
+                  <ScrollView
                     style={styles.suggestionsList}
                     nestedScrollEnabled={true}
                     keyboardShouldPersistTaps="handled"
@@ -409,15 +418,18 @@ dispatch(showSuccess('Medicine added successfully'));
                 </View>
               )}
             </View>
-            {medicineData.medicineName.length > 0 && medicineData.medicineName.length < 3 && (
-              <Text style={styles.hintText}>Type 3 or more letters to see suggestions</Text>
-            )}
+            {medicineData.medicineName.length > 0 &&
+              medicineData.medicineName.length < 3 && (
+                <Text style={styles.hintText}>
+                  Type 3 or more letters to see suggestions
+                </Text>
+              )}
           </View>
 
           {/* Dosage and Frequency */}
           <View style={styles.row}>
             <View style={[styles.section, styles.flex1]}>
-              <Text style={styles.sectionTitle}>Dosage</Text>
+              <Text style={styles.sectionTitle}>Dosage *</Text>
               <View style={styles.dosageContainer}>
                 <TextInput
                   style={[styles.textInput, styles.dosageInput]}
@@ -448,8 +460,13 @@ dispatch(showSuccess('Medicine added successfully'));
                   placeholder="1"
                   value={medicineData.Frequency?.toString() || '1'}
                   onChangeText={(text) => {
-                    const value = text === '' ? 1 : Math.min(Math.max(Number(text), 1), 6);
+                    const value =
+                      text === '' ? 1 : Math.min(Math.max(Number(text), 1), 6);
                     setMedicineData({ ...medicineData, Frequency: value });
+                    // if frequency reduced below current selectedTimes length, trim selectedTimes
+                    if (selectedTimes.length > value) {
+                      setSelectedTimes(selectedTimes.slice(0, value));
+                    }
                   }}
                   keyboardType="numeric"
                   placeholderTextColor={COLORS.placeholder}
@@ -459,28 +476,53 @@ dispatch(showSuccess('Medicine added successfully'));
                   <TouchableOpacity
                     style={[styles.frequencyButton, styles.frequencyButtonUp]}
                     onPress={() => {
-                      const newValue = Math.min((medicineData.Frequency || 1) + 1, 6);
+                      const newValue = Math.min(
+                        (medicineData.Frequency || 1) + 1,
+                        6
+                      );
                       setMedicineData({ ...medicineData, Frequency: newValue });
                     }}
-                    disabled={medicineData.Frequency >= 6 || selectedTimes?.includes('As Per Need')}
+                    disabled={
+                      medicineData.Frequency >= 6 ||
+                      selectedTimes?.includes('As Per Need')
+                    }
                   >
-                    <Text style={[
-                      styles.frequencyButtonText,
-                      (medicineData.Frequency >= 6 || selectedTimes?.includes('As Per Need')) && styles.frequencyButtonDisabled
-                    ]}>↑</Text>
+                    <ChevronUpIcon
+                      size={ICON_SIZE.sm}
+                      color={
+                        medicineData.Frequency >= 6 ||
+                        selectedTimes?.includes('As Per Need')
+                          ? COLORS.sub
+                          : COLORS.text
+                      }
+                    />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.frequencyButton, styles.frequencyButtonDown]}
                     onPress={() => {
-                      const newValue = Math.max((medicineData.Frequency || 1) - 1, 1);
+                      const newValue = Math.max(
+                        (medicineData.Frequency || 1) - 1,
+                        1
+                      );
                       setMedicineData({ ...medicineData, Frequency: newValue });
+                      if (selectedTimes.length > newValue) {
+                        setSelectedTimes(selectedTimes.slice(0, newValue));
+                      }
                     }}
-                    disabled={medicineData.Frequency <= 1 || selectedTimes?.includes('As Per Need')}
+                    disabled={
+                      medicineData.Frequency <= 1 ||
+                      selectedTimes?.includes('As Per Need')
+                    }
                   >
-                    <Text style={[
-                      styles.frequencyButtonText,
-                      (medicineData.Frequency <= 1 || selectedTimes?.includes('As Per Need')) && styles.frequencyButtonDisabled
-                    ]}>↓</Text>
+                    <ChevronDownIcon
+                      size={ICON_SIZE.sm}
+                      color={
+                        medicineData.Frequency <= 1 ||
+                        selectedTimes?.includes('As Per Need')
+                          ? COLORS.sub
+                          : COLORS.text
+                      }
+                    />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -489,7 +531,7 @@ dispatch(showSuccess('Medicine added successfully'));
 
           {/* Days */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Number of Days</Text>
+            <Text style={styles.sectionTitle}>Number of Days *</Text>
             <TextInput
               style={styles.textInput}
               placeholder="Enter number of days"
@@ -509,36 +551,50 @@ dispatch(showSuccess('Medicine added successfully'));
           </View>
 
           {/* Medication Time */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Medication Time {medicineData.Frequency > 1 && `(Select ${medicineData.Frequency})`}
-            </Text>
-            <View style={styles.timeGrid}>
-              {medicationTimes?.map((time) => (
-                <TouchableOpacity
-                  key={time}
-                  style={[
-                    styles.timeButton,
-                    selectedTimes?.includes(time) && styles.timeButtonSelected,
-                  ]}
-                  onPress={() => handleTimeSelect(time)}
-                >
-                  <Text style={[
-                    styles.timeButtonText,
-                    selectedTimes?.includes(time) && styles.timeButtonTextSelected,
-                  ]}>
-                    {time}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {selectedTimes?.length > 0 && (
-              <Text style={styles.selectedTimesText}>
-                Selected: {selectedTimes?.join(', ')}
+{/* Medication Time */}
+<View style={styles.section}>
+  <Text style={styles.sectionTitle}>
+    Medication Time *{' '}
+    {medicineData.Frequency > 1 &&
+      `(Select ${medicineData.Frequency})`}
+  </Text>
+  <View style={styles.timeGrid}>
+    {medicationTimes?.map((time) => {
+      // Split time into lines
+      const timeLines = time.split('\n');
+      
+      return (
+        <TouchableOpacity
+          key={time}
+          style={[
+            styles.timeButton,
+            selectedTimes?.includes(time) && styles.timeButtonSelected,
+          ]}
+          onPress={() => handleTimeSelect(time)}
+        >
+          <View style={styles.timeButtonContent}>
+            {timeLines.map((line, index) => (
+              <Text
+                key={index}
+                style={[
+                  styles.timeButtonText,
+                  index === 0 && styles.timeButtonTextTime, // First line (time)
+                  index === 1 && styles.timeButtonTextDesc, // Second line (description)
+                  selectedTimes?.includes(time) && styles.timeButtonTextSelected,
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {line}
               </Text>
-            )}
+            ))}
           </View>
-
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+</View>
           {/* Notes */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Notes (Optional)</Text>
@@ -546,7 +602,9 @@ dispatch(showSuccess('Medicine added successfully'));
               style={[styles.textInput, styles.notesInput]}
               placeholder="Add any additional notes..."
               value={medicineData.notes}
-              onChangeText={(text) => setMedicineData({ ...medicineData, notes: text })}
+              onChangeText={(text) =>
+                setMedicineData({ ...medicineData, notes: text })
+              }
               multiline
               numberOfLines={3}
               textAlignVertical="top"
@@ -558,10 +616,13 @@ dispatch(showSuccess('Medicine added successfully'));
 
       {/* Footer */}
       <View style={[styles.footerContainer, { bottom: insets.bottom }]}>
-        <Footer active={"patients"} brandColor={COLORS.brand} />
+        <Footer active={'patients'} brandColor={COLORS.brand} />
       </View>
       {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.bottomShield, { height: insets.bottom }]} />
+        <View
+          pointerEvents="none"
+          style={[styles.bottomShield, { height: insets.bottom }]}
+        />
       )}
     </SafeAreaView>
   );
@@ -616,49 +677,43 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: SPACING.sm,
+    textAlign: 'left',
   },
-  categoryScrollContent: {
-    paddingRight: SPACING.md,
-  },
-  categoryButton: {
-    alignItems: 'center',
-    marginRight: isTablet ? SPACING.sm : SPACING.xs,
-    padding: isTablet ? SPACING.sm : SPACING.xs,
-    borderRadius: SPACING.sm,
-    backgroundColor: COLORS.bg,
+
+  // NEW: Medicine Type dropdown styles
+typeDropdownContainer: {
+  borderWidth: 1,
+  borderRadius: SPACING.xs,
+  paddingHorizontal: SPACING.sm,
+  // paddingVertical: isTablet ? SPACING.sm : SPACING.xs, // Match textInput
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: COLORS.card,
+  borderColor: COLORS.border,
+},
+  // Make picker look like other inputs
+  textInputLike: {
     borderWidth: 1,
     borderColor: COLORS.border,
-    minWidth: isTablet ? 90 : 80,
-  },
-  categoryButtonSelected: {
-    backgroundColor: COLORS.brandLight,
-    borderColor: COLORS.brand,
-  },
-  categoryIcon: {
-    width: isTablet ? 44 : 40,
-    height: isTablet ? 44 : 40,
-    borderRadius: isTablet ? 22 : 20,
+    borderRadius: SPACING.xs,
     backgroundColor: COLORS.card,
+  },
+  typeDropdownIcon: {
+    marginRight: SPACING.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.xs,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
-  categoryIconSelected: {
-    borderColor: COLORS.brand,
-    backgroundColor: COLORS.brandLight,
+  typePickerWrapper: {
+    flex: 1,
   },
-  categoryLabel: {
-    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
-    fontWeight: '500',
-    color: COLORS.sub,
-    textAlign: 'center',
+  typePicker: {
+    flex: 1,
+    width: '100%',
+    color: COLORS.text,
+     fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs, 
+    height: Platform.OS === 'android' ? (isTablet ? 58 : 52) : undefined,
   },
-  categoryLabelSelected: {
-    color: COLORS.brand,
-    fontWeight: '600',
-  },
+
   inputContainer: {
     position: 'relative',
   },
@@ -721,7 +776,7 @@ const styles = StyleSheet.create({
   },
   unitText: {
     paddingHorizontal: SPACING.sm,
-    paddingVertical: isTablet ? SPACING.sm : SPACING.xs,
+    paddingVertical: isTablet ? SPACING.sm+1 : SPACING.xs+1,
     backgroundColor: COLORS.pill,
     borderWidth: 1,
     borderLeftWidth: 0,
@@ -740,44 +795,57 @@ const styles = StyleSheet.create({
   flex1: {
     flex: 1,
   },
+   timeButtonSelected: {
+    backgroundColor: COLORS.brand,
+    borderColor: COLORS.brandDark,
+  },
   timeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: isTablet ? SPACING.xs : 6,
   },
+  // make each time button uniform sized boxes
   timeButton: {
-    paddingHorizontal: isTablet ? SPACING.md : SPACING.sm,
+    width: (WINDOW_WIDTH - (SPACING.md * 2) - 24) / 2, // two columns with some gap
+    paddingHorizontal: SPACING.sm,
     paddingVertical: isTablet ? SPACING.sm : SPACING.xs,
-    borderRadius: 20,
+    borderRadius: 10,
     backgroundColor: COLORS.bg,
     borderWidth: 1,
     borderColor: COLORS.border,
+    marginBottom: SPACING.xs,
+    justifyContent: 'center',
+    minHeight: isTablet ? 70 : 60, // Add minimum height for two lines
   },
-  timeButtonSelected: {
-    backgroundColor: COLORS.brand,
-    borderColor: COLORS.brandDark,
+  timeButtonContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   timeButtonText: {
-    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs - 1,
     fontWeight: '500',
     color: COLORS.sub,
+    textAlign: 'center',
+  },
+  timeButtonTextTime: {
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  timeButtonTextDesc: {
+    fontSize: isTablet ? FONT_SIZE.xs : FONT_SIZE.xs,
+    fontWeight: '400',
+    fontStyle: 'italic',
   },
   timeButtonTextSelected: {
     color: COLORS.buttonText,
     fontWeight: '600',
-  },
-  selectedTimesText: {
-    marginTop: SPACING.xs,
-    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
-    color: COLORS.brand,
-    fontWeight: '500',
   },
   notesInput: {
     minHeight: isTablet ? 90 : 80,
     textAlignVertical: 'top',
   },
   footerContainer: {
-    position: 'absolute',
     left: 0,
     right: 0,
     height: FOOTER_HEIGHT,
@@ -820,14 +888,6 @@ const styles = StyleSheet.create({
   frequencyButtonDown: {
     borderBottomRightRadius: SPACING.xs,
     borderTopWidth: 0.5,
-  },
-  frequencyButtonText: {
-    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  frequencyButtonDisabled: {
-    color: COLORS.sub,
   },
 });
 

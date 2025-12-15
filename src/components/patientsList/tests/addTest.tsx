@@ -58,9 +58,8 @@ type NewTest = TestType;
 export default function AddTestsScreen() {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
- 
- 
-   const route = useRoute<any>();
+
+  const route = useRoute<any>();
   const activeTab = route.params?.currentTab;
 
   const { tests: preOpTests, setTests: setPreOpTests } = usePreOpForm();
@@ -80,6 +79,7 @@ export default function AddTestsScreen() {
   // Type-ahead state
   const [suggestions, setSuggestions] = useState<TestType[]>([]);
   const [loadingSugg, setLoadingSugg] = useState(false);
+
   const dedupeTestsForStore = (
     arr: { test: string; ICD_Code: string; testNotes: string }[]
   ) => {
@@ -107,50 +107,53 @@ export default function AddTestsScreen() {
         map.set(t?.LOINC_Name?.toLowerCase(), testItem);
       });
       const uniq = Array.from(map?.values());
-      return uniq?.filter((t) => 
+      return (
+        uniq?.filter((t) =>
         t?.name?.toLowerCase()?.includes(prefix?.toLowerCase())
-      ) || [];
+      ) || []
+    );
     },
     []
   );
 
-  const fetchTestsList = useCallback(async (val: string) => {
+  const fetchTestsList = useCallback(
+async (val: string) => {
     if (!val || val?.length < 1) {
       setSuggestions([]);
       setTestList([]);
       return;
     }
-    
     if (!user?.hospitalID) {
       setSuggestions([]);
       setTestList([]);
       return;
     }
 
-    setLoadingSugg(true);
-    try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const res = await AuthPost(
-        `data/lionicCode/${user?.hospitalID}`, 
-        { text: val }, 
-        token
-      );
-      if (res?.data?.message === "success" && Array.isArray(res?.data?.data)) {
-
-        const uniqueTests = removeDuplicatesAndFilter(res?.data?.data, val);
-        setTestList(uniqueTests);
-        setSuggestions(uniqueTests);
-      } else {
+      setLoadingSugg(true);
+      try {
+        const token = user?.token ?? (await AsyncStorage.getItem("token"));
+        const res = await AuthPost(
+          `data/lionicCode/${user?.hospitalID}`,
+          { text: val },
+          token
+        ) as any;
+        if (res?.data?.message === "success" && Array.isArray(res?.data?.data)) {
+          const uniqueTests = removeDuplicatesAndFilter(res?.data?.data, val);
+          setTestList(uniqueTests);
+          setSuggestions(uniqueTests);
+        } else {
+          setTestList([]);
+          setSuggestions([]);
+        }
+      } catch {
         setTestList([]);
         setSuggestions([]);
+      } finally {
+        setLoadingSugg(false);
       }
-    } catch {
-      setTestList([]);
-      setSuggestions([]);
-    } finally {
-      setLoadingSugg(false);
-    }
-  }, [user?.hospitalID, removeDuplicatesAndFilter]);
+    },
+    [user?.hospitalID, removeDuplicatesAndFilter]
+  );
 
   const latestFetchRef = useRef(fetchTestsList);
   useEffect(() => {
@@ -176,7 +179,7 @@ export default function AddTestsScreen() {
         note: selectedItem?.note || noteInput,
       };
       setSelectedItem(newSelectedItem);
-      
+
       const query = text?.trim();
       if (query?.length >= 1) {
         debouncedFetchRef.current(query);
@@ -200,7 +203,9 @@ export default function AddTestsScreen() {
     }
 
     // Check if it's a valid test from the list
-    const isValidTest = testList?.some((test) => test?.name === selectedItem?.name);
+    const isValidTest = testList?.some(
+      (test) => test?.name === selectedItem?.name
+    );
     if (!isValidTest) {
       dispatch(showError("Please select a valid test from the list."));
       return;
@@ -227,15 +232,17 @@ export default function AddTestsScreen() {
   };
 
   const removeFromList = (loinc_num_: string) => {
-    setNewSelectedList((curr) =>
-      curr?.filter((val) => val?.loinc_num_ !== loinc_num_) || []
+    setNewSelectedList(
+      (curr) => curr?.filter((val) => val?.loinc_num_ !== loinc_num_) || []
     );
   };
 
   const updateTestNote = (loinc_num_: string, note: string) => {
     setNewSelectedList((curr) => {
       const next = [...curr];
-      const index = next?.findIndex((item) => item?.loinc_num_ === loinc_num_);
+      const index = next?.findIndex(
+        (item) => item?.loinc_num_ === loinc_num_
+      );
       if (index !== -1) {
         next[index] = { ...next[index], note };
       }
@@ -253,7 +260,9 @@ export default function AddTestsScreen() {
           testNotes: test?.note || "",
         }))
       : selectedItem &&
-        testList?.some((test) => test?.loinc_num_ === selectedItem?.loinc_num_)
+        testList?.some(
+          (test) => test?.loinc_num_ === selectedItem?.loinc_num_
+        )
       ? [
           {
             testID: selectedItem?.testID,
@@ -289,24 +298,24 @@ export default function AddTestsScreen() {
         patientID,
       };
 
-      const res = await AuthPost(`test/${user?.hospitalID}`, body, token);
-      
+      const res = await AuthPost(`test/${user?.hospitalID}`, body, token) as any;
+
       if (res?.data?.message === "success") {
-            // ---- Push tests into Pre-Op / Post-Op stores (same as web) ----
-    const mappedForStore = tests.map((t) => ({
-      test: String(t.test ?? ""),
-      ICD_Code: String(t.loinc_num_ ?? ""),
-      testNotes: String(t.testNotes ?? ""),
-    }));
-    if (activeTab === "PreOpRecord") {
-      const prev = preOpTests || [];
-      const merged = dedupeTestsForStore([...prev, ...mappedForStore]);
-      setPreOpTests(merged);
-    } else if (activeTab === "PostOpRecord") {
-      const prev = postOpTests || [];
-      const merged = dedupeTestsForStore([...prev, ...mappedForStore]);
-      setPostOpTests(merged);
-    }
+        // ---- Push tests into Pre-Op / Post-Op stores (same as web) ----
+        const mappedForStore = tests?.map((t) => ({
+          test: String(t.test ?? ""),
+          ICD_Code: String(t.loinc_num_ ?? ""),
+          testNotes: String(t.testNotes ?? ""),
+        }));
+        if (activeTab === "PreOpRecord") {
+          const prev = preOpTests || [];
+          const merged = dedupeTestsForStore([...prev, ...mappedForStore]);
+          setPreOpTests(merged);
+        } else if (activeTab === "PostOpRecord") {
+          const prev = postOpTests || [];
+          const merged = dedupeTestsForStore([...prev, ...mappedForStore]);
+          setPostOpTests(merged);
+        }
 
         dispatch(showSuccess("Tests added successfully!"));
         navigation.goBack();
@@ -321,11 +330,14 @@ export default function AddTestsScreen() {
   };
 
   const renderSuggestionItem = ({ item }: { item: TestType }) => (
-    <Pressable 
-      style={styles.suggRow} 
-      onPress={() => selectSuggestion(item)}
-    >
-      <Text style={{ color: COLORS.text, fontWeight: "600", fontSize: FONT_SIZE.sm }}>
+    <Pressable style={styles.suggRow} onPress={() => selectSuggestion(item)}>
+      <Text
+        style={{
+          color: COLORS.text,
+          fontWeight: "600",
+          fontSize: FONT_SIZE.sm,
+        }}
+      >
         {item?.name}
       </Text>
       <View style={styles.suggDetails}>
@@ -340,85 +352,110 @@ export default function AddTestsScreen() {
   );
 
   const renderSelectedTestItem = (item: NewTest, index: number) => (
-    <View key={item?.loinc_num_} style={styles.selectedItemRow}>
-      <View style={[styles.chip, { backgroundColor: COLORS.pill, borderColor: COLORS.border }]}>
-        <Text style={[styles.chipText, { color: COLORS.text }]}>{item?.name}</Text>
-        <Pressable 
+    <View key={item?.loinc_num_} style={styles.testCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.testNameContainer}>
+          <Text style={[styles.testName, { color: COLORS.text }]}>
+            {item?.name}
+          </Text>
+          <View style={styles.testDetails}>
+            <Text style={[styles.testDetail, { color: COLORS.sub }]}>
+              LOINC: {item?.loinc_num_}
+            </Text>
+            <Text style={[styles.testDetail, { color: COLORS.sub }]}>
+              Dept: {item?.department}
+            </Text>
+          </View>
+        </View>
+        <Pressable
           onPress={() => removeFromList(item?.loinc_num_)}
           hitSlop={SPACING.xs}
-          style={styles.chipDelete}
+          style={styles.deleteButton}
         >
-          <XIcon size={ICON_SIZE.sm} color={COLORS.danger} />
+          <XIcon size={ICON_SIZE.md} color={COLORS.danger} />
         </Pressable>
       </View>
-      <TextInput
-        style={[
-          styles.noteInputSmall,
-          { 
-            borderColor: COLORS.border, 
-            color: COLORS.text, 
-            backgroundColor: COLORS.field 
-          }
-        ]}
-        placeholder="Note"
-        placeholderTextColor={COLORS.placeholder}
-        multiline
-        numberOfLines={2}
-        value={item?.note || ""}
-        onChangeText={(text) => updateTestNote(item?.loinc_num_, text)}
-      />
+      <View style={styles.notesSection}>
+        <Text style={[styles.notesLabel, { color: COLORS.sub }]}>Notes:</Text>
+        <TextInput
+          style={[
+            styles.notesInput,
+            {
+              borderColor: COLORS.border,
+              color: COLORS.text,
+              backgroundColor: COLORS.field,
+            },
+          ]}
+          placeholder="Add notes for this test..."
+          placeholderTextColor={COLORS.placeholder}
+          multiline
+          numberOfLines={3}
+          value={item?.note || ""}
+          onChangeText={(text) => updateTestNote(item?.loinc_num_, text)}
+        />
+      </View>
     </View>
   );
 
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : undefined} 
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        <ScrollView 
-          contentContainerStyle={[styles.scrollContent, { 
-            paddingBottom: FOOTER_HEIGHT + SPACING.md + insets.bottom 
-          }]}
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingBottom: FOOTER_HEIGHT + SPACING.md + insets.bottom,
+            },
+          ]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.card, { borderColor: COLORS.border, backgroundColor: COLORS.card }]}>
+          <View
+            style={[
+              styles.card,
+              { borderColor: COLORS.border, backgroundColor: COLORS.card },
+            ]}
+          >
             <Text style={[styles.title, { color: COLORS.text }]}>Add Test</Text>
 
-            {/* Search Row - Matching Web Layout */}
-            <View style={styles.searchRow}>
-              {/* Test Search Input - 75% width */}
-              <View style={styles.searchInputContainer}>
-                <Text style={[styles.label, { color: COLORS.sub }]}>Test</Text>
-                <View style={{ position: "relative" }}>
-                  <TextInput
-                    placeholder="Enter 1 letter for search"
-                    placeholderTextColor={COLORS.placeholder}
-                    style={[
-                      styles.input, 
-                      { 
-                        borderColor: COLORS.border, 
-                        color: COLORS.text, 
-                        backgroundColor: COLORS.field,
-                        height: isTablet ? 50 : 44,
-                      }
-                    ]}
-                    value={selectedItem?.name || ""}
-                    onChangeText={handleInputChange}
-                  />
-                  
-                  {/* Suggestions dropdown */}
-                  {(loadingSugg || suggestions?.length > 0) && selectedItem?.name && selectedItem?.name?.length >= 1 && (
-                    <View style={[
-                      styles.suggBox, 
-                      { 
-                        borderColor: COLORS.border, 
-                        backgroundColor: COLORS.card 
-                      }
-                    ]}>
+            {/* 1. TEST FIELD */}
+            <View style={styles.fieldBlock}>
+              <Text style={[styles.label, { color: COLORS.sub }]}>Test *</Text>
+              <View style={{ position: "relative" }}>
+                <TextInput
+                  placeholder="Enter 1 letter for search"
+                  placeholderTextColor={COLORS.placeholder}
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: COLORS.border,
+                      color: COLORS.text,
+                      backgroundColor: COLORS.field,
+                      height: isTablet ? 50 : 44,
+                    },
+                  ]}
+                  value={selectedItem?.name || ""}
+                  onChangeText={handleInputChange}
+                />
+
+                {/* Suggestions dropdown */}
+                {(loadingSugg || suggestions?.length > 0) &&
+                  selectedItem?.name &&
+                  selectedItem?.name?.length >= 1 && (
+                    <View
+                      style={[
+                        styles.suggBox,
+                        { borderColor: COLORS.border, backgroundColor: COLORS.card },
+                      ]}
+                    >
                       {loadingSugg ? (
                         <View style={styles.suggRowCenter}>
-                          <ActivityIndicator size="small" color={COLORS.brand} />
+                          <ActivityIndicator
+                            size="small"
+                            color={COLORS.brand}
+                          />
                         </View>
                       ) : (
                         <FlatList
@@ -428,7 +465,12 @@ export default function AddTestsScreen() {
                           renderItem={renderSuggestionItem}
                           ListEmptyComponent={
                             <View style={styles.suggRowCenter}>
-                              <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                              <Text
+                                style={{
+                                  color: COLORS.sub,
+                                  fontSize: FONT_SIZE.xs,
+                                }}
+                              >
                                 No matching tests found
                               </Text>
                             </View>
@@ -439,35 +481,10 @@ export default function AddTestsScreen() {
                       )}
                     </View>
                   )}
-                </View>
-              </View>
-
-              {/* Add Button - 25% width */}
-              <View style={styles.addButtonContainer}>
-                <Text style={[styles.label, { color: COLORS.sub, opacity: 0 }]}>
-                  Add
-                </Text>
-                <Pressable
-                  onPress={addToList}
-                  style={[
-                    styles.addButton, 
-                    { 
-                      backgroundColor: COLORS.button,
-                      height: isTablet ? 50 : 44,
-                      opacity: !selectedItem?.name ? 0.6 : 1
-                    }
-                  ]}
-                  disabled={!selectedItem?.name}
-                >
-                  <PlusIcon size={ICON_SIZE.sm} color={COLORS.buttonText} />
-                  <Text style={[styles.addButtonText, { color: COLORS.buttonText }]}>
-                    Add
-                  </Text>
-                </Pressable>
               </View>
             </View>
 
-            {/* Note Input - Always visible like web */}
+            {/* 2. NOTE FIELD */}
             <View style={styles.noteContainer}>
               <Text style={[styles.label, { color: COLORS.sub }]}>Note</Text>
               <TextInput
@@ -494,46 +511,84 @@ export default function AddTestsScreen() {
               />
             </View>
 
+            {/* 3. ADD BUTTON (AFTER TEST + NOTE) */}
+            <View style={styles.addButtonRow}>
+              <Pressable
+                onPress={addToList}
+                style={[
+                  styles.addButton,
+                  {
+                    backgroundColor: COLORS.button,
+                    height: isTablet ? 50 : 44,
+                    opacity: !selectedItem?.name ? 0.6 : 1,
+                  },
+                ]}
+                disabled={!selectedItem?.name}
+              >
+                <PlusIcon size={ICON_SIZE.sm} color={COLORS.buttonText} />
+                <Text
+                  style={[
+                    styles.addButtonText,
+                    { color: COLORS.buttonText },
+                  ]}
+                >
+                  Add
+                </Text>
+              </Pressable>
+            </View>
+
             {/* Selected Tests List */}
             {newSelectedList?.length > 0 && (
               <View style={styles.selectedListContainer}>
-                <Text style={[styles.selectedListTitle, { color: COLORS.text }]}>
-                  Tests to be Added
+                <Text
+                  style={[
+                    styles.selectedListTitle,
+                    { color: COLORS.text },
+                  ]}
+                >
+                  Tests to be Added ({newSelectedList?.length})
                 </Text>
                 <View style={styles.selectedList}>
-                  {newSelectedList?.map((item, index) => 
+                  {newSelectedList?.map((item, index) =>
                     renderSelectedTestItem(item, index)
                   )}
                 </View>
               </View>
             )}
 
-            {/* Action Buttons */}
+            {/* Action Buttons (Cancel / Submit) */}
             <View style={styles.actionButtons}>
-              <Pressable 
-                onPress={() => navigation.goBack()} 
+              <Pressable
+                onPress={() => navigation.goBack()}
                 style={[styles.actionButton, { backgroundColor: COLORS.pill }]}
               >
-                <Text style={[styles.actionButtonText, { color: COLORS.text }]}>
+                <Text
+                  style={[styles.actionButtonText, { color: COLORS.text }]}
+                >
                   Cancel
                 </Text>
               </Pressable>
-              
+
               <Pressable
                 disabled={saving}
                 onPress={submit}
                 style={[
-                  styles.actionButton, 
-                  { 
+                  styles.actionButton,
+                  {
                     backgroundColor: COLORS.button,
-                    opacity: saving ? 0.6 : 1
-                  }
+                    opacity: saving ? 0.6 : 1,
+                  },
                 ]}
               >
                 {saving ? (
                   <ActivityIndicator color={COLORS.buttonText} />
                 ) : (
-                  <Text style={[styles.actionButtonText, { color: COLORS.buttonText }]}>
+                  <Text
+                    style={[
+                      styles.actionButtonText,
+                      { color: COLORS.buttonText },
+                    ]}
+                  >
                     Submit
                   </Text>
                 )}
@@ -544,26 +599,34 @@ export default function AddTestsScreen() {
       </KeyboardAvoidingView>
 
       {/* Footer */}
-      <View style={[styles.footerWrap, { 
-        bottom: insets.bottom,
-        height: FOOTER_HEIGHT,
-      }]}>
+      <View
+        style={[
+          styles.footerWrap,
+          {
+            bottom: insets.bottom,
+            height: FOOTER_HEIGHT,
+          },
+        ]}
+      >
         <Footer active={"patients"} brandColor={COLORS.brand} />
       </View>
       {insets.bottom > 0 && (
-        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+        <View
+          pointerEvents="none"
+          style={[styles.navShield, { height: insets.bottom }]}
+        />
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { 
-    flex: 1 
+  safe: {
+    flex: 1,
   },
-  scrollContent: { 
-    flexGrow: 1, 
-    padding: SPACING.md 
+  scrollContent: {
+    flexGrow: 1,
+    padding: SPACING.md,
   },
   card: {
     borderWidth: 1,
@@ -571,47 +634,29 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
-  title: { 
-    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg, 
-    fontWeight: "800", 
-    marginBottom: SPACING.md 
+  title: {
+    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg,
+    fontWeight: "800",
+    marginBottom: SPACING.md,
   },
-  label: { 
-    fontSize: FONT_SIZE.sm, 
+  label: {
+    fontSize: FONT_SIZE.sm,
     fontWeight: "700",
     marginBottom: 6,
   },
-  // Search row layout (75% input + 25% button)
-  searchRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
+
+  // Field block for Test
+  fieldBlock: {
     marginTop: SPACING.xs,
   },
-  searchInputContainer: {
-    flex: 0.75, // 75% width
-  },
-  addButtonContainer: {
-    flex: 0.25, // 25% width
-    justifyContent: "flex-end",
-  },
+
   input: {
     borderWidth: 1.5,
     borderRadius: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     fontSize: FONT_SIZE.sm,
   },
-  addButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACING.xs,
-    borderRadius: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
-  },
-  addButtonText: {
-    fontWeight: "700",
-    fontSize: FONT_SIZE.sm,
-  },
+
   // Note container
   noteContainer: {
     marginTop: SPACING.sm,
@@ -625,17 +670,78 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     minHeight: 80,
   },
-  noteInputSmall: {
-    borderWidth: 1.5,
-    borderRadius: SPACING.xs,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: SPACING.xs,
+
+  // ADD BUTTON row (below Note)
+  addButtonRow: {
+    marginTop: SPACING.sm,
+    // alignItems: "flex-end",
+  },
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.xs,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    // minWidth: 120,
+  },
+  addButtonText: {
+    fontWeight: "700",
+    fontSize: FONT_SIZE.sm,
+  },
+
+  // Test card styles (combined test+notes)
+  testCard: {
+    backgroundColor: COLORS.field,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    padding: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: SPACING.sm,
+  },
+  testNameContainer: {
+    flex: 1,
+  },
+  testName: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  testDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+  },
+  testDetail: {
     fontSize: FONT_SIZE.xs,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  notesSection: {
+    marginTop: SPACING.xs,
+  },
+  notesLabel: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderRadius: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZE.sm,
     textAlignVertical: "top",
     minHeight: 60,
-    flex: 1,
-    marginLeft: SPACING.xs,
   },
+
   // Selected tests list
   selectedListContainer: {
     marginTop: SPACING.md,
@@ -648,29 +754,7 @@ const styles = StyleSheet.create({
   selectedList: {
     gap: SPACING.sm,
   },
-  selectedItemRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: SPACING.xs,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 20,
-    borderWidth: 1,
-    minWidth: 100,
-  },
-  chipText: {
-    fontWeight: "700",
-    fontSize: FONT_SIZE.xs,
-    flex: 1,
-  },
-  chipDelete: {
-    padding: 2,
-  },
+
   // Action buttons
   actionButtons: {
     flexDirection: "row",
@@ -688,6 +772,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: FONT_SIZE.sm,
   },
+
   // Suggestions
   suggBox: {
     position: "absolute",
@@ -723,6 +808,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   // Footer
   footerWrap: {
     position: "absolute",

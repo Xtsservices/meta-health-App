@@ -16,13 +16,13 @@ export const getValidationMessage = (
   type: "weight" | "height"
 ): string | undefined => {
   if (type === "weight") {
-    if (category === "3" && inputValue > 300) return "Weight should be under 300 kgs";
-    if (category === "2" && inputValue > 175) return "Weight should be under 175 kgs";
-    if (category === "1" && inputValue > 8) return "Weight should be under 8 kgs";
+    if (category === "3" && inputValue > 300) return "Weight should be less than or equal to 300 kgs";
+    if (category === "2" && inputValue > 175) return "Weight should be less than or equal to  kgs";
+    if (category === "1" && inputValue > 8) return "Weight should be less than or equal to 8 kgs";
   } else if (type === "height") {
-    if (category === "3" && inputValue > 305) return "Height should be under 305 cms";
-    if (category === "2" && inputValue > 200) return "Height should be under 200 cms";
-    if (category === "1" && inputValue > 60) return "Height should be under 60 cms";
+    if (category === "3" && inputValue > 305) return "Height should be less than or equal to 305 cms";
+    if (category === "2" && inputValue > 255) return "Height should be less than or equal to 255 cms";
+    if (category === "1" && inputValue > 255) return "Height should be less than or equal to 255 cms";
   }
   return undefined;
 };
@@ -67,37 +67,29 @@ export const getEmailValidationMessage = (value: string): string | undefined => 
   const trimmed = value.trim().toLowerCase();
   if (!trimmed) return undefined;
 
-  // ICANN-approved TLDs (common ones + country codes)
-  const validTLDs = [
-    // Indian specific
-    'co.in', 'org.in', 'net.in', 'gov.in', 'ac.in', 'edu.in', 'mil.in',
-    'res.in', 'ind.in', 'firm.in', 'gen.in'
-  ];
-
-  // Basic email validation
+  // Standard email regex
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   
   if (!emailRegex.test(trimmed)) {
     return "Enter a valid Email ID";
   }
 
-  // Extract the TLD (last part after last dot)
+  // Optional: Check for common TLDs (more permissive)
+  const commonTLDs = [
+    'com', 'org', 'net', 'edu', 'gov', 'mil', 'io', 'co', 
+    'in', 'co.in', 'org.in', 'net.in', 'gov.in', 
+    'uk', 'co.uk', 'org.uk', 'au', 'ca', 'de', 'fr', 'jp'
+  ];
+
   const domain = trimmed.split('@')[1];
   if (!domain) return "Invalid email domain";
   
   const domainParts = domain.split('.');
   const tld = domainParts[domainParts.length - 1];
   
-  // For two-part TLDs like co.uk, gov.in
-  const lastTwoParts = domainParts.length > 1 
-    ? domainParts.slice(-2).join('.') 
-    : '';
-  
-  // Check if TLD is valid
-  const isValidTLD = validTLDs.includes(tld) || validTLDs.includes(lastTwoParts);
-  
-  if (!isValidTLD) {
-    return `Email domain .${tld} is not recognized. Please use a valid domain.`;
+  // Allow common TLDs
+  if (!commonTLDs.includes(tld)) {
+    return `Please use a common email domain (.com, .org, .in, etc.)`;
   }
 
   return undefined;

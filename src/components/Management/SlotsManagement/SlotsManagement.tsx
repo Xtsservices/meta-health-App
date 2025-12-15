@@ -347,7 +347,6 @@ const SlotsManagement: React.FC = () => {
 
     // Add proper array checking
     if (!Array.isArray(slots)) {
-      console.warn("Slots is not an array:", slots);
       return [];
     }
 
@@ -739,7 +738,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 8,
-    minWidth: 180,
+    minWidth: 150,
     justifyContent: "center",
     marginHorizontal: 12,
   },

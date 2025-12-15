@@ -8,14 +8,18 @@ import {
   TouchableOpacity,
   Image,
   Platform,
+  SafeAreaView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Footer from "../dashboard/footer";
 
-
 type Nav = ReturnType<typeof useNavigation>;
+
+// NOTE: update paths if your assets are elsewhere
+const ShieldBoltImg = require("../../assets/ShieldBolt.png");
+const ShieldImg = require("../../assets/Shield.png");
 
 const TriageTraumaTypeScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -29,7 +33,7 @@ const TriageTraumaTypeScreen: React.FC = () => {
   const handleBack = () => navigation.goBack();
 
   return (
-    <View style={styles.screenWrap}>
+    <SafeAreaView style={styles.screenWrap}>
       <KeyboardAwareScrollView
         style={styles.container}
         contentContainerStyle={[
@@ -54,19 +58,19 @@ const TriageTraumaTypeScreen: React.FC = () => {
             style={[styles.choice, styles.choiceTrauma]}
             onPress={handleTrauma}
           >
-            <View style={styles.choiceIconWrap}>
-              {/* Replace source with your actual asset path */}
-              {/* <Image
-                source={require("../../assets/triage/ShieldBolt.png")}
+            <View style={[styles.choiceIconWrap, styles.choiceIconWrapTrauma]}>
+              <Image
+                source={ShieldBoltImg}
                 style={styles.choiceIcon}
                 resizeMode="contain"
-              /> */}
+                accessible
+                accessibilityLabel="Trauma icon"
+              />
             </View>
+
             <View style={styles.choiceTextWrap}>
               <Text style={styles.choiceLabel}>Trauma</Text>
-              <Text style={styles.choiceHint}>
-                Accidents, falls, injuries
-              </Text>
+              <Text style={styles.choiceHint}>Accidents, falls, injuries</Text>
             </View>
           </TouchableOpacity>
 
@@ -75,14 +79,16 @@ const TriageTraumaTypeScreen: React.FC = () => {
             style={[styles.choice, styles.choiceNonTrauma]}
             onPress={handleNonTrauma}
           >
-            <View style={styles.choiceIconWrap}>
-              {/* Replace source with your actual asset path */}
-              {/* <Image
-                source={require("../../assets/triage/Shield.png")}
+            <View style={[styles.choiceIconWrap, styles.choiceIconWrapNonTrauma]}>
+              <Image
+                source={ShieldImg}
                 style={styles.choiceIcon}
                 resizeMode="contain"
-              /> */}
+                accessible
+                accessibilityLabel="Non trauma icon"
+              />
             </View>
+
             <View style={styles.choiceTextWrap}>
               <Text style={styles.choiceLabel}>Non-Trauma</Text>
               <Text style={styles.choiceHint}>
@@ -121,7 +127,7 @@ const TriageTraumaTypeScreen: React.FC = () => {
           style={[styles.navShield, { height: insets.bottom }]}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -174,6 +180,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+    marginBottom: 12,
   },
   choiceTrauma: {
     borderColor: "#f97373",
@@ -184,17 +191,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#ecfdf3",
   },
   choiceIconWrap: {
-    width: 44,
-    height: 44,
+    width: 56,
+    height: 56,
     borderRadius: 999,
     backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+    overflow: "hidden",
+  },
+  // optional colored circle for trauma (if you want a colored bg behind image)
+  choiceIconWrapTrauma: {
+    backgroundColor: "#f47a7aff", // soft peach behind icon
+  },
+  choiceIconWrapNonTrauma: {
+    backgroundColor: "#54cd80ff", // soft blue behind icon
   },
   choiceIcon: {
-    width: 26,
-    height: 26,
+    width: 34,
+    height: 34,
+    // remove tintColor if icons are already colored
   },
   choiceTextWrap: {
     flex: 1,

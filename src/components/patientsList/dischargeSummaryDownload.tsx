@@ -8,8 +8,9 @@ import {
   ScrollView,
   Alert,
   Linking,
+  Platform,
 } from "react-native";
-import { X, Download } from "lucide-react-native";
+import { X, Download, Eye } from "lucide-react-native";
 import RNHTMLtoPDF from "react-native-html-to-pdf"; // for v0.12.0
 
 import { showError } from "../../store/toast.slice";
@@ -510,12 +511,21 @@ const DischargeSummarySheet: React.FC<Props> = ({
 
     try {
       const html = buildHtml();
-      const fileName = `discharge_${patient?.pUHID || patient?.id || "summary"}`;
+      const fileName = `discharge_${patient?.pUHID || patient?.id || "summary"}_${Date.now()}.pdf`;
+
+      // Determine the best directory for each platform
+      let directory = "Downloads";
+      
+      if (Platform.OS === 'android') {
+        directory = "Download"; // Android's Download folder
+      } else if (Platform.OS === 'ios') {
+        directory = "Documents"; // iOS Documents folder
+      }
 
       const options = {
         html,
         fileName,
-        directory: "Documents",
+        directory,
         base64: false,
       };
 
@@ -529,11 +539,95 @@ const DischargeSummarySheet: React.FC<Props> = ({
       const path = file.filePath;
       const url = path.startsWith("file://") ? path : `file://${path}`;
 
-      Alert.alert("PDF Saved", `Saved to:\n${path}`, [
-        { text: "OK", style: "cancel" },
-      ]);
+      // Create a user-friendly display path
+      let displayPath = "";
+      if (Platform.OS === 'android') {
+        displayPath = `Internal Storage/${directory}/${fileName}`;
+      } else if (Platform.OS === 'ios') {
+        displayPath = `Files app → On My iPhone → ${fileName}`;
+      } else {
+        displayPath = path;
+      }
 
-      onClose();
+      // Show success alert with options
+      Alert.alert(
+        "PDF Saved Successfully!",
+        `File: ${fileName}`,
+        [
+          {
+            text: "Open File",
+            onPress: async () => {
+              try {
+                // Try to open with available PDF viewers
+                const canOpen = await Linking.canOpenURL(url);
+                if (canOpen) {
+                  await Linking.openURL(url);
+                } else {
+                  // If can't open directly, show instructions
+                  Alert.alert(
+                    "Open PDF",
+                    `To view the PDF:\n1. Open your file manager\n2. Navigate to: ${displayPath}\n3. Tap to open with a PDF viewer`,
+                    [
+                      { text: "OK" },
+                      {
+                        text: "Open Folder",
+                        onPress: () => {
+                          if (Platform.OS === 'android') {
+                            // Try to open the directory
+                            const dirPath = path.substring(0, path.lastIndexOf('/'));
+                            Linking.openURL(`file://${dirPath}`).catch(() => {
+                              Alert.alert("Note", `File saved to:\n${displayPath}`);
+                            });
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }
+              } catch (openError) {
+                Alert.alert(
+                  "Can't Open Directly",
+                  `File saved to:\n${displayPath}\n\nPlease use a file manager to open it.`
+                );
+              }
+            },
+          },
+          {
+            text: "Open Folder",
+            onPress: () => {
+              if (Platform.OS === 'android') {
+                // Try to open the parent directory
+                const dirPath = path.substring(0, path.lastIndexOf('/'));
+                Linking.openURL(`file://${dirPath}`).catch(() => {
+                  Alert.alert(
+                    "Location",
+                    `File saved to:\n${displayPath}\n\nYou can find it in your Downloads folder.`
+                  );
+                });
+              } else if (Platform.OS === 'ios') {
+                Alert.alert(
+                  "File Location",
+                  `File saved to:\n${displayPath}\n\nOpen the Files app to access it.`
+                );
+              }
+            },
+          },
+          {
+            text: "Share",
+            onPress: () => {
+              // You could implement sharing functionality here
+              Alert.alert(
+                "Share PDF",
+                "Sharing functionality would be implemented here.",
+                [{ text: "OK" }]
+              );
+            },
+          },
+          { text: "Done", style: "cancel" },
+        ]
+      );
+
+      // onClose();
     } catch (error: any) {
       dispatch(showError(error?.message || "Failed to generate PDF"));
     } finally {
@@ -624,7 +718,7 @@ const DischargeSummarySheet: React.FC<Props> = ({
               { backgroundColor: colors.pill, flex: 1 },
             ]}
           >
-            <Text style={{ color: colors.text, fontWeight: "700" }}>
+            <Text style={{ color: colors.text, fontWeight: "700",textAlign: "center"}}>
               Cancel
             </Text>
           </Pressable>
@@ -636,7 +730,7 @@ const DischargeSummarySheet: React.FC<Props> = ({
               {
                 backgroundColor: colors.button,
                 opacity: creating ? 0.7 : 1,
-                flex: 1.2,
+                flex: 1.5,
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "center",
@@ -644,10 +738,22 @@ const DischargeSummarySheet: React.FC<Props> = ({
               },
             ]}
           >
+            {creating ? (
+              <>
+                <Text
+                  style={{ color: colors.buttonText, fontWeight: "700" }}
+                >
+                  Creating...
+                </Text>
+              </>
+            ) : (
+              <>
             <Download size={16} color={colors.buttonText} />
             <Text style={{ color: colors.buttonText, fontWeight: "700" }}>
-              {creating ? "Creating..." : "Download PDF"}
+                  Download PDF
             </Text>
+              </>
+            )}
           </Pressable>
         </View>
       </View>

@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   },
   sidebarItemActive: {
     backgroundColor: "#fff",
-    borderLeftColor: "#1977f3",
+    borderLeftColor: "#14b8a6",
   },
   sidebarText: {
     fontSize: 14,
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#1977f3",
+    backgroundColor: "#14b8a6",
   },
   mainContent: {
     flex: 1,

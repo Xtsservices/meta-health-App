@@ -259,7 +259,7 @@ dispatch(showError(error?.message|| error?.status || "failed to delete report"))
             <Text style={styles.dot}>View</Text>
             {/* <ExternalLink size={18} color={COLORS.text} /> */}
           </Pressable>
-          {!isOt  &&!isCustomerCare && !reception && (
+          {!isOt  &&!isCustomerCare && !reception && cp?.ptype != 21 &&(
             <Pressable onPress={() => onDelete(item.id)} style={styles.iconBtn} hitSlop={8}>
               <Trash2 size={18} color={COLORS.danger} />
             </Pressable>
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
 
   // Footer & nav shield
   footerWrap: {
-    position: "absolute",
+    // position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,

@@ -11,13 +11,16 @@ import {
   Dimensions,
   StatusBar,
   SafeAreaView,
+  PermissionsAndroid,
+  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { ArrowLeftIcon, XIcon, CameraIcon } from "../../utils/SvgIcons";
 import { RootState } from "../../store/store";
 import { AuthPost, UploadFiles } from "../../auth/auth";
-import { launchImageLibrary } from 'react-native-image-picker';
+import { launchImageLibrary, launchCamera, Asset } from "react-native-image-picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const MODULE_OPTIONS = [
   "Inpatient",
@@ -27,6 +30,9 @@ const MODULE_OPTIONS = [
   "Emergency Red zone",
   "Emergency Yellow zone",
   "Emergency Green zone",
+  "Labs",
+  "Pharmacy",
+  "Reception",
 ];
 
 const ISSUE_TYPE_OPTIONS = [
@@ -52,7 +58,26 @@ const NewTicketScreen: React.FC = () => {
   const [files, setFiles] = useState<ImageFile[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const pickImage = () => {
+  const requestCameraPermissionAndroid = async (): Promise<boolean> => {
+    if (Platform.OS !== "android") return true;
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        {
+          title: "Camera Permission",
+          message: "App needs camera permission to take photos for tickets",
+          buttonNeutral: "Ask Me Later",
+          buttonNegative: "Cancel",
+          buttonPositive: "OK",
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      return false;
+    }
+  };
+
+const pickFromGallery = () => {
     if (files?.length >= 3) {
       Alert.alert("Limit Exceeded", "Cannot upload more than 3 images at a time");
       return;
@@ -60,7 +85,7 @@ const NewTicketScreen: React.FC = () => {
 
     const options = {
       mediaType: 'photo' as const,
-      quality: 0.8,
+      quality: 0.8 as const, // ✅ Cast to literal type
       maxWidth: 1000,
       maxHeight: 1000,
     };
@@ -71,21 +96,60 @@ const NewTicketScreen: React.FC = () => {
       } else if (response.errorCode) {
         Alert.alert("Error", `Image picker error: ${response.errorMessage}`);
       } else if (response.assets && response.assets?.length > 0) {
-        const asset = response.assets[0];
+        const asset: Asset = response.assets[0];
         if (asset.uri) {
           const file: ImageFile = {
             uri: asset.uri,
             type: asset.type || 'image/jpeg',
             name: asset.fileName || `image_${Date.now()}.jpg`,
           };
-          setFiles(prev => [...prev, file]);
+        setFiles((prev) => [...prev, file]);
+      }
+    }
+  });
+};
+
+const takePhoto = async () => {
+  if (files?.length >= 3) {
+    Alert.alert("Limit Exceeded", "Cannot upload more than 3 images at a time");
+    return;
+  }
+
+  const hasPermission = await requestCameraPermissionAndroid();
+  if (!hasPermission) {
+    Alert.alert("Permission required", "Camera permission is required to take photos.");
+    return;
+  }
+
+  const options = {
+    mediaType: "photo" as const,
+    quality: 0.8 as const, // ✅ Cast to literal type
+    maxWidth: 1000,
+    maxHeight: 1000,
+    saveToPhotos: true,
+  };
+
+  launchCamera(options, (response) => {
+    if (response.didCancel) {
+      return;
+    } else if (response.errorCode) {
+      Alert.alert("Error", `Camera error: ${response.errorMessage}`);
+    } else if (response.assets && response.assets.length > 0) {
+      const asset: Asset = response.assets[0];
+      if (asset.uri) {
+        const file: ImageFile = {
+          uri: asset.uri,
+          type: asset.type || "image/jpeg",
+          name: asset.fileName || `photo_${Date.now()}.jpg`,
+        };
+        setFiles((prev) => [...prev, file]);
         }
       }
     });
   };
 
   const removeImage = (indexToRemove: number) => {
-    setFiles(prev => prev?.filter?.((_, index) => index !== indexToRemove));
+    setFiles((prev) => prev?.filter?.((_, index) => index !== indexToRemove));
   };
 
   const handleSubmit = async () => {
@@ -102,6 +166,7 @@ const NewTicketScreen: React.FC = () => {
     setLoading(true);
 
     try {
+      const token = await AsyncStorage.getItem("token");
       const ticketData = {
         userID: user?.id,
         type,
@@ -113,20 +178,38 @@ const NewTicketScreen: React.FC = () => {
       const res = await AuthPost(
         `ticket/hospital/${user?.hospitalID}`,
         ticketData,
-        user?.token || ""
+        token || ""
       );
 
-      // FIX: Better response handling
       if (res?.status === 'error') {
-        Alert.alert("Error", res?.message || "Failed to create ticket");
-        return;
+      let errorMessage = "Failed to create ticket";
+      
+      if ("message" in res && res.message) {
+        errorMessage = res.message;
+      } else if ("data" in res && res.data?.message) {
+        errorMessage = res.data.message;
       }
+      
+      Alert.alert("Error", errorMessage);
+      setLoading(false);
+      return;
+    }
 
-      // Handle both response structures safely
-      const responseData = res?.data || res;
+    let responseData: any;
+    
+    if ("data" in res) {
+      responseData = res.data;
+    } else if ("message" in res) {
+      responseData = res;
+    } else {
+      Alert.alert("Error", "Invalid response format");
+      setLoading(false);
+      return;
+    }
 
       if (!responseData) {
         Alert.alert("Error", "No response received from server");
+        setLoading(false);
         return;
       }
 
@@ -152,12 +235,18 @@ const NewTicketScreen: React.FC = () => {
             const attachmentRes = await UploadFiles(
               `attachment/tickets/${user?.hospitalID}/${responseData.ticket.id}`,
               formData,
-              user?.token || ""
+              token || ""
             );
 
-            const attachmentData = attachmentRes?.data || attachmentRes;
+            let attachmentData: any;
             
-            if (attachmentData && attachmentData?.message !== "success") {
+            if ("data" in attachmentRes) {
+              attachmentData = attachmentRes.data;
+            } else if ("message" in attachmentRes) {
+              attachmentData = attachmentRes;
+            }
+            
+            if (!(attachmentData && attachmentData?.message === "success")) {
               Alert.alert("Upload Warning", "Ticket created but file upload failed");
             }
           } catch (uploadError: any) {
@@ -229,6 +318,7 @@ const NewTicketScreen: React.FC = () => {
           <TextInput
             style={styles.customInput}
             placeholder="Or enter custom issue type..."
+            placeholderTextColor={"#a19e9eff"}
             value={type}
             onChangeText={setType}
           />
@@ -270,6 +360,7 @@ const NewTicketScreen: React.FC = () => {
             multiline
             numberOfLines={6}
             placeholder="Describe your issue in detail..."
+            placeholderTextColor={"#a19e9eff"}
             value={description}
             onChangeText={setDescription}
             textAlignVertical="top"
@@ -281,10 +372,17 @@ const NewTicketScreen: React.FC = () => {
           <Text style={styles.label}>
             Attachments {files?.length > 0 && `(${files?.length}/3)`}
           </Text>
-          <TouchableOpacity style={styles.fileUploadButton} onPress={pickImage}>
-            <CameraIcon size={20} color="#666" />
+          <View style={styles.uploadButtonsRow}>
+          <TouchableOpacity style={styles.fileUploadButton} onPress={pickFromGallery}>
+            <CameraIcon size={18} color="#666" />
             <Text style={styles.fileUploadText}>Add Images</Text>
           </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.fileUploadButton, styles.takePhotoButton]} onPress={takePhoto}>
+              <CameraIcon size={18} color="#fff" />
+              <Text style={[styles.fileUploadText, { color: "#fff" }]}>Take Photo</Text>
+            </TouchableOpacity>
+          </View>
           
           {files?.length > 0 && (
             <View style={styles.imagePreviewContainer}>
@@ -385,8 +483,8 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
   },
   chipSelected: {
-    backgroundColor: "#1977f3",
-    borderColor: "#1977f3",
+    backgroundColor: "#14b8a6",
+    borderColor: "#14b8a6",
   },
   chipText: {
     fontSize: 14,
@@ -415,7 +513,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     textAlignVertical: "top",
   },
+  uploadButtonsRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
   fileUploadButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -424,8 +527,14 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
     borderStyle: "dashed",
     borderRadius: 8,
-    padding: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
     backgroundColor: "#fafafa",
+  },
+  takePhotoButton: {
+    backgroundColor: "#14b8a6",
+    borderStyle: "solid",
+    borderWidth: 0,
   },
   fileUploadText: {
     fontSize: 16,
@@ -477,7 +586,7 @@ const styles = StyleSheet.create({
     borderColor: "#d1d5db",
   },
   submitButton: {
-    backgroundColor: "#1977f3",
+    backgroundColor: "#14b8a6",
   },
   disabledButton: {
     opacity: 0.6,

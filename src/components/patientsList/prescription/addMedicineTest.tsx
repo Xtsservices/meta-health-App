@@ -13,6 +13,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -54,6 +56,10 @@ type MedicineRow = {
   followUp: 0 | 1;
   followUpDate: string;
   medicineList: string[];
+  isMedInDb: boolean;
+  showMedicineDropdown: boolean;
+  showTestDropdown: boolean;
+  isTestValidated: boolean; // Track if test was selected from dropdown
 };
 
 /* ------------------------------------------------------------------ */
@@ -93,6 +99,10 @@ const createEmptyRow = (
   followUp: 0,
   followUpDate: "",
   medicineList: [],
+  isMedInDb: false,
+  showMedicineDropdown: false,
+  showTestDropdown: false,
+  isTestValidated: false,
   ...overrides,
 });
 
@@ -131,26 +141,20 @@ export default function AddMedicineScreen() {
     []
   );
 
-  const [testOptions, setTestOptions] = useState<string[]>([]);
-
-  /** All these are now keyed by rowId (NOT index) */
+  // Row-specific states
   const [searchTest, setSearchTest] = useState<Record<string, string>>({});
   const [testNote, setTestNote] = useState<Record<string, string>>({});
   const [medicineOptions, setMedicineOptions] = useState<
     Record<string, string[]>
   >({});
-  const [selectedMedicine, setSelectedMedicine] = useState<
-    Record<string, boolean>
-  >({});
-  const [selectedTest, setSelectedTest] = useState<Record<string, boolean>>({});
-  const [showStartDatePicker, setShowStartDatePicker] = useState<
-    Record<string, boolean>
-  >({});
-  const [showFollowUpPicker, setShowFollowUpPicker] = useState<
-    Record<string, boolean>
-  >({});
+  const [testOptions, setTestOptions] = useState<
+    Record<string, string[]>>({});
+  const [showStartDatePicker, setShowStartDatePicker] = useState<Record<string, boolean>>({});
+  const [showFollowUpPicker, setShowFollowUpPicker] = useState<Record<string, boolean>>({});
 
   const [loading, setLoading] = useState(false);
+  const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
+  const [focusedInputType, setFocusedInputType] = useState<'medicine' | 'test' | null>(null);
 
   /* --------------------------------------------------------------- */
   /* Reset form when patient / timeline changes                      */
@@ -164,11 +168,11 @@ export default function AddMedicineScreen() {
     setSearchTest({});
     setTestNote({});
     setMedicineOptions({});
-    setSelectedMedicine({});
-    setSelectedTest({});
+    setTestOptions({});
     setShowStartDatePicker({});
     setShowFollowUpPicker({});
-    setTestOptions([]);
+    setFocusedRowId(null);
+    setFocusedInputType(null);
   }, [patientID, timeLineID]);
 
   /* --------------------------------------------------------------- */
@@ -192,53 +196,74 @@ export default function AddMedicineScreen() {
   }, [user, timeLineID, patientID]);
 
   /* --------------------------------------------------------------- */
-  /* Medicine autocomplete                                           */
+  /* Medicine autocomplete (CALLS ON EVERY KEYSTROKE)                */
   /* --------------------------------------------------------------- */
 
   const fetchMedicines = useCallback(
-    debounce(async (text: string, rowId: string) => {
-      if (text.length < 1) return;
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const res = await AuthPost(
-        `medicine/${user?.hospitalID}/getMedicines`,
-        { text },
-        token
-      );
-      if (res?.status === "success" && "data" in res) {
-        const names =
-          res.data?.medicines
-            ?.map((m: any) => m.Medicine_Name)
-            .filter(Boolean) ?? [];
-        setMedicineOptions((prev) => ({ ...prev, [rowId]: names }));
+    async (text: string, rowId: string) => {
+      // Immediate call on every keystroke
+      if (text.length < 1) {
+        setMedicineOptions(prev => ({ ...prev, [rowId]: [] }));
+        // keep row data untouched here; dropdown will hide via focused state/onBlur
+        return;
       }
-    }, DEBOUNCE_DELAY),
+      try {
+        const token = user?.token ?? (await AsyncStorage.getItem("token"));
+        const res = await AuthPost(
+          `medicine/${user?.hospitalID}/getMedicines`,
+          { text },
+          token
+        );
+        if (res?.status === "success" && "data" in res) {
+          const names =
+            res.data?.medicines
+              ?.map((m: any) => m.Medicine_Name)
+              .filter(Boolean) ?? [];
+          setMedicineOptions(prev => ({ ...prev, [rowId]: names }));
+        } else {
+          setMedicineOptions(prev => ({ ...prev, [rowId]: [] }));
+        }
+      } catch (err) {
+        setMedicineOptions(prev => ({ ...prev, [rowId]: [] }));
+      }
+    },
     [user]
   );
 
   /* --------------------------------------------------------------- */
-  /* Test autocomplete                                               */
+  /* Test autocomplete (CALLS ON EVERY KEYSTROKE)                    */
   /* --------------------------------------------------------------- */
 
   const fetchTests = useCallback(
-    debounce(async (text: string) => {
-      if (text.length < 1) return;
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const res = await AuthPost(
-        `data/lionicCode/${user?.hospitalID}`,
-        { text },
-        token
-      );
-      if (res?.status === "success" && "data" in res) {
-        const unique = Array.from(
-          new Set(
-            (res.data?.data as { LOINC_Name: string }[])
-              .map((t) => t.LOINC_Name?.trim())
-              .filter(Boolean)
-          )
-        );
-        setTestOptions(unique);
+    async (text: string, rowId: string) => {
+      // Immediate call on every keystroke
+      if (!text || text.trim().length < 1) {
+        setTestOptions(prev => ({ ...prev, [rowId]: [] }));
+        return;
       }
-    }, DEBOUNCE_DELAY),
+      try {
+        const token = user?.token ?? (await AsyncStorage.getItem("token"));
+        const res = await AuthPost(
+          `data/lionicCode/${user?.hospitalID}`,
+          { text },
+          token
+        );
+        if (res?.status === "success" && "data" in res) {
+          const unique = Array.from(
+            new Set(
+              (res.data?.data as { LOINC_Name: string }[])
+                .map((t) => t.LOINC_Name?.trim())
+                .filter(Boolean)
+            )
+          );
+          setTestOptions(prev => ({ ...prev, [rowId]: unique }));
+        } else {
+          setTestOptions(prev => ({ ...prev, [rowId]: [] }));
+        }
+      } catch (err) {
+        setTestOptions(prev => ({ ...prev, [rowId]: [] }));
+      }
+    },
     [user]
   );
 
@@ -246,12 +271,41 @@ export default function AddMedicineScreen() {
   /* Row helpers                                                     */
   /* --------------------------------------------------------------- */
 
-  const addRow = () => setRows((p) => [...p, createEmptyRow()]);
+  const addRow = () => {
+    const newRow = createEmptyRow();
+    setRows((p) => [...p, newRow]);
+  };
 
-  const deleteRow = (rowId: string) =>
+  const deleteRow = (rowId: string) => {
     setRows((p) => p.filter((r) => r.id !== rowId));
+    // Clean up row-specific states
+    setSearchTest(prev => {
+      const newState = { ...prev };
+      delete newState[rowId];
+      return newState;
+    });
+    setTestNote(prev => {
+      const newState = { ...prev };
+      delete newState[rowId];
+      return newState;
+    });
+    setMedicineOptions(prev => {
+      const newState = { ...prev };
+      delete newState[rowId];
+      return newState;
+    });
+    setTestOptions(prev => {
+      const newState = { ...prev };
+      delete newState[rowId];
+      return newState;
+    });
+    if (focusedRowId === rowId) {
+      setFocusedRowId(null);
+      setFocusedInputType(null);
+    }
+  };
 
-  const updateRow = <K extends keyof MedicineRow>(
+  const updateRowField = <K extends keyof MedicineRow>(
     rowId: string,
     field: K,
     value: MedicineRow[K]
@@ -265,15 +319,26 @@ export default function AddMedicineScreen() {
         if (field === "medicineType" && value) {
           const type = Number(value);
           const unit = UNIT_BY_TYPE[type] ?? "";
-         
-            updated.doseUnit = unit;
-          
+          updated.doseUnit = unit;
         }
+
         return updated;
       });
       return next;
     });
   };
+
+  const updateRow = (rowId: string, updates: Partial<MedicineRow>) => {
+    setRows((prev) => {
+      const next = prev.map((row) => {
+        if (row.id !== rowId) return row;
+        return { ...row, ...updates };
+      });
+      return next;
+    });
+  };
+
+  
 
   /* --------------------------------------------------------------- */
   /* Time-of-Medication handling                                     */
@@ -292,8 +357,7 @@ export default function AddMedicineScreen() {
             times = times.filter((t) => t !== prn);
           } else {
             times = [prn];
-            row.Frequency = 1;
-            row.daysCount = 0;
+            updateRow(rowId, { Frequency: 1, daysCount: 0 });
           }
         } else {
           times = times.filter((t) => t !== prn);
@@ -350,7 +414,9 @@ export default function AddMedicineScreen() {
       return;
     }
 
-    if (!testOptions.includes(term)) {
+    // Check if the test was validated (selected from dropdown)
+    const row = rows.find(r => r.id === rowId);
+    if (!row?.isTestValidated) {
       dispatch(showError("Please select a test from the dropdown list."));
       return;
     }
@@ -374,15 +440,19 @@ export default function AddMedicineScreen() {
           existing.push(entry);
         }
 
-        return { ...row, test: existing.join("#") };
+        return {
+          ...row,
+          test: existing.join("#"),
+          showTestDropdown: false,
+          isTestValidated: false
+        };
       });
       return next;
     });
 
-    setSearchTest((p) => ({ ...p, [rowId]: "" }));
-    setTestNote((p) => ({ ...p, [rowId]: "" }));
-    setSelectedTest((p) => ({ ...p, [rowId]: false }));
-    setTestOptions([]); // Clear dropdown after adding
+    // Reset test state for this row
+    setSearchTest(prev => ({ ...prev, [rowId]: "" }));
+    setTestNote(prev => ({ ...prev, [rowId]: "" }));
   };
 
   /* --------------------------------------------------------------- */
@@ -401,14 +471,13 @@ export default function AddMedicineScreen() {
 
       // Validate medicine selected from dropdown
       for (const row of rows) {
-        if (row.medicineName && !selectedMedicine[row.id]) {
-            dispatch(
-              showError(
-                `Please select "${row.medicineName}" from the medicine dropdown.`
-              )
-            );
-            return;
-            
+        if (row.medicineName && !row.isMedInDb) {
+          dispatch(
+            showError(
+              `Please select medicine from the medicine dropdown.`
+            )
+          );
+          return;
         }
       }
 
@@ -514,21 +583,21 @@ export default function AddMedicineScreen() {
         dispatch(
           showSuccess(
             (res && "data" in res ? res.data?.message : res?.message) ||
-              "Prescription saved successfully!"
+            "Prescription saved successfully!"
           )
         );
 
-        // 🔹 Clear form state AFTER success
+        // Clear form state AFTER success
         setRows([createEmptyRow()]);
         setCopyMode(false);
         setSearchTest({});
         setTestNote({});
         setMedicineOptions({});
-        setSelectedMedicine({});
-        setSelectedTest({});
+        setTestOptions({});
         setShowStartDatePicker({});
         setShowFollowUpPicker({});
-        setTestOptions([]);
+        setFocusedRowId(null);
+        setFocusedInputType(null);
 
         navigation.goBack();
       } else {
@@ -566,11 +635,77 @@ export default function AddMedicineScreen() {
         advice: p.advice ?? "",
         followUp: p.followUp ?? 0,
         followUpDate: p.followUpDate ?? "",
+        isMedInDb: true,
+        isTestValidated: true, // Assume copied tests are valid
+        showMedicineDropdown: false,
+        showTestDropdown: false,
       })
     );
 
     setRows(mapped.length ? mapped : [createEmptyRow()]);
     setCopyMode(true);
+  };
+
+  /* --------------------------------------------------------------- */
+  /* UI Components                                                   */
+  /* --------------------------------------------------------------- */
+
+  const MedicineDropdown = ({ rowId, visible, options, onSelect }: {
+    rowId: string;
+    visible: boolean;
+    options: string[];
+    onSelect: (option: string) => void;
+  }) => {
+    if (!visible || options.length === 0 || focusedInputType !== 'medicine') return null;
+
+    return (
+      <View style={styles.dropdownContainer}>
+        <ScrollView
+          style={styles.dropdownScroll}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
+          {options.map((opt, i) => (
+            <Pressable
+              key={`${rowId}-med-${i}`}
+              onPress={() => onSelect(opt)}
+              style={styles.dropdownItem}
+            >
+              <Text style={styles.dropdownText}>{opt}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  const TestDropdown = ({ rowId, visible, options, onSelect }: {
+    rowId: string;
+    visible: boolean;
+    options: string[];
+    onSelect: (option: string) => void;
+  }) => {
+    if (!visible || options.length === 0 || focusedInputType !== 'test') return null;
+
+    return (
+      <View style={styles.dropdownContainer}>
+        <ScrollView
+          style={styles.dropdownScroll}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
+          {options.map((opt, i) => (
+            <Pressable
+              key={`${rowId}-test-${i}`}
+              onPress={() => onSelect(opt)}
+              style={styles.dropdownItem}
+            >
+              <Text style={styles.dropdownText}>{opt}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+    );
   };
 
   /* --------------------------------------------------------------- */
@@ -580,9 +715,8 @@ export default function AddMedicineScreen() {
   const renderRow = (row: MedicineRow, idx: number) => {
     const isLast = idx === rows.length - 1;
     const rowId = row.id;
-    const medOptions = medicineOptions[rowId] ?? [];
-    const testSearch = searchTest[rowId] ?? "";
-    const noteVal = testNote[rowId] ?? "";
+    const medOptions = medicineOptions[rowId] || [];
+    const testOpts = testOptions[rowId] || [];
 
     return (
       <View key={rowId} style={styles.card}>
@@ -596,47 +730,51 @@ export default function AddMedicineScreen() {
           </Pressable>
         )}
 
-        {/* Medicine Name */}
+        {/* Medicine Name with Dropdown */}
         <View style={styles.field}>
           <Text style={styles.label}>Medicine Name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g., Amoxicillin"
-            placeholderTextColor={COLORS.placeholderText}
-            value={row.medicineName}
-            onChangeText={(t) => {
-              updateRow(rowId, "medicineName", t);
-              setSelectedMedicine((p) => ({ ...p, [rowId]: false }));
-              fetchMedicines(t, rowId);
-            }}
-          />
-          {medOptions.length > 0 && (
-            <ScrollView
-              style={styles.autoList}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-            >
-              {medOptions.map((opt, i) => (
-                <Pressable
-                  key={i}
-                  onPress={() => {
-                    updateRow(rowId, "medicineName", opt);
-                    setMedicineOptions((p) => ({
-                      ...p,
-                      [rowId]: [],
-                    }));
-                    setSelectedMedicine((p) => ({
-                      ...p,
-                      [rowId]: true,
-                    }));
-                  }}
-                  style={styles.autoItem}
-                >
-                  <Text style={styles.autoText}>{opt}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., Amoxicillin"
+              placeholderTextColor={COLORS.placeholderText}
+              value={row.medicineName}
+              onChangeText={(t) => {
+                updateRow(rowId, {
+                  medicineName: t,
+                  isMedInDb: false,
+                  showMedicineDropdown: true
+                });
+                fetchMedicines(t, rowId); // immediate
+              }}
+              onFocus={() => {
+                setFocusedRowId(rowId);
+                setFocusedInputType('medicine');
+                // keep other rows untouched; dropdown visibility controlled by focusedInputType + row.show... + options
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  if (focusedInputType !== 'medicine') {
+                    updateRowField(rowId, 'showMedicineDropdown', false);
+                  }
+                }, 200);
+              }}
+            />
+            <MedicineDropdown
+              rowId={rowId}
+              visible={row.showMedicineDropdown}
+              options={medOptions}
+              onSelect={(opt) => {
+                updateRow(rowId, {
+                  medicineName: opt,
+                  isMedInDb: true,
+                  showMedicineDropdown: false
+                });
+                setMedicineOptions(prev => ({ ...prev, [rowId]: [] }));
+                setFocusedInputType(null);
+              }}
+            />
+          </View>
         </View>
 
         {/* Medicine Type */}
@@ -650,12 +788,12 @@ export default function AddMedicineScreen() {
                 key.toLowerCase() === "ivline"
                   ? "IV Line"
                   : key.charAt(0).toUpperCase() +
-                    key.slice(1).toLowerCase();
+                  key.slice(1).toLowerCase();
               const active = row.medicineType === val;
               return (
                 <Pressable
                   key={val}
-                  onPress={() => updateRow(rowId, "medicineType", val)}
+                  onPress={() => updateRowField(rowId, "medicineType", val)}
                   style={[
                     styles.pill,
                     active && styles.pillActive,
@@ -686,64 +824,58 @@ export default function AddMedicineScreen() {
               placeholderTextColor={COLORS.placeholderText}
               value={row.doseCount?.toString() ?? ""}
               onChangeText={(t) => {
-                // Allow only numbers and one decimal point
-                const clean = t.replace(/[^0-9.]/g, '');
-                const parts = clean.split('.');
+                const clean = t.replace(/[^0-9.]/g, "");
+                const parts = clean.split(".");
                 if (parts.length > 2) return;
                 if (clean.length > 6) return;
                 const n = clean === "" ? null : Number(clean);
-                updateRow(rowId, "doseCount", n);
+                updateRowField(rowId, "doseCount", n);
               }}
               maxLength={4}
             />
           </View>
-         <View style={styles.col}>
-  <Text style={styles.label}>Unit</Text>
+          <View style={styles.col}>
+            <Text style={styles.label}>Unit</Text>
 
-  {row.medicineType ? (
-    // 🔒 Type selected → show read-only unit based on type
-    <TextInput
-      style={[
-        styles.input,
-        { backgroundColor: "#f1f5f9" }, // subtle readonly look
-      ]}
-      value={row.doseUnit || UNIT_BY_TYPE[Number(row.medicineType)] || ""}
-      editable={false}
-      placeholder="Unit"
-      placeholderTextColor={COLORS.placeholderText}
-    />
-  ) : (
-    // 🔓 No type selected → user can choose unit via Picker
-    <View
-      style={{
-        borderWidth: 1.5,
-        borderColor: COLORS.border,
-        borderRadius: 12,
-        overflow: "hidden",
-        backgroundColor: "#fff",
-      }}
-    >
-      <Picker
-        selectedValue={row.doseUnit || ""}
-        onValueChange={(val) => {
-          if (!val) return;
-          updateRow(rowId, "doseUnit", val as any);
-        }}
-        dropdownIconColor={COLORS.text}
-      >
-        <Picker.Item label="Select unit" value="" />
-        <Picker.Item label="μg" value="μg" />
-        <Picker.Item label="mg" value="mg" />
-        <Picker.Item label="g" value="g" />
-        <Picker.Item label="ml" value="ml" />
-        <Picker.Item label="l" value="l" />
-      </Picker>
-    </View>
-  )}
-</View>
-
-
-
+            {row.medicineType ? (
+              <TextInput
+                style={[
+                  styles.input,
+                  { backgroundColor: "#f1f5f9" },
+                ]}
+                value={row.doseUnit || UNIT_BY_TYPE[Number(row.medicineType)] || ""}
+                editable={false}
+                placeholder="Unit"
+                placeholderTextColor={COLORS.placeholderText}
+              />
+            ) : (
+              <View
+                style={{
+                  borderWidth: 1.5,
+                  borderColor: COLORS.border,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  backgroundColor: "#fff",
+                }}
+              >
+                <Picker
+                  selectedValue={row.doseUnit || ""}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    updateRowField(rowId, "doseUnit", val as any);
+                  }}
+                  dropdownIconColor={COLORS.text}
+                >
+                  <Picker.Item label="Select unit" value="" />
+                  <Picker.Item label="μg" value="μg" />
+                  <Picker.Item label="mg" value="mg" />
+                  <Picker.Item label="g" value="g" />
+                  <Picker.Item label="ml" value="ml" />
+                  <Picker.Item label="l" value="l" />
+                </Picker>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Frequency & Duration */}
@@ -754,7 +886,7 @@ export default function AddMedicineScreen() {
               style={styles.input}
               keyboardType="numeric"
               placeholder="1"
-            placeholderTextColor={COLORS.placeholderText}
+              placeholderTextColor={COLORS.placeholderText}
               value={row.Frequency.toString()}
               editable={!row.medicationTime.includes("As Per Need")}
               onChangeText={(t) => {
@@ -770,19 +902,16 @@ export default function AddMedicineScreen() {
               style={styles.input}
               keyboardType="numeric"
               placeholder="7"
-            placeholderTextColor={COLORS.placeholderText}
+              placeholderTextColor={COLORS.placeholderText}
               editable={!row.medicationTime.includes("As Per Need")}
               value={row.daysCount?.toString() ?? ""}
               onChangeText={(t) => {
-                // Allow only numbers
-                const clean = t.replace(/[^0-9]/g, '');
-                // Limit to 3 characters (max 365 days)
-                if (clean.length > 3) return;
-                
+                const clean = t.replace(/[^0-9]/g, "");
+                if (clean.length > 1) return;
                 const n = clean === "" ? null : Number(clean);
-                updateRow(rowId, "daysCount", n);
+                updateRowField(rowId, "daysCount", n);
               }}
-              maxLength={3}
+              maxLength={1}
             />
           </View>
         </View>
@@ -792,9 +921,7 @@ export default function AddMedicineScreen() {
           <Text style={styles.label}>Time of Medication</Text>
           <View style={styles.timeWrap}>
             {timeOfMedication.map((slot) => {
-              const active = parseTimes(row.medicationTime).includes(
-                slot
-              );
+              const active = parseTimes(row.medicationTime).includes(slot);
               return (
                 <Pressable
                   key={slot}
@@ -830,99 +957,90 @@ export default function AddMedicineScreen() {
             }
             style={styles.input}
           >
-           <Text
-  style={{
-    color: row.medicineStartDate ? COLORS.text : COLORS.sub,
-  }}
->
-  {row.medicineStartDate
-    ? formatDate(row.medicineStartDate)
-    : formatDate(todayYMD())}
-</Text>
-
+            <Text
+              style={{
+                color: row.medicineStartDate ? COLORS.text : COLORS.sub,
+              }}
+            >
+              {row.medicineStartDate
+                ? formatDate(row.medicineStartDate)
+                : formatDate(todayYMD())}
+            </Text>
           </Pressable>
-         {showStartDatePicker[rowId] && (
-  <DateTimePicker
-    value={
-      row.medicineStartDate
-        ? new Date(row.medicineStartDate)
-        : new Date()
-    }
-    mode="date"
-    display={Platform.OS === "android" ? "spinner" : "default"}
-    minimumDate={new Date()}
-    onChange={(_, d) => {
-      setShowStartDatePicker((p) => ({
-        ...p,
-        [rowId]: false,
-      }));
-      if (d) {
-        updateRow(rowId, "medicineStartDate", formatYMD(d)); // keep API format YYYY-MM-DD
-      }
-    }}
-  />
-)}
-
+          {showStartDatePicker[rowId] && (
+            <DateTimePicker
+              value={
+                row.medicineStartDate
+                  ? new Date(row.medicineStartDate)
+                  : new Date()
+              }
+              mode="date"
+              display={Platform.OS === "android" ? "spinner" : "default"}
+              minimumDate={new Date()}
+              onChange={(_, d) => {
+                setShowStartDatePicker((p) => ({
+                  ...p,
+                  [rowId]: false,
+                }));
+                if (d) {
+                  updateRowField(rowId, "medicineStartDate", formatYMD(d));
+                }
+              }}
+            />
+          )}
         </View>
 
         {/* Tests */}
         <View style={styles.field}>
           <Text style={styles.label}>Tests</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter 3+ letters"
-            placeholderTextColor={COLORS.placeholderText}
-           
-            value={testSearch}
-            onChangeText={(t) => {
-              setSearchTest((p) => ({ ...p, [rowId]: t }));
-              setSelectedTest((p) => ({ ...p, [rowId]: false }));
-              fetchTests(t);
-            }}
-          />
-          {testOptions.length > 0 && (
-            <ScrollView style={styles.autoList} nestedScrollEnabled>
-              {testOptions
-                .filter(
-                  (t) =>
-                    !row.test
-                      .split("#")
-                      .some(
-                        (e) =>
-                          e
-                            .split("|")[0]
-                            .toLowerCase() === t.toLowerCase()
-                      )
-                )
-                .map((opt, i) => (
-                  <Pressable
-                    key={i}
-                    onPress={() => {
-                      setSearchTest((p) => ({
-                        ...p,
-                        [rowId]: opt,
-                      }));
-                      setTestOptions([]);
-                      setSelectedTest((p) => ({
-                        ...p,
-                        [rowId]: true,
-                      }));
-                    }}
-                    style={styles.autoItem}
-                  >
-                    <Text style={styles.autoText}  >{opt}</Text>
-                  </Pressable>
-                ))}
-            </ScrollView>
-          )}
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter 3+ letters"
+              placeholderTextColor={COLORS.placeholderText}
+              value={searchTest[rowId] || ""}
+              onChangeText={(t) => {
+                setSearchTest(prev => ({ ...prev, [rowId]: t }));
+                updateRow(rowId, {
+                  isTestValidated: false,
+                  showTestDropdown: true
+                });
+                fetchTests(t, rowId); // immediate
+              }}
+              onFocus={() => {
+                setFocusedRowId(rowId);
+                setFocusedInputType('test');
+              }}
+              onBlur={() => {
+                setTimeout(() => {
+                  if (focusedInputType !== 'test') {
+                    updateRowField(rowId, 'showTestDropdown', false);
+                  }
+                }, 200);
+              }}
+            />
+            <TestDropdown
+              rowId={rowId}
+              visible={row.showTestDropdown}
+              options={testOpts}
+              onSelect={(opt) => {
+                setSearchTest(prev => ({ ...prev, [rowId]: opt }));
+                updateRow(rowId, {
+                  isTestValidated: true,
+                  showTestDropdown: false
+                });
+                setFocusedInputType(null);
+              }}
+            />
+          </View>
 
           <TextInput
             style={[styles.input, { marginTop: 8 }]}
-            placeholder="Optional note"
+            placeholder="Test note (optional)"
             placeholderTextColor={COLORS.placeholderText}
-            value={noteVal}
+            value={testNote[rowId] || ""}
             onChangeText={(t) =>
-              setTestNote((p) => ({ ...p, [rowId]: t }))
+              setTestNote(prev => ({ ...prev, [rowId]: t }))
             }
           />
 
@@ -982,7 +1100,7 @@ export default function AddMedicineScreen() {
                   <Pressable
                     key={o.value}
                     onPress={() =>
-                      updateRow(rowId, "followUp", o.value)
+                      updateRowField(rowId, "followUp", o.value)
                     }
                     style={[
                       styles.pill,
@@ -1016,37 +1134,34 @@ export default function AddMedicineScreen() {
                 style={styles.input}
               >
                 <Text
-  style={{
-    color: row.followUpDate ? COLORS.text : COLORS.sub,
-  }}
->
-  {row.followUpDate ? formatDate(row.followUpDate) : "Select date"}
-</Text>
-
+                  style={{
+                    color: row.followUpDate ? COLORS.text : COLORS.sub,
+                  }}
+                >
+                  {row.followUpDate ? formatDate(row.followUpDate) : "Select date"}
+                </Text>
               </Pressable>
               {showFollowUpPicker[rowId] && (
-  <DateTimePicker
-    value={
-      row.followUpDate
-        ? new Date(row.followUpDate)
-        : new Date()
-    }
-    mode="date"
-    display={Platform.OS === "android" ? "spinner" : "default"}
-    minimumDate={new Date()}
-    onChange={(_, d) => {
-      setShowFollowUpPicker((p) => ({
-        ...p,
-        [rowId]: false,
-      }));
-      if (d) {
-        updateRow(rowId, "followUpDate", formatYMD(d)); // keep YYYY-MM-DD for API
-      }
-    }}
-  />
-)}
-
-
+                <DateTimePicker
+                  value={
+                    row.followUpDate
+                      ? new Date(row.followUpDate)
+                      : new Date()
+                  }
+                  mode="date"
+                  display={Platform.OS === "android" ? "spinner" : "default"}
+                  minimumDate={new Date()}
+                  onChange={(_, d) => {
+                    setShowFollowUpPicker((p) => ({
+                      ...p,
+                      [rowId]: false,
+                    }));
+                    if (d) {
+                      updateRowField(rowId, "followUpDate", formatYMD(d));
+                    }
+                  }}
+                />
+              )}
             </View>
           )}
         </View>
@@ -1072,53 +1187,67 @@ export default function AddMedicineScreen() {
   const hasCopySource = existingPrescriptions.some(
     (p) => p.status === 1 && p.medicine
   );
+
+  // OUTER tap handler: avoid remapping rows to prevent reflows that cause scroll-to-top.
+  const handleOutsideTap = () => {
+    Keyboard.dismiss();
+    setFocusedRowId(null);
+    setFocusedInputType(null);
+    // Clear option caches for dropdowns (this hides dropdowns without changing rows)
+    setMedicineOptions({});
+    setTestOptions({});
+  };
+
   return (
-    <View style={styles.screen}>
-      <KeyboardAwareScrollView
-        extraScrollHeight={120}
-        enableOnAndroid
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: bottomPad }}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>Add Prescription</Text>
-          <Pressable
-            onPress={copyPrescription}
-            disabled={!hasCopySource}
-            style={[
-              styles.copyBtn,
-              !hasCopySource && styles.copyBtnDisabled,
-            ]}
-          >
-            <Text style={styles.copyBtnText}>Copy Prescription</Text>
-          </Pressable>
-        </View>
+    <TouchableWithoutFeedback onPress={handleOutsideTap}>
+      <View style={styles.screen}>
+        <KeyboardAwareScrollView
+          extraScrollHeight={120}
+          enableOnAndroid
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: bottomPad }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>Add Prescription</Text>
+            <Pressable
+              onPress={copyPrescription}
+              disabled={!hasCopySource}
+              style={[
+                styles.copyBtn,
+                !hasCopySource && styles.copyBtnDisabled,
+              ]}
+            >
+              <Text style={styles.copyBtnText}>Copy Prescription</Text>
+            </Pressable>
+          </View>
 
-        {rows.map(renderRow)}
+          {rows.map(renderRow)}
 
-        <View style={styles.stickyFooter}>
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={styles.footerBtnCancel}
-          >
-            <Text style={[styles.footerBtnText, { color: COLORS.text }]}>
-              Cancel
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={debouncedSubmit}
-            disabled={loading}
-            style={styles.footerBtnSave}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.footerBtnText}>Save</Text>
-            )}
-          </Pressable>
-        </View>
-      </KeyboardAwareScrollView>
-    </View>
+          <View style={styles.stickyFooter}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.footerBtnCancel}
+            >
+              <Text style={[styles.footerBtnText, { color: COLORS.text }]}>
+                Cancel
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={debouncedSubmit}
+              disabled={loading}
+              style={styles.footerBtnSave}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.footerBtnText}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardAwareScrollView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -1174,6 +1303,9 @@ const styles = StyleSheet.create({
   deleteX: { color: COLORS.danger, fontSize: 18, fontWeight: "bold" },
 
   field: { marginBottom: 16 },
+  inputContainer: {
+    position: 'relative',
+  },
   label: {
     fontSize: 13,
     fontWeight: "700",
@@ -1191,20 +1323,36 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 
-  autoList: {
+  dropdownContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
     maxHeight: 150,
+    backgroundColor: "#fff",
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 8,
-    marginTop: 4,
-    backgroundColor: "#fff",
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    marginTop: 2,
   },
-  autoItem: {
-    padding: 10,
+  dropdownScroll: {
+    maxHeight: 150,
+  },
+  dropdownItem: {
+    padding: 12,
     borderBottomWidth: 1,
-    borderColor: COLORS.border,
+    borderBottomColor: '#f1f5f9',
   },
-  autoText: { fontSize: 15, color: COLORS.text },
+  dropdownText: {
+    fontSize: 15,
+    color: COLORS.text,
+  },
 
   pickerWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: {

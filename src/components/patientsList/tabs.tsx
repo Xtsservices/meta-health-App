@@ -107,7 +107,7 @@ const PatientTabsGrid: React.FC<Props> = ({
       { key: "reports",                label: "Reports",                Icon: FileText },
       { key: "timeline",               label: "Patient Timeline",       Icon: Calendar },
       { key: "doctors",                label: "Treating Doctors",       Icon: Users },
-      { key: "previousPrescriptions",  label: "Previous Prescriptions", Icon: Pill },
+      { key: "previousPrescriptions",  label: "Previous\nPrescriptions", Icon: Pill },
       { key: "insurance",              label: "Insurance",              Icon: Pill },
       { key: "prescription",           label: "Prescription",           Icon: Pill },
       { key: "physicalexamination",    label: "Physical Examination",   Icon: Stethoscope },
@@ -138,9 +138,8 @@ const allowedKeys = useMemo<TabKey[]>(() => {
      return ["symptoms","tests","vitals","treatment","reports","previousPrescriptions","doctors","medicalHistory","timeline"];
   }
   else if (startStatus === 3) {
-     return ["symptoms","tests","vitals","treatment","reports","medicalHistory","timeline","physicalexamination","pocus",];
-  }else 
-  // fallback -> show all
+     return ["symptoms","tests","vitals","treatment","reports","medicalHistory","timeline","physicalexamination","pocus"];
+  }
   return all;
 }, [patientFromStore]);
 
@@ -189,8 +188,7 @@ const onPressTile = (item: GridItem) => {
       </View>
 
       <View style={styles.textCol}>
-        <Text numberOfLines={2}          // ⬅️ allow up to 2 lines
-  ellipsizeMode="clip"
+        <Text 
      style={[styles.cardTitle, { color: COLORS.text }]}>
           {item.label}
         </Text>
@@ -238,7 +236,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     paddingVertical: 14,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     elevation: 2,
     flexDirection: "row",      
     // alignItems: "center", 
@@ -247,32 +245,32 @@ const styles = StyleSheet.create({
   minHeight: 72, 
   },
   iconWrap: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 42,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "flex-start",
     borderWidth: 1,
-    marginRight: 12,   
+    marginRight: 10,
   },
   textCol: {
   flex: 1,
   justifyContent: "center",
-},
-  cardTitle: {
-  fontSize: 14,
+  minWidth: 0,
+  },
+cardTitle: {
+ 
   fontWeight: "800",
   lineHeight: 18,
-  flexShrink: 1,  
-  flexWrap: "wrap",            // ⬅️ enable wrapping inside fixed width
+  flexWrap: "wrap",    // allow wrapping
+  flexShrink: 1,       // allow it to shrink inside flex layout
+  fontSize: 14,        // explicit font size helps consistent wrapping
 },
- cardSub: {
-  marginTop: 2,
-  fontSize: 12,
-  fontWeight: "600",
-  lineHeight: 16,
-  flexShrink: 1,
-  flexWrap: "wrap",     
-},
+  cardSub: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
 });

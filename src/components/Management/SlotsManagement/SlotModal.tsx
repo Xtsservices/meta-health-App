@@ -67,6 +67,38 @@ const SlotModal: React.FC<SlotModalProps> = ({
       return;
     }
 
+  const selectedDate = new Date(formData.date);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  selectedDate.setHours(0, 0, 0, 0);
+  
+  if (selectedDate < today) {
+    Alert.alert("Error", "Cannot create slots for past dates");
+    return;
+  }
+
+  // If date is today, check if times are in the future
+  if (selectedDate.getTime() === today.getTime()) {
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    const [startHour, startMinute] = formData.shiftFromTime.split(':').map(Number);
+    const [endHour, endMinute] = formData.shiftToTime.split(':').map(Number);
+    
+    // Check if start time is in the past
+    if (startHour < currentHour || (startHour === currentHour && startMinute < currentMinute)) {
+      Alert.alert("Error", "Cannot create slots with start time in the past");
+      return;
+    }
+    
+    // Check if end time is in the past
+    if (endHour < currentHour || (endHour === currentHour && endMinute < currentMinute)) {
+      Alert.alert("Error", "Cannot create slots with end time in the past");
+      return;
+    }
+  }
+
     const availableSlotsNum = parseInt(formData.availableSlots ?? '0');
     if (isNaN(availableSlotsNum) || availableSlotsNum <= 0) {
       Alert.alert("Error", "Available slots must be greater than 0");
@@ -123,7 +155,17 @@ const SlotModal: React.FC<SlotModalProps> = ({
     const start = parseInt(formData.shiftFromTime?.split(':')?.[0] ?? '0');
     const end = parseInt(formData.shiftToTime?.split(':')?.[0] ?? '0');
     
+    const now = new Date();
+    const selectedDate = new Date(formData.date);
+    const isToday = selectedDate.toDateString() === now.toDateString();
+    const currentHour = now.getHours();
+    
     for (let i = start; i < end; i++) {
+      // Skip past hours if it's today
+      if (isToday && i < currentHour) {
+        continue;
+      }
+      
       const fromTime = `${i.toString().padStart(2, '0')}:00`;
       const toTime = `${(i + 1).toString().padStart(2, '0')}:00`;
       slots.push({
@@ -138,6 +180,15 @@ const SlotModal: React.FC<SlotModalProps> = ({
 
   const timeSlots = generateTimeSlots();
 
+const selectedDateIsToday = () => {
+  const today = new Date();
+  const selectedDate = new Date(formData.date);
+  return (
+    today.getFullYear() === selectedDate.getFullYear() &&
+    today.getMonth() === selectedDate.getMonth() &&
+    today.getDate() === selectedDate.getDate()
+  );
+};
   const getCurrentDate = () => {
     try {
       return formData.date ? new Date(formData.date + 'T00:00:00') : new Date();
@@ -324,6 +375,9 @@ const SlotModal: React.FC<SlotModalProps> = ({
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           onChange={handleFromTimeChange}
           is24Hour={false}
+          {...(selectedDateIsToday && {
+            minimumDate: new Date()
+          })}
         />
       )}
 

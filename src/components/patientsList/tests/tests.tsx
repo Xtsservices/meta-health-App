@@ -8,17 +8,21 @@ import {
   Pressable,
   Alert,
   Dimensions,
+  Modal,
+  ScrollView,
+  Image,
 } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthDelete, AuthFetch } from "../../../auth/auth";
-import { FileTextIcon, PlusIcon, Trash2Icon } from "../../../utils/SvgIcons";
+import { FileTextIcon, PlusIcon, Trash2Icon, UserIcon } from "../../../utils/SvgIcons";
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import usePreOpForm from "../../../utils/usePreOpForm";
 import { COLORS } from "../../../utils/colour";
+import { showSuccess } from "../../../store/toast.slice";
 
 type RootState = any;
 const selectUser = (s: RootState) => s.currentUser;
@@ -29,19 +33,43 @@ type TestRow = {
   id: number;
   test: string;
   loinc_num_: string;
-  category: string;
-  status: string;
+  category?: string; // Make optional
+  status?: string; // Make optional
   addedOn?: string | null;
   userID?: number | null;
   notes?: string | null;
   alertStatus?: string | null;
 };
 
+type UserData = {
+  imageURL?: string;
+  firstName: string;
+  lastName: string;
+  phoneNo: string;
+  gender: string;
+  dob: string;
+  state: string;
+  city: string;
+  pinCode: string;
+  email: string;
+  address: string;
+  departmentID: string;
+  role: number;
+};
+
+const RoleList: { [key: number]: string } = {
+  10007: "sAdmin",
+  9999: "admin",
+  4001: "doctor",
+  2003: "nurse",
+  1003: "staff",
+  3001: "management",
+  6001: "reception"
+};
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
 const moderateScale = (size: number, factor: number = 0.5) => size + (scale(size) - size) * factor;
-
-
 
 const FOOTER_HEIGHT = moderateScale(70);
 
@@ -49,7 +77,7 @@ const cap = (s: string) => (s ? s.slice(0, 1).toUpperCase() + s.slice(1).toLower
 
 export default function TestsScreen() {
   const navigation = useNavigation<any>();
-   const route = useRoute<any>();    
+  const route = useRoute<any>();    
   const insets = useSafeAreaInsets();
   const user = useSelector(selectUser);
   const currentpatient = useSelector(selectCurrentPatient);
@@ -58,60 +86,128 @@ export default function TestsScreen() {
   const {
     tests
   } = usePreOpForm();
-   const activetab =
-    route.params?.currentTab 
-const shouldShowPreOpTests = activetab === "PreOpRecord";
-    let readOnly = false
-    if ((shouldShowPreOpTests && user?.roleName === "surgeon") || activetab === "PatientFile"){
-
+  const activetab = route.params?.currentTab;
+  const shouldShowPreOpTests = activetab === "PreOpRecord";
+  
+  let readOnly = false;
+  if ((shouldShowPreOpTests && user?.roleName === "surgeon") || activetab === "PatientFile") {
     readOnly = true;
-  }else if (shouldShowPreOpTests && user?.roleName !== "surgeon"){
-    readOnly = false
+  } else if (shouldShowPreOpTests && user?.roleName !== "surgeon") {
+    readOnly = false;
   }
+  
   const [loading, setLoading] = useState(false);
-
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [viewDepartment, setViewDepartment] = useState<string>("");
+  const [viewRole, setViewRole] = useState<string>("");
+  const [viewGender, setViewGender] = useState<string>("");
+  const [loadingUserData, setLoadingUserData] = useState(false);
+  const dispatch = useDispatch(); 
+const load = useCallback(async () => {
+  if (!currentpatient?.id) return;
+  setLoading(true);
+  
+  if (shouldShowPreOpTests) {
+    // Convert pre-op tests to TestRow format
+    const preOpTestRows: TestRow[] = (tests || []).map((test: any, index: number) => ({
+      id: index + 1, // Temporary ID
+      ICD_Code: test.ICD_Code || "",
+      test: test.test || "",
+      loinc_num_: test.ICD_Code || "", // Use ICD_Code as loinc_num_ for pre-op tests
+      category: "", // Not applicable for pre-op
+      status: "", // Not applicable for pre-op
+      notes: test.testNotes || null,
+    }));
+    setList(preOpTestRows);
+    setLoading(false);
+    return;
+  }
+  
+  try {
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    const res = await AuthFetch(`test/${currentpatient.id}`, token) as any; // Add 'as any'
     
-  const load = useCallback(async () => {
-    if (!currentpatient?.id) return;
-    setLoading(true);
-    if (shouldShowPreOpTests) {
-  setList(tests || []);
-  setLoading(false);
-  return;
-}
-    try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const res = await AuthFetch(`test/${currentpatient.id}`, token);
-      
-      if (res?.data?.message === "success") {
-        const rows: TestRow[] = (res?.data?.tests || [])?.map((t: any) => ({
-          id: Number(t?.id),
-          test: String(t?.test || ""),
-          loinc_num_: t?.loinc_num_ || "",
-          category: t?.category || "",
-          status: t?.status || "",
-          addedOn: t?.addedOn || null,
-          userID: t?.userID ?? null,
-          notes: t?.testNotes || null,
-          alertStatus: t?.alertStatus || null,
-        })) || [];
-        rows?.sort((a, b) => new Date(b?.addedOn || 0)?.getTime() - new Date(a?.addedOn || 0)?.getTime());
-        setList(rows);
-      } else {
-        setList([]);
-      }
-    } catch {
+    if (res?.data?.message === "success") {
+      const rows: TestRow[] = (res?.data?.tests || []).map((t: any) => ({
+        id: Number(t?.id),
+        test: String(t?.test || ""),
+        loinc_num_: t?.loinc_num_ || "",
+        category: t?.category || "",
+        status: t?.status || "",
+        addedOn: t?.addedOn || null,
+        userID: t?.userID ?? null,
+        notes: t?.testNotes || null,
+        alertStatus: t?.alertStatus || null,
+        ICD_Code: t?.loinc_num_ || "", // Add ICD_Code
+      }));
+      rows.sort((a, b) => new Date(b?.addedOn || 0).getTime() - new Date(a?.addedOn || 0).getTime());
+      setList(rows);
+    } else {
       setList([]);
-    } finally {
-      setLoading(false);
     }
-  }, [currentpatient?.id, user?.token]);
+  } catch {
+    setList([]);
+  } finally {
+    setLoading(false);
+  }
+}, [currentpatient?.id, user?.token, shouldShowPreOpTests, tests]);
 
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load])
   );
+
+const fetchUserData = async (userId: number) => {
+  if (!userId) return;
+  
+  setLoadingUserData(true);
+  try {
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    
+    // Add 'as any' to fix TypeScript error
+    const res = await AuthFetch(`user/${userId}`, token) as any;
+    
+    if (res?.data?.message === "success") {
+      const userData = res.data.user;
+      
+      // Fetch department name
+      if (userData.departmentID) {
+        // Add 'as any' here too
+        const deptRes = await AuthFetch(`department/singledpt/${userData.departmentID}`, token) as any;
+        if (deptRes?.data?.message === "success") {
+          setViewDepartment(deptRes.data.department[0]?.name || "");
+        }
+      }
+      
+      // Set role
+      setViewRole(RoleList[userData.role] || "");
+      
+      // Set gender
+      let gender = "others";
+      if (userData.gender === "1") {
+        gender = "male";
+      } else if (userData.gender === "2") {
+        gender = "female";
+      }
+      setViewGender(gender);
+      
+      setUserData(userData);
+      setModalVisible(true);
+    }
+  } catch (error) {
+    Alert.alert("Error", "Failed to load user details");
+  } finally {
+    setLoadingUserData(false);
+  }
+};
+
+  const handleUserPress = (userId: number) => {
+    setSelectedUserId(userId);
+    fetchUserData(userId);
+  };
 
   const onDelete = async (row: TestRow) => {
     if (row?.alertStatus && row?.alertStatus?.toLowerCase() !== "pending") {
@@ -128,9 +224,10 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
         onPress: async () => {
           try {
             const token = user?.token ?? (await AsyncStorage.getItem("token"));
-            const res = await AuthDelete(`test/${timeline}/${row.id}`, token);
+            const res = await AuthDelete(`test/${timeline}/${row.id}`, token) as any;
             if (res?.data?.message === "success") {
               setList((prev) => prev?.filter((x) => x?.id !== row?.id) || []);
+              dispatch(showSuccess("Test deleted successfully"));
             }
           } catch {
             Alert.alert("Error", "Failed to delete test.");
@@ -179,15 +276,25 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
             <Text style={[styles.notesText, { color: COLORS.text }]}>{item?.notes}</Text>
           </View>
         )}
-{!shouldShowPreOpTests &&
+        
+        {!shouldShowPreOpTests &&
         <View style={styles.metaContainer}>
           <Text style={[styles.metaText, { color: COLORS.sub }]}>
             Added: {formatDateTime(item?.addedOn)}
           </Text>
-          <Text style={[styles.metaText, { color: COLORS.sub }]}>
-            Added By: {item?.userID || "N/A"}
-          </Text>
-        </View>}
+            {item?.userID && (
+          <Pressable 
+                onPress={() => handleUserPress(item.userID!)}
+                style={styles.userContainer}
+              >
+                <UserIcon size={moderateScale(12)} color={COLORS.brand} />
+                <Text style={[styles.userText, { color: COLORS.brand }]}>
+                  Added By: {user.firstName} {user.lastName}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        }
       </View>
       
       {(!item?.alertStatus || item?.alertStatus?.toLowerCase() === "pending") && (
@@ -209,14 +316,15 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
       ) : empty ? (
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: COLORS.sub }]}>No tests prescribed yet</Text>
-          {!readOnly && user?.roleName !== "reception" &&
+          {!readOnly && user?.roleName !== "reception" && currentpatient.ptype != 21 && 
           <Pressable
             style={[styles.cta, { backgroundColor: COLORS.button }]}
             onPress={() => navigation.navigate("AddTests" as never, {currentTab: activetab})}
           >
             <PlusIcon size={moderateScale(18)} color={COLORS.buttonText} />
             <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>Add Test</Text>
-          </Pressable>}
+          </Pressable>
+          }
         </View>
       ) : (
         <>
@@ -231,18 +339,179 @@ const shouldShowPreOpTests = activetab === "PreOpRecord";
             ItemSeparatorComponent={() => <View style={{ height: moderateScale(12) }} />}
             showsVerticalScrollIndicator={false}
           />
-          {!readOnly && user?.roleName !== "reception" && 
+          {!readOnly && user?.roleName !== "reception" && currentpatient.ptype != 21 &&
           <Pressable
             style={[styles.fab, { 
               backgroundColor: COLORS.button,
               bottom: FOOTER_HEIGHT + moderateScale(16) + insets.bottom 
             }]}
-            onPress={() => navigation.navigate("AddTests" as never,  {currentTab: activetab})}
+            onPress={() => navigation.navigate("AddTests" as never, {currentTab: activetab})}
           >
             <PlusIcon size={moderateScale(20)} color={COLORS.buttonText} />
-          </Pressable>}
+          </Pressable>
+        }
         </>
       )}
+      
+      {/* User Details Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Added By</Text>
+                <Pressable onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </Pressable>
+              </View>
+              
+              {loadingUserData ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={COLORS.brand} />
+                  <Text style={styles.loadingText}>Loading user details...</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.modalBody}>                    
+                       {userData?.imageURL ? (
+                <View style={styles.imageContainer}>
+                  <Image 
+                    source={{ uri: userData.imageURL }} 
+                    style={styles.profileImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : (
+                <View style={styles.noImageContainer}>
+                  <UserIcon size={moderateScale(40)} color={COLORS.sub} />
+                  <Text style={styles.noImageText}>No profile image</Text>
+                </View>
+              )}
+                    
+                    <Text style={styles.userId}>ID: {selectedUserId}</Text>
+                    
+                    <View style={styles.gridContainer}>
+                      {/* First Name */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>First Name</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.firstName || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Last Name */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Last Name</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.lastName || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Department */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Department</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{viewDepartment || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Role */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Role</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{viewRole || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Phone Number */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Phone Number</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.phoneNo || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Gender */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Gender</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{viewGender || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Date of Birth */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Date of Birth</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>
+                            {userData?.dob ? userData.dob.split("T")[0] : ""}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      {/* State */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>State</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.state || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* City */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>City</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.city || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Pincode */}
+                      <View style={styles.inputContainer}>
+                        <Text style={styles.inputLabel}>Pincode</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.pinCode || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Email */}
+                      <View style={[styles.inputContainer, styles.fullWidth]}>
+                        <Text style={styles.inputLabel}>Email</Text>
+                        <View style={styles.inputValue}>
+                          <Text style={styles.inputText}>{userData?.email || ""}</Text>
+                        </View>
+                      </View>
+                      
+                      {/* Address */}
+                      {userData?.address && (
+                        <View style={[styles.inputContainer, styles.fullWidth]}>
+                          <Text style={styles.inputLabel}>Address</Text>
+                          <View style={styles.inputValue}>
+                            <Text style={styles.inputText}>{userData?.address || ""}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  
+                  <View style={styles.modalFooter}>
+                    <Pressable
+                      style={[styles.modalButton, { backgroundColor: COLORS.brand }]}
+                      onPress={() => setModalVisible(false)}
+                    >
+                      <Text style={[styles.modalButtonText, { color: '#fff' }]}>Close</Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       
       <View style={[styles.footerWrap, { 
         bottom: insets.bottom,
@@ -271,7 +540,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14), 
     fontWeight: "600" 
   },
-
   row: {
     borderWidth: 1,
     borderRadius: moderateScale(12),
@@ -301,7 +569,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: moderateScale(8),
   },
-  
   detailsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -320,7 +587,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(12),
     fontWeight: "700",
   },
-  
   notesContainer: {
     marginTop: moderateScale(4),
   },
@@ -334,7 +600,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     fontStyle: 'italic',
   },
-  
   metaContainer: {
     marginTop: moderateScale(6),
     gap: moderateScale(2),
@@ -343,14 +608,22 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(11),
     fontWeight: "500",
   },
-
+  userContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(4),
+  },
+  userText: {
+    fontSize: moderateScale(11),
+    fontWeight: "600",
+    textDecorationLine: 'underline',
+  },
   deleteBtn: { 
     paddingHorizontal: moderateScale(6), 
     paddingVertical: moderateScale(4), 
     alignSelf: "flex-start",
     marginTop: moderateScale(4),
   },
-
   viewReportBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -364,7 +637,6 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(12),
     fontWeight: "700",
   },
-
   fab: {
     position: "absolute",
     right: moderateScale(16),
@@ -379,7 +651,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
-
   cta: {
     flexDirection: "row",
     gap: moderateScale(8),
@@ -392,8 +663,8 @@ const styles = StyleSheet.create({
     fontWeight: "800", 
     fontSize: moderateScale(14) 
   },
-  
   footerWrap: {
+    // position: 'absolute',
     left: 0,
     right: 0,
     justifyContent: "center",
@@ -404,5 +675,146 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "transparent",
+  },
+  status: {
+    fontSize: moderateScale(12),
+    fontWeight: "600",
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: moderateScale(12),
+    width: '90%',
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: moderateScale(16),
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: moderateScale(18),
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    padding: moderateScale(8),
+  },
+  closeButtonText: {
+    fontSize: moderateScale(18),
+    color: '#666',
+  },
+  modalBody: {
+    padding: moderateScale(16),
+  },
+  sectionTitle: {
+    fontSize: moderateScale(16),
+    fontWeight: '600',
+    marginBottom: moderateScale(16),
+    color: '#333',
+    textAlign: 'center',
+  },
+  imageContainer: {
+    alignItems: 'center',
+    marginBottom: moderateScale(16),
+  },
+  imagePlaceholder: {
+    fontSize: moderateScale(14),
+    color: '#666',
+    marginBottom: moderateScale(4),
+  },
+  imageNote: {
+    fontSize: moderateScale(10),
+    color: '#999',
+    fontStyle: 'italic',
+  },
+  userId: {
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: moderateScale(16),
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  inputContainer: {
+    width: '48%',
+    marginBottom: moderateScale(12),
+  },
+  fullWidth: {
+    width: '100%',
+  },
+  inputLabel: {
+    fontSize: moderateScale(12),
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: moderateScale(4),
+  },
+   profileImage: {
+    width: moderateScale(100),
+    height: moderateScale(100),
+    borderRadius: moderateScale(50),
+    borderWidth: 2,
+    borderColor: COLORS.brand,
+  },
+    noImageContainer: {
+    alignItems: 'center',
+    marginBottom: moderateScale(16),
+    padding: moderateScale(20),
+    backgroundColor: '#f5f5f5',
+    borderRadius: moderateScale(50),
+  },
+  noImageText: {
+    fontSize: moderateScale(12),
+    color: COLORS.sub,
+    marginTop: moderateScale(4),
+  },
+  inputValue: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: moderateScale(6),
+    padding: moderateScale(8),
+    backgroundColor: '#f9f9f9',
+  },
+  inputText: {
+    fontSize: moderateScale(14),
+    color: '#333',
+  },
+  modalFooter: {
+    padding: moderateScale(16),
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  modalButton: {
+    paddingVertical: moderateScale(12),
+    borderRadius: moderateScale(8),
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    fontSize: moderateScale(14),
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    padding: moderateScale(40),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: moderateScale(12),
+    fontSize: moderateScale(14),
+    color: '#666',
   },
 });
