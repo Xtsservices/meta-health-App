@@ -18,7 +18,6 @@ import { zoneType } from "../../utils/role";
 import { showError } from "../../store/toast.slice";
 import Footer from "../dashboard/footer";
 
-
 /* -------------------------------------------------------------------------- */
 /*                        Local validation & zone helpers                     */
 /* -------------------------------------------------------------------------- */
@@ -30,10 +29,7 @@ type GcsLocalType = {
   painScale: string; // keep as string locally for TextInput
 };
 
-const validateField = (
-  name: keyof GcsLocalType,
-  value: string
-): string => {
+const validateField = (name: keyof GcsLocalType, value: string): string => {
   switch (name) {
     case "painScale":
       if (!value) return "Please enter a valid number.";
@@ -65,25 +61,25 @@ function validateGCSData(data: GcsLocalType): boolean {
 // Map text -> numeric GCS score
 function getGcsScore(data: GcsLocalType): number {
   const eyeMap: Record<string, number> = {
-    "spontaneous": 4,
+    spontaneous: 4,
     "to sound": 3,
     "to pressure": 2,
-    "none": 1,
+    none: 1,
   };
   const verbalMap: Record<string, number> = {
-    "oriented": 5,
-    "confused": 4,
-    "words": 3,
-    "sounds": 2,
-    "none": 1,
+    oriented: 5,
+    confused: 4,
+    words: 3,
+    sounds: 2,
+    none: 1,
   };
   const motorMap: Record<string, number> = {
     "obey commands": 6,
-    "localising": 5,
+    localising: 5,
     "normal flexion": 4,
     "abnormal flexion": 3,
-    "extension": 2,
-    "none": 1,
+    extension: 2,
+    none: 1,
   };
 
   const eye = eyeMap[data.eyeMovement] ?? 0;
@@ -97,9 +93,9 @@ function getGcsScore(data: GcsLocalType): number {
 function getGcsZone(data: GcsLocalType): number {
   const score = getGcsScore(data);
 
-  if (score <= 8) return zoneType.red;       // severe
-  if (score <= 12) return zoneType.yellow;   // moderate
-  return zoneType.green;                     // mild
+  if (score <= 8) return zoneType.red; // severe
+  if (score <= 12) return zoneType.yellow; // moderate
+  return zoneType.green; // mild
 }
 
 /* -------------------------------------------------------------------------- */
@@ -133,20 +129,20 @@ const TriageGcsScreen: React.FC = () => {
     eyeMovement: formData.gcs.eyeMovement || "",
     verbalResponse: formData.gcs.verbalResponse || "",
     motorResponse: formData.gcs.motorResponse || "",
-    painScale: formData.gcs.painScale !== "" ? String(formData.gcs.painScale) : "",
+    painScale:
+      formData.gcs.painScale !== "" ? String(formData.gcs.painScale) : "",
   };
 
   const [gcs, setGcs] = useState<GcsLocalType>(initialGcs);
-  const [errors, setErrors] = useState<Partial<Record<keyof GcsLocalType, string>>>(
-    {}
-  );
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof GcsLocalType, string>>
+  >({});
 
   const score = useMemo(() => getGcsScore(gcs), [gcs]);
 
   const updateField = (name: keyof GcsLocalType, value: string) => {
     // only digits for painScale
-    const cleaned =
-      name === "painScale" ? value.replace(/[^0-9]/g, "") : value;
+    const cleaned = name === "painScale" ? value.replace(/[^0-9]/g, "") : value;
 
     setGcs((prev) => ({ ...prev, [name]: cleaned }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
@@ -156,7 +152,7 @@ const TriageGcsScreen: React.FC = () => {
     const newErrors: Partial<Record<keyof GcsLocalType, string>> = {};
 
     (["eyeMovement", "verbalResponse", "motorResponse", "painScale"] as (
-      keyof GcsLocalType
+      | keyof GcsLocalType
     )[]).forEach((key) => {
       const val = gcs[key] ?? "";
       const err = validateField(key, val);
@@ -216,21 +212,38 @@ const TriageGcsScreen: React.FC = () => {
         {/* Row 1: Eye Movement + Verbal Response */}
         <View style={styles.rowWrap}>
           <View style={styles.fieldHalf}>
-            <Text style={styles.label}>Eye Movement</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Eye Movement</Text>
+              <Text style={styles.mandatory}>*</Text>
+            </View>
             <View style={[styles.pickerWrap, styles.inputBg]}>
               <Picker
                 selectedValue={gcs.eyeMovement}
                 onValueChange={(v) => updateField("eyeMovement", String(v))}
+                style={styles.pickerText}
+                dropdownIconColor="#0f172a"
               >
                 <Picker.Item
                   label="Select Eye Movement"
                   value=""
-                  color="#9ca3af"
+                  color="#0000000"
                 />
-                <Picker.Item label="Spontaneous" value="spontaneous" />
-                <Picker.Item label="To Sound" value="to sound" />
-                <Picker.Item label="To Pressure" value="to pressure" />
-                <Picker.Item label="None" value="none" />
+                <Picker.Item
+                  label="Spontaneous"
+                  value="spontaneous"
+                  color="#0000000"
+                />
+                <Picker.Item
+                  label="To Sound"
+                  value="to sound"
+                  color="#0000000"
+                />
+                <Picker.Item
+                  label="To Pressure"
+                  value="to pressure"
+                  color="#0000000"
+                />
+                <Picker.Item label="None" value="none" color="#0000000" />
               </Picker>
             </View>
             {!!errors.eyeMovement && (
@@ -239,22 +252,35 @@ const TriageGcsScreen: React.FC = () => {
           </View>
 
           <View style={styles.fieldHalf}>
-            <Text style={styles.label}>Verbal Response</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Verbal Response</Text>
+              <Text style={styles.mandatory}>*</Text>
+            </View>
             <View style={[styles.pickerWrap, styles.inputBg]}>
               <Picker
                 selectedValue={gcs.verbalResponse}
                 onValueChange={(v) => updateField("verbalResponse", String(v))}
+                style={styles.pickerText}
+                dropdownIconColor="#0f172a"
               >
                 <Picker.Item
                   label="Select Verbal Response"
                   value=""
-                  color="#9ca3af"
+                  color="#0000000"
                 />
-                <Picker.Item label="Oriented" value="oriented" />
-                <Picker.Item label="Confused" value="confused" />
-                <Picker.Item label="Words" value="words" />
-                <Picker.Item label="Sounds" value="sounds" />
-                <Picker.Item label="None" value="none" />
+                <Picker.Item
+                  label="Oriented"
+                  value="oriented"
+                  color="#0000000"
+                />
+                <Picker.Item
+                  label="Confused"
+                  value="confused"
+                  color="#0000000"
+                />
+                <Picker.Item label="Words" value="words" color="#0000000" />
+                <Picker.Item label="Sounds" value="sounds" color="#0000000" />
+                <Picker.Item label="None" value="none" color="#0000000" />
               </Picker>
             </View>
             {!!errors.verbalResponse && (
@@ -266,26 +292,48 @@ const TriageGcsScreen: React.FC = () => {
         {/* Row 2: Motor Response + Pain Scale */}
         <View style={styles.rowWrap}>
           <View style={styles.fieldHalf}>
-            <Text style={styles.label}>Motor Response</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Motor Response</Text>
+              <Text style={styles.mandatory}>*</Text>
+            </View>
             <View style={[styles.pickerWrap, styles.inputBg]}>
               <Picker
                 selectedValue={gcs.motorResponse}
                 onValueChange={(v) => updateField("motorResponse", String(v))}
+                style={styles.pickerText}
+                dropdownIconColor="#0f172a"
               >
                 <Picker.Item
                   label="Select Motor Response"
                   value=""
-                  color="#9ca3af"
+                  color="#0000000"
                 />
-                <Picker.Item label="Obey commands" value="obey commands" />
-                <Picker.Item label="Localising" value="localising" />
-                <Picker.Item label="Normal Flexion" value="normal flexion" />
+                <Picker.Item
+                  label="Obey commands"
+                  value="obey commands"
+                  color="#0000000"
+                />
+                <Picker.Item
+                  label="Localising"
+                  value="localising"
+                  color="#0000000"
+                />
+                <Picker.Item
+                  label="Normal Flexion"
+                  value="normal flexion"
+                  color="#0000000"
+                />
                 <Picker.Item
                   label="Abnormal Flexion"
                   value="abnormal flexion"
+                  color="#0000000"
                 />
-                <Picker.Item label="Extension" value="extension" />
-                <Picker.Item label="None" value="none" />
+                <Picker.Item
+                  label="Extension"
+                  value="extension"
+                  color="#0000000"
+                />
+                <Picker.Item label="None" value="none" color="#0000000" />
               </Picker>
             </View>
             {!!errors.motorResponse && (
@@ -294,7 +342,10 @@ const TriageGcsScreen: React.FC = () => {
           </View>
 
           <View style={styles.fieldHalf}>
-            <Text style={styles.label}>Pain Scale (1–10)</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Pain Scale (1–10)</Text>
+              <Text style={styles.mandatory}>*</Text>
+            </View>
             <TextInput
               style={[styles.textInput, styles.inputBg]}
               value={gcs.painScale}
@@ -378,25 +429,40 @@ const styles = StyleSheet.create({
   fieldHalf: {
     width: "48%",
   },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
   label: {
     fontSize: 13,
     color: "#0f172a",
-    marginBottom: 6,
+  },
+  mandatory: {
+    marginLeft: 3,
+    fontSize: 13,
+    color: "#000000",
   },
   pickerWrap: {
     borderWidth: 1,
     borderColor: "#cbd5e1",
     borderRadius: 8,
     overflow: "hidden",
+    height: 46,
+    justifyContent: "center",
+  },
+  pickerText: {
+    fontSize: 14,
+    color: "#0f172a",
   },
   textInput: {
     borderWidth: 1,
     borderColor: "#cbd5e1",
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: Platform.OS === "ios" ? 10 : 8,
     fontSize: 14,
     color: "#0f172a",
+    height: 46,
   },
   inputBg: {
     backgroundColor: "#f8fafc",

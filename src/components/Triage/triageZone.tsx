@@ -10,6 +10,7 @@ import {
   Modal,
   ActivityIndicator,
   Dimensions,
+  TextInput,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -34,15 +35,30 @@ type Ward = {
 };
 
 const spinnerColor: Record<number, string> = {
-  [zoneType.red]: "#ff6f61",
-  [zoneType.yellow]: "#ffdf61",
-  [zoneType.green]: "#61ff76",
+  [zoneType.red]: "#ef4444",
+  [zoneType.yellow]: "#facc15",
+  [zoneType.green]: "#22c55e",
 };
 
-const finalBoxColors: Record<number, string> = {
-  [zoneType.red]: "#c43232",
-  [zoneType.yellow]: "#fdcb19",
-  [zoneType.green]: "#209116",
+const finalBoxColors: Record<
+  number,
+  { bg: string; border: string; text: string }
+> = {
+  [zoneType.red]: {
+    bg: "#fee2e2",
+    border: "#ef4444",
+    text: "#dc2626",
+  },
+  [zoneType.yellow]: {
+    bg: "#fef3c7",
+    border: "#facc15",
+    text: "#d97706",
+  },
+  [zoneType.green]: {
+    bg: "#dcfce7",
+    border: "#22c55e",
+    text: "#16a34a",
+  },
 };
 
 const TriageZoneFinalMobile: React.FC = () => {
@@ -58,10 +74,11 @@ const TriageZoneFinalMobile: React.FC = () => {
   const [wardModalVisible, setWardModalVisible] = useState(false);
   const [selectedWard, setSelectedWard] = useState<Ward | null>(null);
 
+  const [wardSearch, setWardSearch] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const triagePostRef = useRef(false);
 
-  // 🔴 Zone selection state  (initially RED, or existing zone if available)
+  // Zone selection state
   const [selectedZone, setSelectedZone] = useState<number>(
     formData?.zone ?? zoneType.red
   );
@@ -76,8 +93,16 @@ const TriageZoneFinalMobile: React.FC = () => {
     [selectedZone]
   );
 
-  const spinnerCol = spinnerColor[selectedZone] ?? "#c6c4ee";
-  const boxColor = finalBoxColors[selectedZone] ?? "#209116";
+  const spinnerCol = spinnerColor[selectedZone] ?? "#14b8a6";
+  const zoneColors =
+    finalBoxColors[selectedZone] ?? finalBoxColors[zoneType.green];
+
+  // Filter wards for modal list
+  const filteredWards = useMemo(() => {
+    const s = wardSearch.trim().toLowerCase();
+    if (!s) return wards;
+    return wards.filter((w) => w.name.toLowerCase().includes(s));
+  }, [wards, wardSearch]);
 
   // Fetch wards on mount
   useEffect(() => {
@@ -91,12 +116,16 @@ const TriageZoneFinalMobile: React.FC = () => {
         }
 
         const res = await AuthFetch(`ward/${user.hospitalID}`, token);
-        if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.wards)) {
+        if (
+          res?.status === "success" &&
+          "data" in res &&
+          Array.isArray(res?.data?.wards)
+        ) {
           setWards(res.data.wards);
         } else {
           setWards([]);
         }
-      } catch (err) {
+      } catch {
         setWards([]);
       } finally {
         setWardsLoading(false);
@@ -141,14 +170,12 @@ const TriageZoneFinalMobile: React.FC = () => {
       }
 
       const data: any = GetTriageFormDataObject(formData);
-
       const zoneToSend = selectedZone || zoneType.green;
 
       data.zone = String(zoneToSend);
       data.hospitalID = user?.hospitalID;
       data.userID = user?.id;
       data.ward = String(selectedWard.id);
-
 
       const res = await AuthPost(
         `triage/${user?.hospitalID}/${currentPatient?.id}`,
@@ -157,12 +184,17 @@ const TriageZoneFinalMobile: React.FC = () => {
       );
 
       if (res?.status === "success" && "data" in res) {
-        navigation.navigate("PatientList"); // your list screen
+        navigation.navigate("PatientList");
       } else {
-        dispatch(showError("message" in res && res?.message?.message || "Failed to save triage"));
+        dispatch(
+          showError(
+            ("message" in res && (res as any)?.message?.message) ||
+              "Failed to save triage"
+          )
+        );
         triagePostRef.current = false;
       }
-    } catch (err) {
+    } catch {
       dispatch(showError("Something went wrong while saving triage"));
       triagePostRef.current = false;
     } finally {
@@ -170,14 +202,19 @@ const TriageZoneFinalMobile: React.FC = () => {
     }
   };
 
-  const renderZoneChip = (label: string, value: number, color: string) => {
+  const renderZoneChip = (
+    label: string,
+    value: number,
+    color: string,
+    bgColor: string
+  ) => {
     const active = selectedZone === value;
     return (
       <TouchableOpacity
         key={label}
         style={[
           styles.zoneChip,
-          { borderColor: color },
+          { borderColor: color, backgroundColor: bgColor },
           active && { backgroundColor: color },
         ]}
         onPress={() => setSelectedZone(value)}
@@ -187,6 +224,7 @@ const TriageZoneFinalMobile: React.FC = () => {
           style={[
             styles.zoneChipText,
             active && { color: "#fff", fontWeight: "700" },
+            !active && { color: "#0f172a" },
           ]}
         >
           {label}
@@ -205,33 +243,47 @@ const TriageZoneFinalMobile: React.FC = () => {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Triage Zone</Text>
 
         <View style={styles.centerArea}>
           <Text style={styles.processingText}>
             Patient is being processed under{" "}
-            <Text style={styles.zoneName}>{zoneName}</Text> zone
+            <Text style={[styles.zoneName, { color: zoneColors.text }]}>
+              {zoneName}
+            </Text>{" "}
+            zone
           </Text>
 
-          {/* 🔴 Zone selection row */}
+          {/* Zone selection row */}
           <View style={styles.zoneSelectorRow}>
-            {renderZoneChip("Red", zoneType.red, "#ef4444")}
-            {renderZoneChip("Yellow", zoneType.yellow, "#facc15")}
-            {renderZoneChip("Green", zoneType.green, "#22c55e")}
+            {renderZoneChip("Red", zoneType.red, "#ef4444", "#fee2e2")}
+            {renderZoneChip(
+              "Yellow",
+              zoneType.yellow,
+              "#facc15",
+              "#fef3c7"
+            )}
+            {renderZoneChip(
+              "Green",
+              zoneType.green,
+              "#22c55e",
+              "#dcfce7"
+            )}
           </View>
 
           {/* Zone card */}
           <View
             style={[
               styles.zoneCard,
-              { backgroundColor: boxColor },
-              selectedZone === zoneType.red && styles.zoneCardRedShadow,
+              {
+                backgroundColor: zoneColors.bg,
+                borderColor: zoneColors.border,
+              },
             ]}
           >
             <Text style={styles.zoneIcon}>
               {selectedZone === zoneType.red ? "⚠️" : "👤"}
             </Text>
-            <Text style={styles.zoneCardText}>
+            <Text style={[styles.zoneCardText, { color: zoneColors.text }]}>
               Patient is under {zoneName} Zone
             </Text>
           </View>
@@ -319,37 +371,54 @@ const TriageZoneFinalMobile: React.FC = () => {
                 <Text style={styles.modalLoadingText}>Loading wards...</Text>
               </View>
             ) : (
-              <ScrollView
-                style={styles.modalScroll}
-                contentContainerStyle={{ paddingVertical: 4 }}
-              >
-                {wards.map((w) => {
-                  const active = selectedWard?.id === w.id;
-                  return (
-                    <TouchableOpacity
-                      key={w.id}
-                      style={[
-                        styles.modalWardItem,
-                        active && { backgroundColor: "#14b8a6" },
-                      ]}
-                      onPress={() => handleSelectWard(w)}
-                    >
-                      <Text
-                        style={[
-                          styles.modalWardText,
-                          active && { color: "#fff" },
-                        ]}
-                      >
-                        {w.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              <>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search wards..."
+                  placeholderTextColor="#94a3b8"
+                  value={wardSearch}
+                  onChangeText={setWardSearch}
+                />
 
-                {!wardsLoading && wards.length === 0 && (
-                  <Text style={styles.modalEmpty}>No wards found.</Text>
-                )}
-              </ScrollView>
+                <ScrollView
+                  style={styles.modalScroll}
+                  contentContainerStyle={{ paddingBottom: 4 }}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {filteredWards.map((w, idx) => {
+                    const active = selectedWard?.id === w.id;
+                    return (
+                      <TouchableOpacity
+                        key={w.id}
+                        style={[
+                          styles.modalWardRow,
+                          active && styles.modalWardRowActive,
+                          idx === filteredWards.length - 1 && {
+                            borderBottomWidth: 0,
+                          },
+                        ]}
+                        onPress={() => handleSelectWard(w)}
+                      >
+                        <Text
+                          style={[
+                            styles.modalWardText,
+                            active && styles.modalWardTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {w.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  {!wardsLoading && filteredWards.length === 0 && (
+                    <Text style={styles.modalEmpty}>
+                      No wards found. Try a different search.
+                    </Text>
+                  )}
+                </ScrollView>
+              </>
             )}
 
             <View style={styles.modalActions}>
@@ -368,6 +437,10 @@ const TriageZoneFinalMobile: React.FC = () => {
 };
 
 export default TriageZoneFinalMobile;
+
+/* -------------------------------------------------------------------------- */
+/*                                   Styles                                   */
+/* -------------------------------------------------------------------------- */
 
 const styles = StyleSheet.create({
   root: {
@@ -398,10 +471,8 @@ const styles = StyleSheet.create({
   },
   zoneName: {
     fontWeight: "700",
-    color: "#0f172a",
   },
 
-  // zone chips
   zoneSelectorRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -411,16 +482,15 @@ const styles = StyleSheet.create({
   zoneChip: {
     flex: 1,
     borderRadius: 999,
-    borderWidth: 1,
+    borderWidth: 1.5,
     paddingVertical: 8,
     marginHorizontal: 4,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
   },
   zoneChipText: {
     fontSize: 13,
-    color: "#0f172a",
+    fontWeight: "500",
   },
 
   zoneCard: {
@@ -431,13 +501,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
-  },
-  zoneCardRedShadow: {
-    shadowColor: "#c43232",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 12,
-    elevation: 6,
+    borderWidth: 2,
   },
   zoneIcon: {
     fontSize: 32,
@@ -446,7 +510,7 @@ const styles = StyleSheet.create({
   zoneCardText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#ffffff",
+    fontStyle: "italic",
   },
   spinnerWrap: {
     marginVertical: 12,
@@ -539,59 +603,77 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     backgroundColor: "#ffffff",
     borderRadius: 16,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
     elevation: 6,
   },
   modalTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: "#0f172a",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   modalLoading: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
-    gap: 8,
+    marginTop: 10,
   },
   modalLoadingText: {
     fontSize: 14,
     color: "#64748b",
+    marginLeft: 8,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 14,
+    color: "#0f172a",
+    backgroundColor: "#f8fafc",
+    marginTop: 4,
   },
   modalScroll: {
-    maxHeight: 260,
-    marginTop: 8,
+    maxHeight: 350,
+    marginTop: 6,
   },
-  modalWardItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginBottom: 8,
+  modalWardRow: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#e2e8f0",
+  },
+  modalWardRowActive: {
+    backgroundColor: "#e0f7f5",
   },
   modalWardText: {
-    fontSize: 15,
+    fontSize: 14,
     color: "#0f172a",
   },
+  modalWardTextActive: {
+    fontWeight: "600",
+  },
   modalEmpty: {
-    marginTop: 12,
-    fontSize: 14,
+    marginTop: 10,
+    fontSize: 13,
     color: "#94a3b8",
+    textAlign: "center",
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 12,
+    marginTop: 8,
   },
   modalBtnGhost: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     backgroundColor: "#f1f5f9",
   },
   modalBtnGhostText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#0f172a",
   },

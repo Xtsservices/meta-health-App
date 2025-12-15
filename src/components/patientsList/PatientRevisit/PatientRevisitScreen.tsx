@@ -42,6 +42,8 @@ type RouteParams = {
 type WardType = {
   id: number;
   name: string;
+  description?: string;
+  capacity?: number;
 };
 
 type StaffType = {
@@ -107,14 +109,17 @@ const PatientRevisitScreen: React.FC = () => {
       
       // Handle ward response - ensure we always set an array
       let wards: WardType[] = [];
-      if (wardResponse?.data?.wards && Array.isArray(wardResponse?.data?.wards)) {
+      if (wardResponse?.status === "success" && "data" in wardResponse && 
+          wardResponse?.data?.wards && Array.isArray(wardResponse?.data?.wards)) {
         wards = wardResponse?.data?.wards;
       }
       setWardList(wards);
 
       // Handle doctor response - ensure we always set an array
       let doctors: StaffType[] = [];
-      if (doctorResponse?.data?.users && Array.isArray(doctorResponse?.data?.users)) {
+      // ✅ Add type guard check
+      if (doctorResponse?.status === "success" && "data" in doctorResponse && 
+          doctorResponse?.data?.users && Array.isArray(doctorResponse?.data?.users)) {
         doctors = doctorResponse?.data?.users;
       }
       setDoctorList(doctors);
@@ -171,14 +176,23 @@ const PatientRevisitScreen: React.FC = () => {
         token
       );
 
-      if (response?.data?.message === "success" || response?.status === "success") {
+      if (("data" in response && response?.data?.message === "success") || 
+          response?.status === "success") {
         Alert.alert("Success", "Patient successfully added for revisit");
         
         setTimeout(() => {
           navigation.navigate("PatientList" as never);
         }, 2000);
       } else {
-        Alert.alert("Error", response?.message || "Failed to add patient revisit");
+        let errorMessage = "Failed to add patient revisit";
+        
+        if ("message" in response && response.message) {
+          errorMessage = response.message;
+        } else if ("data" in response && response.data?.message) {
+          errorMessage = response.data.message;
+        }
+        
+        Alert.alert("Error", errorMessage);
       }
     } catch (error) {
       Alert.alert("Error", "An error occurred while processing revisit");
@@ -325,24 +339,26 @@ const PatientRevisitScreen: React.FC = () => {
             <Text style={[styles.label, { color: COLORS.text }]}>
               Doctor *
             </Text>
-            <View style={[styles.pickerContainer, { borderColor: COLORS.border, backgroundColor: COLORS.inputBg }]}>
+            <View style={[styles.pickerContainer, { borderColor: COLORS.border, backgroundColor: isDark ? '#000000ff' : COLORS.inputBg}]}>
               <Picker
                 selectedValue={userID}
                 onValueChange={(value) => {
                   setUserID(value);
-                  // Find department ID for selected doctor
                   const selectedDoctor = doctorList?.find(doc => doc?.id === value);
                   if (selectedDoctor) {
                     setDepartmentID(selectedDoctor?.departmentID || 0);
                   }
                 }}
-                style={[styles.picker, { color: COLORS.text }]}
-                dropdownIconColor={COLORS.text}
+                style={[styles.picker, { 
+                  color: isDark ? '#000000ff' : COLORS.text,
+                  backgroundColor: isDark ? '#ffffffff' : COLORS.inputBg // Match container bg
+                }]}
+                dropdownIconColor={isDark ? '#FFFFFF' : COLORS.text}
               >
                 <Picker.Item 
                   label="Select Doctor" 
                   value={0} 
-                  color={COLORS.placeholder}
+                  color={isDark ? '#FFFFFF' : COLORS.placeholder}
                 />
                 {doctorList && doctorList.length > 0 ? (
                   doctorList?.map((doc) => (
@@ -350,14 +366,14 @@ const PatientRevisitScreen: React.FC = () => {
                       key={doc?.id}
                       label={`${doc?.firstName || ''} ${doc?.lastName || ''}`.trim() || 'Unknown Doctor'}
                       value={doc?.id}
-                      color={COLORS.text}
+                      color={isDark ? '#FFFFFF' : COLORS.text}
                     />
                   ))
                 ) : (
                   <Picker.Item 
                     label="No doctors available" 
                     value={0} 
-                    color={COLORS.placeholder}
+                    color={isDark ? '#FFFFFF' : COLORS.placeholder}
                   />
                 )}
               </Picker>
@@ -370,17 +386,23 @@ const PatientRevisitScreen: React.FC = () => {
               <Text style={[styles.label, { color: COLORS.text }]}>
                 Ward *
               </Text>
-              <View style={[styles.pickerContainer, { borderColor: COLORS.border, backgroundColor: COLORS.inputBg }]}>
+              <View style={[styles.pickerContainer, { 
+                borderColor: COLORS.border, 
+                backgroundColor: isDark ? '#1F2937' : COLORS.inputBg // Dark background in dark mode
+              }]}>
                 <Picker
                   selectedValue={wardID}
                   onValueChange={setWardID}
-                  style={[styles.picker, { color: COLORS.text }]}
-                  dropdownIconColor={COLORS.text}
+                  style={[styles.picker, { 
+                    color: isDark ? '#000000ff' : COLORS.text,
+                    backgroundColor: isDark ? '#ffffffff' : COLORS.inputBg // Match container bg
+                  }]}
+                  dropdownIconColor={isDark ? '#FFFFFF' : COLORS.text}
                 >
                   <Picker.Item 
                     label="Select Ward" 
                     value={0} 
-                    color={COLORS.placeholder}
+                    color={isDark ? '#FFFFFF' : COLORS.placeholder}
                   />
                   {wardList && wardList.length > 0 ? (
                     wardList?.map((ward) => (
@@ -388,14 +410,14 @@ const PatientRevisitScreen: React.FC = () => {
                         key={ward?.id}
                         label={capitalizeFirstLetter(ward?.name) || 'Unknown Ward'}
                         value={ward?.id}
-                        color={COLORS.text}
+                        color={isDark ? '#FFFFFF' : COLORS.text}
                       />
                     ))
                   ) : (
                     <Picker.Item 
                       label="No wards available" 
                       value={0} 
-                      color={COLORS.placeholder}
+                      color={isDark ? '#FFFFFF' : COLORS.placeholder}
                     />
                   )}
                 </Picker>
@@ -559,7 +581,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   picker: {
-    height: screenHeight * 0.06,
+    height: screenHeight * 0.08,
   },
   actions: {
     flexDirection: "row",

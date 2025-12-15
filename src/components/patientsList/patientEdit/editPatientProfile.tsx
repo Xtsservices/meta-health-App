@@ -33,6 +33,7 @@ import { state as STATE_LIST, city as CITY_LIST } from "../../../utils/stateCity
 import { AgeUnit, dobFromAge } from "../../../utils/age";
 import { COLORS } from "../../../utils/colour";
 import { formatDate } from "../../../utils/dateTime";
+import { Camera, User } from "lucide-react-native";
 
 const FOOTER_H = 64;
 
@@ -332,15 +333,14 @@ const EditPatientMobile = () => {
     }
 
     const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      dispatch(showError("Email is required"));
-      return false;
-    }
+  // Email is optional, only validate if provided
+  if (trimmedEmail) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmedEmail)) {
       dispatch(showError("Enter a valid email address"));
       return false;
     }
+  }
 
     if (!address.trim()) {
       dispatch(showError("Address is required"));
@@ -535,16 +535,31 @@ const EditPatientMobile = () => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Patient Photo</Text>
             <View style={styles.photoRow}>
-              <TouchableOpacity onPress={() => setImagePickerModal(true)}>
-                <View style={styles.photoWrap}>
+              <TouchableOpacity onPress={() => setImagePickerModal(true)} activeOpacity={0.8}>
+                <View style={styles.avatarOuter}>            {/* outer wrapper provides border/bkg */}
+                  <View style={styles.avatarWrap}>          {/* clip & image container */}
                   {photoUri ? (
-                    <Image source={{ uri: photoUri }} style={styles.photo} />
+                    <Image source={{ uri: photoUri }} style={styles.avatarImage} />
                   ) : (
-                    <Text style={{ fontSize: 32, color: COLORS.sub }}>+</Text>
-                  )}
+                    <View style={styles.avatarPlaceholder}>
+                        <User size={36} color={COLORS.sub} />
+                      </View>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => setImagePickerModal(true)}
+                    style={styles.cameraBadgeOuter}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.cameraBadgeInner}>
+                      <Camera size={14} color="#fff" />
+                  </View>
+              </TouchableOpacity>
                 </View>
               </TouchableOpacity>
-              <View>
+
+              <View style={{ justifyContent: "center" }}>
                 <Text style={styles.photoHint}>Tap to upload (optional)</Text>
                 <Text style={[styles.photoHint, { fontSize: 11 }]}>
                   JPG/PNG • Max 5MB
@@ -679,7 +694,7 @@ const EditPatientMobile = () => {
               required: true,
             })}
             {renderInput("Email", email, setEmail, false, {
-              required: true,
+              // required: true,
             })}
           </View>
 
@@ -691,9 +706,7 @@ const EditPatientMobile = () => {
               required: true,
             })}
 
-            <View>
-              <View style={styles.row}>
-                <View  style={styles.col}>
+              <View >
                   <CustomPicker
                     label="State"
                     selected={stateName}
@@ -706,8 +719,8 @@ const EditPatientMobile = () => {
                     items={STATE_LIST.map((s) => ({ label: s, value: s }))}
                     required
                   />
-                </View>
-                <View style={styles.col}>
+                
+                <View style={{ height: 14 }} />
                   <CustomPicker
                     label="City"
                     selected={cityName}
@@ -716,8 +729,6 @@ const EditPatientMobile = () => {
                     disabled={cityList.length === 0}
                     required
                   />
-                </View>
-              </View>
             </View>
 
             {renderInput("PIN Code", pinCode, setPinCode, false, {
@@ -906,7 +917,122 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
   },
+  photoContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  circleBorder: {
+    width: 100, // Slightly larger than the photo
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)', // Light white circle
+    backgroundColor: 'rgba(255, 255, 255, 0.1)', // Very light background
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  /* Avatar outer wrapper — contains border and positions the badge */
+avatarOuter: {
+  width: 92,               // total outer size (tweak if needed)
+  height: 92,
+  alignItems: "center",
+  justifyContent: "center",
+  position: "relative",    // needed for absolute badge placement
+  // outer border look:
+  borderRadius: 46,
+  borderWidth: 2,
+  borderColor: COLORS.border, // the visible border on which the badge sits
+  backgroundColor: "#fff",     // background behind image (visible if image has transparency)
+},
 
+/* inner clip that holds the image (slightly smaller so the outer border is visible) */
+avatarWrap: {
+  width: 84,               // slightly smaller than avatarOuter
+  height: 84,
+  borderRadius: 42,
+  overflow: "hidden",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#fff",
+},
+
+avatarImage: {
+  width: "100%",
+  height: "100%",
+  resizeMode: "cover",
+},
+
+avatarPlaceholder: {
+  width: "100%",
+  height: "100%",
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#f6f7f9",
+},
+
+/* camera badge wrapper (placement) — this sits outside the circle, overlapping the outer border */
+cameraBadgeOuter: {
+  position: "absolute",
+  right: -8,              // negative to push outside; tweak to move more/less
+  bottom: -8,             // negative to push outside; tweak to move more/less
+  width: 38,              // hit area, keeps touch-friendly
+  height: 38,
+  borderRadius: 19,
+  alignItems: "center",
+  justifyContent: "center",
+  // optional shadow for badge
+  shadowColor: "#000",
+  shadowOpacity: 0.12,
+  shadowRadius: 4,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 3,
+},
+
+/* actual visible badge (colored circle) */
+cameraBadgeInner: {
+  width: 30,
+  height: 30,
+  borderRadius: 15,
+  backgroundColor: COLORS.brand,
+  alignItems: "center",
+  justifyContent: "center",
+  borderWidth: 2,
+  borderColor: "#fff",    // white ring between badge and outer border
+},
+
+
+  // Update photoPlaceholder style
+  photoPlaceholder: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: COLORS.inputBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
   saveBtn: {
     paddingVertical: 14,
     borderRadius: 12,

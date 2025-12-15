@@ -53,7 +53,7 @@ const reasons = [
   "Off-Duty",
 ];
 
-const ACTION_BAR_H = Math.max(80, SCREEN_HEIGHT * 0.1);
+const ACTION_BAR_H = Math.max(60, SCREEN_HEIGHT * 0.08);
 
 type HandshakeRouteParams = {
   patientID?: string | number;
@@ -98,9 +98,17 @@ export default function HandshakePatientScreen() {
           token
         );
         
-        if (response?.status === "success") {
-          const filteredDoctors = (response?.data?.users || response?.users || [])
-            ?.filter((doc: Doctor) => doc?.id !== user?.id) || [];
+        if (("data" in response && response?.data?.status === "success") || 
+            response?.status === "success") {
+            let users: Doctor[] = [];
+          
+          if ("data" in response && response.data?.users && Array.isArray(response.data.users)) {
+            users = response.data.users;
+          } else if ("users" in response && response.users && Array.isArray(response.users)) {
+            users = response.users;
+          }
+          
+          const filteredDoctors = users?.filter((doc: Doctor) => doc?.id !== user?.id) || [];
           setDoctors(filteredDoctors);
         } else {
           dispatch(showError("Failed to load doctors list"));
@@ -131,7 +139,7 @@ export default function HandshakePatientScreen() {
 
     try {
       setSubmitting(true);
-      const token = user?.token || (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
 
       const requestData = {
         handshakingTo: selectedDoctor,
@@ -146,11 +154,20 @@ export default function HandshakePatientScreen() {
         token
       );
 
-      if (response?.data?.message === "success") {
+      if (("data" in response && response?.data?.status === "success") || 
+          response?.status === "success") {
         dispatch(showSuccess("Patient successfully handshaked"));
-        navigation.goBack();
+        navigation.navigate("PatientList" as never);
       } else {
-        dispatch(showError(response?.data?.message || "Failed to handshake patient"));
+      let errorMessage = "Failed to handshake patient";
+      
+      if ("message" in response && response.message) {
+        errorMessage = response.message;
+      } else if ("data" in response && response.data?.message) {
+        errorMessage = response.data.message;
+      }
+      
+      dispatch(showError(errorMessage));
       }
     } catch (error) {
       dispatch(showError("Failed to handshake patient"));
@@ -184,7 +201,7 @@ export default function HandshakePatientScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerIcon}>
-            <HandshakeIcon size={ICON_SIZE.lg} color={COLORS.brand} strokeWidth={2} />
+            <HandshakeIcon size={ICON_SIZE.md} color={COLORS.brand} strokeWidth={2} />
           </View>
           <Text style={styles.headerTitle}>Handshake Patient</Text>
           <Text style={styles.headerSubtitle}>
@@ -215,7 +232,7 @@ export default function HandshakePatientScreen() {
             <TouchableOpacity
               style={[
                 styles.selectInput,
-                selectedDoctor && styles.selectInputActive,
+                selectedDoctor ? styles.selectInputActive : null,
               ]}
               onPress={() => setShowDoctorModal(true)}
               disabled={loading}
@@ -226,12 +243,12 @@ export default function HandshakePatientScreen() {
                 </View>
                 <Text style={[
                   styles.selectText,
-                  selectedDoctor && styles.selectTextActive,
+                  selectedDoctor ? styles.selectTextActive : null, 
                 ]}>
                   {getSelectedDoctorName()}
                 </Text>
               </View>
-              <ChevronRightIcon size={ICON_SIZE.md} color={COLORS.sub} />
+              <ChevronRightIcon size={ICON_SIZE.sm} color={COLORS.sub} />
             </TouchableOpacity>
           </View>
 
@@ -255,7 +272,7 @@ export default function HandshakePatientScreen() {
                   {reason || "Select Reason"}
                 </Text>
               </View>
-              <ChevronRightIcon size={ICON_SIZE.md} color={COLORS.sub} />
+              <ChevronRightIcon size={ICON_SIZE.sm} color={COLORS.sub} />
             </TouchableOpacity>
           </View>
         </View>
@@ -321,7 +338,7 @@ export default function HandshakePatientScreen() {
               onPress={() => setShowDoctorModal(false)}
               style={styles.modalClose}
             >
-              <XIcon size={ICON_SIZE.lg} color={COLORS.sub} />
+              <XIcon size={ICON_SIZE.md} color={COLORS.sub} />
             </Pressable>
           </View>
           <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
@@ -377,7 +394,7 @@ export default function HandshakePatientScreen() {
               onPress={() => setShowReasonModal(false)}
               style={styles.modalClose}
             >
-              <XIcon size={ICON_SIZE.lg} color={COLORS.sub} />
+              <XIcon size={ICON_SIZE.md} color={COLORS.sub} />
             </Pressable>
           </View>
           <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
@@ -415,47 +432,47 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    paddingVertical: isTablet ? SPACING.xl * 2 : SPACING.lg,
-    paddingBottom: isTablet ? SPACING.xl : SPACING.md,
+    paddingVertical: isTablet ? SPACING.lg : SPACING.md,
+    paddingBottom: isTablet ? SPACING.lg : SPACING.sm,
   },
   headerIcon: {
-    width: isTablet ? 90 : 72,
-    height: isTablet ? 90 : 72,
-    borderRadius: isTablet ? 45 : 36,
+    width: isTablet ? 60 : 48,
+    height: isTablet ? 60 : 48,
+    borderRadius: isTablet ? 30 : 24,
     backgroundColor: COLORS.brandLight,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   headerTitle: {
-    fontSize: isTablet ? FONT_SIZE.xxl + 4 : FONT_SIZE.xxl,
+    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg,
     fontWeight: "800",
     color: COLORS.text,
     marginBottom: SPACING.xs,
     textAlign: "center",
   },
   headerSubtitle: {
-    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     color: COLORS.sub,
     textAlign: "center",
-    lineHeight: FONT_SIZE.md + 6,
+    lineHeight: FONT_SIZE.sm + 4,
     fontWeight: "500",
   },
   formCard: {
     backgroundColor: COLORS.card,
     borderRadius: SPACING.md,
-    padding: isTablet ? SPACING.xl : SPACING.md,
+    padding: isTablet ? SPACING.lg : SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   section: {
-    marginBottom: isTablet ? SPACING.lg : SPACING.md,
+    marginBottom: SPACING.md,
   },
   label: {
     fontSize: FONT_SIZE.xs,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -465,23 +482,24 @@ const styles = StyleSheet.create({
   infoBox: {
     flexDirection: "row",
     alignItems: "center",
-    padding: SPACING.md,
+    padding: SPACING.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: SPACING.sm,
     backgroundColor: COLORS.pill,
     gap: SPACING.sm,
+    minHeight: 44, // Reduced height
   },
   iconCircle: {
-    width: isTablet ? 44 : 36,
-    height: isTablet ? 44 : 36,
-    borderRadius: isTablet ? 22 : 18,
+    width: isTablet ? 32 : 28,
+    height: isTablet ? 32 : 28,
+    borderRadius: isTablet ? 16 : 14,
     backgroundColor: COLORS.card,
     alignItems: "center",
     justifyContent: "center",
   },
   infoText: {
-    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: "600",
     color: COLORS.text,
     flex: 1,
@@ -490,12 +508,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: COLORS.border,
     borderRadius: SPACING.sm,
-    padding: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm - 2,
     backgroundColor: COLORS.card,
-    minHeight: isTablet ? 70 : 60,
+    minHeight: 44, // Reduced from 60
   },
   selectInputActive: {
     borderColor: COLORS.brand,
@@ -508,7 +527,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectText: {
-    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: "600",
     color: COLORS.placeholder,
     flex: 1,
@@ -527,7 +546,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingHorizontal: SPACING.md,
     alignItems: "center",
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
@@ -536,7 +555,7 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    height: isTablet ? 60 : 52,
+    height: isTablet ? 48 : 44,
     borderRadius: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
@@ -546,7 +565,7 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     flex: 1,
-    height: isTablet ? 60 : 52,
+    height: isTablet ? 48 : 44,
     borderRadius: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
@@ -556,12 +575,12 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   cancelBtnText: {
-    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: "700",
     color: COLORS.text,
   },
   submitBtnText: {
-    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: "700",
     color: "#fff",
   },
@@ -600,12 +619,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: isTablet ? SPACING.lg : SPACING.md,
+    padding: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
   modalTitle: {
-    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg,
+    fontSize: isTablet ? FONT_SIZE.lg : FONT_SIZE.md,
     fontWeight: "800",
     color: COLORS.text,
   },
@@ -618,11 +637,11 @@ const styles = StyleSheet.create({
   modalItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: isTablet ? SPACING.lg : SPACING.md,
+    padding: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     gap: SPACING.sm,
-    minHeight: isTablet ? 70 : 64,
+    minHeight: 56, // Reduced from 64
   },
   modalItemPressed: {
     backgroundColor: COLORS.pill,
@@ -631,9 +650,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.brandLight,
   },
   modalIconCircle: {
-    width: isTablet ? 48 : 40,
-    height: isTablet ? 48 : 40,
-    borderRadius: isTablet ? 24 : 20,
+    width: isTablet ? 36 : 32,
+    height: isTablet ? 36 : 32,
+    borderRadius: isTablet ? 18 : 16,
     backgroundColor: COLORS.pill,
     alignItems: "center",
     justifyContent: "center",
@@ -642,7 +661,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   modalItemText: {
-    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: "600",
     color: COLORS.text,
     flex: 1,

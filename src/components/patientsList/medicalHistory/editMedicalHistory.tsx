@@ -1,6 +1,6 @@
 // src/screens/EditMedicalHistoryScreen.tsx
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   StatusBar,
   Platform,
   ScrollView,
+  SafeAreaView,
+  Dimensions,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useRoute, useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -20,6 +22,7 @@ import { ArrowLeft } from "lucide-react-native";
 import type { medicalHistoryFormType } from "../../../utils/types";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type RouteParams = {
   patientId: string;
@@ -40,6 +43,11 @@ const sections = [
   { key: "cancer", label: "Cancer", icon: "Activity" },
 ];
 
+const { width: WINDOW_WIDTH } = Dimensions.get("window");
+// Reserve extra space for footer + comfortable gap so system nav or gesture areas don't overlap content.
+// Keep consistent with other screens (safe reserve).
+const FOOTER_RESERVE = 88;
+
 const EditMedicalHistoryScreen: React.FC = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
@@ -48,8 +56,14 @@ const EditMedicalHistoryScreen: React.FC = () => {
   const patient = useSelector((s: RootState) => s.currentPatient);
   const patientId = patient?.id;
 
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom ?? 0;
+  const topInset = insets.top ?? 0;
+  const bottomPadding = bottomInset + FOOTER_RESERVE;
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [mobileError, setMobileError] = useState(false);
   const [medicalHistory, setMedicalHistory] = useState<medicalHistoryFormType>({
     patientID: patientId,
     userID: user?.id,
@@ -76,6 +90,15 @@ const EditMedicalHistoryScreen: React.FC = () => {
     cancer: "",
     familyDisease: "",
   });
+
+  const mobileErrorShown = useRef(false);
+
+  const isValidIndianMobile = (phone: string) => {
+    if (!phone) return false;
+    if (phone.length !== 10) return false;
+    if (!/^[6-9]/.test(phone[0])) return false;
+    return /^[6-9]\d{9}$/.test(phone);
+  };
 
   const getMedicalHistory = useCallback(async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
@@ -105,9 +128,32 @@ const EditMedicalHistoryScreen: React.FC = () => {
     getMedicalHistory();
   }, []);
 
+  useEffect(() => {
+    if (medicalHistory?.givenPhone) {
+      setMobileError(!isValidIndianMobile(medicalHistory.givenPhone));
+    } else {
+      setMobileError(false);
+    }
+  }, [medicalHistory?.givenPhone]);
+
+  // Show toast once when mobileError becomes true; reset flag when mobile becomes valid again
+  useEffect(() => {
+    if (mobileError && !mobileErrorShown.current) {
+      dispatch(
+        showError(
+          "Invalid mobile number"
+        )
+      );
+      mobileErrorShown.current = true;
+    } else if (!mobileError) {
+      // reset so if user later makes it invalid again we show toast again
+      mobileErrorShown.current = false;
+    }
+  }, [mobileError, dispatch]);
+
   const canSave =
     !!medicalHistory?.givenName &&
-    !!medicalHistory?.givenPhone &&
+    isValidIndianMobile(medicalHistory?.givenPhone) &&
     !!medicalHistory?.givenRelation &&
     !saving;
 
@@ -156,7 +202,10 @@ const EditMedicalHistoryScreen: React.FC = () => {
   const renderSectionIcons = () => (
     <View style={styles.iconsContainer}>
       <Text style={styles.sectionTitle}>Select Section</Text>
-      <ScrollView contentContainerStyle={styles.iconsGrid}>
+      <ScrollView contentContainerStyle={[styles.iconsGrid,
+          { paddingBottom: bottomPadding ,paddingRight: 8},
+        ]}
+      >
         {sections.map((section) => (
           <TouchableOpacity
             key={section.key}
@@ -178,7 +227,7 @@ const EditMedicalHistoryScreen: React.FC = () => {
   );
 
   const renderSaveButton = () => (
-    <View style={styles.saveContainer}>
+    <View style={[styles.saveContainer, { paddingBottom: Math.max(bottomInset, 8) }]}>
       <TouchableOpacity
         style={[
           styles.saveButton,
@@ -195,7 +244,7 @@ const EditMedicalHistoryScreen: React.FC = () => {
   );
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen}>
       <StatusBar
         barStyle={Platform.OS === "ios" ? "dark-content" : "light-content"}
         backgroundColor="#0f172a"
@@ -217,7 +266,7 @@ const EditMedicalHistoryScreen: React.FC = () => {
           </>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -283,7 +332,8 @@ const styles = StyleSheet.create({
   iconButton: {
     width: "30%",
     alignItems: "center",
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 0,
     marginBottom: 16,
     borderRadius: 12,
     backgroundColor: "#f8fafc",
@@ -329,6 +379,21 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontWeight: "600",
     fontSize: 16,
+  },
+  errorContainer: {
+    padding: 16,
+    backgroundColor: "#fef2f2",
+    borderColor: "#fca5a5",
+    borderWidth: 1,
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  errorText: {
+    color: "#dc2626",
+    fontSize: 14,
+    textAlign: "center",
   },
 });
 

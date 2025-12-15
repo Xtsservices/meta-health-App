@@ -1,35 +1,29 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   ActivityIndicator,
-  Modal,
-  FlatList,
-  Pressable,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
+  StatusBar,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
-import { useColorScheme } from "react-native";
-import { useSafeAreaInsets,  SafeAreaView  } from "react-native-safe-area-context";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
-
 import { AuthPost } from "../../auth/auth";
 import { formatDateTime } from "../../utils/dateTime";
-import { ChevronDownIcon, XIcon } from "../../utils/SvgIcons";
+import { ChevronDownIcon } from "../../utils/SvgIcons";
 import Footer from "../dashboard/footer";
 import { FormData, DietItem } from "../../utils/types";
-import { RESPONSIVE, styles } from "./DischargeStyles";
+import { RESPONSIVE, styles, FOOTER_H } from "./DischargeStyles";
 import { COLORS } from "../../utils/colour";
 import { showError, showSuccess } from "../../store/toast.slice";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context"; // SafeAreaView comes from here
 
 const dietList: DietItem[] = [
   { id: "1", name: "Pineapple" },
@@ -40,178 +34,16 @@ const dietList: DietItem[] = [
   { id: "6", name: "Low Salt Diet" },
 ];
 
-// Bottom sheet dropdown for diet selection
-const DietDropdown: React.FC<{
-  visible: boolean;
-  onClose: () => void;
-  selectedDiets: string[];
-  onToggleDiet: (diet: string) => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  filteredDiets: DietItem[];
-}> = ({
-  visible,
-  onClose,
-  selectedDiets,
-  onToggleDiet,
-  searchQuery,
-  onSearchChange,
-  filteredDiets,
-}) => {
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
-
-  const selectedSummary =
-    selectedDiets.length === 0
-      ? "No diet selected"
-      : `Selected: ${selectedDiets.join(", ")}`;
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.dropdownOverlay}>
-        {/* tap outside to close */}
-        <Pressable
-          style={StyleSheet.absoluteFillObject}
-          onPress={onClose}
-        />
-        <View
-          style={[
-            styles.dropdownContainer,
-            {
-              backgroundColor: COLORS.dropdownBg ?? COLORS.card,
-            },
-          ]}
-        >
-          <View style={styles.dropdownHeader}>
-            <Text
-              style={[styles.dropdownTitle, { color: COLORS.text }]}
-            >
-              Select Diet
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <XIcon size={RESPONSIVE.icon.md} color={COLORS.text} />
-            </TouchableOpacity>
-          </View>
-
-          <Text
-            style={[
-              styles.selectedSummaryText,
-              { color: COLORS.sub },
-            ]}
-            numberOfLines={2}
-          >
-            {selectedSummary}
-          </Text>
-
-          <TextInput
-            style={[
-              styles.searchInput,
-              {
-                backgroundColor: COLORS.inputBg,
-                color: COLORS.text,
-                borderColor: COLORS.border,
-              },
-            ]}
-            placeholder="Search diets..."
-            placeholderTextColor={COLORS.sub}
-            value={searchQuery}
-            onChangeText={onSearchChange}
-          />
-
-          <FlatList
-            data={filteredDiets}
-            keyExtractor={(item) => item?.id}
-            style={styles.dietList}
-            contentContainerStyle={{ paddingBottom: RESPONSIVE.spacing.md }}
-            renderItem={({ item }) => {
-              const isSelected = selectedDiets?.includes(item?.name);
-              return (
-                <Pressable
-                  style={[
-                    styles.dietItem,
-                    {
-                      backgroundColor: isSelected
-                        ? `${COLORS.button}20`
-                        : COLORS.card,
-                      borderColor: COLORS.border,
-                    },
-                  ]}
-                  onPress={() => onToggleDiet(item?.name)}
-                >
-                  <Text
-                    style={[
-                      styles.dietItemText,
-                      { color: COLORS.text },
-                    ]}
-                    numberOfLines={2}
-                    ellipsizeMode="tail"
-                  >
-                    {item?.name}
-                  </Text>
-                  <View
-                    style={[
-                      styles.checkbox,
-                      {
-                        backgroundColor: isSelected
-                          ? COLORS.button
-                          : "transparent",
-                        borderColor: COLORS.border,
-                      },
-                    ]}
-                  >
-                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                </Pressable>
-              );
-            }}
-          />
-
-          <View style={styles.dropdownActions}>
-            <TouchableOpacity
-              style={[
-                styles.dropdownButton,
-                { backgroundColor: COLORS.cancelButton },
-              ]}
-              onPress={onClose}
-            >
-              <Text style={styles.dropdownButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.dropdownButton,
-                { backgroundColor: COLORS.button },
-              ]}
-              onPress={onClose}
-            >
-              <Text style={styles.dropdownButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
 const DischargeScreen: React.FC = () => {
   const route = useRoute<any>();
   const navigation = useNavigation();
-  const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
-  const isDark = scheme === "dark";
 const dispatch = useDispatch();
   const user = useSelector((state: any) => state.currentUser);
   const { patientId, hospitalID } = route.params ?? {};
 
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filteredDiets, setFilteredDiets] =
-    useState<DietItem[]>(dietList);
 
   const [formData, setFormData] = useState<FormData>({
     dischargeType: 0,
@@ -227,19 +59,6 @@ const dispatch = useDispatch();
   // Follow-up date state (actual Date + picker flag)
   const [followUpDate, setFollowUpDate] = useState<Date | null>(null);
   const [showFollowUpPicker, setShowFollowUpPicker] = useState(false);
-
-  // Filter diets as user types
-  useEffect(() => {
-    if (searchQuery) {
-      setFilteredDiets(
-        dietList?.filter((diet) =>
-          diet?.name?.toLowerCase()?.includes(searchQuery?.toLowerCase())
-        ) ?? []
-      );
-    } else {
-      setFilteredDiets(dietList);
-    }
-  }, [searchQuery]);
 
   // UI string for follow-up date (DD-MM-YYYY)
   const getFollowUpDisplay = () => {
@@ -272,74 +91,72 @@ const dispatch = useDispatch();
 
   const validateForm = (): boolean => {
     if (!formData?.dischargeType || formData?.dischargeType === 0) {
-      Alert.alert("Error", "Please select a reason for Discharge");
+      dispatch(showError("Please select a reason for Discharge"));
       return false;
     }
 
     if (formData?.followUp === 1 && !followUpDate) {
-      Alert.alert("Error", "Follow-up date is required.");
+      dispatch(showError("Follow-up date is required."));
       return false;
     }
 
     if (!formData?.diagnosis?.trim()) {
-      Alert.alert("Error", "Final diagnosis is required.");
+      dispatch(showError("Final diagnosis is required."));
       return false;
     }
 
     return true;
   };
 
-  const handleDischarge = async () => {
-    if (!validateForm()) return;
+const handleDischarge = async () => {
+  if (!validateForm()) return;
 
-    setLoading(true);
-    try {
-      const token = user?.token || (await AsyncStorage.getItem("token"));
-      const response = await AuthPost(
-        `patient/${hospitalID}/patients/discharge/${patientId}`,
-        {
-          dischargeType: formData?.dischargeType,
-          diet: selectedDiets?.join(","),
-          advice: formData?.advice,
-          followUp: formData?.followUp,
-          followUpDate: formData?.followUpDate,
-          diagnosis: formData?.diagnosis,
-          prescription: formData?.prescription,
-        },
-        token
-      );
+  setLoading(true);
+  try {
+    const token = user?.token || (await AsyncStorage.getItem("token"));
+    
+    // Type the response as 'any' to avoid TypeScript errors
+    const response = await AuthPost(
+      `patient/${hospitalID}/patients/discharge/${patientId}`,
+      {
+        dischargeType: formData?.dischargeType,
+        diet: selectedDiets?.join(","),
+        advice: formData?.advice,
+        followUp: formData?.followUp,
+        followUpDate: formData?.followUpDate,
+        diagnosis: formData?.diagnosis,
+        prescription: formData?.prescription,
+      },
+      token
+    ) as any; 
 
-      if (response?.status === "success") {
-        dispatch(showSuccess("Patient successfully discharged"));
-        setTimeout(() => {
-          navigation.navigate("DischargePatient" as never);
-        }, 2000);
-      } else {
-         dispatch(showError(response?.message ||"Patient discharge failed"));
-        
-      }
-    } catch (error) {
-        dispatch(showError(error?.message ||"An error occurred during discharge"));
-     
-    } finally {
-      setLoading(false);
+    if (response?.status === "success") {
+      dispatch(showSuccess("Patient successfully discharged"));
+      navigation.navigate("DischargedPatientsIPD" as never);
+    } else {
+      // Now TypeScript won't complain about accessing message
+      const errorMessage = 
+        response?.message || 
+        response?.data?.message || 
+        response?.error || 
+        "Patient discharge failed";
+      dispatch(showError(errorMessage));
     }
-  };
+  } catch (error: any) {
+    dispatch(
+      showError(error?.message || "An error occurred during discharge")
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   const toggleDiet = (diet: string) => {
     if (selectedDiets?.includes(diet)) {
-      setSelectedDiets(
-        selectedDiets?.filter((item) => item !== diet) ?? []
-      );
+      setSelectedDiets(selectedDiets?.filter((item) => item !== diet) ?? []);
     } else {
       setSelectedDiets([...(selectedDiets ?? []), diet]);
     }
-  };
-
-  const removeDiet = (diet: string) => {
-    setSelectedDiets(
-      selectedDiets?.filter((item) => item !== diet) ?? []
-    );
   };
 
   if (!patientId || !hospitalID) {
@@ -353,30 +170,31 @@ const dispatch = useDispatch();
         <View
           style={[
             styles.footerWrap,
-            {
-              paddingBottom:
-                (insets.bottom || RESPONSIVE.spacing.md) +
-                RESPONSIVE.spacing.lg,
-            },
+            { bottom: insets.bottom ?? 0 },
           ]}
         >
           <Footer active={"patients"} brandColor="#14b8a6" />
         </View>
+        {insets.bottom > 0 && (
+          <View
+            pointerEvents="none"
+            style={[styles.navShield, { height: insets.bottom }]}
+          />
+        )}
       </View>
     );
   }
 
   // Diet trigger text: show selected names (comma separated) or placeholder
   const dietTriggerLabel =
-    selectedDiets.length === 0
-      ? "Select diets..."
-      : selectedDiets.join(", ");
+    selectedDiets.length === 0 ? "Select diets..." : selectedDiets.join(", ");
 
   return (
-   <SafeAreaView
-    style={[styles.safe, { backgroundColor: COLORS.bg }]}
-    edges={["top", "left", "right", "bottom"]}
-  >
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: COLORS.bg }]}
+      edges={["top", "left", "right", "bottom"]}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -389,7 +207,7 @@ const dispatch = useDispatch();
             paddingBottom:
               RESPONSIVE.spacing.xxl * 2 +
               (insets.bottom || RESPONSIVE.spacing.lg) +
-              100, // enough space above buttons & footer
+              FOOTER_H, // ensure space for absolute footer
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -474,7 +292,16 @@ const dispatch = useDispatch();
                       >
                         Diet
                       </Text>
+                      <Text
+                        style={[
+                          styles.helperText,
+                          { color: COLORS.sub },
+                        ]}
+                      >
+                        Select one or more
+                      </Text>
 
+                      {/* Diet Trigger */}
                       <TouchableOpacity
                         style={[
                           styles.dietDropdownTrigger,
@@ -483,7 +310,7 @@ const dispatch = useDispatch();
                             borderColor: COLORS.border,
                           },
                         ]}
-                        onPress={() => setDropdownVisible(true)}
+                        onPress={() => setDropdownVisible((prev) => !prev)}
                         activeOpacity={0.8}
                       >
                         <Text
@@ -496,50 +323,61 @@ const dispatch = useDispatch();
                                   : COLORS.sub,
                             },
                           ]}
-                         numberOfLines={2}
+                          numberOfLines={2}
                           ellipsizeMode="tail"
                         >
                           {dietTriggerLabel}
                         </Text>
-                        <ChevronDownIcon
-                          size={RESPONSIVE.icon.md}
-                          color={COLORS.sub}
-                        />
+                        <ChevronDownIcon size={RESPONSIVE.icon.md} color={COLORS.sub} />
                       </TouchableOpacity>
 
-                      {/* {selectedDiets?.length > 0 && (
-                        <View style={styles.chipsContainer}>
-                          {selectedDiets?.map((item, index) => (
-                            <View
-                              key={index}
-                              style={[
-                                styles.chip,
-                                { backgroundColor: `${COLORS.button}20` },
-                              ]}
+                      {/* Simple inline dropdown - NO search, NO per-item borders */}
+                      {dropdownVisible && (
+                        <View
+                          style={[
+                            styles.dropdownContainer,
+                            {
+                              backgroundColor: COLORS.card || COLORS.bg || "#ffffff",
+                              borderColor: COLORS.border,
+                            },
+                          ]}
+                        >
+                          {dietList.map((item) => {
+                            const isSelected = selectedDiets?.includes(item?.name);
+                            return (
+                              <TouchableOpacity
+                                key={item.id}
+                                style={styles.dietRow}
+                                onPress={() => toggleDiet(item?.name)}
                             >
                               <Text
                                 style={[
-                                  styles.chipText,
+                                  styles.dietItemText,
                                   { color: COLORS.text },
                                 ]}
                                 numberOfLines={2}
                                 ellipsizeMode="tail"
                               >
-                                {item}qwerty
+                                {item?.name}
                               </Text>
-                              <TouchableOpacity
-                                onPress={() => removeDiet(item)}
-                                style={styles.chipRemove}
-                              >
-                                <XIcon
-                                  size={RESPONSIVE.icon.sm}
-                                  color={COLORS.text}
-                                />
+                              <View
+                                  style={[
+                                    styles.checkbox,
+                                    {
+                                      backgroundColor: isSelected
+                                        ? COLORS.button
+                                        : "transparent",
+                                      borderColor: COLORS.border,
+                                    },
+                                  ]}
+                                >
+                                  {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                                </View>
                               </TouchableOpacity>
-                            </View>
-                          ))}
+                            );
+                          })}
                         </View>
-                      )} */}
+                      )}
                     </View>
 
                     {/* Advice on Discharge */}
@@ -714,20 +552,9 @@ const dispatch = useDispatch();
                 )}
               </View>
             </View>
-          </View>
-        </ScrollView>
-
-        {/* Actions – above footer and navigation bar */}
         <View
           style={[
             styles.actions,
-            {
-              backgroundColor: COLORS.card,
-              borderTopColor: COLORS.border,
-              paddingBottom:
-               
-                RESPONSIVE.spacing.xs, // lift buttons above nav bar
-            },
           ]}
         >
           <TouchableOpacity
@@ -752,32 +579,17 @@ const dispatch = useDispatch();
             )}
           </TouchableOpacity>
         </View>
-
-        {/* Footer (bottom navigation), clearly above system nav bar */}
-        <View
-          style={[
-            styles.footerWrap,
-            {
-              paddingBottom:
-                (insets.bottom || RESPONSIVE.spacing.md) +
-                RESPONSIVE.spacing.lg,
-            },
-          ]}
-        >
-          <Footer active={"patients"} brandColor="#14b8a6" />
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Diet Dropdown Modal */}
-      <DietDropdown
-        visible={dropdownVisible}
-        onClose={() => setDropdownVisible(false)}
-        selectedDiets={selectedDiets}
-        onToggleDiet={toggleDiet}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        filteredDiets={filteredDiets}
-      />
+      <View style={[styles.footerWrap, { bottom: insets.bottom ?? 0 }]}>
+        <Footer active={"patients"} brandColor="#14b8a6" />
+      </View>
+
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
     </SafeAreaView>
   );
 };

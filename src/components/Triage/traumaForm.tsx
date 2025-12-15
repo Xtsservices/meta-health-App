@@ -14,12 +14,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useDispatch } from "react-redux";
 
-import { useTriageForm } from "./context/triageFormContext";
-import { TraumaFormType, TraumaErrorsType, TriageLastKnownSequence } from "./context/triageFormContext";
+import {
+  useTriageForm,
+  TraumaFormType,
+  TraumaErrorsType,
+  TriageLastKnownSequence,
+} from "./context/triageFormContext";
 import { zoneType } from "../../utils/role";
 import { showError } from "../../store/toast.slice";
 import Footer from "../dashboard/footer";
-
 
 /* -------------------------------------------------------------------------- */
 /*                         Helpers: validation & zone                         */
@@ -44,7 +47,10 @@ const validateTraumaForm = (data: TraumaFormType): TraumaErrorsType => {
     errors.fractureRegion = "This field is required.";
   }
 
-  if (data.traumaType === "fall" && (!data.fallHeight || data.fallHeight === "null")) {
+  if (
+    data.traumaType === "fall" &&
+    (!data.fallHeight || data.fallHeight === "null")
+  ) {
     errors.fallHeight = "This field is required.";
   }
 
@@ -87,9 +93,7 @@ function validateTraumaData(data: TraumaFormType): boolean {
 
   return keys.every(
     (key) =>
-      key in data &&
-      typeof data[key] !== "undefined" &&
-      data[key] !== null
+      key in data && typeof data[key] !== "undefined" && data[key] !== null
   );
 }
 
@@ -190,7 +194,6 @@ const TriageTraumaScreen: React.FC = () => {
     formData.errors.trauma
   );
 
-  // Dynamic title / subtitle if you want, currently static
   const headerTitle = "Trauma Form";
   const headerSubTitle = "Capture trauma details for zone decision.";
 
@@ -244,14 +247,13 @@ const TriageTraumaScreen: React.FC = () => {
       zone,
     }));
 
-    // In web: always navigate to zone-form after trauma
     navigation.navigate("TriageZoneForm" as never);
   };
 
   const renderError = (msg?: string | null) =>
     !!msg ? <Text style={styles.errorText}>{msg}</Text> : null;
 
-  // Small checkbox-looking toggle
+  // Small checkbox-looking toggle WITH tick
   const BoolToggle: React.FC<{ label: string; field: TraumaBoolKey }> = ({
     label,
     field,
@@ -263,18 +265,10 @@ const TriageTraumaScreen: React.FC = () => {
         onPress={() => toggleBoolField(field)}
         activeOpacity={0.8}
       >
-        <View
-          style={[
-            styles.checkboxBox,
-            isOn && styles.checkboxBoxActive,
-          ]}
-        />
-        <Text
-          style={[
-            styles.boolLabel,
-            isOn && styles.boolLabelActive,
-          ]}
-        >
+        <View style={[styles.checkboxBox, isOn && styles.checkboxBoxActive]}>
+          {isOn && <Text style={styles.checkboxTick}>✓</Text>}
+        </View>
+        <Text style={[styles.boolLabel, isOn && styles.boolLabelActive]}>
           {label}
         </Text>
       </TouchableOpacity>
@@ -303,6 +297,8 @@ const TriageTraumaScreen: React.FC = () => {
             <Text style={styles.label}>Trauma Type</Text>
             <View style={[styles.pickerWrap, styles.inputBg]}>
               <Picker
+                style={styles.picker}
+                dropdownIconColor="#0f172a"
                 selectedValue={trauma.traumaType}
                 onValueChange={(v) =>
                   updateSelectField("traumaType", String(v))
@@ -345,6 +341,8 @@ const TriageTraumaScreen: React.FC = () => {
               <Text style={styles.label}>Stab Injury Severity</Text>
               <View style={[styles.pickerWrap, styles.inputBg]}>
                 <Picker
+                  style={styles.picker}
+                  dropdownIconColor="#0f172a"
                   selectedValue={trauma.stabInjurySeverity}
                   onValueChange={(v) =>
                     updateSelectField("stabInjurySeverity", String(v))
@@ -383,6 +381,8 @@ const TriageTraumaScreen: React.FC = () => {
               <Text style={styles.label}>Stab Injury Location</Text>
               <View style={[styles.pickerWrap, styles.inputBg]}>
                 <Picker
+                  style={styles.picker}
+                  dropdownIconColor="#0f172a"
                   selectedValue={trauma.stabInjuryLocation}
                   onValueChange={(v) =>
                     updateSelectField("stabInjuryLocation", String(v))
@@ -409,6 +409,8 @@ const TriageTraumaScreen: React.FC = () => {
               <Text style={styles.label}>Chest Injury Type</Text>
               <View style={[styles.pickerWrap, styles.inputBg]}>
                 <Picker
+                  style={styles.picker}
+                  dropdownIconColor="#0f172a"
                   selectedValue={trauma.chestInjuryType}
                   onValueChange={(v) =>
                     updateSelectField("chestInjuryType", String(v))
@@ -454,6 +456,8 @@ const TriageTraumaScreen: React.FC = () => {
               <Text style={styles.label}>Fall Height</Text>
               <View style={[styles.pickerWrap, styles.inputBg]}>
                 <Picker
+                  style={styles.picker}
+                  dropdownIconColor="#0f172a"
                   selectedValue={trauma.fallHeight}
                   onValueChange={(v) =>
                     updateSelectField("fallHeight", String(v))
@@ -549,6 +553,8 @@ const TriageTraumaScreen: React.FC = () => {
               <Text style={styles.label}>Fracture Region</Text>
               <View style={[styles.pickerWrap, styles.inputBg]}>
                 <Picker
+                  style={styles.picker}
+                  dropdownIconColor="#0f172a"
                   selectedValue={trauma.fractureRegion}
                   onValueChange={(v) =>
                     updateSelectField("fractureRegion", String(v))
@@ -559,10 +565,7 @@ const TriageTraumaScreen: React.FC = () => {
                     value=""
                     color="#9ca3af"
                   />
-                  <Picker.Item
-                    label="Pelvic Fracture"
-                    value="pelvic"
-                  />
+                  <Picker.Item label="Pelvic Fracture" value="pelvic" />
                   <Picker.Item
                     label="Multiple Fractures"
                     value="multiple"
@@ -591,7 +594,7 @@ const TriageTraumaScreen: React.FC = () => {
               </View>
               {renderError(errors.fractureRegion)}
               <Text style={styles.helperText}>
-                For two or more long bone fractures use "Multiple".
+                For two or more long bone fractures use "Multiple Fractures".
               </Text>
             </View>
           )}
@@ -653,6 +656,8 @@ export default TriageTraumaScreen;
 /*                                   Styles                                   */
 /* -------------------------------------------------------------------------- */
 
+const INPUT_HEIGHT = 52; // taller so text is not cut
+
 const styles = StyleSheet.create({
   screenWrap: {
     flex: 1,
@@ -660,6 +665,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    backgroundColor: "#ffffff",
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -680,6 +686,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 12,
   },
   gridItem: {
@@ -687,7 +694,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   gridItemHalf: {
-    width: "48%",
+    width: "100%",
     marginBottom: 12,
   },
   label: {
@@ -700,9 +707,17 @@ const styles = StyleSheet.create({
     borderColor: "#cbd5e1",
     borderRadius: 8,
     overflow: "hidden",
+    height: INPUT_HEIGHT,
+    justifyContent: "center",
+    backgroundColor: "#f8fafc",
   },
   inputBg: {
     backgroundColor: "#f8fafc",
+  },
+  picker: {
+    height: INPUT_HEIGHT,
+    fontSize: 10,
+    color: "#0f172a",
   },
   inlineGrid: {
     flexDirection: "row",
@@ -714,35 +729,44 @@ const styles = StyleSheet.create({
     width: "48%",
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 10,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#cbd5e1",
     marginBottom: 8,
     backgroundColor: "#ffffff",
+    minHeight: INPUT_HEIGHT, // same height feel as inputs
   },
   boolItemActive: {
     borderColor: "#14b8a6",
     backgroundColor: "#ecfdf5",
   },
   checkboxBox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
     borderColor: "#cbd5e1",
     marginRight: 8,
     backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
   },
   checkboxBoxActive: {
     borderColor: "#14b8a6",
     backgroundColor: "#14b8a6",
   },
+  checkboxTick: {
+    fontSize: 14,
+    color: "#ffffff",
+    fontWeight: "700",
+  },
   boolLabel: {
     fontSize: 13,
     color: "#0f172a",
     flexShrink: 1,
+    lineHeight: 16,
   },
   boolLabelActive: {
     color: "#065f46",
@@ -762,7 +786,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 24,
-    marginBottom: 8,
+    marginBottom: 108,
   },
   btn: {
     flex: 1,

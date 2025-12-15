@@ -10,11 +10,10 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
-  NativeSyntheticEvent,
-  TextInputFocusEventData,
   LayoutChangeEvent,
   Modal,
   Pressable,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
@@ -34,7 +33,7 @@ import { COLORS } from "../../utils/colour";
 type Ward = { id: number; name: string; availableBeds: number | null };
 type Staff = { id: number; firstName?: string; lastName?: string; departmentID?: number };
 type Vitals = { oxygen?: number; pulse?: number; temperature?: number; bp?: string };
-type Timeline = { id: number; patientID: number };
+type Timeline = { id: number; patientID: number , wardID?: number; };
 
 type TransferRouteParams = {
   hospitalID?: number;
@@ -53,6 +52,7 @@ const capitalize = (s?: string) =>
 
 const ACTION_FOOTER_H = 68;      // Submit/Cancel bar height
 const APP_FOOTER_H = 70;         // Bottom <Footer> height
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const initialForm = {
   transferType: transferType.internal,
@@ -100,42 +100,87 @@ export default function TransferPatientSheet() {
   const [openDoctor, setOpenDoctor] = useState(false);
 
   // --- Keyboard & Smooth Scroll management ---
-  const [kbHeight, setKbHeight] = useState(0);
   const scrollRef = useRef<ScrollView | null>(null);
-  const fieldYRef = useRef<Record<string, number>>({});
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const scrollViewContentHeight = useRef<number>(0);
+  const scrollViewHeight = useRef<number>(0);
 
   useEffect(() => {
-    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
-      setKbHeight(e.endCoordinates?.height ?? 0);
+    const showSubscription = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      setIsKeyboardVisible(true);
+      setTimeout(() => {
+        scrollToActiveField();
+      }, 100);
     });
-    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
-      setKbHeight(0);
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+      setIsKeyboardVisible(false);
     });
+
     return () => {
-      showSub.remove();
-      hideSub.remove();
+      showSubscription.remove();
+      hideSubscription.remove();
     };
   }, []);
 
-  const registerY =
-    (key: string) =>
-    (e: LayoutChangeEvent): void => {
-      const y = e.nativeEvent.layout.y;
-      fieldYRef.current[key] = y;
-    };
+  const activeFieldRef = useRef<string | null>(null);
 
-  const scrollInto = (key: string) => {
-    const y = fieldYRef.current[key] ?? 0;
-    const target = Math.max(0, y - 80); // keep offset from top, so input is clear above keyboard
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ y: target, animated: true });
+  const handleFocus = useCallback(
+    (fieldName: string) => () => {
+      activeFieldRef.current = fieldName;
+
+      if (!isKeyboardVisible) {
+        return;
+      }
+      setTimeout(() => {
+        scrollToActiveField();
+      }, 100);
+    },
+    [isKeyboardVisible]
+  );
+
+  const scrollToActiveField = useCallback(() => {
+    if (!scrollRef.current || !activeFieldRef.current) return;
+
+    // Get the active field based on its name
+    const fieldName = activeFieldRef.current;
+
+    // Calculate scroll position based on field type/position
+    let scrollY = 0;
+
+    // Determine scroll position based on which field is active
+    switch (fieldName) {
+      case "oxygen":
+      case "temp":
+      case "pulse":
+      case "bpH":
+      case "bpL":
+        scrollY = 250;
+        break;
+      case "reason":
+        scrollY = 200;
+        break;
+      case "relativeName":
+        scrollY = 400;
+        break;
+      case "hospitalName":
+        scrollY = 150;
+        break;
+      default:
+        scrollY = 100;
+    }
+
+    scrollRef.current.scrollTo({
+      y: scrollY,
+      animated: true,
     });
-  };
+  }, []);
 
-  const onFocusScroll =
-    (key: string) =>
-    (_e: NativeSyntheticEvent<TextInputFocusEventData>) =>
-      scrollInto(key);
+  const handleBlur = useCallback(() => {
+    activeFieldRef.current = null;
+  }, []);
 
   // token cache
   const tokenRef = useRef<string | null>(null);
@@ -154,9 +199,14 @@ export default function TransferPatientSheet() {
     if (!hospitalID) return;
     const token = await ensureToken();
     const wr = await authFetch(`ward/${hospitalID}`, token);
-    if (wr?.status === "success") setWards(wr.data?.wards || wr.wards || []);
-    else setWards([]);
-  }, [hospitalID, ensureToken]);
+    if (wr?.status === "success" && "data" in wr) {
+      const wardsData = wr.data?.wards || [];
+      const filterWardData = timeline?.wardID
+        ? wardsData.filter((ward: { id: number }) => ward.id !== (timeline as any).wardID)
+        : wardsData;
+      setWards(filterWardData);
+    } else setWards([]);
+  }, [hospitalID, ensureToken, timeline?.wardID]);
 
   const fetchDoctors = useCallback(async () => {
     if (!hospitalID) return;
@@ -165,16 +215,24 @@ export default function TransferPatientSheet() {
       `user/${hospitalID}/list/${Role_NAME.doctor}`,
       token
     );
-    if (dr?.status === "success") setDoctors(dr.data?.users || dr.users || []);
-    else setDoctors([]);
-  }, [hospitalID, ensureToken]);
+    if (dr?.status === "success" && "data" in dr) {
+    const doctorsData = dr.data?.users || [];
+    // Filter out current user if they're a doctor
+    const filteredDoctors = doctorsData.filter(
+      (doctor: { id: number }) => doctor.id !== user?.id
+    );
+    setDoctors(filteredDoctors);
+  } else {
+    setDoctors([]);
+  }
+}, [hospitalID, ensureToken, user?.id]);
 
   const fetchVitals = useCallback(async () => {
     if (!hospitalID || !patientID) return;
     const token = await ensureToken();
     const vr = await authFetch(`vitals/${hospitalID}/${patientID}`, token);
-    if (vr?.status === "success") {
-      const vList: Vitals[] = vr.data?.vitals || vr.vitals || [];
+    if (vr?.status === "success" && "data" in vr) {
+      const vList: Vitals[] = vr.data?.vitals || [];
       let latest = { oxygen: "", pulse: "", temp: "", bpH: "", bpL: "" } as any;
       [...vList].reverse().forEach((v) => {
         if (!latest.oxygen && v.oxygen != null) latest.oxygen = String(v.oxygen);
@@ -207,11 +265,30 @@ export default function TransferPatientSheet() {
 
   const validate = useCallback(() => {
     const e: Record<string, string> = {};
-    if (!form.wardID) e.wardID = "Ward is required.";
-    if (!form.userID) e.userID = "Doctor is required.";
-    if (form.transferType === transferType.internal && !form.departmentID) {
-      e.departmentID = "Department is required (auto from selected doctor).";
+
+    // Check transfer type
+    if (!form.transferType && form.transferType !== 0) {
+      e.transferType = "Transfer Type is required";
     }
+
+    if (form.transferType === transferType.internal) {
+      // Internal transfer validations
+      if (!form.wardID) e.wardID = "Ward is required.";
+      if (!form.userID) e.userID = "Doctor is required.";
+      if (form.departmentID === 0 && form.transferType === transferType.internal) {
+        e.departmentID = "Please select doctor name";
+      }
+
+      // Check required fields for internal transfer
+      if (!form.reason) e.reason = "Reason is required";
+    } else if (form.transferType === transferType.external) {
+      // External transfer validations
+      if (!form.hospitalName) e.hospitalName = "Hospital Name is required";
+      if (!form.reason) e.reason = "Reason is required";
+      if (!form.relativeName) e.relativeName = "Relative Name is required";
+    }
+
+    // Common validations for vitals
     if (form.oxygen && (Number(form.oxygen) < 50 || Number(form.oxygen) > 100)) {
       e.oxygen = "Oxygen must be between 50 and 100.";
     }
@@ -225,6 +302,12 @@ export default function TransferPatientSheet() {
       e.bpL = "Low BP cannot be greater than High BP.";
       e.bpH = "High BP must be ≥ Low BP.";
     }
+
+    // Validate BP fields
+    if ((form.bpH && !form.bpL) || (!form.bpH && form.bpL)) {
+      e.bp = "Both BP High and BP Low must be provided";
+    }
+
     setErrors(e);
     return Object.keys(e).length === 0;
   }, [form]);
@@ -248,7 +331,7 @@ export default function TransferPatientSheet() {
       const req = {
         wardID: form.wardID,
         transferType: form.transferType,
-        bp: form.bpH ? `${form.bpH}/${form.bpL || ""}` : null,
+        bp: form.bpH && form.bpL ? `${form.bpH}/${form.bpL}` : null,
         temp: form.temp ? Number(form.temp) : null,
         oxygen: form.oxygen ? Number(form.oxygen) : null,
         pulse: form.pulse ? Number(form.pulse) : null,
@@ -256,7 +339,7 @@ export default function TransferPatientSheet() {
         reason: form.reason || null,
         relativeName: form.relativeName || "",
         departmentID: form.departmentID || 0,
-        userID: form.userID || 0,
+        userID:form.transferType === transferType.internal ? form.userID : (user as any).id,
         status: null,
       };
 
@@ -266,18 +349,27 @@ export default function TransferPatientSheet() {
         token
       );
 
-      if (res?.status === "success" || res?.message === "success") {
-        dispatch(showSuccess("Patient successfully transferred"));
-        navigation.navigate("PatientList" as never);
-      } else {
-        dispatch(showError(res?.message || "Failed to transfer patient"));
-      }
+if (("data" in res && res?.status === "success") || ("message" in res && res?.message === "success")) {
+  dispatch(showSuccess("Patient successfully transferred"));
+  navigation.navigate("PatientList" as never);
+} else {
+  // Safely extract error message
+  let errorMessage = "Failed to transfer patient";
+  
+  if ("message" in res && res.message) {
+    errorMessage = res.message;
+  } else if ("data" in res && res.data?.message) {
+    errorMessage = res.data.message;
+  }
+  
+  dispatch(showError(errorMessage));
+}
     } catch (err) {
       dispatch(showError("Failed to transfer patient"));
     } finally {
       setSubmitting(false);
     }
-  }, [hospitalID, patientID, form, ensureToken, validate, dispatch, navigation]);
+  }, [hospitalID, patientID, form, ensureToken, validate, dispatch, navigation, user?.id]);
 
   const debouncedSubmit = useCallback(
     debounce(handleSubmit, DEBOUNCE_DELAY),
@@ -290,19 +382,32 @@ export default function TransferPatientSheet() {
     setField("departmentID", d?.departmentID || 0);
   };
 
-  // footer offset = above keyboard OR above app footer + nav area
-  const keyboardOpen = kbHeight > 0;
-  const footerOffset = APP_FOOTER_H + insets.bottom;
 
-  const bottomPad = ACTION_FOOTER_H + 16 + (insets.bottom + APP_FOOTER_H);
-  const indicatorBottom = ACTION_FOOTER_H + (insets.bottom + APP_FOOTER_H);
+  const showExtendedForm = user?.patientStatus !== 1;
+  const calculateBottomPadding = () => {
+    let padding = 16 + APP_FOOTER_H + insets.bottom;
+
+    // If keyboard is open, we need more padding to ensure content is visible
+    if (isKeyboardVisible && keyboardHeight > 0) {
+      padding += keyboardHeight;
+    }
+
+    return padding;
+  };
+  const handleScrollViewLayout = useCallback((e: LayoutChangeEvent) => {
+    scrollViewHeight.current = e.nativeEvent.layout.height;
+  }, []);
+
+  const handleContentSizeChange = useCallback((width: number, height: number) => {
+    scrollViewContentHeight.current = height;
+  }, []);
 
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         {loading ? (
           <View style={styles.loadingWrap}>
@@ -312,18 +417,59 @@ export default function TransferPatientSheet() {
          <>
           <ScrollView
             ref={scrollRef}
-            contentContainerStyle={{ padding: 12, paddingBottom: ACTION_FOOTER_H + 16 + APP_FOOTER_H + insets.bottom + (keyboardOpen ? kbHeight : 0)
+              onLayout={handleScrollViewLayout}
+              onContentSizeChange={handleContentSizeChange}
+              contentContainerStyle={{
+                padding: 12,
+                paddingBottom: calculateBottomPadding(),
               }}
-            scrollIndicatorInsets={{ 
-              bottom: keyboardOpen ? kbHeight + ACTION_FOOTER_H : ACTION_FOOTER_H + APP_FOOTER_H + insets.bottom
-          }}
-            keyboardShouldPersistTaps="always"
-            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-            automaticallyAdjustKeyboardInsets={true}
-            showsVerticalScrollIndicator
-          >
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+            >
+              {/* Transfer Type Section - Only show when in IPD (patientStatus !== 1) */}
+              {showExtendedForm && (
+                <View>
+                  <Field label="Type of Transfer *" error={errors.transferType}>
+                    <View style={styles.radioGroup}>
+                      <View style={styles.radioOption}>
+                        <Pressable
+                          onPress={() => setField("transferType", transferType.internal)}
+                          style={styles.radioButton}
+                        >
+                          <View style={styles.radioCircle}>
+                            {form.transferType === transferType.internal && (
+                              <View style={styles.radioInnerCircle} />
+                            )}
+                          </View>
+                          <Text style={styles.radioLabel}>Internal</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.radioOption}>
+                        <Pressable
+                          onPress={() => setField("transferType", transferType.external)}
+                          style={styles.radioButton}
+                        >
+                          <View style={styles.radioCircle}>
+                            {form.transferType === transferType.external && (
+                              <View style={styles.radioInnerCircle} />
+                            )}
+                          </View>
+                          <Text style={styles.radioLabel}>External</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </Field>
+                </View>
+              )}
+
+              {/* Conditional Fields based on Transfer Type */}
+              {showExtendedForm && form.transferType === transferType.internal ? (
+                // Internal Transfer Fields
+                <>
             {/* Ward */}
-            <View onLayout={registerY("ward")}>
+            <View>
               <Field label="Ward *" error={errors.wardID}>
                 <Pressable
                   onPress={() => setOpenWard(true)}
@@ -342,7 +488,7 @@ export default function TransferPatientSheet() {
             </View>
 
             {/* Doctor */}
-            <View onLayout={registerY("doctor")}>
+            <View>
               <Field label="Doctor Name *" error={errors.userID || errors.departmentID}>
                 <Pressable
                   onPress={() => setOpenDoctor(true)}
@@ -370,33 +516,123 @@ export default function TransferPatientSheet() {
                 </Pressable>
               </Field>
             </View>
+                </>
+              ) : showExtendedForm && form.transferType === transferType.external ? (
+                // External Transfer Fields
+                <>
+                  <View>
+                    <Field label="Hospital Name *" error={errors.hospitalName}>
+                      <TextInput
+                        value={form.hospitalName}
+                        onFocus={handleFocus("hospitalName")}
+                        onBlur={handleBlur}
+                        onChangeText={(t) => setField("hospitalName", t)}
+                        placeholder="Enter hospital name"
+                        placeholderTextColor={COLORS.sub}
+                        style={[
+                          styles.input,
+                          {
+                            borderColor: errors.hospitalName
+                              ? COLORS.danger
+                              : COLORS.border,
+                          },
+                        ]}
+                        returnKeyType="next"
+                      />
+                    </Field>
+                  </View>
+                </>
+              ) : (
+                // Default/Internal Transfer Fields (when not in extended form)
+                <>
+                  {/* Ward */}
+                  <View>
+                    <Field label="Ward *" error={errors.wardID}>
+                      <Pressable
+                        onPress={() => setOpenWard(true)}
+                        style={[
+                          styles.input,
+                          { borderColor: errors.wardID ? COLORS.danger : COLORS.border },
+                        ]}
+                      >
+                        <Text style={styles.inputText}>
+                          {form.wardID
+                            ? capitalize(wards.find((w) => w.id === form.wardID)?.name)
+                            : "Select Ward"}
+                        </Text>
+                      </Pressable>
+                    </Field>
+                  </View>
+
+                  {/* Doctor */}
+                  <View>
+                    <Field
+                      label="Doctor Name *"
+                      error={errors.userID || errors.departmentID}
+                    >
+                      <Pressable
+                        onPress={() => setOpenDoctor(true)}
+                        style={[
+                          styles.input,
+                          {
+                            borderColor:
+                              errors.userID || errors.departmentID
+                                ? COLORS.danger
+                                : COLORS.border,
+                          },
+                        ]}
+                      >
+                        <Text style={styles.inputText}>
+                          {form.userID
+                            ? (() => {
+                                const d = doctors.find((x) => x.id === form.userID);
+                                if (!d) return "Select Doctor";
+                                return `${capitalize(d.firstName)}${
+                                  d.lastName ? " " + capitalize(d.lastName) : ""
+                                }`;
+                              })()
+                            : "Select Doctor"}
+                        </Text>
+                      </Pressable>
+                    </Field>
+                  </View>
+                </>
+              )}
 
             {/* Reason */}
-            <View onLayout={registerY("reason")}>
-              <Field label="Reason">
+            <View>
+              <Field label="Reason *" error={errors.reason}>
                 <TextInput
                   value={form.reason}
-                  onFocus={onFocusScroll("reason")}
+                  onFocus={handleFocus("reason")}
+                  onBlur={handleBlur}
                   onChangeText={(t) => setField("reason", t)}
                   placeholder="Enter reason"
                   placeholderTextColor={COLORS.sub}
                   multiline
                   numberOfLines={3}
-                  style={[styles.input, { height: 96 }]}
+                    style={[
+                      styles.input,
+                      {
+                        height: 96,
+                        borderColor: errors.reason ? COLORS.danger : COLORS.border,
+                      },
+                    ]}
+                    returnKeyType="next"
                 />
               </Field>
             </View>
 
             {/* Vitals */}
             <Text style={styles.sectionTitle}>Vitals</Text>
-
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <View style={{ flex: 1 }} onLayout={registerY("oxygen")}>
+              <View style={{ flex: 1 }}>
                 <Field label="Oxygen (%)" error={errors.oxygen}>
                   <TextInput
                     keyboardType="numeric"
                     value={String(form.oxygen || "")}
-                    onFocus={onFocusScroll("oxygen")}
+                    onFocus={handleFocus("oxygen")}
+                    onBlur={handleBlur}
                     onChangeText={(t) => setField("oxygen", t)}
                     placeholder="e.g. 96"
                     placeholderTextColor={COLORS.sub}
@@ -404,15 +640,17 @@ export default function TransferPatientSheet() {
                       styles.input,
                       { borderColor: errors.oxygen ? COLORS.danger : COLORS.border },
                     ]}
+                      returnKeyType="next"
                   />
                 </Field>
               </View>
-              <View style={{ flex: 1 }} onLayout={registerY("temp")}>
+              <View style={{ flex: 1 }}>
                 <Field label="Temperature (°C)" error={errors.temp}>
                   <TextInput
                     keyboardType="numeric"
                     value={String(form.temp || "")}
-                    onFocus={onFocusScroll("temp")}
+                    onFocus={handleFocus("temp")}
+                    onBlur={handleBlur}
                     onChangeText={(t) => setField("temp", t)}
                     placeholder="e.g. 37"
                     placeholderTextColor={COLORS.sub}
@@ -420,15 +658,17 @@ export default function TransferPatientSheet() {
                       styles.input,
                       { borderColor: errors.temp ? COLORS.danger : COLORS.border },
                     ]}
+                      returnKeyType="next"
                   />
                 </Field>
               </View>
-              <View style={{ flex: 1 }} onLayout={registerY("pulse")}>
+              <View style={{ flex: 1 }}>
                 <Field label="Pulse (bpm)" error={errors.pulse}>
                   <TextInput
                     keyboardType="numeric"
                     value={String(form.pulse || "")}
-                    onFocus={onFocusScroll("pulse")}
+                    onFocus={handleFocus("pulse")}
+                      onBlur={handleBlur}
                     onChangeText={(t) => setField("pulse", t)}
                     placeholder="e.g. 78"
                     placeholderTextColor={COLORS.sub}
@@ -436,6 +676,7 @@ export default function TransferPatientSheet() {
                       styles.input,
                       { borderColor: errors.pulse ? COLORS.danger : COLORS.border },
                     ]}
+                    returnKeyType="next"
                   />
                 </Field>
               </View>
@@ -443,12 +684,13 @@ export default function TransferPatientSheet() {
 
 
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <View style={{ flex: 1 }} onLayout={registerY("bpH")}>
-                <Field label="Blood Pressure High (mmHg)" error={errors.bpH}>
+              <View style={{ flex: 1 }}>
+                <Field label="Blood Pressure High (mmHg)" error={errors.bpH || errors.bp}>
                   <TextInput
                     keyboardType="numeric"
                     value={String(form.bpH || "")}
-                    onFocus={onFocusScroll("bpH")}
+                    onFocus={handleFocus("bpH")}
+                    onBlur={handleBlur}
                     onChangeText={(t) => setField("bpH", t)}
                     placeholder="e.g. 120"
                     placeholderTextColor={COLORS.sub}
@@ -456,15 +698,17 @@ export default function TransferPatientSheet() {
                       styles.input,
                       { borderColor: errors.bpH ? COLORS.danger : COLORS.border },
                     ]}
+                      returnKeyType="next"
                   />
                 </Field>
               </View>
-              <View style={{ flex: 1 }} onLayout={registerY("bpL")}>
-                <Field label="Blood Pressure Low (mmHg)" error={errors.bpL}>
+              <View style={{ flex: 1 }}>
+                <Field label="Blood Pressure Low (mmHg)" error={errors.bpL || errors.bp}>
                   <TextInput
                     keyboardType="numeric"
                     value={String(form.bpL || "")}
-                    onFocus={onFocusScroll("bpL")}
+                    onFocus={handleFocus("bpL")}
+                    onBlur={handleBlur}
                     onChangeText={(t) => setField("bpL", t)}
                     placeholder="e.g. 80"
                     placeholderTextColor={COLORS.sub}
@@ -472,43 +716,39 @@ export default function TransferPatientSheet() {
                       styles.input,
                       { borderColor: errors.bpL ? COLORS.danger : COLORS.border },
                     ]}
+                      returnKeyType="next"
                   />
                 </Field>
               </View>
             </View>
 
-            {/* Hospital / Relative */}
-            {/* <View onLayout={registerY("hospitalName")}>
-              <Field label="Hospital Name (if external)">
-                <TextInput
-                  value={form.hospitalName}
-                  onFocus={onFocusScroll("hospitalName")}
-                  onChangeText={(t) => setField("hospitalName", t)}
-                  placeholder="Hospital name (optional)"
-                  placeholderTextColor={COLORS.sub}
-                  style={styles.input}
-                />
-              </Field>
-            </View> */}
-
-            <View onLayout={registerY("relativeName")}>
-              <Field label="Relative Name">
+              {/* Relative Name */}
+              <View>
+                <Field label="Relative Name" error={errors.relativeName}>
                 <TextInput
                   value={form.relativeName}
-                  onFocus={onFocusScroll("relativeName")}
+                  onFocus={handleFocus("relativeName")}
+                  onBlur={handleBlur}
                   onChangeText={(t) => setField("relativeName", t)}
-                  placeholder="Relative name (optional)"
+                  placeholder="Relative name"
                   placeholderTextColor={COLORS.sub}
-                  style={styles.input}
+                  style={[
+                      styles.input,
+                      {
+                        borderColor: errors.relativeName
+                          ? COLORS.danger
+                          : COLORS.border,
+                      },
+                    ]}
+                    returnKeyType="done"
+                    onSubmitEditing={() => {
+                      handleBlur();
+                      Keyboard.dismiss();
+                    }}
                 />
               </Field>
             </View>
-          </ScrollView>
-
-
-
-      {/* Fixed action footer – ALWAYS above app footer / keyboard */}
-      <View style={[styles.footer, { bottom: footerOffset }]}>
+      <View style={[styles.footer, { marginTop: 12 }]}>
         <Pressable
           onPress={handleCancel}
           style={[styles.btn, { backgroundColor: COLORS.pill, flex: 1 }]}
@@ -533,16 +773,19 @@ export default function TransferPatientSheet() {
           </Text>
         </Pressable>
       </View>
+    </ScrollView>
           </>
         )}
       </KeyboardAvoidingView>
 
-      {/* Bottom app footer (global navigation) */}
+      {/* Bottom app footer (global navigat*/}
+      {!isKeyboardVisible && (
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
+      )}
 
-      {insets.bottom > 0 && (
+      {insets.bottom > 0 && !isKeyboardVisible && (
         <View
           pointerEvents="none"
           style={[styles.navShield, { height: insets.bottom }]}
@@ -649,7 +892,7 @@ const styles = StyleSheet.create({
 
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  label: { color: COLORS.sub, fontWeight: "700", marginBottom: 6 ,fontSize: 12},
+  label: { color: COLORS.sub, fontWeight: "700", marginBottom: 6, fontSize: 12 },
   input: {
     borderWidth: 1.5,
     borderColor: COLORS.border,
@@ -661,8 +904,44 @@ const styles = StyleSheet.create({
   inputText: { color: COLORS.text, fontWeight: "800" },
   errorText: { marginTop: 6, color: COLORS.danger, fontSize: 12, fontWeight: "700" },
 
+  // Radio button styles
+  radioGroup: {
+    flexDirection: "row",
+    gap: 20,
+    marginTop: 4,
+  },
+  radioOption: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  radioButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: COLORS.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioInnerCircle: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.brand,
+  },
+  radioLabel: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
   footer: {
-    position: "absolute",
+    // not absolute anymore, just a row at end of form
     left: 0,
     right: 0,
     height: ACTION_FOOTER_H,
@@ -673,6 +952,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 12,
     alignItems: "center",
+    zIndex: 10,
   },
   btn: {
     height: 44,
@@ -693,6 +973,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     overflow: "hidden",
+    zIndex: 20,
   },
   pickerHead: {
     paddingHorizontal: 12,
@@ -715,11 +996,12 @@ const styles = StyleSheet.create({
   },
 
   footerWrap: {
-    position: "absolute",
+    // position: "absolute",
     left: 0,
     right: 0,
     height: APP_FOOTER_H,
     justifyContent: "center",
+    zIndex: 5,
   },
   navShield: {
     position: "absolute",

@@ -8,12 +8,12 @@ import {
   TouchableOpacity,
   TextInput,
   Platform,
+  Switch,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Picker } from "@react-native-picker/picker";
 import { useNavigation } from "@react-navigation/native";
-
 
 import { useTriageForm } from "./context/triageFormContext";
 import {
@@ -128,6 +128,8 @@ const getNonTraumaZone = (data: NonTraumaFormType): number => {
 /*                               Screen Component                             */
 /* -------------------------------------------------------------------------- */
 
+const INPUT_HEIGHT = 52;
+
 const TriageNonTraumaScreen: React.FC = () => {
   const { formData, setFormData } = useTriageForm();
   const navigation = useNavigation();
@@ -161,13 +163,13 @@ const TriageNonTraumaScreen: React.FC = () => {
       [key]: value,
     };
 
-    // Preserve web logic: reset pregnancy-related when not pregnant
+    // Reset pregnancy-related when not pregnant
     if (!updated.pregnancy) {
       updated.trimester = "null";
       updated.pregnancyIssue = "null";
     }
 
-    // For consistency with your initial context, set "null" for empty select-like fields
+    // Set "null" for empty select-like fields
     if (!updated.internalBleeding) {
       updated.internalBleedingCause = "null";
     }
@@ -189,7 +191,7 @@ const TriageNonTraumaScreen: React.FC = () => {
   const handleToggle = (key: keyof NonTraumaFormType) => {
     const current = nonTrauma[key];
     if (typeof current === "boolean") {
-      updateField(key, !current as any);
+      updateField(key, (!current) as any);
     }
   };
 
@@ -212,7 +214,6 @@ const TriageNonTraumaScreen: React.FC = () => {
       lastKnownSequence: TriageLastKnownSequence.NON_TRAUMA,
     }));
 
-    // Same as web: always go to zone-form
     navigation.navigate("TriageZoneForm" as never);
   };
 
@@ -242,7 +243,7 @@ const TriageNonTraumaScreen: React.FC = () => {
         style={styles.container}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 120 },
+          { paddingBottom: insets.bottom + 140 }, // same idea as trauma screen
         ]}
         enableOnAndroid
         extraScrollHeight={Platform.OS === "ios" ? 80 : 120}
@@ -257,22 +258,26 @@ const TriageNonTraumaScreen: React.FC = () => {
         <View style={styles.card}>
           <View style={styles.rowBetween}>
             <Text style={styles.sectionTitle}>Pregnancy</Text>
-            <TouchableOpacity
-              style={[
-                styles.togglePill,
-                nonTrauma.pregnancy && styles.togglePillOn,
-              ]}
-              onPress={() => handleToggle("pregnancy")}
-            >
-              <Text
-                style={[
-                  styles.toggleText,
-                  nonTrauma.pregnancy && styles.toggleTextOn,
-                ]}
-              >
-                {nonTrauma.pregnancy ? "YES" : "NO"}
+
+            <View style={styles.switchRow}>
+              <Switch
+                value={!!nonTrauma.pregnancy}
+                onValueChange={(val) => updateField("pregnancy", val as any)}
+                thumbColor={
+                  Platform.OS === "android"
+                    ? nonTrauma.pregnancy
+                      ? "#ffffff"
+                      : "#ffffff"
+                    : undefined
+                }
+                trackColor={{ false: "#d1d5db", true: "#34d399" }}
+                accessibilityLabel="Pregnancy switch"
+                accessibilityHint="Toggle if patient is pregnant"
+              />
+              <Text style={styles.switchLabel}>
+                {nonTrauma.pregnancy ? "Yes" : "No"}
               </Text>
-            </TouchableOpacity>
+            </View>
           </View>
 
           {nonTrauma.pregnancy && (
@@ -282,6 +287,8 @@ const TriageNonTraumaScreen: React.FC = () => {
                 <Text style={styles.label}>Trimester</Text>
                 <View style={styles.pickerWrap}>
                   <Picker
+                    style={styles.picker}
+                    dropdownIconColor="#0f172a"
                     selectedValue={
                       nonTrauma.trimester === "null" ? "" : nonTrauma.trimester
                     }
@@ -297,9 +304,13 @@ const TriageNonTraumaScreen: React.FC = () => {
                       value=""
                       color="#9ca3af"
                     />
-                    <Picker.Item label="First" value="first" />
-                    <Picker.Item label="Second" value="second" />
-                    <Picker.Item label="Third" value="third" />
+                    <Picker.Item label="First" value="first" color="#9ca3af" />
+                    <Picker.Item
+                      label="Second"
+                      value="second"
+                      color="#9ca3af"
+                    />
+                    <Picker.Item label="Third" value="third" color="#9ca3af" />
                   </Picker>
                 </View>
                 {!!errors.trimester && (
@@ -313,6 +324,8 @@ const TriageNonTraumaScreen: React.FC = () => {
                   <Text style={styles.label}>Pregnancy Issue</Text>
                   <View style={styles.pickerWrap}>
                     <Picker
+                      style={styles.picker}
+                      dropdownIconColor="#0f172a"
                       selectedValue={
                         nonTrauma.pregnancyIssue === "null"
                           ? ""
@@ -333,12 +346,14 @@ const TriageNonTraumaScreen: React.FC = () => {
                       <Picker.Item
                         label="Abdominal Pain"
                         value="abdominal pain"
+                        color="#0f172a"
                       />
                       <Picker.Item
                         label="Vaginal Bleeding"
                         value="vaginal bleeding"
+                        color="#0f172a"
                       />
-                      <Picker.Item label="Both" value="both" />
+                      <Picker.Item label="Both" value="both" color="#0f172a" />
                     </Picker>
                   </View>
                 </View>
@@ -389,6 +404,8 @@ const TriageNonTraumaScreen: React.FC = () => {
                 <Text style={styles.sectionTitle}>Bleeding Cause</Text>
                 <View style={styles.pickerWrap}>
                   <Picker
+                    style={styles.picker}
+                    dropdownIconColor="#0f172a"
                     selectedValue={
                       nonTrauma.internalBleedingCause === "null"
                         ? ""
@@ -406,9 +423,17 @@ const TriageNonTraumaScreen: React.FC = () => {
                       value=""
                       color="#9ca3af"
                     />
-                    <Picker.Item label="Nose & ENT" value="noseEnt" />
-                    <Picker.Item label="Active" value="active" />
-                    <Picker.Item label="P/R" value="pr" />
+                    <Picker.Item
+                      label="Nose & ENT"
+                      value="noseEnt"
+                      color="#0f172a"
+                    />
+                    <Picker.Item
+                      label="Active"
+                      value="active"
+                      color="#0f172a"
+                    />
+                    <Picker.Item label="P/R" value="pr" color="#0f172a" />
                   </Picker>
                 </View>
                 {!!errors.internalBleedingCause && (
@@ -424,6 +449,8 @@ const TriageNonTraumaScreen: React.FC = () => {
                 <Text style={styles.sectionTitle}>Poisoning Cause</Text>
                 <View style={styles.pickerWrap}>
                   <Picker
+                    style={styles.picker}
+                    dropdownIconColor="#0f172a"
                     selectedValue={
                       nonTrauma.poisoningCause === "null"
                         ? ""
@@ -441,9 +468,17 @@ const TriageNonTraumaScreen: React.FC = () => {
                       value=""
                       color="#9ca3af"
                     />
-                    <Picker.Item label="Snake" value="snake" />
-                    <Picker.Item label="Scorpion" value="scorpion" />
-                    <Picker.Item label="Others" value="others" />
+                    <Picker.Item label="Snake" value="snake" color="#0f172a" />
+                    <Picker.Item
+                      label="Scorpion"
+                      value="scorpion"
+                      color="#0f172a"
+                    />
+                    <Picker.Item
+                      label="Others"
+                      value="others"
+                      color="#0f172a"
+                    />
                   </Picker>
                 </View>
                 {!!errors.poisoningCause && (
@@ -483,6 +518,8 @@ const TriageNonTraumaScreen: React.FC = () => {
                 <Text style={styles.sectionTitle}>Fever Symptoms</Text>
                 <View style={styles.pickerWrap}>
                   <Picker
+                    style={styles.picker}
+                    dropdownIconColor="#0f172a"
                     selectedValue={
                       nonTrauma.feverSymptoms === "null"
                         ? ""
@@ -500,13 +537,33 @@ const TriageNonTraumaScreen: React.FC = () => {
                       value=""
                       color="#9ca3af"
                     />
-                    <Picker.Item label="Headache" value="headache" />
-                    <Picker.Item label="Chest Pain" value="chest pain" />
-                    <Picker.Item label="Jaundice" value="jaundice" />
-                    <Picker.Item label="Chemotherapy" value="chemotherapy" />
-                    <Picker.Item label="HIV" value="hiv" />
-                    <Picker.Item label="Diabetic" value="diabetic" />
-                    <Picker.Item label="None" value="none" />
+                    <Picker.Item
+                      label="Headache"
+                      value="headache"
+                      color="#0f172a"
+                    />
+                    <Picker.Item
+                      label="Chest Pain"
+                      value="chest pain"
+                      color="#0f172a"
+                    />
+                    <Picker.Item
+                      label="Jaundice"
+                      value="jaundice"
+                      color="#0f172a"
+                    />
+                    <Picker.Item
+                      label="Chemotherapy"
+                      value="chemotherapy"
+                      color="#0f172a"
+                    />
+                    <Picker.Item label="HIV" value="hiv" color="#0f172a" />
+                    <Picker.Item
+                      label="Diabetic"
+                      value="diabetic"
+                      color="#0f172a"
+                    />
+                    <Picker.Item label="None" value="none" color="#0f172a" />
                   </Picker>
                 </View>
                 {!!errors.feverSymptoms && (
@@ -518,7 +575,7 @@ const TriageNonTraumaScreen: React.FC = () => {
         )}
 
         {/* Back / Submit buttons (above footer) */}
-        <View style={[styles.actionRow, { marginBottom: 16 }]}>
+        <View style={[styles.actionRow, { marginBottom: 24 }]}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.secondaryBtn]}
             onPress={goBack}
@@ -563,6 +620,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    marginBottom: 60,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -603,6 +661,49 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 8,
   },
+
+  /* NEW: switch row for pregnancy */
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 0,
+  },
+  switchLabel: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: "#0f172a",
+    fontWeight: "600",
+  },
+
+  pregnancyToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    overflow: "hidden",
+    backgroundColor: "#f8fafc",
+  },
+  pregnancyOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    minWidth: 52,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pregnancyOptionActive: {
+    backgroundColor: "#14b8a6",
+  },
+  pregnancyOptionText: {
+    fontSize: 12,
+    color: "#0f172a",
+    fontWeight: "500",
+  },
+  pregnancyOptionTextActive: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+
   field: {
     marginBottom: 10,
   },
@@ -616,24 +717,35 @@ const styles = StyleSheet.create({
     borderColor: "#cbd5e1",
     borderRadius: 8,
     overflow: "hidden",
+    backgroundColor: "#f8fafc",
+    height: INPUT_HEIGHT,
+    justifyContent: "center",
+  },
+  picker: {
+    height: INPUT_HEIGHT,
+    color: "#0f172a",
+    fontSize: 14,
   },
   input: {
     borderWidth: 1,
     borderColor: "#cbd5e1",
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: Platform.OS === "ios" ? 10 : 8,
+    height: INPUT_HEIGHT,
     fontSize: 14,
     color: "#0f172a",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f8fafc",
   },
   chipGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     marginHorizontal: -4,
     marginTop: 4,
+    alignContent: "center",
+    justifyContent: "center",
   },
   chip: {
+    width: "40%", // three per row
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 20,
@@ -642,7 +754,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     marginHorizontal: 4,
     marginVertical: 4,
-    maxWidth: "48%",
+    alignItems: "center",
+    justifyContent: "center",
   },
   chipSelected: {
     backgroundColor: "#14b8a6",
@@ -651,30 +764,11 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 12,
     color: "#0f172a",
+    textAlign: "center",
   },
   chipTextSelected: {
     color: "#ffffff",
     fontWeight: "600",
-  },
-  togglePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    backgroundColor: "#ffffff",
-  },
-  togglePillOn: {
-    borderColor: "#14b8a6",
-    backgroundColor: "#ccfbf1",
-  },
-  toggleText: {
-    fontSize: 12,
-    color: "#0f172a",
-    fontWeight: "500",
-  },
-  toggleTextOn: {
-    color: "#0f172a",
   },
   error: {
     fontSize: 11,

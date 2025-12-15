@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
+// DashboardTriage.tsx
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -11,18 +12,14 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  Animated,
+  Pressable,
+  Easing,
+  Image,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import {
-  
-  LayoutDashboard,
-  List as ListIcon,
-  UserPlus2,
-  HelpCircle,
-  PanelRightOpen,
-} from "lucide-react-native";
 
 import { patientStatus, zoneType } from "../../utils/role";
 import { RootState } from "../../store/store";
@@ -31,11 +28,42 @@ import { AuthFetch } from "../../auth/auth";
 import LineChartActualScheduled from "../dashboard/lineGraph";
 import WeeklyBarChart from "../dashboard/barGraph";
 import PatientsList from "../dashboard/patientsList";
-import Sidebar, { SidebarItem } from "../Sidebar/sidebarOpd";
 import Footer from "../dashboard/footer";
 import { showError } from "../../store/toast.slice";
-import PieChart from "../dashboard/pieChart"; // ⭐ same component as IPD
-import { ActivityIcon, CalendarIcon, ClockIcon, HelpCircleIcon, LayoutDashboardIcon, LogOutIcon, MenuIcon, SettingsIcon, UsersIcon } from "../../utils/SvgIcons";
+import PieChart from "../dashboard/pieChart";
+
+// responsive utilities (same as OPD)
+import {
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
+  isTablet,
+  isSmallDevice,
+  isExtraSmallDevice,
+  SPACING,
+  FONT_SIZE,
+  ICON_SIZE,
+  FOOTER_HEIGHT,
+} from "../../utils/responsive";
+
+// SVG icons (same set as OPD sidebar)
+import {
+  LayoutDashboardIcon,
+  ListIcon,
+  UserPlusIcon,
+  SettingsIcon,
+  HelpCircleIcon,
+  LogOutIcon,
+  PanelRightOpenIcon,
+  MenuIcon,
+  XIcon,
+  ActivityIcon,
+  CalendarIcon,
+  ClockIcon,
+  UsersIcon,
+} from "../../utils/SvgIcons";
+
+// import Sidebar types
+import type { SidebarItem } from "../Sidebar/sidebarIpd";
 
 // ---- Types ----
 type XY = { x: number | string; y: number };
@@ -49,7 +77,6 @@ type PatientRow = {
 };
 
 const { width: W } = Dimensions.get("window");
-const isTablet = W >= 768;
 
 const ZONE_META: Record<number, { label: string; color: string }> = {
   1: { label: "Red", color: "#ed4f4f" },
@@ -86,34 +113,278 @@ const ConfirmDialog: React.FC<{
   );
 };
 
-/* -------------------------- Header -------------------------- */
+/* -------------------------- Header (same as OPD) -------------------------- */
 const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onMenu }) => {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
-        <MenuIcon size={30} color="#ffffffff" />
-      </TouchableOpacity>
+      <View style={styles.headerContent}>
+        <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>
+          {title}
+        </Text>
+        <TouchableOpacity
+          onPress={onMenu}
+          style={styles.menuBtn}
+          accessibilityLabel="Open menu"
+          hitSlop={{
+            top: SPACING.xs,
+            bottom: SPACING.xs,
+            left: SPACING.xs,
+            right: SPACING.xs,
+          }}
+        >
+          <MenuIcon size={ICON_SIZE.lg} color="#ffffffff" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
-/* -------------------------- Main Screen -------------------------- */
+/* -------------------------- Sidebar helpers (same as OPD) -------------------------- */
+const SidebarButton: React.FC<{
+  item: SidebarItem;
+  isActive?: boolean;
+  onPress: () => void;
+}> = ({ item, isActive = false, onPress }) => {
+  const IconCmp = item.icon;
+  const color =
+    item.variant === "danger"
+      ? "#b91c1c"
+      : item.variant === "muted"
+      ? "#475569"
+      : isActive
+      ? "#14b8a6"
+      : "#0b1220";
+
+  return (
+    <TouchableOpacity
+      style={[styles.sidebarButton, isActive && styles.sidebarButtonActive]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={styles.buttonContent}>
+        <IconCmp size={20} color={color} />
+        <Text style={[styles.buttonText, { color }]}>{item.label}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const Avatar: React.FC<{ name?: string; uri?: string; size?: number }> = ({
+  name = "",
+  uri,
+  size = 46,
+}) => {
+  const initial = (name || "").trim().charAt(0).toUpperCase() || "U";
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={styles.avatarText}>{initial}</Text>
+    </View>
+  );
+};
+
+/* -------------------------- Sidebar component (grouped like screenshot) -------------------------- */
+const Sidebar: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  userName?: string;
+  userImage?: string;
+  onProfile: () => void;
+  items: SidebarItem[];
+  bottomItems: SidebarItem[];
+}> = ({ open, onClose, userName, userImage, onProfile, items, bottomItems }) => {
+  const user = useSelector((state: RootState) => state.currentUser);
+  const slide = useRef(new Animated.Value(-Math.min(320, SCREEN_WIDTH * 0.82))).current;
+  const width = Math.min(320, SCREEN_WIDTH * 0.82);
+
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: open ? 0 : -width,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [open, slide, width]);
+
+  // Group items into sections (keys same as OPD)
+  const overviewItems = items?.filter((item) => item.key === "dash") ?? [];
+  const patientManagementItems =
+    items?.filter((item) => ["plist", "addp", "app"].includes(item.key)) ?? [];
+  const operationsItems = items?.filter((item) => item.key === "mgmt") ?? [];
+  const supportItems = items?.filter((item) => item.key === "help") ?? [];
+
+  return (
+    <Modal transparent visible={open} animationType="none" onRequestClose={onClose}>
+      <Pressable style={styles.sidebarOverlay} onPress={onClose} />
+      <Animated.View
+        style={[styles.sidebarContainer, { width, transform: [{ translateX: slide }] }]}
+      >
+        {/* Sidebar header with avatar */}
+        <View style={styles.sidebarHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <XIcon size={24} color="#0b1220" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.userProfileSection} onPress={onProfile}>
+            <Avatar name={userName} uri={userImage} size={50} />
+            <View style={styles.userInfo}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {userName || "User"}
+              </Text>
+              <Text style={styles.userMetaId}>Meta Health ID: {user?.id || "N/A"}</Text>
+              <Text style={styles.profile}>View Profile</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Navigation sections */}
+        <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
+          {/* Overview */}
+          {overviewItems.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Overview</Text>
+              {overviewItems.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Patient Management */}
+          {patientManagementItems.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Patient Management</Text>
+              {patientManagementItems.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Operations */}
+          {operationsItems.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Operations</Text>
+              {operationsItems.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Support */}
+          {supportItems.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Support</Text>
+              {supportItems.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Bottom actions (Go to Modules / Logout) */}
+        <View style={styles.bottomActions}>
+          {bottomItems?.map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              style={[
+                styles.bottomButton,
+                item.variant === "danger" ? styles.logoutButton : styles.modulesButton,
+              ]}
+              onPress={() => {
+                onClose();
+                item.onPress();
+              }}
+            >
+              <item.icon
+                size={20}
+                color={item.variant === "danger" ? "#b91c1c" : "#14b8a6"}
+              />
+              <Text
+                style={[
+                  styles.bottomButtonText,
+                  { color: item.variant === "danger" ? "#b91c1c" : "#14b8a6" },
+                ]}
+              >
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+};
+
+/* -------------------------- KPI Card (visual same as OPD) -------------------------- */
+const KpiCard: React.FC<{
+  title: string;
+  value: number | string | null | undefined;
+  icon: React.ReactNode;
+  bg: string;
+}> = ({ title, value, icon, bg }) => {
+  return (
+    <View style={[styles.card, { backgroundColor: bg }]}>
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardValue}>{value ?? "—"}</Text>
+      </View>
+      <View style={styles.iconWrap}>{icon}</View>
+    </View>
+  );
+};
+
+/* -------------------------- Main Screen (logic same as your triage) -------------------------- */
 const DashboardTriage: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
   const insets = useSafeAreaInsets();
-  const userName = `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;;
-
   const dispatch = useDispatch();
-  const FOOTER_HEIGHT = 70;
+
+  const userName = `${user?.firstName} ${user?.lastName}` || "User";
+  const userImg = user?.avatarUrl || user?.profileImage || user?.imageURL;
+
+  const FOOTER_FIXED = 70;
 
   // Sidebar & logout
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
-  // KPIs & data
+  // KPIs & data (same as original)
   const [thisYearCount, setThisYearCount] = useState<number | null>(null);
   const [thisMonthCount, setThisMonthCount] = useState<number | null>(null);
   const [appointmentsToday, setAppointmentsToday] = useState<number | null>(null);
@@ -129,12 +400,9 @@ const DashboardTriage: React.FC = () => {
   const [latestLoading, setLatestLoading] = useState<boolean>(false);
 
   // 🔴🟡🟢 Zone pie chart state
-  const [selectedZoneDataFilter, setSelectedZoneDataFilter] = useState<"Day" | "Week" | "Month">(
-    "Day"
-  );
-  const [zoneData, setZoneData] = useState<
-    { x: string; y: number; color: string }[]
-  >([]);
+  const [selectedZoneDataFilter, setSelectedZoneDataFilter] =
+    useState<"Day" | "Week" | "Month">("Day");
+  const [zoneData, setZoneData] = useState<{ x: string; y: number; color: string }[]>([]);
   const [zoneLoading, setZoneLoading] = useState(false);
 
   /* -------------------------- TOTAL COUNTS (EMERGENCY + ZONE) -------------------------- */
@@ -215,7 +483,7 @@ const DashboardTriage: React.FC = () => {
 
         const res = await AuthFetch(url, token);
 
-        if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.counts) ) {
+        if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.counts)) {
           const actual: XY[] = res?.data?.counts?.map((c: any) => ({
             x: c.filter_value,
             y: Number(c.actual_visits) || 0,
@@ -253,28 +521,26 @@ const DashboardTriage: React.FC = () => {
           `patient/${user.hospitalID}/patients/count/zone/${filter}`,
           token
         );
-        // Web version had: response.message === "success" & response.count
-        // Mobile wrapper usually normalizes to: status + data.count
-        const success = res?.status === "success" && ("data" in res) 
+        const success = res?.status === "success" && "data" in res;
         if (!success) {
           setZoneData([]);
           dispatch(showError("Failed to fetch zone data"));
           return;
         }
 
-        const rows: Array<{ zone: number; patient_count: number }> =
-          Array.isArray(res?.data?.count)
-            ? res.data.count
-            : Array.isArray((res as any)?.count)
-            ? (res as any).count
-            : [];
+        const rows: Array<{ zone: number; patient_count: number }> = Array.isArray(
+          res?.data?.count
+        )
+          ? res.data.count
+          : Array.isArray((res as any)?.count)
+          ? (res as any).count
+          : [];
 
         if (!rows.length) {
           setZoneData([]);
           return;
         }
 
-        // ensure all zones exist
         const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0 };
         rows.forEach(({ zone, patient_count }) => {
           if (counts[zone as 1 | 2 | 3] !== undefined) {
@@ -290,11 +556,7 @@ const DashboardTriage: React.FC = () => {
         setZoneData(nextData);
       } catch (err: any) {
         setZoneData([]);
-        dispatch(
-          showError(
-            err?.message || String(err) || "Error fetching zone data"
-          )
-        );
+        dispatch(showError(err?.message || String(err) || "Error fetching zone data"));
       } finally {
         setZoneLoading(false);
       }
@@ -302,7 +564,7 @@ const DashboardTriage: React.FC = () => {
     [user?.hospitalID, user?.token, dispatch]
   );
 
-  /* -------------------------- LATEST PATIENTS (unchanged endpoint) -------------------------- */
+  /* -------------------------- LATEST PATIENTS -------------------------- */
   const getLatestPatients = useCallback(async () => {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
@@ -334,23 +596,23 @@ const DashboardTriage: React.FC = () => {
   /* -------------------------- EFFECT: INITIAL LOAD + FILTER CHANGE -------------------------- */
   useFocusEffect(
     useCallback(() => {
-    if (user?.hospitalID) {
-      getTotalCount();
-      getWeekly();
-      getLatestPatients();
-      getPatientsVisit(filterYear, filterMonth);
-    }
-  }, [
-    user?.hospitalID,
-    getTotalCount,
-    getWeekly,
-    getLatestPatients,
-    getPatientsVisit,
-    filterYear,
-    filterMonth,
-  ]));
+      if (user?.hospitalID) {
+        getTotalCount();
+        getWeekly();
+        getLatestPatients();
+        getPatientsVisit(filterYear, filterMonth);
+      }
+    }, [
+      user?.hospitalID,
+      getTotalCount,
+      getWeekly,
+      getLatestPatients,
+      getPatientsVisit,
+      filterYear,
+      filterMonth,
+    ])
+  );
 
-  // fetch zone pie data whenever filter changes
   useEffect(() => {
     if (user?.hospitalID) {
       getZoneData(selectedZoneDataFilter);
@@ -372,7 +634,7 @@ const DashboardTriage: React.FC = () => {
   const onLogoutPress = () => setConfirmVisible(true);
   const confirmLogout = async () => {
     try {
-      await AsyncStorage.multiRemove(["token", "userID"]); // clear session
+      await AsyncStorage.multiRemove(["token", "userID"]);
     } catch (e: any) {
       dispatch(showError(e?.message || String(e) || "Logout storage cleanup error"));
     } finally {
@@ -382,15 +644,17 @@ const DashboardTriage: React.FC = () => {
     }
   };
 
+  // items for sidebar – keys used for grouping into Overview / Patient Management / Operations / Support
   const sidebarItems: SidebarItem[] = [
     { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, onPress: () => go("TriageDashboard") },
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
-    { key: "addp", label: "Add Patient", icon: UserPlus2, onPress: () => go("AddPatient") },
+    { key: "addp", label: "Add Patient", icon: UserPlusIcon, onPress: () => go("AddPatient") },
     { key: "mgmt", label: "Management", icon: SettingsIcon, onPress: () => go("Management") },
     { key: "help", label: "Help", icon: HelpCircleIcon, onPress: () => go("HelpScreen") },
   ];
+
   const bottomItems: SidebarItem[] = [
-    { key: "modules", label: "Go to Modules", icon: PanelRightOpen, onPress: () => go("Home") },
+    { key: "modules", label: "Go to Modules", icon: PanelRightOpenIcon, onPress: () => go("Home") },
     { key: "logout", label: "Logout", icon: LogOutIcon, onPress: onLogoutPress, variant: "danger" },
   ];
 
@@ -404,7 +668,11 @@ const DashboardTriage: React.FC = () => {
         style={styles.container}
         contentContainerStyle={[
           styles.containerContent,
-          { paddingBottom: FOOTER_HEIGHT + insets.bottom + 16 },
+          {
+            paddingBottom:
+              FOOTER_FIXED + (insets.bottom > 0 ? insets.bottom + SPACING.md : SPACING.md),
+            minHeight: SCREEN_HEIGHT - (isSmallDevice ? 120 : 160),
+          },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -413,25 +681,25 @@ const DashboardTriage: React.FC = () => {
           <KpiCard
             title="Today's Patients"
             value={todayCount}
-            icon={<UsersIcon size={22} color="#2563EB" />}
+            icon={<UsersIcon size={ICON_SIZE.md} color="#2563EB" />}
             bg="#ffffffff"
           />
           <KpiCard
             title="Appointments"
             value={appointmentsToday}
-            icon={<CalendarIcon size={22} color="#10B981" />}
+            icon={<CalendarIcon size={ICON_SIZE.md} color="#10B981" />}
             bg="#ffffffff"
           />
           <KpiCard
             title="This Month"
             value={thisMonthCount}
-            icon={<ClockIcon size={22} color="#F59E0B" />}
+            icon={<ClockIcon size={ICON_SIZE.md} color="#F59E0B" />}
             bg="#ffffffff"
           />
           <KpiCard
             title="This Year"
             value={thisYearCount}
-            icon={<ActivityIcon size={22} color="#7C3AED" />}
+            icon={<ActivityIcon size={ICON_SIZE.md} color="#7C3AED" />}
             bg="#ffffffff"
           />
         </View>
@@ -450,7 +718,7 @@ const DashboardTriage: React.FC = () => {
           <WeeklyBarChart data={weeklyData} />
         </View>
 
-        {/* 🔴🟡🟢 Zone Pie Chart - BEFORE PatientsList */}
+        {/* Zone Pie Chart */}
         <View style={styles.pieChartContainer}>
           <View style={styles.pieChartHeader}>
             <Text style={styles.pieChartTitle}>Patients by Zone</Text>
@@ -511,14 +779,13 @@ const DashboardTriage: React.FC = () => {
               <ActivityIndicator size="small" color="#14b8a6" />
             </View>
           ) : zoneData.length > 0 ? (
-            // assuming your PieChart can consume `data` shaped as { x, y, color }
             <PieChart data={zoneData} />
           ) : (
             <Text style={styles.emptyPieText}>No patients in selected period.</Text>
           )}
         </View>
 
-        {/* Latest table */}
+        {/* Latest patients table */}
         <PatientsList navigation={navigation} patientType={patientStatus.emergency} />
       </ScrollView>
 
@@ -557,107 +824,152 @@ const DashboardTriage: React.FC = () => {
   );
 };
 
-/* -------------------------- KPI Card -------------------------- */
-const KpiCard: React.FC<{
-  title: string;
-  value: number | string | null | undefined;
-  icon: React.ReactNode;
-  bg: string;
-}> = ({ title, value, icon, bg }) => {
-  return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: bg, width: (W - 16 * 2 - 12) / 2 },
-        isTablet && { width: (W - 16 * 2 - 12 * 3) / 4 },
-      ]}
-    >
-      <View>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardValue}>{value ?? "—"}</Text>
-      </View>
-      <View style={styles.iconWrap}>{icon}</View>
-    </View>
-  );
-};
-
 export default DashboardTriage;
 
 /* -------------------------- Styles -------------------------- */
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
 
-  /* Header */
+  /* Header (from OPD) */
   header: {
-    height: 100,
-    paddingHorizontal: 16,
+    height:
+      Platform.OS === "ios"
+        ? isExtraSmallDevice
+          ? 90
+          : isSmallDevice
+          ? 100
+          : 110
+        : isExtraSmallDevice
+        ? 70
+        : isSmallDevice
+        ? 80
+        : 90,
+    paddingHorizontal: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#e2e8f0",
+    backgroundColor: "#14b8a6",
+    paddingTop:
+      Platform.OS === "ios"
+        ? isExtraSmallDevice
+          ? 30
+          : 40
+        : isExtraSmallDevice
+        ? 15
+        : 20,
+    justifyContent: "center",
+  },
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#14b8a6",
+    width: "100%",
   },
-  headerTitle: { fontSize: 24, fontWeight: "700", color: "#fdfdfdff" },
+  headerTitle: {
+    fontSize: FONT_SIZE.xxl,
+    fontWeight: "700",
+    color: "#fdfdfdff",
+    flex: 1,
+    textAlign: "center",
+    marginRight: SPACING.md,
+  },
   menuBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.xs,
     alignItems: "center",
     justifyContent: "center",
-    color: "white",
+    position: "absolute",
+    right: 0,
   },
 
-  container: { flex: 1, backgroundColor: "#fff" },
-  containerContent: { padding: 16, paddingBottom: 32, gap: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  containerContent: {
+    padding: SPACING.sm,
+    gap: SPACING.sm,
+  },
 
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: SPACING.xs,
     justifyContent: "space-between",
   },
   card: {
+    width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 14,
-    borderRadius: 16,
+    padding: SPACING.sm,
+    borderRadius: SPACING.md,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+    minHeight: isExtraSmallDevice ? 70 : 80,
+  },
+  cardContent: {
+    flex: 1,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.sm,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.05)",
+    marginLeft: SPACING.xs,
   },
-  cardTitle: { color: "#0f172a", fontSize: 13, opacity: 0.75, marginBottom: 4 },
-  cardValue: { color: "#0b1220", fontSize: 22, fontWeight: "700" },
+  cardTitle: {
+    color: "#0f172a",
+    fontSize: FONT_SIZE.xs,
+    opacity: 0.75,
+    marginBottom: 4,
+  },
+  cardValue: {
+    color: "#0b1220",
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+  },
 
-  controlPanel: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end" },
-  primaryBtn: {
-    backgroundColor: "#1C7C6B",
-    height: 44,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+  controlPanel: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    justifyContent: "flex-end",
   },
-  primaryBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  primaryBtn: {
+    backgroundColor: "#1C7C6B",
+    height: isExtraSmallDevice ? 40 : 44,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+    minWidth: SCREEN_WIDTH * 0.4,
+    maxWidth: SCREEN_WIDTH * 0.6,
+    justifyContent: "center",
+  },
+  primaryBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: FONT_SIZE.sm,
+  },
 
-  chartsRow: { gap: 12 },
+  chartsRow: {
+    gap: SPACING.sm,
+  },
 
-  /* Zone pie card */
+  /* Zone pie card (kept from triage, adjusted to responsive spacing) */
   pieChartContainer: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: SPACING.md,
+    padding: SPACING.sm,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
@@ -665,32 +977,33 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   pieChartHeader: {
-    flexDirection: "row",
+    flexDirection: W < 375 ? "column" : "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
+    alignItems: W < 375 ? "flex-start" : "center",
+    marginBottom: SPACING.sm,
+    gap: W < 375 ? SPACING.xs : 0,
   },
   pieChartTitle: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
     color: "#0f172a",
   },
   filterContainer: {
     flexDirection: "row",
     backgroundColor: "#f1f5f9",
-    borderRadius: 8,
-    padding: 2,
+    borderRadius: SPACING.xs,
+    padding: 4,
   },
   filterButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 6,
     borderRadius: 6,
   },
   filterButtonActive: {
     backgroundColor: "#14b8a6",
   },
   filterButtonText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "600",
     color: "#64748b",
   },
@@ -705,13 +1018,12 @@ const styles = StyleSheet.create({
   emptyPieText: {
     textAlign: "center",
     color: "#64748b",
-    fontSize: 13,
+    fontSize: FONT_SIZE.xs,
     paddingVertical: 12,
   },
 
-  /* Patients list card (if your PatientsList uses dark theme) */
+  /* Patients list card (if dark theme used inside) */
   tableCard: { backgroundColor: "#0F1C3F", borderRadius: 16, padding: 12 },
-  sectionTitle: { color: "#E8ECF5", fontSize: 16, fontWeight: "700", marginBottom: 8 },
   patientRow: {
     paddingVertical: 10,
     flexDirection: "row",
@@ -726,33 +1038,49 @@ const styles = StyleSheet.create({
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: "#1E2B4F" },
   noDataText: { color: "#9FB2D9", fontSize: 12, paddingVertical: 12, textAlign: "center" },
 
-  /* Modal */
+  /* Confirm dialog modal */
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: SPACING.lg,
   },
   modalCard: {
-    width: "100%",
+    width: SCREEN_WIDTH * 0.85,
     maxWidth: 380,
     backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: SPACING.md,
+    padding: SPACING.sm,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
-  modalTitle: { fontSize: 17, fontWeight: "800", color: "#0b1220" },
-  modalMsg: { fontSize: 14, color: "#334155", marginTop: 8 },
+  modalTitle: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "800",
+    color: "#0b1220",
+  },
+  modalMsg: {
+    fontSize: FONT_SIZE.sm,
+    color: "#334155",
+    marginTop: SPACING.xs,
+    lineHeight: 20,
+  },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 16,
+    gap: SPACING.sm,
+    marginTop: SPACING.sm,
   },
   modalBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: SPACING.xs,
+    minWidth: SCREEN_WIDTH * 0.2,
+    alignItems: "center",
   },
   modalBtnGhost: {
     backgroundColor: "#ecfeff",
@@ -762,7 +1090,7 @@ const styles = StyleSheet.create({
   },
   modalBtnText: {
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
   },
 
   footerWrap: {
@@ -781,7 +1109,149 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#fff", // same as footer/bg
-    zIndex: 9, // just under the footer
+    backgroundColor: "#fff",
+    zIndex: 9,
+  },
+
+  /* Sidebar styles (same as OPD to match screenshot) */
+  sidebarOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  sidebarContainer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    paddingTop: Platform.OS === "ios" ? 60 : 40,
+    paddingHorizontal: 16,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 2, height: 0 },
+  },
+  sidebarHeader: {
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+  },
+  closeButton: {
+    position: "absolute",
+    right: 0,
+    top: -10,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f1f5f9",
+    zIndex: 10,
+  },
+  userProfileSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 50,
+    flex: 1,
+  },
+  userInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0b1220",
+    marginBottom: 2,
+  },
+  userMetaId: {
+    fontSize: 12,
+    color: "#64748b",
+    marginBottom: 2,
+  },
+  userDepartment: {
+    fontSize: 12,
+    color: "#14b8a6",
+    fontWeight: "600",
+  },
+  profile: {
+   fontSize: 12,
+    color: "#007AFF", // iOS blue link color
+    fontStyle: "italic",
+    textDecorationLine: "underline",
+    marginTop: 4,
+  },
+  
+  sidebarContent: {
+    flex: 1,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748b",
+    marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sidebarButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  sidebarButtonActive: {
+    backgroundColor: "#f0fdfa",
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  buttonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    flex: 1,
+  },
+  bottomActions: {
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    gap: 8,
+  },
+  bottomButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  modulesButton: {
+    backgroundColor: "#f0fdfa",
+  },
+  logoutButton: {
+    backgroundColor: "#fef2f2",
+  },
+  bottomButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  avatar: {
+    backgroundColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontWeight: "800",
+    color: "#0b1220",
+    fontSize: 16,
   },
 });

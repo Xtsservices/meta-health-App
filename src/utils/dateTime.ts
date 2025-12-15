@@ -248,3 +248,90 @@ export function convertTo24Hour(time12: string): string {
   
   return `${hour.toString().padStart(2, '0')}:${minute}`;
 }
+// utils/dateTime.ts - Add this function
+export const getCurrentFormattedTime = (): string => {
+  const now = new Date();
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const seconds = now.getSeconds().toString().padStart(2, '0');
+  
+  // Return in format that matches your API
+  return `${hours}:${minutes}:${seconds}`;
+
+};
+
+/**
+ * Format date string to readable format
+ * Handles: "2025-12-10 06:35:11.000000", "2025-12-10T06:35:11.000Z", etc.
+ * Returns: "Dec 10, 2025 06:35 AM"
+ */
+export const formatDateTimeTL = (dateString?: string | null): string => {
+  if (!dateString) return "-";
+  
+  try {
+    let dateToParse = dateString;
+    
+    // Handle format: "2025-12-10 06:35:11.000000"
+    if (dateString.includes(" ") && !dateString.includes("T")) {
+      // Remove microseconds and convert to ISO format
+      dateToParse = dateString.split(".")[0].replace(" ", "T") + "Z";
+    }
+    
+    const date = new Date(dateToParse);
+    
+    if (isNaN(date.getTime())) return "-";
+    
+    // Format: "Dec 10, 2025 06:35 AM"
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
+    const year = date.getFullYear();
+    
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    
+    return `${month} ${day}, ${year} ${hours}:${minutes} ${ampm}`;
+  } catch (e) {
+    console.error("Error formatting date:", dateString, e);
+    return "-";
+  }
+};
+
+// utils/duration.ts
+
+export const formatDurationParameter = (param: string = "", duration: string = ""): string => {
+  if (!param) return "";
+  
+  const paramLower = param.toLowerCase().trim();
+  const durationNum = parseInt(duration, 10);
+  
+  // Handle singular/plural based on duration value
+  if (paramLower === "days" || paramLower === "day") {
+    return durationNum === 1 ? "day" : "days";
+  }
+  if (paramLower === "years" || paramLower === "year") {
+    return durationNum === 1 ? "year" : "years";
+  }
+  if (paramLower === "months" || paramLower === "month") {
+    return durationNum === 1 ? "month" : "months";
+  }
+  if (paramLower === "weeks" || paramLower === "week") {
+    return durationNum === 1 ? "week" : "weeks";
+  }
+  if (paramLower === "hours" || paramLower === "hour") {
+    return durationNum === 1 ? "hour" : "hours";
+  }
+  if (paramLower === "minutes" || paramLower === "minute") {
+    return durationNum === 1 ? "minute" : "minutes";
+  }
+  if (paramLower === "seconds" || paramLower === "second") {
+    return durationNum === 1 ? "second" : "seconds";
+  }
+  
+  // Return as is if not matched
+  return paramLower;
+};

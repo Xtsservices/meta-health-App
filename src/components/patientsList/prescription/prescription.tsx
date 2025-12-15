@@ -21,8 +21,6 @@ import { AuthFetch } from "../../../auth/auth";
 import Footer from "../../dashboard/footer";
 import { COLORS } from "../../../utils/colour";
 
-
-
 type Prescription = {
   id: number;
   medicine?: string;
@@ -30,19 +28,17 @@ type Prescription = {
   meddosage?: number;
   dosageUnit?: string;
   medicineFrequency?: string | number;
-  medicineTime?: string;           // "Morning,Afternoon"
-  test?: string;                   // "CBC|Fasting#LFT|8am ..."
+  medicineTime?: string; // "Morning,Afternoon" OR "05:00 AM - 07:00 AM (Before Breakfast)"
+  test?: string; // "CBC|Fasting#LFT|8am ..."
   advice?: string;
   followUp?: 0 | 1 | number | string;
   followUpDate?: string;
   addedOn?: string;
-  status?: number | string;        // 1 active / 0 inactive
+  status?: number | string; // 1 active / 0 inactive
   medicineNotes?: string;
   medicineStartDate?: string;
-  medicineType?: number | string;
+  medicineType?: number | string; // 1-9 (capsule/tablet/etc)
 };
-
-
 
 const FOOTER_H = 64;
 
@@ -72,6 +68,33 @@ const formatDate = (iso?: string) => {
   const mm = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
   const yy = d.getFullYear();
   return `${dd} ${mm} ${yy}`;
+};
+
+const medicineTypeLabel = (t: any): string => {
+  if (t === undefined || t === null || t === "") return "-";
+  const v = Number(t);
+  switch (v) {
+    case 1:
+      return "Capsules";
+    case 2:
+      return "Syrups";
+    case 3:
+      return "Tablets";
+    case 4:
+      return "Injections";
+    case 5:
+      return "IV Line";
+    case 6:
+      return "Tubing";
+    case 7:
+      return "Topical";
+    case 8:
+      return "Drops";
+    case 9:
+      return "Spray";
+    default:
+      return "-";
+  }
 };
 
 export default function PrescriptionScreen() {
@@ -125,6 +148,11 @@ export default function PrescriptionScreen() {
     const dosage =
       (item.meddosage ?? item.meddosage === 0 ? String(item.meddosage) : "") +
       (item.dosageUnit ? ` ${item.dosageUnit}` : "");
+    const medType = medicineTypeLabel(item.medicineType);
+    const timeDisplay = item.medicineTime || (times.length ? times.join(", ") : "");
+
+    const hasMedicine = item.medicine && item.medicine.trim() !== "";
+    const hasTests = tests.length > 0;
 
     return (
       <Pressable
@@ -136,38 +164,118 @@ export default function PrescriptionScreen() {
         </View>
 
         <View style={styles.rowMiddle}>
+        {hasMedicine ? (
+          <>
           <Text style={styles.title} numberOfLines={2}>
-            {item.medicine || "(Tests Only)"}
+            {item.medicine}
           </Text>
+
+            {/* First line: Status and Date */}
           <View style={styles.metaWrap}>
             <View style={styles.pill}>
               <Text style={styles.pillText}>{sLabel}</Text>
             </View>
             <Text style={styles.dot}>•</Text>
             <Text style={styles.meta}>{formatDate(item.addedOn)}</Text>
-            {dosage ? (
-              <>
-                <Text style={styles.dot}>•</Text>
-                <Text style={styles.meta}>{dosage}</Text>
-              </>
-            ) : null}
-          </View>
 
-          {tests?.length ? (
+              {medType !== "-" && (
+                <>
+                  <Text style={styles.dot}>•</Text>
+                  <Text style={styles.meta}>{medType}</Text>
+                </>
+              )}
+            </View>
+
+            {/* Second line: Dosage */}
+            {dosage ? (
+              <View style={[styles.metaWrap, { marginTop: 4 }]}>
+                <Text style={[styles.meta, { fontSize: 13, color: COLORS.text }]}>
+                  Dosage: {dosage}</Text>
+              </View>
+            ) : null}
+
+          {hasTests ? (
             <View style={styles.chipsWrap}>
               {tests.map((t, i) => (
                 <View key={`${t}-${i}`} style={styles.chip}>
-                  <Text style={styles.chipText}>{t.split("|")[0]}</Text>
+                  <Text style={styles.chipText}>• TESTS : {t.split("|")[0]}</Text>
                 </View>
               ))}
             </View>
           ) : null}
 
-          {times?.length ? (
-            <Text style={styles.times} numberOfLines={1}>
-              {times.join(", ")}
+            {timeDisplay ? (
+              <Text style={styles.times}>{timeDisplay}</Text>
+            ) : null}
+          </>
+        ) : hasTests ? (
+          <>
+            <View style={styles.chipsWrap}>
+              {tests.map((t, i) => {
+                const [testName, testDetails] = t.split("|");
+                return (
+                  <View key={`${t}-${i}`} style={styles.chip}>
+                    <Text style={styles.chipText}>
+                      TESTS : {testName}
+                      {testDetails ? ` : ${testDetails.trim()}` : ""}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* First line: Status and Date for tests */}
+            <View style={[styles.metaWrap, { marginTop: 8 }]}>
+              <View style={styles.pill}>
+                <Text style={styles.pillText}>{sLabel}</Text>
+              </View>
+              <Text style={styles.dot}>•</Text>
+              <Text style={styles.meta}>{formatDate(item.addedOn)}</Text>
+            </View>
+
+            {/* Second line: Dosage for tests if available */}
+            {dosage ? (
+              <View style={[styles.metaWrap, { marginTop: 4 }]}>
+                <Text style={[styles.meta, { fontSize: 13, color: COLORS.text }]}>
+                  Dosage: {dosage}
+                </Text>
+              </View>
+            ) : null}
+
+            {item.advice ? (
+              <Text style={[styles.times, { marginTop: 8, color: COLORS.text }]}>
+                Advice: {item.advice}
+              </Text>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Text style={styles.title}>No Details</Text>
+            
+            <View style={[styles.metaWrap, { marginTop: 4 }]}>
+              <View style={styles.pill}>
+                <Text style={styles.pillText}>{sLabel}</Text>
+              </View>
+              <Text style={styles.dot}>•</Text>
+              <Text style={styles.meta}>{formatDate(item.addedOn)}</Text>
+            </View>
+
+            {/* Second line: Dosage if available */}
+            {dosage ? (
+              <View style={[styles.metaWrap, { marginTop: 4 }]}>
+                <Text style={[styles.meta, { fontSize: 13, color: COLORS.text }]}>
+                  Dosage: {dosage}
+                </Text>
+              </View>
+            ) : null}
+
+            {item.advice ? (
+              <Text style={[styles.times, { marginTop: 8, color: COLORS.text }]}>
+                Advice: {item.advice}
             </Text>
           ) : null}
+          </>
+        )}
         </View>
 
         <View style={styles.rowRight}>
@@ -184,16 +292,15 @@ const testNote =
     .join(", ") || "";
 
 const notesToShow =
-  detail?.medicineNotes  || testNote || "-";
+  detail?.medicineNotes ||
+    (detail ? (detail as any).notes || "" : "") ||testNote || "-";
 
   return (
     <View style={[styles.screen, { backgroundColor: COLORS.bg }]}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Prescriptions</Text>
       </View>
 
-      {/* Body */}
       <View style={{ flex: 1 }}>
         {loading ? (
           <View style={{ paddingTop: 40, alignItems: "center" }}>
@@ -231,7 +338,7 @@ const notesToShow =
       </View>
 
       {/* FAB when we have any prescriptions */}
-      {list.length > 0 && (
+      {list.length > 0 && 
       cp.ptype != 21 && (
         <Pressable
           onPress={() => navigation.navigate("AddMedicineTest" as never, {} as never)}
@@ -246,7 +353,6 @@ const notesToShow =
         >
           <Text style={styles.fabText}>＋</Text>
         </Pressable>
-      )
       )}
 
       {/* Footer pinned above system nav */}
@@ -255,7 +361,6 @@ const notesToShow =
       </View>
       {insets.bottom > 0 && <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />}
 
-      {/* Details modal (read-only) */}
       <Modal visible={!!detail} transparent animationType="fade" onRequestClose={() => setDetail(null)}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { backgroundColor: COLORS.card }]}>
@@ -266,6 +371,9 @@ const notesToShow =
 
               <Text style={styles.label}>Medicine</Text>
               <Text style={styles.value}>{detail?.medicine || "-"}</Text>
+
+              <Text style={styles.label}>Medicine Type</Text>
+              <Text style={styles.value}>{medicineTypeLabel(detail?.medicineType)}</Text>
 
               <Text style={styles.label}>Dosage</Text>
               <Text style={styles.value}>
@@ -284,7 +392,9 @@ const notesToShow =
 
               <Text style={styles.label}>Frequency / Time</Text>
               <Text style={styles.value}>
-                {parseTimes(detail?.medicineTime).length
+                {detail?.medicineTime
+                  ? detail.medicineTime
+                  : parseTimes(detail?.medicineTime).length
                   ? parseTimes(detail?.medicineTime).join(", ")
                   : String(detail?.medicineFrequency ?? "-")}
               </Text>
@@ -292,16 +402,21 @@ const notesToShow =
               <Text style={styles.label}>Test(s)</Text>
               {parseTests(detail?.test).length ? (
                 <View style={styles.chipsWrap}>
-                  {parseTests(detail?.test).map((t, i) => (
-                    <View key={`${t}-${i}`} style={styles.chip}>
-                      <Text style={styles.chipText}>{t.split("|")[0]}</Text>
-                    </View>
-                  ))}
+                  {parseTests(detail?.test).map((t, i) => {
+                    const [testName, testDetails] = t.split("|");
+                    return (
+                      <View key={`${t}-${i}`} style={styles.chip}>
+                        <Text style={styles.chipText}>
+                          {testName}
+                          {testDetails ? ` : ${testDetails.trim()}` : ""}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               ) : (
                 <Text style={styles.value}>-</Text>
               )}
-
 
               <Text style={styles.label}>Notes</Text>
               <Text style={styles.value}>{notesToShow}</Text>
@@ -360,15 +475,14 @@ const styles = StyleSheet.create({
   dot: { color: COLORS.sub, fontWeight: "900" },
   meta: { color: COLORS.sub, fontWeight: "700", fontSize: 12 },
 
-  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { backgroundColor: "#f1f5f9", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
-  chipText: { color: COLORS.text, fontWeight: "800", fontSize: 11 },
+  chipText: { color: COLORS.text, fontWeight: "800", fontSize: 11,marginVertical:3,marginHorizontal:5},
 
-  times: { color: COLORS.sub, fontWeight: "700", marginTop: 6 },
+  times: { color: COLORS.sub, fontWeight: "600", marginTop: 6, fontStyle: 'italic', fontSize: 11 },
 
   rowRight: { paddingTop: 2 },
 
-  // FAB
   fab: {
     position: "absolute",
     width: 52,
@@ -384,7 +498,6 @@ const styles = StyleSheet.create({
   fabText: { color: "#fff", fontWeight: "900", fontSize: 24, marginTop: -2 },
 
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,
@@ -398,7 +511,6 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
 
-  // Modal
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.25)",

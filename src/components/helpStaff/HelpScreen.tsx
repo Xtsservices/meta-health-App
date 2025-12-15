@@ -177,8 +177,8 @@ const HelpScreen: React.FC = () => {
           {/* Documentation Card */}
           <View style={styles.card}>
             <View style={styles.cardRow}>
-              <View style={[styles.cardIcon, { backgroundColor: "rgba(25, 119, 243, 0.1)" }]}>
-                <FileTextIcon size={24} color="#1977f3" />
+              <View style={[styles.cardIcon, { backgroundColor: "rgba(20, 184, 166, 0.1)" }]}>
+                <FileTextIcon size={24} color="#14b8a6" />
               </View>
               <View style={styles.cardBody}>
                 <Text style={styles.cardTitle}>System Documentation</Text>
@@ -202,8 +202,8 @@ const HelpScreen: React.FC = () => {
           {/* Technical Support Card */}
           <View style={styles.card}>
             <View style={styles.cardRow}>
-              <View style={[styles.cardIcon, { backgroundColor: "rgba(25, 119, 243, 0.1)" }]}>
-                <MessageCircleIcon size={24} color="#1977f3" />
+              <View style={[styles.cardIcon, { backgroundColor: "rgba(20, 184, 166, 0.1)" }]}>
+                <MessageCircleIcon size={24} color="#14b8a6" />
               </View>
               <View style={styles.cardBody}>
                 <Text style={styles.cardTitle}>Technical Support</Text>

@@ -20,6 +20,7 @@ import { formatDateTime, } from "../../utils/dateTime";
 import { PatientType } from '../../utils/types';
 import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { showError } from '../../store/toast.slice';
+import { formatAgeDisplay } from '../../utils/age';
 
 const PatientTable = ({ 
   navigation, 
@@ -40,14 +41,17 @@ const user = useSelector((s: RootState) => s.currentUser);
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     try {
   let endpoint
-      if (patientType === 3 && !zone){
-endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${user?.id}&role=${user?.role}&category=triage`
-      }else{
- endpoint = user?.role === 2003
-        ? `patient/${user?.hospitalID}/patients/nurseRecent/${patientType}?userID=${user?.id}&role=${user?.role}`
-        : `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${user?.id}&role=${user?.role}`;
-      }
+      let isNurseRole = user?.role === 2003;
       
+      if (patientType === 3 && !zone) {
+        endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${user?.id}&role=${user?.role}&category=triage`;
+      } else {
+        if (isNurseRole) {
+          endpoint = `patient/${user?.hospitalID}/patients/nurseRecent/${patientType}?userID=${user?.id}&role=${user?.role}`;
+        } else {
+          endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${user?.id}&role=${user?.role}`;
+        }
+      }
 
       if (zone !== undefined) {
         endpoint += `&zone=${zone}`;
@@ -82,8 +86,20 @@ endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${
         `patient/${user?.hospitalID}/patients/isviewchange/${id}`,
         token
       );
-      if (response?.status === 'success') {
+      
+      if (response?.data?.status === 'success' || response?.message === 'success') {
+        if (patientType === patientStatus.inpatient) {
+          navigation.navigate('PatientProfile', { 
+            id: id,
+            patientType: patientType 
+          });
+        } else {
+          navigation.navigate('PatientProfile', { id: id });
+        }
+        setPatients(prev => prev.filter(p => p.id !== id));
+      } else if (response?.status === 'success') {
         navigation.navigate('PatientProfile', { id: id });
+        setPatients(prev => prev.filter(p => p.id !== id));
       }
     } catch (error) {
       const errorMessage =
@@ -113,7 +129,7 @@ endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${
     <View style={styles.card}>
       <View style={styles.cardContent}>
         <View style={styles.patientInfo}>
-          <Text style={styles.patientName}>{item?.pName || '-'}, {item?.age}</Text>
+          <Text style={styles.patientName}>{item?.pName || '-'}, {formatAgeDisplay(item?.age)}</Text>
           <Text style={styles.dateText}>
             {formatDateTime( item?.lastModified)}
           </Text>
@@ -148,13 +164,13 @@ endpoint = `patient/${user?.hospitalID}/patients/recent/${patientType}?userID=${
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Latest Patient Details</Text>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.viewAllButton}
           onPress={handleViewAll}
           activeOpacity={0.7}
         >
           <Text style={styles.viewAllText}>View All</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Patient List */}

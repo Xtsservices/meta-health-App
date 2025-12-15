@@ -14,6 +14,7 @@ import {
   useColorScheme,
   Dimensions,
   ScrollView,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -23,20 +24,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RootState } from "../../store/store";
 import { AuthFetch } from "../../auth/auth";
 import { patientStatus } from "../../utils/role";
-import { PatientType, WardType } from "../../utils/types";
+import { PatientType, wardType } from "../../utils/types"; 
 import { formatDate } from "../../utils/dateTime";
 import { formatageFromDOB } from "../../utils/age";
 import { 
   UserIcon, 
   SearchIcon, 
   EyeIcon, 
-  ChevronDownIcon,
   ChevronLeftIcon, 
   ChevronRightIcon, 
   BellIcon,
-  UserPlusIcon,
   FilterIcon,
-  ArrowLeftIcon 
 } from "../../utils/SvgIcons";
 import Footer from "../dashboard/footer";
 import { COLORS } from "../../utils/colour";
@@ -64,7 +62,7 @@ const DischargedPatientsIPD: React.FC = () => {
   const user = useSelector((s: RootState) => s.currentUser);
 
   const [allPatients, setAllPatients] = useState<PatientType[]>([]);
-  const [wardList, setWardList] = useState<WardType[]>([]);
+  const [wardList, setWardList] = useState<wardType[]>([]);
   const [wardFilter, setWardFilter] = useState<number>(0);
   const [deviceFilter, setDeviceFilter] = useState<number>(0);
   const [search, setSearch] = useState("");
@@ -74,61 +72,77 @@ const DischargedPatientsIPD: React.FC = () => {
   const flatRef = useRef<FlatList<PatientType>>(null);
 
   // Fetch discharged patients data
-  const fetchDischargedPatients = useCallback(async () => {
-    const token = user?.token ?? (await AsyncStorage.getItem("token"));
-    if (!user?.hospitalID || !token) return;
+const fetchDischargedPatients = useCallback(async () => {
+  const token = user?.token ?? (await AsyncStorage.getItem("token"));
+  if (!user?.hospitalID || !token) return;
 
-    try {
-      setLoading(true);
-      const url = `patient/${user?.hospitalID}/patients/${patientStatus.discharged}?userID=${user?.id}&role=${user?.role}`;
+  try {
+    setLoading(true);
+    const url = `patient/${user?.hospitalID}/patients/${patientStatus.discharged}?userID=${user?.id}&role=${user?.role}`;
 
-      const response = await AuthFetch(url, token);
+    // Type the response as 'any' to avoid TypeScript errors
+    const response = await AuthFetch(url, token) as any;
 
-      if (response?.data?.message === "success") {
-        const patients: PatientType[] = Array.isArray(response?.data?.patients)
+    // Check success in multiple ways
+    if (
+      response?.data?.message === "success" ||
+      response?.status === "success" ||
+      response?.message === "success"
+    ) {
+      // Extract patients from multiple possible locations
+      const patients: PatientType[] = 
+        Array.isArray(response?.data?.patients)
           ? response?.data?.patients
+          : Array.isArray(response?.patients)
+          ? response?.patients
+          : Array.isArray(response?.data)
+          ? response?.data
           : [];
-        
-        // Normalize doctor name and ensure data consistency
-        const normalizedPatients = patients?.map((pat: any) => ({
-          ...pat,
-          doctorName: pat?.doctor?.name || pat?.doctorName || "Not Assigned",
-          ptype: patientStatus.discharged,
-        })) ?? [];
+      
+      // Normalize doctor name and ensure data consistency
+      const normalizedPatients = patients.map((pat: any) => ({
+        ...pat,
+        doctorName: pat?.doctor?.name || pat?.doctorName || "Not Assigned",
+        ptype: patientStatus.discharged,
+      })) ?? [];
+      
+      const filteredPatients = normalizedPatients.filter((p: any) => p?.category !== 2) ?? [];
 
-        const seen = new Set<string | number>();
-        const uniq = normalizedPatients?.filter((p) => {
-          const key = p?.id;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        }) ?? [];
-        
-        setAllPatients(uniq?.sort(compareDates) ?? []);
-      } else {
-        setAllPatients([]);
-      }
-    } catch (e) {
+      const seen = new Set<string | number>();
+      const uniq = filteredPatients.filter((p: any) => {
+        const key = p?.id;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }) ?? [];
+      
+      setAllPatients(uniq.sort(compareDates) ?? []);
+    } else {
       setAllPatients([]);
-    } finally {
-      setLoading(false);
     }
-  }, [user?.hospitalID, user?.token, user?.id, user?.role]);
+  } catch (e) {
+    console.error("Error fetching discharged patients:", e);
+    setAllPatients([]);
+  } finally {
+    setLoading(false);
+  }
+}, [user?.hospitalID, user?.token, user?.id, user?.role]);
 
   // Fetch ward data
-  const fetchWards = useCallback(async () => {
-    const token = user?.token ?? (await AsyncStorage.getItem("token"));
-    if (!user?.hospitalID || !token) return;
+const fetchWards = useCallback(async () => {
+  const token = user?.token ?? (await AsyncStorage.getItem("token"));
+  if (!user?.hospitalID || !token) return;
 
-    try {
-      const response = await AuthFetch(`ward/${user?.hospitalID}`, token);
-      if (response?.status === "success") {
-        setWardList(response?.data?.wards ?? []);
-      }
-    } catch (e) {
-      setWardList([]);
+  try {
+    const response = await AuthFetch(`ward/${user?.hospitalID}`, token) as any; // Add 'as any'
+    
+    if (response?.status === "success") {
+      setWardList(response?.data?.wards ?? []);
     }
-  }, [user?.hospitalID, user?.token]);
+  } catch (e) {
+    setWardList([]);
+  }
+}, [user?.hospitalID, user?.token]);
 
   useEffect(() => {
     fetchDischargedPatients();
@@ -220,35 +234,40 @@ const DischargedPatientsIPD: React.FC = () => {
         />
       </View>
 
-    </View>
-  );
-
-  // Filters component
-  const renderFilters = () => (
-    <View style={[styles.filtersContainer, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersContent}>
-        {/* Ward Filter */}
-        <View style={[styles.filterWrap, { borderColor: COLORS.border }]}>
-          <Text style={[styles.filterLabel, { color: COLORS.text }]}>Ward</Text>
-          <View style={[styles.pickerWrap, { backgroundColor: COLORS.bg, borderColor: COLORS.border }]}>
+      {/* Ward Filter */}
+      {/* <View style={styles.actionButtons}>
+        <View style={[styles.wardFilterContainer, { 
+          backgroundColor: COLORS.card, 
+          borderColor: wardFilter !== 0 ? COLORS.brand : COLORS.border 
+        }]}>
+          <View style={styles.wardFilterIcon}>
+            <FilterIcon size={14} color={wardFilter !== 0 ? COLORS.brand : COLORS.sub} />
+          </View>
+          <View style={styles.wardPickerWrapper}>
             <Picker
               selectedValue={wardFilter}
               onValueChange={(v) => setWardFilter(Number(v))}
-              style={[styles.picker, { color: COLORS.text }]}
-              dropdownIconColor={COLORS.sub}
+              style={[styles.wardPicker, { color: COLORS.text }]}
+              dropdownIconColor={COLORS.brand}
             >
               <Picker.Item label="All Wards" value={0} />
               {wardList?.map((ward) => (
-                <Picker.Item 
-                  key={ward?.id} 
-                  label={capitalizeFirstLetter(ward?.name ?? "")} 
-                  value={ward?.id} 
+                <Picker.Item
+                  key={ward?.id}
+                  label={capitalizeFirstLetter(ward?.name ?? "")}
+                  value={ward?.id}
                 />
               ))}
             </Picker>
           </View>
         </View>
+      </View> */}
+    </View>
+  );
 
+  const renderFilters = () => (
+    <View style={[styles.filtersContainer, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersContent}>
         {/* Device Filter */}
         <View style={[styles.filterWrap, { borderColor: COLORS.border }]}>
           <Text style={[styles.filterLabel, { color: COLORS.text }]}>Device</Text>
@@ -272,7 +291,6 @@ const DischargedPatientsIPD: React.FC = () => {
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
       <View style={styles.emptyImageContainer}>
-        <View style={[styles.emptyImage, { backgroundColor: COLORS.border }]} />
         <Text style={[styles.emptyTitle, { color: COLORS.text }]}>
           No Discharged Patients Found
         </Text>
@@ -290,10 +308,11 @@ const DischargedPatientsIPD: React.FC = () => {
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
     const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—")?.toString();
-    const age = formatageFromDOB(item?.dob || "");
+    const age = item?.age || formatageFromDOB(item?.dob || "");
     const hasNotification = item?.notificationCount && item?.notificationCount > 0;
     const wardName = wardList?.find(w => w?.id === item?.wardID)?.name || "—";
     const dischargeDate = item?.endTime ? formatDate(item?.endTime) : "—";
+    const imageUrl = item?.imageURL || (item as any)?.photo || null;
 
     return (
       <TouchableOpacity
@@ -306,7 +325,18 @@ const DischargedPatientsIPD: React.FC = () => {
       >
         <View style={styles.cardRow}>
           <View style={[styles.avatar, { borderColor: COLORS.border, backgroundColor: COLORS.bg }]}>
+            {imageUrl ? (
+              <Image
+                source={{ uri: imageUrl }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: 40,
+                }}
+              />
+            ) : (
             <UserIcon size={moderateScale(24)} color={COLORS.sub} />
+            )}
           </View>
 
           <View style={styles.meta}>
@@ -498,6 +528,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: moderateScale(12),
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
   searchInput: { 
     flex: 1, 
@@ -510,34 +541,31 @@ const styles = StyleSheet.create({
     gap: moderateScale(12),
     alignItems: "center",
   },
-  filterButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: moderateScale(6),
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(10),
-    borderRadius: moderateScale(10),
+  wardFilterContainer: {
+    height: verticalScale(64),
     borderWidth: 1.5,
-    flex: 1,
-  },
-  filterButtonText: {
-    fontSize: moderateScale(14),
-    fontWeight: "600",
-  },
-  admitButton: {
+    borderRadius: moderateScale(12),
+    paddingHorizontal: moderateScale(2),
+    paddingVertical: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: moderateScale(6),
-    paddingHorizontal: moderateScale(16),
-    paddingVertical: verticalScale(10),
-    borderRadius: moderateScale(10),
-    backgroundColor: "#14b8a6",
+    overflow: "hidden",
+    justifyContent: "flex-start",
+    flex: 1,
+    minWidth: moderateScale(40),
+  },
+  wardFilterIcon: {
+    marginRight: moderateScale(1),
+  },
+  wardPickerWrapper: {
     flex: 1,
   },
-  admitButtonText: {
-    color: "#fff",
-    fontSize: moderateScale(14),
-    fontWeight: "600",
+  wardPicker: {
+    flex: 1,
+    height: verticalScale(52),
+    marginLeft: moderateScale(2),
+    marginRight: moderateScale(-16),
+    marginTop: Platform.OS === "android" ? moderateScale(-4) : 0,
   },
   filtersContainer: {
     borderTopWidth: 1,
@@ -561,13 +589,22 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(6),
   },
   pickerWrap: {
-    height: verticalScale(40),
-    borderWidth: 1,
-    borderRadius: moderateScale(8),
-    justifyContent: "center",
+    height: verticalScale(52),
+    borderWidth: 1.5,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: moderateScale(8),
+    paddingVertical: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    overflow: "hidden",
+    justifyContent: "flex-start",
   },
   picker: {
-    fontSize: moderateScale(14),
+    flex: 1,
+    height: verticalScale(52),
+    marginLeft: moderateScale(2),
+    marginRight: moderateScale(-16),
+    marginTop: Platform.OS === "android" ? moderateScale(-4) : 0,
   },
   listContent: { 
     paddingHorizontal: moderateScale(16), 
@@ -597,6 +634,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: moderateScale(12),
+    overflow: 'hidden',
   },
   meta: { 
     flex: 1,

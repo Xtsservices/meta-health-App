@@ -69,8 +69,8 @@ const WatchedAlertCard: React.FC<{
 
       <View style={styles.alertFooter}>
         <View style={styles.footerLeft}>
-          <Text style={styles.wardText}>Ward: {alert.ward}</Text>
-          <Text style={styles.dateText}>{formatDateTime(alert.datetime)}</Text>
+          {/* <Text style={styles.wardText}>Ward: {alert.ward}</Text> */}
+          <Text style={styles.dateText}>Date and Time: {formatDateTime(alert.datetime)}</Text>
         </View>
         <View style={styles.watchedIndicator}>
           <Text style={styles.watchedText}>Reviewed</Text>

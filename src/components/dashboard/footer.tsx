@@ -59,7 +59,10 @@ const Footer: React.FC<Props> = ({
       // For pathology and radiology roles, navigate to SaleComp (Walk-in)
       else if (user?.roleName === "pathology" || user?.roleName === "radiology") {
         navigation.navigate("SaleComp");
-      } else {
+      }  // For emergency role, navigate to DischargedPatientsIPD
+      else if (user?.roleName === "emergency") {
+        navigation.navigate("DischargedPatientsIPD");
+      }else {
         navigation.navigate("AddPatient");
       }
     } else if (k === "patients") {

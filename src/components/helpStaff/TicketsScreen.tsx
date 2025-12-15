@@ -16,6 +16,7 @@ import { ArrowLeftIcon, PlusIcon } from "../../utils/SvgIcons";
 import { RootState } from "../../store/store";
 import { AuthFetch } from "../../auth/auth";
 import { formatDate } from "../../utils/dateTime";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Types
 type TicketType = {
@@ -26,6 +27,7 @@ type TicketType = {
   type: string;
   assignedName: string;
   module: string;
+  subject: string;
 };
 
 type PriorityBadgeProps = {
@@ -66,12 +68,13 @@ const TicketsScreen: React.FC = () => {
 
   const getAllData = async () => {
     try {
-      if (!user?.hospitalID || !user?.token) return;
+      const token = await AsyncStorage.getItem("token");
+      if (!user?.hospitalID) return;
       
       const res = await AuthFetch(
         `ticket/hospital/${user.hospitalID}/getAllTickets/${user.id}`,
-        user.token
-      );
+        token
+      ) as any;
       
       if (res?.status === "success") {
         setTicketData(res?.data?.tickets || []);
@@ -161,6 +164,17 @@ const TicketsScreen: React.FC = () => {
                     <Text style={styles.cellLabel}>Module</Text>
                     <Text style={styles.cellValue}>{ticket.module || "N/A"}</Text>
                   </View>
+                  
+                </View>
+                <View style={styles.ticketRow}>
+                  <View style={styles.ticketCell}>
+                    <Text style={styles.cellLabel}>Subject</Text>
+                    <Text style={styles.cellValue}>
+                      {ticket?.subject}
+                    </Text>
+                  </View>
+                
+                  
                 </View>
               </TouchableOpacity>
             ))
@@ -211,7 +225,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1977f3",
+    backgroundColor: "#14b8a6",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -222,9 +236,11 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+    fontStyle: "italic",
   },
   ticketsList: {
     gap: 12,
+      marginBottom: 30,
   },
   ticketCard: {
     borderRadius: 12,
@@ -251,6 +267,7 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 4,
     fontWeight: "500",
+    fontStyle: "italic",
   },
   cellValue: {
     fontSize: 14,

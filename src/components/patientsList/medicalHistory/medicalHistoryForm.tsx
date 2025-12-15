@@ -17,7 +17,7 @@ import { useSelector } from "react-redux";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import { RootState } from "../../../store/store";
-import { AuthFetch } from "../../../auth/auth";
+import { AuthFetch, AuthPost } from "../../../auth/auth";
 import type { medicalHistoryFormType } from "../../../utils/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { heriditaryList, infectionList } from "../../../utils/list";
@@ -25,6 +25,7 @@ import { formatDate } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
+import { debounce } from "../../../utils/debounce";
 
 // 🔹 Mental problem master list (same as web)
 const mentalProblemList = [
@@ -219,6 +220,28 @@ const parseMedList = (raw?: string | null): { istrue: boolean; items: MedItem[] 
 
   const items: MedItem[] = chunks.map((chunk) => {
     // New rich format: name|dosage|dosageUnit|frequency|duration|durationUnit|date
+    const parenMatch = chunk.match(/^(.+?)\s*\(Dosage:\s*([^)]+)\)\s*(?:\(([^)]+)\))?$/);
+    
+    if (parenMatch) {
+      const [, name, details, dateStr] = parenMatch;
+      
+      // Parse dosage, frequency, duration from details
+      const dosageMatch = details.match(/Dosage:\s*([\d.]+)\s*([a-zA-Z]+)/);
+      const frequencyMatch = details.match(/Frequency:\s*(\d+)/);
+      const durationMatch = details.match(/Duration:\s*([\d.]+)\s*([a-zA-Z]+)/);
+      
+      return {
+        name: name.trim(),
+        dosage: dosageMatch ? dosageMatch[1] : "",
+        dosageUnit: dosageMatch ? dosageMatch[2] : "mg",
+        frequency: frequencyMatch ? frequencyMatch[1] : "",
+        duration: durationMatch ? durationMatch[1] : "",
+        durationUnit: durationMatch ? durationMatch[2] : "days",
+        startDate: parseDateString(dateStr),
+      };
+    }
+    
+    // Old pipe-separated format: name|dosage|dosageUnit|frequency|duration|durationUnit|date
     const parts = chunk.split("|");
 
     // Old format – only name
@@ -584,6 +607,11 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const [bloodPressure, setBloodPressure] = useState<boolean | null>(
     medicalHistoryData?.bloodPressure === "Yes" ? true : false
   );
+  const isValidIndianMobile = (phone: string) => {
+  if (phone.length !== 10) return false;
+  if (!/^[6-9]/.test(phone[0])) return false;
+  return /^[6-9]\d{9}$/.test(phone);
+};
 
   // Surgical Section State
   const parsedDisease = parseDiseaseField(medicalHistoryData?.disease);
@@ -805,6 +833,10 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
       });
     }
   }, [currentPatient?.category]);
+  useEffect(() => {
+  const isValidMobile = isValidIndianMobile(phoneNumber);
+  setFormDisabled(!(giveBy && isValidMobile && relation));
+}, [giveBy, phoneNumber, relation]);
 
   const [hereditaryDisease, setHereditaryDisease] = useState<{
     istrue: boolean;
@@ -832,6 +864,10 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const [relationList, setRelationList] = useState<string[]>([]);
   const [medicineList, setMedicineList] = useState<string[]>([]);
   const [formDisabled, setFormDisabled] = useState(false);
+  const [prescribedMedicineSuggestions, setPrescribedMedicineSuggestions] = useState<string[]>([]);
+  const [selfMedicineSuggestions, setSelfMedicineSuggestions] = useState<string[]>([]);
+  const [loadingPrescribedSuggestions, setLoadingPrescribedSuggestions] = useState(false);
+  const [loadingSelfSuggestions, setLoadingSelfSuggestions] = useState(false);
 
   const sectionOrder = [
     "basic",
@@ -905,6 +941,106 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
     getAllData();
     getRelationList();
   }, [getAllData, getRelationList]);
+  const fetchMedicineSuggestions = async (text: string, isPrescribed: boolean) => {
+    try {
+      if (text.length < 3) {
+        if (isPrescribed) {
+          setPrescribedMedicineSuggestions([]);
+        } else {
+          setSelfMedicineSuggestions([]);
+        }
+        return;
+      }
+
+      const token = user?.token || (await AsyncStorage.getItem("token"));
+      
+      const response = await AuthPost(
+        `medicine/${user?.hospitalID}/getMedicines`,
+        { text },
+        token
+      );
+
+    if ("data" in response && response?.data?.message === 'success') {
+      const names =
+        response?.data?.medicines
+          ?.map((m: any) => m.Medicine_Name)
+          .filter(Boolean) || [];
+        
+        if (isPrescribed) {
+          setPrescribedMedicineSuggestions(names);
+        } else {
+          setSelfMedicineSuggestions(names);
+        }
+      } else {
+        if (isPrescribed) {
+          setPrescribedMedicineSuggestions([]);
+        } else {
+          setSelfMedicineSuggestions([]);
+        }
+      }
+    } catch (error) {
+      if (isPrescribed) {
+        setPrescribedMedicineSuggestions([]);
+      } else {
+        setSelfMedicineSuggestions([]);
+      }
+    } finally {
+      if (isPrescribed) {
+        setLoadingPrescribedSuggestions(false);
+      } else {
+        setLoadingSelfSuggestions(false);
+      }
+    }
+  };
+
+  // Debounced search functions
+  const debouncedSearchPrescribed = useCallback(
+    debounce((text: string) => {
+      fetchMedicineSuggestions(text, true);
+    }, 300),
+    [user]
+  );
+
+  const debouncedSearchSelf = useCallback(
+    debounce((text: string) => {
+      fetchMedicineSuggestions(text, false);
+    }, 300),
+    [user]
+  );
+
+  // Handle medicine name change with real-time search
+  const handlePrescribedMedNameChange = (text: string) => {
+    setNewPrescribedMed((prev) => ({ ...prev, name: text }));
+    
+    if (text.length >= 3) {
+      setLoadingPrescribedSuggestions(true);
+      debouncedSearchPrescribed(text);
+    } else {
+      setPrescribedMedicineSuggestions([]);
+    }
+  };
+
+  const handleSelfMedNameChange = (text: string) => {
+    setNewSelfMed((prev) => ({ ...prev, name: text }));
+    
+    if (text.length >= 3) {
+      setLoadingSelfSuggestions(true);
+      debouncedSearchSelf(text);
+    } else {
+      setSelfMedicineSuggestions([]);
+    }
+  };
+
+  // Handle medicine selection from suggestions
+  const handlePrescribedMedicineSelect = (medicineName: string) => {
+    setNewPrescribedMed((prev) => ({ ...prev, name: medicineName }));
+    setPrescribedMedicineSuggestions([]);
+  };
+
+  const handleSelfMedicineSelect = (medicineName: string) => {
+    setNewSelfMed((prev) => ({ ...prev, name: medicineName }));
+    setSelfMedicineSuggestions([]);
+  };
 
   // ---------- Suggestions (used for pickers) ----------
 
@@ -949,25 +1085,35 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   );
 
   const filteredPrescribedMedicineOptions = useMemo(
-    () =>
-      newPrescribedMed.name.trim()
-        ? medicineList.filter((el) =>
-            el
-              .toLowerCase()
-              .includes(newPrescribedMed.name.trim().toLowerCase())
-          )
-        : medicineList,
-    [newPrescribedMed.name, medicineList]
+    () => {
+      const searchTerm = newPrescribedMed.name.trim().toLowerCase();
+      if (!searchTerm) return medicineList;
+      
+      // Combine local list with API suggestions
+      const allOptions = [...medicineList, ...prescribedMedicineSuggestions];
+      const uniqueOptions = Array.from(new Set(allOptions));
+      
+      return uniqueOptions.filter((el) =>
+        el.toLowerCase().includes(searchTerm)
+      );
+    },
+    [newPrescribedMed.name, medicineList, prescribedMedicineSuggestions]
   );
 
   const filteredSelfMedicineOptions = useMemo(
-    () =>
-      newSelfMed.name.trim()
-        ? medicineList.filter((el) =>
-            el.toLowerCase().includes(newSelfMed.name.trim().toLowerCase())
-          )
-        : medicineList,
-    [newSelfMed.name, medicineList]
+    () => {
+      const searchTerm = newSelfMed.name.trim().toLowerCase();
+      if (!searchTerm) return medicineList;
+      
+      // Combine local list with API suggestions
+      const allOptions = [...medicineList, ...selfMedicineSuggestions];
+      const uniqueOptions = Array.from(new Set(allOptions));
+      
+      return uniqueOptions.filter((el) =>
+        el.toLowerCase().includes(searchTerm)
+      );
+    },
+    [newSelfMed.name, medicineList, selfMedicineSuggestions]
   );
 
   const filteredChestConditionOptions = useMemo(
@@ -995,32 +1141,20 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   // 🔹 Build final data ONLY when needed (no auto-save)
   const buildUpdatedData = useCallback((): medicalHistoryFormType => {
     const medsString = prescribedMeds.items
-      .map((item) =>
-        [
-          item.name,
-          item.dosage,
-          item.dosageUnit,
-          item.frequency,
-          item.duration,
-          item.durationUnit,
-          item.startDate ? formatDate(item.startDate) : "",
-        ].join("|")
-      )
-      .join(",");
+      .map((item) => {
+        const formattedDate = item.startDate ? formatDate(item.startDate) : "";
+        const datePart = formattedDate ? ` (${formattedDate})` : "";
+        return `${item.name} (Dosage: ${item.dosage} ${item.dosageUnit} | Frequency: ${item.frequency} | Duration: ${item.duration} ${displayDurationUnit(item.duration, item.durationUnit)})${datePart}`;
+      })
+      .join(", ");
 
     const selfMedsString = selfMeds.items
-      .map((item) =>
-        [
-          item.name,
-          item.dosage,
-          item.dosageUnit,
-          item.frequency,
-          item.duration,
-          item.durationUnit,
-          item.startDate ? formatDate(item.startDate) : "",
-        ].join("|")
-      )
-      .join(",");
+      .map((item) => {
+        const formattedDate = item.startDate ? formatDate(item.startDate) : "";
+        const datePart = formattedDate ? ` (${formattedDate})` : "";
+        return `${item.name} (Dosage: ${item.dosage} ${item.dosageUnit} | Frequency: ${item.frequency} | Duration: ${item.duration} ${displayDurationUnit(item.duration, item.durationUnit)})${datePart}`;
+      })
+      .join(", ");
 
     return {
       ...medicalHistoryData,
@@ -1191,7 +1325,10 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Mobile Number *</Text>
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            phoneNumber && !isValidIndianMobile(phoneNumber) && styles.inputError
+          ]}
           placeholder="Enter mobile number"
           placeholderTextColor="#9ca3af"
           keyboardType="phone-pad"
@@ -1210,6 +1347,11 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
             setPhoneNumber(onlyDigits);
           }}
         />
+        {phoneNumber && !isValidIndianMobile(phoneNumber) && (
+          <Text style={styles.errorText}>
+            Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9
+          </Text>
+        )}
       </View>
 
       <View style={styles.fieldBlock}>
@@ -1735,42 +1877,42 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
       {prescribedMeds.istrue && (
         <>
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Medicine Name</Text>
+            <Text style={styles.label}>Medicine Name *</Text>
             <TextInput
               style={styles.input}
               value={newPrescribedMed.name}
-              onChangeText={(text) =>
-                setNewPrescribedMed((prev) => ({ ...prev, name: text }))
-              }
-              placeholder="Search or enter medicine name"
+              onChangeText={handlePrescribedMedNameChange}
+              placeholder="Type at least 3 letters to search"
               placeholderTextColor="#9ca3af"
             />
+            {loadingPrescribedSuggestions && (
+              <Text style={styles.hintText}>Searching...</Text>
+            )}
+            {newPrescribedMed.name.length > 0 && newPrescribedMed.name.length < 3 && (
+              <Text style={styles.hintText}>Type 3 or more letters to see suggestions</Text>
+            )}
           </View>
 
-          {!formDisabled &&
-            filteredPrescribedMedicineOptions.length > 0 && (
-              <View style={styles.fieldBlock}>
-                <Text style={styles.label}>Pick from list</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={newPrescribedMed.name}
-                    onValueChange={(value) =>
-                      setNewPrescribedMed((prev) => ({ ...prev, name: value }))
-                    }
-                    style={styles.picker}
+          {!formDisabled && prescribedMedicineSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <Text style={styles.suggestionTitle}>Suggestions:</Text>
+              <ScrollView style={styles.suggestionsList}>
+                {prescribedMedicineSuggestions.map((suggestion, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.suggestionItem}
+                    onPress={() => handlePrescribedMedicineSelect(suggestion)}
                   >
-                    <Picker.Item label="Select medicine" value="" />
-                    {filteredPrescribedMedicineOptions.map((item) => (
-                      <Picker.Item key={item} label={item} value={item} />
-                    ))}
-                  </Picker>
-                </View>
+                    <Text style={styles.suggestionText}>{suggestion}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
               </View>
             )}
 
           <View style={styles.row}>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
-              <Text style={styles.label}>Dosage</Text>
+              <Text style={styles.label}>Dosage *</Text>
               <TextInput
                 style={styles.input}
                 value={newPrescribedMed.dosage}
@@ -1783,7 +1925,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
               />
             </View>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
-
               <Text style={styles.label}>Unit</Text>
               <View style={styles.pickerContainer}>
                 <Picker
@@ -1806,7 +1947,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
           <View style={styles.row}>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
-              <Text style={styles.label}>Frequency (per day)</Text>
+              <Text style={styles.label}>Frequency (per day) *</Text>
              <TextInput
   style={styles.input}
   value={newPrescribedMed.frequency}
@@ -1916,6 +2057,19 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                 return;
               }
 
+              // Check if medicine exists in suggestions or local list
+              const isMedicineValid = 
+                prescribedMedicineSuggestions.includes(name) ||
+                medicineList.includes(name);
+              
+              if (!isMedicineValid) {
+                Alert.alert(
+                  "Validation",
+                  "Please select medicine from the search suggestions."
+                );
+                return;
+              }
+
               setPrescribedMeds((prev) => ({
                 ...prev,
                 items: [...prev.items, { ...newPrescribedMed }],
@@ -1929,6 +2083,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                 durationUnit: "days",
                 startDate: null,
               });
+              setPrescribedMedicineSuggestions([]);
             }}
           >
             <Text style={styles.addButtonText}>Add Medicine</Text>
@@ -1937,10 +2092,9 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
           {prescribedMeds.items.map((item, index) => (
             <View key={index} style={styles.medicationItem}>
               <Text style={styles.medicationText}>
-                {item.name} - {item.dosage}
-                {item.dosageUnit}, {item.frequency}/day, {item.duration}{" "}
-                {displayDurationUnit(item.duration, item.durationUnit)}
-                {item.startDate && `, Started: ${formatDate(item.startDate)}`}
+                {item.name} (Dosage: {item.dosage}
+                {item.dosageUnit} | Frequency: {item.frequency} | Duration: {item.duration}
+                {displayDurationUnit(item.duration, item.durationUnit)}){item.startDate && `(${formatDate(item.startDate)})`}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -1986,41 +2140,42 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
       {selfMeds.istrue && (
         <>
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Medicine Name</Text>
+            <Text style={styles.label}>Medicine Name *</Text>
             <TextInput
               style={styles.input}
               value={newSelfMed.name}
-              onChangeText={(text) =>
-                setNewSelfMed((prev) => ({ ...prev, name: text }))
-              }
-              placeholder="Search or enter medicine name"
+              onChangeText={handleSelfMedNameChange}
+              placeholder="Type at least 3 letters to search"
               placeholderTextColor="#9ca3af"
             />
+            {loadingSelfSuggestions && (
+              <Text style={styles.hintText}>Searching...</Text>
+            )}
+            {newSelfMed.name.length > 0 && newSelfMed.name.length < 3 && (
+              <Text style={styles.hintText}>Type 3 or more letters to see suggestions</Text>
+            )}
           </View>
 
-          {!formDisabled && filteredSelfMedicineOptions.length > 0 && (
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>Pick from list</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={newSelfMed.name}
-                  onValueChange={(value) =>
-                    setNewSelfMed((prev) => ({ ...prev, name: value }))
-                  }
-                  style={styles.picker}
-                >
-                  <Picker.Item label="Select medicine" value="" />
-                  {filteredSelfMedicineOptions.map((item) => (
-                    <Picker.Item key={item} label={item} value={item} />
-                  ))}
-                </Picker>
-              </View>
+          {!formDisabled && selfMedicineSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <Text style={styles.suggestionTitle}>Suggestions:</Text>
+              <ScrollView style={styles.suggestionsList}>
+                {selfMedicineSuggestions.map((suggestion, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.suggestionItem}
+                    onPress={() => handleSelfMedicineSelect(suggestion)}
+                  >
+                    <Text style={styles.suggestionText}>{suggestion}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
 
           <View style={styles.row}>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
-              <Text style={styles.label}>Dosage</Text>
+              <Text style={styles.label}>Dosage * </Text>
               <TextInput
                 style={styles.input}
                 value={newSelfMed.dosage}
@@ -2055,7 +2210,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
           <View style={styles.row}>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
-              <Text style={styles.label}>Frequency (per day)</Text>
+              <Text style={styles.label}>Frequency (per day) *</Text>
               <TextInput
                 style={styles.input}
                 value={newSelfMed.frequency}
@@ -2150,6 +2305,19 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                 return;
               }
 
+              // Check if medicine exists in suggestions or local list
+              const isMedicineValid = 
+                selfMedicineSuggestions.includes(name) ||
+                medicineList.includes(name);
+              
+              if (!isMedicineValid) {
+                Alert.alert(
+                  "Validation",
+                  "Please select medicine from the search suggestions."
+                );
+                return;
+              }
+
               setSelfMeds((prev) => ({
                 ...prev,
                 items: [...prev.items, { ...newSelfMed }],
@@ -2163,6 +2331,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                 durationUnit: "days",
                 startDate: null,
               });
+              setSelfMedicineSuggestions([]);
             }}
           >
             <Text style={styles.addButtonText}>Add Medicine</Text>
@@ -2223,24 +2392,23 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         {chestCondition.istrue && (
           <>
             <View style={styles.fieldBlock}>
-  <Text style={styles.label}>Chest Condition</Text>
-  <View style={styles.pickerContainer}>
-    <Picker
-      selectedValue={newChestCondition}
-      onValueChange={(value) => {
-        setNewChestCondition(value);
-      }}
-      style={styles.picker}
-      dropdownIconColor="#6b7280"
-    >
-      <Picker.Item label="Select condition" value="" />
-      {chestConditionList.map((item) => (
-        <Picker.Item key={item} label={item} value={item} />
-      ))}
-    </Picker>
-  </View>
-</View>
-
+              <Text style={styles.label}>Chest Condition</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={newChestCondition}
+                  onValueChange={(value) => {
+                    setNewChestCondition(value);
+                  }}
+                  style={styles.picker}
+                  dropdownIconColor="#6b7280"
+                >
+                  <Picker.Item label="Select condition" value="" />
+                  {chestConditionList.map((item) => (
+                    <Picker.Item key={item} label={item} value={item} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
 
             <DateField
               label="Condition Since"
@@ -2355,24 +2523,23 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         {neurologicalDisorder.istrue && (
           <>
             <View style={styles.fieldBlock}>
-  <Text style={styles.label}>Neurological Disorder</Text>
-  <View style={styles.pickerContainer}>
-    <Picker
-      selectedValue={newNeurologicalCondition}
-      onValueChange={(value) => {
-        setNewNeurologicalCondition(value);
-      }}
-      style={styles.picker}
-      dropdownIconColor="#6b7280"
-    >
-      <Picker.Item label="Select disorder" value="" />
-      {neurologicalDisorderList.map((item) => (
-        <Picker.Item key={item} label={item} value={item} />
-      ))}
-    </Picker>
-  </View>
-</View>
-
+              <Text style={styles.label}>Neurological Disorder</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={newNeurologicalCondition}
+                  onValueChange={(value) => {
+                    setNewNeurologicalCondition(value);
+                  }}
+                  style={styles.picker}
+                  dropdownIconColor="#6b7280"
+                >
+                  <Picker.Item label="Select disorder" value="" />
+                  {neurologicalDisorderList.map((item) => (
+                    <Picker.Item key={item} label={item} value={item} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
 
             <DateField
               label="Condition Since"
@@ -2484,25 +2651,24 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         </View>
         {heartProblems.istrue && (
           <>
-           <View style={styles.fieldBlock}>
-  <Text style={styles.label}>Heart Problem</Text>
-  <View style={styles.pickerContainer}>
-    <Picker
-      selectedValue={newHeartProblem}
-      onValueChange={(value) => {
-        setNewHeartProblem(value);
-      }}
-      style={styles.picker}
-      dropdownIconColor="#6b7280"
-    >
-      <Picker.Item label="Select problem" value="" />
-      {heartProblemList.map((item) => (
-        <Picker.Item key={item} label={item} value={item} />
-      ))}
-    </Picker>
-  </View>
-</View>
-
+            <View style={styles.fieldBlock}>
+              <Text style={styles.label}>Heart Problem</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={newHeartProblem}
+                  onValueChange={(value) => {
+                    setNewHeartProblem(value);
+                  }}
+                  style={styles.picker}
+                  dropdownIconColor="#6b7280"
+                >
+                  <Picker.Item label="Select problem" value="" />
+                  {heartProblemList.map((item) => (
+                    <Picker.Item key={item} label={item} value={item} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
 
             <DateField
               label="Problem Since"
@@ -2615,24 +2781,23 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         {mentalHealth.istrue && (
           <>
             <View style={styles.fieldBlock}>
-  <Text style={styles.label}>Mental Health Problem</Text>
-  <View style={styles.pickerContainer}>
-    <Picker
-      selectedValue={newMentalHealth}
-      onValueChange={(value) => {
-        setNewMentalHealth(value);
-      }}
-      style={styles.picker}
-      dropdownIconColor="#6b7280"
-    >
-      <Picker.Item label="Select problem" value="" />
-      {mentalProblemList.map((item) => (
-        <Picker.Item key={item} label={item} value={item} />
-      ))}
-    </Picker>
-  </View>
-</View>
-
+              <Text style={styles.label}>Mental Health Problem</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={newMentalHealth}
+                  onValueChange={(value) => {
+                    setNewMentalHealth(value);
+                  }}
+                  style={styles.picker}
+                  dropdownIconColor="#6b7280"
+                >
+                  <Picker.Item label="Select problem" value="" />
+                  {mentalProblemList.map((item) => (
+                    <Picker.Item key={item} label={item} value={item} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
 
             <DateField
               label="Problem Since"
@@ -3695,6 +3860,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
   },
+  errorText: {
+    fontSize: 12,
+    color: '#ef4444',
+    marginTop: 4,
+  },
   navButtonDisabled: {
     opacity: 0.4,
   },
@@ -3704,7 +3874,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: 70,
@@ -3717,11 +3886,43 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "transparent",
   },
-  suggestionsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 8,
+  suggestionsContainer: {
+    marginBottom: 16,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    padding: 8,
+    maxHeight: 150,
+  },
+  suggestionTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6b7280",
+    marginBottom: 4,
+  },
+  suggestionsList: {
+    maxHeight: 120,
+  },
+  suggestionItem: {
+    padding: 8,
+    backgroundColor: "#ffffff",
+    borderRadius: 4,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: "#374151",
+  },
+  hintText: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 4,
+    fontStyle: "italic",
+  },
+  inputError: {
+    borderColor: '#ef4444',
+    borderWidth: 2,
   },
   suggestionPill: {
     paddingHorizontal: 10,
@@ -3731,10 +3932,7 @@ const styles = StyleSheet.create({
     borderColor: "#d1d5db",
     backgroundColor: "#f9fafb",
   },
-  suggestionText: {
-    fontSize: 12,
-    color: "#374151",
-  },
 });
+
 
 export default MedicalHistoryFormScreen;

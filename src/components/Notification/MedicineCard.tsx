@@ -1,5 +1,5 @@
 // components/Notification/MedicineCard.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect, JSX } from "react";
 import {
   View,
   Text,
@@ -11,22 +11,29 @@ import {
 } from "react-native";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store/store";
-import { AuthFetch, AuthPatch } from "../../auth/auth";
+import { AuthPatch } from "../../auth/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatTime } from "../../utils/dateTime";
-import { 
-  PillIcon, 
-  SyringeIcon, 
-  DropletIcon, 
-  TestTubeIcon, 
-  BandageIcon, 
+import {
   ActivityIcon, 
-  WindIcon, 
-  SquareIcon, 
   BeakerIcon 
 } from "../../utils/SvgIcons";
+import {
+  Droplets as SyrupIcon,
+  PillIcon,
+  FilterIcon,
+  ScissorsLineDashed as TestTubeIcon,
+  Syringe as SyringeIcon, 
+  DropletIcon,
+  BandageIcon,
+  Circle as SquareIcon,
+  WindIcon,
+} from "lucide-react-native";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
+const moderateScale = (size: number, factor: number = 0.5) =>
+  size + (scale(size) - size) * factor;
 
 type ReminderGroup = {
   dosageTime: string;
@@ -35,7 +42,7 @@ type ReminderGroup = {
 };
 
 type MedicineCardProps = {
-  medicineType: string;
+  medicineType: number | string | null;
   medicineName: string;
   timeOfMedication: string | undefined;
   timestamp?: string;
@@ -46,14 +53,18 @@ type MedicineCardProps = {
   activeIndex: number;
   indexTime: number;
   reminderGroup: ReminderGroup[][];
-  dosageTime: string;
   isToday?: boolean;
+  dosage?: string | number | null;
+  givenBy?: string | null;
+    onStatusChange?: (newStatus: number) => void;
+
 };
 
 const MedicineCard: React.FC<MedicineCardProps> = ({
   medicineType,
   medicineName,
   timeOfMedication,
+  timestamp,
   givenAt = "------",
   status,
   day,
@@ -62,18 +73,91 @@ const MedicineCard: React.FC<MedicineCardProps> = ({
   indexTime,
   reminderGroup,
   isToday = false,
+  dosage,
+  givenBy,
 }) => {
   const user = useSelector((s: RootState) => s.currentUser);
-  const [selectedStatus, setSelectedStatus] = useState(status);
+  const [selectedStatus, setSelectedStatus] =
+ useState<MedicineCardProps["status"]>(status);
   const [loading, setLoading] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [givenAtState, setGivenAtState] = useState<string | undefined>(givenAt);
+
+  useEffect(() => {
+    setGivenAtState(givenAt);
+  }, [givenAt]);
+  const isAfterStartTime = (): boolean => {
+    if (!timeOfMedication) return false;
+    
+    try {
+      let startTimeStr = timeOfMedication;
+      if (timeOfMedication.includes(' - ')) {
+        const parts = timeOfMedication.split(' - ');
+        if (parts.length > 0) {
+          startTimeStr = parts[0].trim();
+        }
+      }
+      
+      const currentTime = new Date();
+      const currentHours = currentTime.getHours();
+      const currentMinutes = currentTime.getMinutes();
+      const currentTotalMinutes = currentHours * 60 + currentMinutes;
+      
+      // Parse the start time
+      const parseTime = (timeStr: string): number => {
+        let hours = 0;
+        let minutes = 0;
+        
+        // Check for AM/PM
+        const isPM = timeStr.toLowerCase().includes('pm');
+        const isAM = timeStr.toLowerCase().includes('am');
+        
+        // Remove AM/PM and whitespace
+        const cleanTime = timeStr.replace(/[apm\s]/gi, '').trim();
+        const timeParts = cleanTime.split(':');
+        
+        if (timeParts.length === 2) {
+          hours = parseInt(timeParts[0], 10);
+          minutes = parseInt(timeParts[1], 10);
+        } else if (timeParts.length === 1) {
+          hours = parseInt(timeParts[0], 10);
+        }
+        
+        // Convert to 24-hour format
+        if (isPM && hours < 12) hours += 12;
+        if (isAM && hours === 12) hours = 0;
+        
+        return hours * 60 + minutes;
+      };
+      
+      const startMinutes = parseTime(startTimeStr);
+      return currentTotalMinutes >= startMinutes;
+      
+    } catch (error) {
+      return true; 
+    }
+  };
 
   const getMedicineIcon = () => {
-    const iconProps = { 
-      size: SCREEN_WIDTH < 375 ? 20 : 22, 
-      color: "#14b8a6" 
+    const iconProps = { size: 20, color: "#14b8a6" };
+    const typeNum = Number(medicineType);
+
+    const icons: { [key: number]: JSX.Element } = {
+      1: <PillIcon {...iconProps} />,       // Capsules
+      2: <SyrupIcon {...iconProps} />,      // Syrups
+      3: <SquareIcon {...iconProps} />,     // Tablets
+      4: <SyringeIcon {...iconProps} />,    // Injections
+      5: <ActivityIcon {...iconProps} />,   // IV line
+      6: <TestTubeIcon {...iconProps} />,   // Tubing / tests
+      7: <BandageIcon {...iconProps} />,    // Topical
+      8: <DropletIcon {...iconProps} />,    // Drops
+      9: <WindIcon {...iconProps} />,       // Ventilator
+      10: <WindIcon {...iconProps} />,      // Ventilator / other
     };
-    
-    switch (medicineType?.toLowerCase()) {
+
+    if (icons[typeNum]) return icons[typeNum];
+
+    switch (String(medicineType)?.toLowerCase()) {
       case "capsules":
         return <PillIcon {...iconProps} />;
       case "tablets":
@@ -97,89 +181,157 @@ const MedicineCard: React.FC<MedicineCardProps> = ({
     }
   };
 
-  const getMedicineColor = () => {
-    switch (medicineType?.toLowerCase()) {
-      case "capsules":
-        return "#FFF0DA";
-      case "tablets":
-        return "#E4F8F8";
-      case "injections":
-        return "#F0F9FF";
-      case "drops":
-        return "#F0FDF4";
-      case "tubing":
-        return "#FFFBEB";
-      case "topical":
-        return "#FEF2F2";
-      case "syrups":
-        return "#E6F2FE";
-      case "iv line":
-        return "#F3E8FF";
-      case "ventilator":
-        return "#ECFDF5";
-      default:
-        return "#f8fafc";
-    }
+  const getMedicineTypeLabel = () => {
+    const typeNum = Number(medicineType);
+    const labels: { [key: number]: string } = {
+      1: "Capsules",
+      2: "Syrup",
+      3: "Tablets",
+      4: "Injection",
+      5: "IV Line",
+      6: "Tubing",
+      7: "Topical",
+      8: "Drops",
+      9: "Ventilator",
+      10: "Ventilator",
+    };
+
+    return labels[typeNum] || String(medicineType || "—");
   };
 
-  const handleStatusUpdate = async (newStatus: number) => {
-    if (!medicineID) return;
+const handleStatusUpdate = async (newStatus: number) => {
+  if (!medicineID) return;
+  
+  try {
+    setLoading(true);
     
-    try {
-      setLoading(true);
-      
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        Alert.alert("Error", "Authentication token not found");
-        return;
-      }
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      Alert.alert("Error", "Authentication token not found");
+      return;
+    }
 
-      const payload = {
-        userID: user?.id,
-        doseStatus: newStatus,
-        medicineID: medicineID,
-        medicationTime: timeOfMedication || "",
+    const payload = {
+      userID: user?.id,
+      doseStatus: newStatus,
+      medicineID: medicineID,
+      medicationTime: timeOfMedication || "",
+    };
+
+    // Type definitions for API response
+    type SuccessResponseData = {
+      givenTime?: string;
+      updatedReminder?: {
+        givenTime?: string;
+      };
+      message?: string;
+      status?: string;
+    };
+
+    type SuccessResponse = {
+      status: "success";
+      message?: string;
+      data?: SuccessResponseData;
+      givenTime?: string;
+    };
+
+    type ErrorResponse = {
+      status: "error" | string;
+      message: string;
+      data?: {
+        message?: string;
+      };
+    };
+
+    type ApiResponse = SuccessResponse | ErrorResponse;
+
+    // Make API call
+    const response = await AuthPatch(
+      `medicineReminder/${medicineID}`,
+      payload,
+      token
+    );
+
+    // Type assertion
+    const apiResponse = response as ApiResponse;
+
+    // Check for success
+    const isSuccess = 
+      apiResponse.status === "success" || 
+      apiResponse.message === "success" ||
+      (apiResponse as any)?.data?.status === "success";
+
+    if (isSuccess) {
+      const mappedStatus =
+        newStatus === 1 ? "Completed" : newStatus === 2 ? "Not Required" : "Pending";
+      setSelectedStatus(mappedStatus as MedicineCardProps["status"]);
+      setStatusMenuOpen(false);
+      
+      // Extract givenTime safely with multiple fallbacks
+      let responseGivenTime: string;
+      
+      // Better type checking using custom type guard
+      const isSuccessResponse = (response: ApiResponse): response is SuccessResponse => {
+        return response.status === "success" || response.message === "success";
       };
 
-      const response = await AuthPatch(
-        `medicineReminder/${medicineID}`,
-        payload,
-        token,
-        "PATCH"
-      );
-
-      if (response?.status === "success" || response?.message === "success") {
-        setSelectedStatus(
-          newStatus === 1 ? "Completed" : newStatus === 2 ? "Not Required" : "Pending"
-        );
+      if (isSuccessResponse(apiResponse)) {
+        // Now TypeScript knows this is a SuccessResponse
+        const successData = apiResponse.data;
         
-        if (reminderGroup?.[activeIndex]?.[indexTime]) {
-          const updatedReminders = reminderGroup[activeIndex][indexTime]?.reminders?.map(
-            (reminder: any) =>
-              reminder?.id === medicineID
-                ? { ...reminder, doseStatus: newStatus }
-                : reminder
+        responseGivenTime = 
+          successData?.givenTime ||
+          successData?.updatedReminder?.givenTime ||
+          apiResponse.givenTime ||
+          new Date().toISOString();
+      } else {
+        // Fallback to current time if not a success response
+        responseGivenTime = new Date().toISOString();
+      }
+
+      setGivenAtState(responseGivenTime);
+      
+      // Update local state
+      if (reminderGroup?.[activeIndex]?.[indexTime]) {
+        const timeSlot = reminderGroup[activeIndex][indexTime];
+        if (timeSlot?.reminders) {
+          const updatedReminders = timeSlot.reminders.map((reminder: any) =>
+            reminder?.id === medicineID
+              ? { ...reminder, doseStatus: newStatus, givenTime: responseGivenTime }
+              : reminder
           );
           
-          reminderGroup[activeIndex][indexTime].reminders = updatedReminders;
+          timeSlot.reminders = updatedReminders;
           
-          const completedCount = updatedReminders?.filter(
+          const completedCount = updatedReminders.filter(
             (r: any) => r?.doseStatus === 1
-          )?.length || 0;
-          const percentage = (completedCount / (updatedReminders?.length || 1)) * 100;
-          reminderGroup[activeIndex][indexTime].percentage = percentage;
+          ).length || 0;
+          const percentage = (completedCount / (updatedReminders.length || 1)) * 100;
+          timeSlot.percentage = percentage;
         }
-        
-        Alert.alert("Success", "Medicine status updated successfully");
-      } else {
-        Alert.alert("Error", response?.message || response?.data?.message || "Failed to update status");
       }
-    } catch (error: any) {
-      Alert.alert("Error", error?.message || "Failed to update medicine status");
-    } finally {
-      setLoading(false);
+    } else {
+      // Safely extract error message
+      let errorMessage = "Failed to update status";
+      
+      // Use type guard for error response
+      const isErrorResponse = (response: ApiResponse): response is ErrorResponse => {
+        return response.status !== "success" && response.message !== "success";
+      };
+
+      if (isErrorResponse(apiResponse)) {
+        errorMessage = apiResponse.message || apiResponse.data?.message || errorMessage;
+      }
+      
+      Alert.alert("Error", errorMessage);
     }
-  };
+  } catch (error: any) {
+    console.error("Medicine status update error:", error);
+    Alert.alert("Error", error?.message || "Failed to update medicine status");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getStatusColor = () => {
     switch (selectedStatus) {
@@ -203,12 +355,12 @@ const MedicineCard: React.FC<MedicineCardProps> = ({
     }
   };
 
-  const isStatusDisabled = selectedStatus === "Completed" || selectedStatus === "Not Required" || !isToday;
+  const isStatusDisabled = selectedStatus === "Completed" || selectedStatus === "Not Required" || !isToday ||!isAfterStartTime();
 
   const formatDay = (dayStr: string | null | undefined) => {
-    if (!dayStr) return "?/?";
+    if (!dayStr) return "-";
     
-    const parts = dayStr?.split('/');
+    const parts = dayStr?.split("/");
     if (parts?.length === 2) {
       return `${parts[0]}/${parts[1]}`;
     }
@@ -222,16 +374,11 @@ const MedicineCard: React.FC<MedicineCardProps> = ({
     
     // First try using the utils formatTime
     try {
-      const formattedTime = formatTime(time);
-      if (formattedTime && formattedTime !== '-') {
-        return formattedTime;
-      }
-    } catch (error) {
-      // Fallback to manual formatting if utils fails
-    }
-    
-    // Manual fallback formatting
-    const timeParts = time?.split(':');
+      const formatted = formatTime(time);
+      if (formatted && formatted !== '-')
+       return formatted;
+    } catch (e) {}
+    const timeParts = time?.split(":");
     if (timeParts?.length >= 2) {
       const hours = timeParts[0]?.padStart(2, '0') || '00';
       const minutes = timeParts[1]?.padStart(2, '0') || '00';
@@ -248,58 +395,90 @@ const MedicineCard: React.FC<MedicineCardProps> = ({
     return formatTimeDisplay(time);
   };
 
+  const renderDosage = () => {
+    if (dosage === null || dosage === undefined || dosage === "") {
+      return "-";
+    }
+    if (typeof dosage === "number") {
+      return `${dosage} ml`;
+    }
+    return String(dosage);
+  };
+
+  const renderGivenBy = () => {
+    if (!givenBy) return "-";
+    return givenBy;
+  };
+
+  // Helper to extract just the start time for display
+  const getStartTimeOnly = () => {
+    if (!timeOfMedication) return "";
+    
+    if (timeOfMedication.includes(' - ')) {
+      const parts = timeOfMedication.split(' - ');
+      return parts[0].trim();
+    }
+    
+    return timeOfMedication.trim();
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: getMedicineColor() }]}>
-      {/* Top Row - Medicine Name and Day Counter */}
-      <View style={styles.topRow}>
-        <View style={styles.nameContainer}>
-          <Text style={styles.medicineName} numberOfLines={1}>
-            {medicineName}
+    <View style={styles.medicineCard}>
+      <View style={styles.medicineCardRow}>
+        {/* Icon avatar */}
+        <View style={styles.medicineAvatar}>{getMedicineIcon()}</View>
+
+        <View style={styles.medicineMeta}>
+          {/* Name + type badge */}
+          <View style={styles.medicineNameRow}>
+          <Text style={styles.medicineCardName} numberOfLines={1}>
+            {medicineName || " "}
           </Text>
-          <Text style={styles.medicineType} numberOfLines={1}>
-            {medicineType}
+          <Text style={styles.medicineTypeBadge} numberOfLines={1}>
+            {getMedicineTypeLabel()}
           </Text>
         </View>
-        <View style={styles.dayContainer}>
-          <Text style={styles.dayText}>
-            {formatDay(day)}
+        <View style={styles.medicineInfoRow}>
+          <Text style={styles.medicineInfoText}>
+              Dosage:{" "}
+              <Text style={styles.medicineInfoStrong}>{renderDosage()}</Text>
           </Text>
-        </View>
       </View>
 
-      {/* Middle Row - Icon and Time Information */}
-      <View style={styles.middleRow}>
-        <View style={styles.iconContainer}>
-          {getMedicineIcon()}
+          <View style={styles.medicineInfoRow}>
+        <Text style={styles.medicineInfoText}>
+              Given By:{" "}
+              <Text style={styles.medicineInfoStrong}>{renderGivenBy()}</Text>
+            </Text>
         </View>
-        
-        {/* Time Information in single line */}
-        <View style={styles.timeInfoContainer}>
-          <View style={styles.timeRow}>
-            <Text style={styles.timeLabel}>Scheduled: </Text>
-            <Text style={styles.timeValue} numberOfLines={1}>
-              {formatTimeDisplay(timeOfMedication)}
+          <View style={styles.medicineInfoRow}>
+          <Text style={styles.medicineInfoText}>
+              Medication Time:{" "}
+            <Text style={styles.medicineInfoStrong}>
+              {timeOfMedication || "-"}
+            </Text>
             </Text>
           </View>
-          <View style={styles.timeRow}>
-            <Text style={styles.timeLabel}>Given At: </Text>
+          <View style={styles.medicineInfoRow}>
+            <Text style={styles.medicineInfoText}>Given At:{" "}
             <Text style={[
-              styles.timeValue, 
-              styles.givenAtText,
-              givenAt === "Not given yet" || givenAt === "------" ? styles.notGivenText : {}
-            ]} numberOfLines={1}>
-              {formatGivenAtTime(givenAt)}
+              styles.medicineInfoStrong,
+                  (!givenAtState ||
+              givenAtState === "Not given yet" || givenAtState === "------") && styles.notGivenText,
+            ]}
+              >
+              {formatGivenAtTime(givenAtState)}
+              </Text>
             </Text>
-          </View>
-        </View>
       </View>
 
       {/* Bottom Row - Status */}
-      <View style={styles.bottomRow}>
+      <View style={styles.statusRow}>
         <Text style={styles.statusLabel}>Status</Text>
         {loading ? (
-          <ActivityIndicator size="small" color="#14b8a6" style={styles.statusLoader} />
+          <ActivityIndicator size="small" color="#14b8a6" />
         ) : (
+          <View style={styles.dropdownWrapper}>
           <TouchableOpacity
             style={[
               styles.statusButton,
@@ -311,26 +490,7 @@ const MedicineCard: React.FC<MedicineCardProps> = ({
             disabled={isStatusDisabled}
             onPress={() => {
               if (!isStatusDisabled) {
-                Alert.alert(
-                  "Update Status",
-                  `Mark "${medicineName}" as:`,
-                  [
-                    { 
-                      text: "Cancel", 
-                      style: "cancel" 
-                    },
-                    { 
-                      text: "Completed", 
-                      onPress: () => handleStatusUpdate(1),
-                      style: "default"
-                    },
-                    { 
-                      text: "Not Required", 
-                      onPress: () => handleStatusUpdate(2),
-                      style: "destructive"
-                    },
-                  ]
-                );
+                setStatusMenuOpen((prev) => !prev);
               }
             }}
           >
@@ -343,145 +503,151 @@ const MedicineCard: React.FC<MedicineCardProps> = ({
             >
               {selectedStatus}
             </Text>
+                  {!isStatusDisabled && (
+                    <Text style={styles.statusArrow}>
+                      {statusMenuOpen ? "▲" : "▼"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Dropdown menu */}
+                {statusMenuOpen && !isStatusDisabled && (
+                  <View style={styles.dropdownMenu}>
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
+                      onPress={() => handleStatusUpdate(1)}
+                    >
+                      <Text style={styles.dropdownItemText}>Completed</Text>
+                    </TouchableOpacity>
+                    <View style={styles.dropdownDivider} />
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
+                      onPress={() => handleStatusUpdate(2)}
+                    >
+                      <Text style={styles.dropdownItemText}>Not Required</Text>
           </TouchableOpacity>
-        )}
+                  </View>
+                )}
+
+                {/* Tooltip for why dropdown is disabled */}
+                {isStatusDisabled && !(selectedStatus === "Completed" || selectedStatus === "Not Required") && (
+                  <Text style={styles.disabledTooltip}>
+                    Available from {getStartTimeOnly()}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    borderRadius: 12,
-    padding: SCREEN_WIDTH < 375 ? 12 : 16,
-    marginBottom: 8,
-    marginHorizontal: 4,
+  medicineCard: {
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#ffffff",
     shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "rgba(0, 0, 0, 0.05)",
-    minHeight: SCREEN_WIDTH < 375 ? 140 : 150,
-  },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: SCREEN_WIDTH < 375 ? 10 : 12,
-  },
-  nameContainer: {
-    flex: 1,
-    marginRight: SCREEN_WIDTH < 375 ? 8 : 10,
-  },
-  medicineName: {
-    fontSize: SCREEN_WIDTH < 375 ? 15 : 16,
-    fontWeight: "600",
-    color: "#0f172a",
-    lineHeight: SCREEN_WIDTH < 375 ? 20 : 22,
-    marginBottom: 2,
-  },
-  medicineType: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
-    fontWeight: "500",
-    color: "#64748b",
-    textTransform: "capitalize",
-  },
-  dayContainer: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingHorizontal: SCREEN_WIDTH < 375 ? 8 : 10,
-    paddingVertical: SCREEN_WIDTH < 375 ? 4 : 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(0, 0, 0, 0.08)",
-    minWidth: SCREEN_WIDTH < 375 ? 45 : 50,
-  },
-  dayText: {
-    fontSize: SCREEN_WIDTH < 375 ? 10 : 11,
-    fontWeight: "700",
-    color: "#475569",
-    textAlign: "center",
-  },
-  middleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: SCREEN_WIDTH < 375 ? 12 : 14,
-  },
-  iconContainer: {
-    width: SCREEN_WIDTH < 375 ? 36 : 40,
-    height: SCREEN_WIDTH < 375 ? 36 : 40,
-    borderRadius: SCREEN_WIDTH < 375 ? 18 : 20,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: SCREEN_WIDTH < 375 ? 12 : 14,
-    borderWidth: 1.5,
-    borderColor: "rgba(20, 184, 166, 0.15)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
     elevation: 2,
   },
-  timeInfoContainer: {
-    flex: 1,
+  medicineCardRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
-  timeRow: {
+  medicineAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    backgroundColor: "#f8fafc",
+  },
+  medicineMeta: {
+    flex: 1,
+    minHeight: 60,
+  },
+  medicineNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: SCREEN_WIDTH < 375 ? 4 : 6,
+    justifyContent: "space-between",
+    marginBottom: 4,
   },
-  timeLabel: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
-    fontWeight: "600",
-    color: "#64748b",
-    minWidth: SCREEN_WIDTH < 375 ? 70 : 75,
-  },
-  timeValue: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
-    fontWeight: "500",
-    color: "#374151",
+  medicineCardName: {
+    fontSize: SCREEN_WIDTH < 375 ? 15 : 16,
+    fontWeight: "700",
     flex: 1,
-    flexWrap: 'nowrap',
+    marginRight: 8,
+    color: "#0f172a",
   },
-  givenAtText: {
-    color: "#6b7280",
-    fontStyle: "italic",
+  medicineTypeBadge: {
+    fontSize: SCREEN_WIDTH < 375 ? 11 : 12,
+    fontWeight: "700",
+    backgroundColor: "rgba(20, 184, 166, 0.1)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    color: "#0f766e",
+    maxWidth: 110,
+    textAlign: "right",
+  },
+  medicineInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+    flexWrap: "wrap",
+  },
+  medicineInfoText: {
+    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
+    color: "#64748b",
+  },
+  medicineInfoStrong: {
+    fontWeight: "700",
+    color: "#0f172a",
   },
   notGivenText: {
     color: "#9ca3af",
-    fontStyle: "normal",
+    fontWeight: "500",
   },
-  bottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: SCREEN_WIDTH < 375 ? 8 : 10,
+  statusRow: {
+    marginTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "rgba(0, 0, 0, 0.1)",
+    borderTopColor: "#e5e7eb",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
   },
   statusLabel: {
-    fontSize: SCREEN_WIDTH < 375 ? 12 : 13,
+    fontSize: moderateScale(11),
     fontWeight: "600",
     color: "#64748b",
     textTransform: "uppercase",
   },
-  statusLoader: {
-    marginLeft: "auto",
+  dropdownWrapper: {
+    flexShrink: 1,
+    alignItems: "flex-end",
   },
   statusButton: {
     paddingHorizontal: SCREEN_WIDTH < 375 ? 12 : 14,
     paddingVertical: SCREEN_WIDTH < 375 ? 6 : 8,
     borderRadius: 8,
-    minWidth: SCREEN_WIDTH < 375 ? 80 : 90,
+    minWidth: SCREEN_WIDTH < 375 ? 110 : 120,
     borderWidth: 1,
     borderColor: "rgba(0, 0, 0, 0.08)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
   },
   statusText: {
     fontSize: SCREEN_WIDTH < 375 ? 11 : 12,
@@ -489,6 +655,44 @@ const styles = StyleSheet.create({
     textAlign: "center",
     textTransform: "uppercase",
     letterSpacing: 0.3,
+  },
+  statusArrow: {
+    fontSize: 10,
+    marginLeft: 6,
+    color: "#6b7280",
+  },
+  dropdownMenu: {
+    marginTop: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#ffffff",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+    minWidth: 140,
+  },
+  dropdownItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  dropdownItemText: {
+    fontSize: 12,
+    color: "#0f172a",
+    fontWeight: "500",
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: "#e5e7eb",
+  },
+  disabledTooltip: {
+    fontSize: 10,
+    color: '#6b7280',
+    marginTop: 4,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
 });
 

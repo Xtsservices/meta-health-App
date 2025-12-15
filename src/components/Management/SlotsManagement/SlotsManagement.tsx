@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 8,
-    minWidth: 180,
+    minWidth: 150,
     justifyContent: "center",
     marginHorizontal: 12,
   },

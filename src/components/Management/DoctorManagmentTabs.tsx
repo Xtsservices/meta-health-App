@@ -1,3 +1,4 @@
+// src/components/DoctorManagmentTabs.tsx
 import React, { useState, useRef, useEffect } from "react";
 import { 
   View, 
@@ -5,7 +6,9 @@ import {
   TouchableOpacity, 
   ScrollView, 
   StyleSheet, 
-  Dimensions 
+  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store/store";
@@ -13,12 +16,12 @@ import MySchedule from "./MySchedule/MySchedule";
 import SlotsManagement from "./SlotsManagement/SlotsManagement";
 import MyTasks from "../../pages/nurseDashboard/MyTasks";
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get("window");
 
 // Constants
 const TAB_CONFIG = {
   minTabWidth: 140,
-  scrollThreshold: 768, 
+  scrollThreshold: 768,
 } as const;
 
 // Selector function for current user
@@ -40,11 +43,11 @@ const TabButton = ({
       isActive && styles.activeTab
     ]}
     onPress={onPress}
+    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    accessibilityRole="button"
+    accessibilityState={{ selected: isActive }}
   >
-    <Text style={[
-      styles.tabButtonText,
-      isActive && styles.activeTabText
-    ]}>
+    <Text style={[styles.tabButtonText, isActive && styles.activeTabText]}>
       {title}
     </Text>
     {isActive && <View style={styles.activeIndicator} />}
@@ -52,7 +55,7 @@ const TabButton = ({
 );
 
 // Arrow component for scroll indicators
-const ScrollArrow = ({ direction, onPress, visible }: { 
+const ScrollArrow = ({ direction, onPress, visible}: {
   direction: 'left' | 'right'; 
   onPress: () => void; 
   visible: boolean 
@@ -62,21 +65,22 @@ const ScrollArrow = ({ direction, onPress, visible }: {
       style={[
         styles.arrowButton,
         direction === 'left' ? styles.arrowLeft : styles.arrowRight,
-        !visible && styles.arrowDisabled
       ]} 
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
       disabled={!visible}
+      accessibilityLabel={direction === "left" ? "Scroll left" : "Scroll right"}
+      accessibilityState={{ disabled: !visible }}
     >
       <View style={[
         styles.arrowIconContainer,
-        !visible && styles.arrowIconDisabled
+        !visible ? styles.arrowIconDisabled : undefined,
       ]}>
         <Text style={[
           styles.arrowText,
           !visible && styles.arrowTextDisabled
         ]}>
-          {direction === 'left' ? '<' : '>'}
+          {direction === 'left' ? '‹' : '›'}
         </Text>
       </View>
     </TouchableOpacity>
@@ -85,14 +89,15 @@ const ScrollArrow = ({ direction, onPress, visible }: {
 
 const DoctorManagmentTabs: React.FC = () => {
   const user = useSelector(selectCurrentUser);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollView | null>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
-  const [showRightArrow, setShowRightArrow] = useState(true);
+  const [showRightArrow, setShowRightArrow] = useState(false);
   const [contentWidth, setContentWidth] = useState(0);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [scrollX, setScrollX] = useState(0);
   
   const defaultTab = user?.role === 4000 ? "LeaveManagment" : "MySchedule";
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
   // Check if tabs need scrolling
   const needsScrolling = screenWidth < TAB_CONFIG.scrollThreshold;
@@ -101,42 +106,50 @@ const DoctorManagmentTabs: React.FC = () => {
   useEffect(() => {
     if (needsScrolling && contentWidth > containerWidth) {
       setShowRightArrow(true);
+      setShowLeftArrow(false);
+    } else {
+      setShowRightArrow(false);
+      setShowLeftArrow(false);
     }
   }, [needsScrolling, contentWidth, containerWidth]);
 
   // Handle scroll events to show/hide arrows
-  const handleScroll = (event: any) => {
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!needsScrolling) return;
     
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const scrollX = contentOffset.x;
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const x = contentOffset.x;
     const contentW = contentSize.width;
     const containerW = layoutMeasurement.width;
 
-    setShowLeftArrow(scrollX > 5);
-    setShowRightArrow(scrollX + containerW < contentW - 5);
+    setScrollX(x);
+    setShowLeftArrow(x > 5);
+    setShowRightArrow(x + containerW < contentW - 5);
   };
 
   // Handle content size change
-  const handleContentSizeChange = (width: number) => {
-    setContentWidth(width);
+  const handleContentSizeChange = (w: number) => {
+    setContentWidth(w);
+    setShowRightArrow(needsScrolling && w > containerWidth);
   };
 
   // Handle layout change
-  const handleLayout = (event: any) => {
-    setContainerWidth(event.nativeEvent.layout.width);
+  const handleLayout = (e: any) => {
+    setContainerWidth(e.nativeEvent.layout.width);
+    setShowRightArrow(needsScrolling && contentWidth > e.nativeEvent.layout.width);
   };
 
   // Scroll tab container
   const scrollTabs = (direction: 'left' | 'right') => {
     if (!scrollViewRef.current) return;
-    
-    const scrollAmount = 200;
-    
-    scrollViewRef.current.scrollTo({
-      x: direction === 'left' ? -scrollAmount : scrollAmount,
-      animated: true,
-    });
+    const chunk = Math.round((containerWidth || screenWidth) * 0.8);
+    let target = direction === "left" ? Math.max(0, scrollX - chunk) : scrollX + chunk;
+    const maxScroll = Math.max(0, contentWidth - (containerWidth || screenWidth));
+    if (target > maxScroll) target = maxScroll;
+    scrollViewRef.current.scrollTo({ x: target, animated: true });
+    setScrollX(target);
+    setShowLeftArrow(target > 5);
+    setShowRightArrow(target < maxScroll - 5);
   };
 
   const renderContent = () => {
@@ -221,10 +234,10 @@ const DoctorManagmentTabs: React.FC = () => {
           ]}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-          onContentSizeChange={handleContentSizeChange}
+          onContentSizeChange={(w: number) => handleContentSizeChange(w)}
           onLayout={handleLayout}
         >
-          {availableTabs?.map?.((tab) => (
+          {availableTabs?.map((tab) => (
             <TabButton
               key={tab.id}
               isActive={activeTab === tab.id}
@@ -331,13 +344,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: "#e2e8f0",
     backgroundColor: "#ffffff",
-    minHeight: 50,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
   },
   tabHeaders: {
     paddingHorizontal: 8,
     flexGrow: 1,
+    alignItems: "center",
   },
   tabHeadersCentered: {
     justifyContent: "center",
@@ -348,10 +362,11 @@ const styles = StyleSheet.create({
     minWidth: TAB_CONFIG.minTabWidth,
     alignItems: "center",
     position: "relative",
-    marginHorizontal: 4,
+    marginHorizontal: 6,
+    borderRadius: 10,
   },
   activeTab: {
-    backgroundColor: "transparent",
+    // subtle white background keeps it consistent
   },
   tabButtonText: {
     fontSize: 14,
@@ -367,59 +382,59 @@ const styles = StyleSheet.create({
   activeIndicator: {
     position: "absolute",
     bottom: -2,
-    left: 8,
-    right: 8,
-    height: 3,
+    left: 12,
+    right: 12,
+    height: 4,
     backgroundColor: "#14b8a6",
-    borderRadius: 2,
+    borderRadius: 4,
   },
+
   tabContent: {
     flex: 1,
     padding: 8,
   },
+
+  // arrow styles
   arrowButton: {
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 6,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#ffffff",
-    minWidth: 50,
     zIndex: 10,
   },
   arrowLeft: {
     borderRightWidth: 1,
-    borderRightColor: "#cbd5e1",
+    borderRightColor: "#e6eef0",
   },
   arrowRight: {
     borderLeftWidth: 1,
-    borderLeftColor: "#cbd5e1",
-  },
-  arrowDisabled: {
-    opacity: 1,
+    borderLeftColor: "#e6eef0",
   },
   arrowIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(63, 169, 155, 1)",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#0fb39f", // teal-ish
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#14b8a6",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowColor: "#0fb39f",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 6,
   },
   arrowIconDisabled: {
-    backgroundColor: "#e2e8f0",
+    backgroundColor: "#eef2f6",
     shadowColor: "#94a3b8",
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.06,
+    elevation: 0,
   },
   arrowText: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#ffffff",
-    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#fff",
+    lineHeight: 20,
   },
   arrowTextDisabled: {
     color: "#94a3b8",

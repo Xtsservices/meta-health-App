@@ -309,7 +309,7 @@ export const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: RESPONSIVE.fontSize.xs,
-    color: "#9ca3af",
+    color: "#6b7280",
   },
   viewButton: {
     backgroundColor: "#14b8a6",

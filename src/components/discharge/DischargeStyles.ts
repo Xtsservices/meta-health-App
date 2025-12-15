@@ -1,5 +1,5 @@
 // DischargeStyles.ts
-import { StyleSheet, Platform } from "react-native";
+import { StyleSheet } from "react-native";
 import {
   SPACING,
   FONT_SIZE,
@@ -26,6 +26,9 @@ export const RESPONSIVE = {
   isTablet,
   isSmallDevice,
 };
+
+// Footer height constant (shared)
+export const FOOTER_H = 70;
 
 export const styles = StyleSheet.create({
   safe: {
@@ -83,6 +86,11 @@ export const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FONT_SIZE.md,
     fontWeight: "600",
+    marginBottom: SPACING.xs,
+  },
+  helperText: {
+    fontSize: FONT_SIZE.xs,
+    fontStyle: "italic",
     marginBottom: SPACING.sm,
   },
   input: {
@@ -140,7 +148,6 @@ export const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
-    // removed maxWidth so long text is visible
     marginRight: SPACING.xs,
     marginBottom: SPACING.xs,
   },
@@ -154,57 +161,20 @@ export const styles = StyleSheet.create({
     padding: 2,
   },
 
-  // Dropdown Modal Styles
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "flex-end",
-  },
+  // Simple inline dropdown (no modal, no search, no borders per item)
   dropdownContainer: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.lg,
-    maxHeight: responsiveHeight(75),
-    marginBottom: Platform.OS === "ios" ? 0 : 0,
-  },
-  dropdownHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.md,
-  },
-  dropdownTitle: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: "600",
-  },
-  selectedSummaryText: {
-    fontSize: FONT_SIZE.sm,
-    marginBottom: SPACING.sm,
-  },
-  searchInput: {
-    borderWidth: 1,
+    marginTop: SPACING.xs,
     borderRadius: 8,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    fontSize: FONT_SIZE.md,
-    marginBottom: SPACING.md,
-    minHeight: 44,
+    borderWidth: 1,
   },
-  dietList: {
-    maxHeight: responsiveHeight(45),
-  },
-  dietItem: {
+  dietRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    marginBottom: SPACING.xs,
-    minHeight: 44,
+    paddingVertical: SPACING.xs,
+    minHeight: 40,
   },
   dietItemText: {
     fontSize: FONT_SIZE.md,
@@ -224,28 +194,6 @@ export const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     fontWeight: "bold",
   },
-  dropdownActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: SPACING.md,
-    marginTop: SPACING.md,
-    paddingTop: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  dropdownButton: {
-    flex: 1,
-    borderRadius: 8,
-    paddingVertical: SPACING.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-  },
-  dropdownButtonText: {
-    color: "#FFFFFF",
-    fontSize: FONT_SIZE.md,
-    fontWeight: "600",
-  },
 
   // Actions (Submit / Cancel)
   actions: {
@@ -255,12 +203,11 @@ export const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    backgroundColor: COLORS.card,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 5,
+    backgroundColor: COLORS.card,
   },
   button: {
     flex: 1,
@@ -281,18 +228,23 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Footer
+  // Footer (absolute to match other screens)
   footerWrap: {
-    width: "100%",
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: FOOTER_H,
+    justifyContent: "center",
     backgroundColor: COLORS.bg,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
   navShield: {
+    position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: COLORS.bg,
+    backgroundColor: "transparent",
   },
 
   // Utility

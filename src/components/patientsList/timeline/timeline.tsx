@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   subHeader: { fontSize: 12, fontWeight: "700", marginTop: 2 },
 
   footerWrap: {
-    position: "absolute",
+    // position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,

@@ -84,7 +84,7 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter, data: zoneD
   // Chart area width uses most of screen width minus paddings from your card/container
   const containerHorizontalPadding = SPACING.sm * 2; // aligns with card padding
   const chartMaxWidth = SCREEN_WIDTH - containerHorizontalPadding;
-  const chartSize = Math.min(Math.max(240, Math.round(chartMaxWidth - 40)), Math.round(responsiveHeight(28))); // bounded size
+  const chartSize = Math.min(Math.max(240, Math.round(chartMaxWidth - 40)), Math.round(responsiveHeight(22))); // bounded size
   const outerRadius = chartSize / 2;
   const donutThickness = Math.max(20, Math.round(chartSize * 0.22));
   const innerRadius = Math.max(outerRadius - donutThickness, 12);
@@ -228,7 +228,8 @@ const PieChart: React.FC<PieChartProps> = ({ selectedWardDataFilter, data: zoneD
     n ? n.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "";
 
   // prepare data for drawing
-  const total = data.reduce((s, d) => s + (d.value || 0), 0) || 100;
+  const rawTotal = data.reduce((s, d) => s + (d.value || 0), 0);
+  const total = rawTotal > 0 ? rawTotal : 1;
   let accAngle = 0;
 
   // UI states
@@ -291,8 +292,33 @@ const NoData = () => (
               const startAngle = accAngle;
               const sweep = (slice.value / total) * 360;
               const endAngle = startAngle + sweep;
-              const path = describeArc(chartSize / 2, chartSize / 2, outerRadius - donutThickness / 2, startAngle, endAngle);
+              const radius = outerRadius - donutThickness / 2;
+              const isFullCircle = sweep >= 359.9 || data.length === 1;
+
               accAngle += sweep;
+
+              if (isFullCircle) {
+                return (
+                  <Circle
+                    key={`slice-${idx}`}
+                    cx={chartSize / 2}
+                    cy={chartSize / 2}
+                    r={radius}
+                    stroke={slice.color}
+                    strokeWidth={donutThickness}
+                    fill="none"
+                  />
+                );
+              }
+
+              const path = describeArc(
+                chartSize / 2,
+                chartSize / 2,
+                radius,
+                startAngle,
+                endAngle
+              );
+
               return (
                 <Path
                   key={`slice-${idx}`}

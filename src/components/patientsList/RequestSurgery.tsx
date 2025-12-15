@@ -20,7 +20,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
 import { showError, showSuccess } from "../../store/toast.slice";
 import Footer from "../dashboard/footer";
-
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 // Import responsive utilities
 import { 
   SCREEN_WIDTH, 
@@ -34,6 +34,7 @@ import {
   FOOTER_HEIGHT
 } from "../../utils/responsive";
 import { COLORS } from "../../utils/colour";
+import { RootStackParamList } from "../../navigation/navigationTypes";
 
 // Import colors
 
@@ -58,7 +59,7 @@ type RequestSurgeryRouteParams = {
 
 export default function RequestSurgeryScreen() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const dispatch = useDispatch();
 
@@ -92,6 +93,11 @@ export default function RequestSurgeryScreen() {
     try {
       setLoading(true);
       const token = user?.token || (await AsyncStorage.getItem("token"));
+      if (!user?.hospitalID) {
+        dispatch(showError("User information not available"));
+        setLoading(false);
+        return;
+      }
       
       if (!timelineID) {
         dispatch(showError("Timeline ID is required"));
@@ -109,15 +115,25 @@ export default function RequestSurgeryScreen() {
         token
       );
       // FIXED: Check response structure properly
-      if (res?.data?.status === 201) {
+      if ("data" in res && res?.data?.status === 201) {
         dispatch(showSuccess("Surgery request submitted successfully"));
         // Navigate back to patient profile
         setTimeout(() => {
-          navigation.goBack();
+          navigation.reset({
+          index: 0,
+          routes: [{ name: 'PatientList' }],
+        });
         }, 1500);
       }
       else {
-        dispatch(showError(res?.data?.message || "Failed to submit surgery request"));
+        let errorMessage = "Failed to submit surgery request";
+        if ("message" in res && res.message) {
+          errorMessage = res.message;
+        } else if ("data" in res && res.data?.message) {
+          errorMessage = res.data.message;
+        }
+        
+        dispatch(showError(errorMessage));
       }
     } catch (error) {
       dispatch(showError("Failed to submit surgery request"));

@@ -44,8 +44,8 @@ import DischargeSummaryDownload from "./dischargeSummaryDownload";
 import AddTriageIssue from "../Triage/addTriageIssue";
 import { Edit2Icon } from "../../utils/SvgIcons";
 import { COLORS } from "../../utils/colour";
-import { PatientType } from "../../utils/types";
-import { ageFromDOB } from "../../utils/age";
+import { PatientType, wardType } from "../../utils/types";
+import { formatAgeDisplay } from "../../utils/age";
 import { formatDate } from "../../utils/dateTime";
 import { showError, showSuccess } from "../../store/toast.slice";
 // ---- types ----
@@ -192,6 +192,7 @@ const PatientProfileOPD: React.FC = () => {
   const [currentPatient, setCurrentPatient] = useState<PatientType | undefined>(patientFromStore);
   const [timeline, setTimeline] = useState<TimelineType | undefined>(timelineFromStore);
   const [loading, setLoading] = useState(false);
+  const [wardList, setWardList] = useState<wardType[]>([]);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
@@ -248,34 +249,83 @@ if (startStatus === 1) {
   const isSurgeonOrAnesthetist = user?.roleName === "surgeon" || user?.roleName === "anesthetist";
   const shouldShowPatientRevisit = isDischargedPatient || isFromPreviousPatients;
 
-  const fetchPatientAndTimeline = async () => {
-    if (!id) return;
+  // Helper function to get ward name
+  const getWardName = (wardId: number | string | undefined): string => {
+    if (!wardId) return "—";
+    const ward = wardList.find((w) => w.id === Number(wardId));
+    return ward?.name || "—";
+  };
+
+  // Helper to capitalize ward name
+  const capitalizeFirstLetter = (str: string): string => {
+    if (!str) return "—";
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  };
+
+  const fetchPatientAndTimeline = async (): Promise<boolean> => {
+    if (!id) {
+      return false;
+    }
     setLoading(true);
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       const resp = await AuthFetch(`patient/${user?.hospitalID}/patients/single/${id}`, token);
       if (resp?.status === "success" && "data" in resp && resp?.data?.patient) {
-         dispatch(setCurrentPatientAction(resp.data.patient));
-        setCurrentPatient(resp?.data?.patient);
-        const timeLine = await AuthFetch(`patientTimeLine/${resp?.data?.patient.id}`, token);
+        const patient = resp.data.patient;
+        dispatch(setCurrentPatientAction(patient));
+        setCurrentPatient(patient);
+        const timeLine = await AuthFetch(`patientTimeLine/${patient.id}`, token);
         if (timeLine?.status === "success" && "data" in timeLine && timeLine?.data?.patientTimeLine) {
           setTimeline(timeLine?.data?.patientTimeLine);
+        } else {
+          setTimeline(undefined);
         }
+        return true;
+      } else {
+        return false;
       }
+    } catch (e) {
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const loadReportData = async () => {
-    if (!timeline?.patientID) return;
+
+  const fetchWards = async () => {
+    if (!user?.hospitalID) return;
+
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const response = await AuthFetch(`ward/${user.hospitalID}`, token);
+
+      if (response?.status === "success" && "data" in response) {
+        setWardList(response?.data?.wards || []);
+      }
+    } catch (e) {}
+  };
+
+  const loadReportData = async (patientIDOverride?: number): Promise<any[]> => {
+    const patientID = patientIDOverride ?? timeline?.patientID;
+    if (!patientID) {
+      return [];
+    }
+
     setLoading(true);
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      const res = await AuthFetch(`attachment/${user?.hospitalID}/all/${timeline.patientID}`, token);
-      if (res?.status === "success" && "data" in res && res?.data?.attachments) {
-        setReports(res?.data?.attachments);
+      const url = `attachment/${user?.hospitalID}/all/${patientID}`;
+      const res = await AuthFetch(url, token);
+      const attachments = "data" in res ? res?.data?.attachments || [] : [];
+      if (res?.status === "success") {
+        setReports(attachments);
+      } else {
+        setReports([]);
       }
+      return attachments;
+    } catch (err) {
+      setReports([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -414,11 +464,43 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
   }
 };
 
-
   const openReportFromMenu = async (type: "generalInfo" | "tests") => {
-    setPrintSelectOptions([type]);
     setMenuOpen(false);
+    if (!timeline?.id) {
+      const ok = await fetchPatientAndTimeline();
+      if (!ok) {
+        let waited = 0;
+        const maxWait = 1200;
+        const step = 300;
+        while (!timeline?.id && waited < maxWait) {
+          await new Promise<void>((resolve) => setTimeout(resolve, step));
+          waited += step;
+        }
+      }
+    }
+
+    // now branch
+    if (type === "tests") {
+      const attachments = await loadReportData(timeline?.patientID);
+
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        setPrintOpen(true);
+      } else {
+        if (!timeline?.patientID) {
+          await fetchPatientAndTimeline();
+          const attachmentsRetry = await loadReportData(timeline?.patientID);
+          if (attachmentsRetry.length > 0) {
+            setPrintOpen(true);
+            return;
+          }
+        }
+        dispatch(showError("No reports found."));
+      }
+    } else if (type === "generalInfo") {
+      await loadPrintData();
+    }
   };
+
 
   // Handle patient revisit
   const handlePatientRevisit = () => {
@@ -428,6 +510,9 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
   useFocusEffect(
     useCallback(() => {
     fetchPatientAndTimeline();
+      if (user?.patientStatus === 2 || user?.patientStatus === 3) {
+        fetchWards();
+      }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]))
 
@@ -442,7 +527,7 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
       : "";
 
   const genderText = currentPatient?.gender === 1 ? "Male" : "Female";
-  const ageText = currentPatient?.age ?  currentPatient?.age: ageFromDOB(currentPatient?.dob) ;
+  const ageText = formatAgeDisplay(currentPatient?.age, currentPatient?.dob);
   const doctorText = (() => {
     if (currentPatient?.doctorName) {
       const d = currentPatient.doctorName;
@@ -596,7 +681,7 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
           {/* Profile Card (icons moved to top-right inside card) */}
           <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
             {/* top-right actions */}
-            {user?.roleName !== "triage" && 
+            {user?.roleName !== "triage" && (
             <View style={styles.cardActions}>
               {!shouldShowPatientRevisit  && (
                 <TouchableOpacity
@@ -621,7 +706,7 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
               >
                 <MoreVertical size={16} color={COLORS.text} />
               </TouchableOpacity>
-            </View>}
+            </View>)}
 
             {/* left side avatar + name */}
             <View style={styles.row}>
@@ -669,18 +754,61 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
             </View>
 
             {/* middle demographics */}
+            {isDischargedPatient ? (
+              <View style={styles.infoGrid2x2}>
+                <View style={styles.infoItemHalf}>
+                  <Text style={[styles.fieldValue, { color: COLORS.text }]}>
+                    {genderText}
+                    {ageText ? `, ${ageText}` : ""}
+                  </Text>
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>Gender</Text>
+                </View>
+                <View style={styles.infoItemHalf}>
+                  <Text style={[styles.fieldValue, { color: COLORS.text }]}>
+                    {currentPatient?.endTime ? formatDate(currentPatient.endTime) : "—"}
+                  </Text>
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>Discharge Date</Text>
+                </View>
+                <View style={styles.infoItemHalf}>
+                  <Text style={[styles.fieldValue, { color: COLORS.text }]}>{doctorText}</Text>
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>Treating Doctor</Text>
+                </View>
+                <View style={styles.infoItemHalf}>
+                  <Text
+                    style={[
+                      styles.fieldValue,
+                      { color: currentPatient?.followUp === 1 ? COLORS.warn : COLORS.sub },
+                    ]}
+                  >
+                    {currentPatient?.followUp === 1 && currentPatient?.followUpDate
+                      ? formatDate(currentPatient.followUpDate)
+                      : "No Follow up"}
+                  </Text>
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>Follow Up</Text>
+                </View>
+              </View>
+            ) : (
             <View style={[styles.infoGrid]}>
               <View style={styles.infoItem}>
                 <Text style={[styles.fieldValue, { color: COLORS.text }]}>
                   {genderText}{ageText ? `, ${ageText}` : ""}
                 </Text>
-<Text style={[styles.fieldHint, { color: COLORS.sub }]}>DOB: {formatDate(currentPatient?.dob)}</Text>
+<Text style={[styles.fieldHint, { color: COLORS.sub }]}>DOB: {currentPatient?.dob ? formatDate(currentPatient?.dob) : "—"}</Text>
               </View>
               <View style={styles.infoItem}>
                 <Text style={[styles.fieldValue, { color: COLORS.text }]}>{doctorText}</Text>
-                <Text style={[styles.fieldHint, { color: COLORS.sub }]}>{currentPatient?.department || "—"}</Text>
+                <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
+                    • Department: {currentPatient?.department || "—"}
+                  </Text>
+                  {/* Updated Ward display */}
+                  {startStatus !== 1 && (
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
+                    • Ward: {capitalizeFirstLetter(getWardName(currentPatient?.wardID))}
+                  </Text>
+                  )}
               </View>
             </View>
+            )}
 
             {/* Action Buttons for Discharged OR Previous Patients */}
             {(shouldShowPatientRevisit) && (
@@ -700,7 +828,7 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
             )}
 
             {/* Discharge Button - Only for startStatus 2 (active patients) */}
-            {!isDischargedPatient && !timeline?.patientEndStatus && startStatus === 2 && !isSurgeonOrAnesthetist && (
+            {!isDischargedPatient && !timeline?.patientEndStatus && (startStatus === 2 || startStatus === 3) && !isSurgeonOrAnesthetist && (
               <View style={styles.dischargeButtonContainer}>
                 <TouchableOpacity
                   onPress={() => navigation.navigate("DischargeScreen", { 
@@ -857,7 +985,6 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
     </Text>
   )}
 </Pressable>
-
         </View>
       </ActionSheet>
     </View>
@@ -985,7 +1112,17 @@ const styles = StyleSheet.create({
     marginRight: 12,
     overflow: "hidden",
   },
-
+  // Add to your StyleSheet:
+  infoGrid2x2: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
+  infoItemHalf: {
+    width: "48%",
+    marginBottom: 12,
+  },
   name: { fontSize: 18, fontWeight: "800" },
   sub: { fontSize: 13, marginTop: 2 },
 
@@ -1067,41 +1204,41 @@ const styles = StyleSheet.create({
   // Discharge button styles
   dischargeButtonContainer: {
     marginTop: 16,
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   dischargeButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     minWidth: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   dischargeButtonText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   // Discharged patient action buttons
   dischargedActionsContainer: {
     marginTop: 16,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   actionButton: {
     flex: 1,
-    minWidth: '30%',
+    minWidth: "30%",
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionButtonText: {
     fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: "700",
+    textAlign: "center",
   },
 });
 

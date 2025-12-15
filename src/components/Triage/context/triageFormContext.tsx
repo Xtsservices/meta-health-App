@@ -363,16 +363,16 @@ export const validateVitalsForm = ({
 
   if (data.bpH || isSubmission) {
     if (data.bpL && data.bpH < data.bpL)
-      errors.bpH = "High value should be greater than low value";
-    else if (data.bpH > 400) errors.bpH = "High value should be <= 400";
-    else if (data.bpH < 50) errors.bpH = "High value should be >= 50";
+      errors.bpH = "High bp should be greater than low bp";
+    else if (data.bpH > 400) errors.bpH = "High bp should be <= 400";
+    else if (data.bpH < 50) errors.bpH = "High bp should be >= 50";
   }
 
   if (data.bpL || isSubmission) {
     if (data.bpH && data.bpH < data.bpL)
-      errors.bpL = "Low value should be less than high value";
-    else if (data.bpL > 300) errors.bpL = "Low value should be <= 300";
-    else if (data.bpL < 30) errors.bpL = "Low value should be >= 30";
+      errors.bpL = "Low bp should be less than high bp";
+    else if (data.bpL > 300) errors.bpL = "Low bp should be <= 300";
+    else if (data.bpL < 30) errors.bpL = "Low bp should be >= 30";
   }
 
   if (data.pulse || isSubmission) {

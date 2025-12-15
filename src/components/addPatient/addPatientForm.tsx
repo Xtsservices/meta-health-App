@@ -47,6 +47,7 @@ import { showError, showSuccess } from "../../store/toast.slice";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 import { COLORS } from "../../utils/colour";
 import { formatDate } from "../../utils/dateTime";
+import { Camera, User } from "lucide-react-native";
 
 type Department = { id: number; name: string };
 type PatientField = {
@@ -519,8 +520,10 @@ const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
         dispatch(showSuccess("Patient registered successfully"))
         if (user?.patientStatus == 2) { 
           navigation.navigate("DashboardIpd");
-        } else {
-          navigation.navigate("AddPatient");
+        } else if (user?.patientStatus == 3) {
+          navigation.navigate("DashboardTriage");
+        } else if (user?.patientStatus == 1) {
+          navigation.navigate("DashboardOpd");
         }
       } else {
         dispatch(showError("message" in res && res?.message || res?.status || "data" in res && res?.data?.message || "Patient registration failed"))
@@ -561,7 +564,7 @@ const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
           ))}
         </Picker>
         <View style={styles.pickerOverlay}>
-          <Text style={[styles.pickerSelectedText, { color: selectedValue ? COLORS.text : COLORS.placeholder }]}>
+          <Text style={[styles.pickerSelectedText, { color: selectedValue ? COLORS.text : COLORS.text }]}>
             {selectedLabel}
           </Text>
         </View>
@@ -825,19 +828,32 @@ else if (name === "email") {
             <Text style={[styles.cardTitle, { color: COLORS.text }]}>Patient Photo</Text>
             <View style={styles.photoRow}>
               <TouchableOpacity onPress={() => setImagePickerModal(true)} activeOpacity={0.8}>
-                <View style={[styles.photoWrap, { borderColor: COLORS.brand }]}>
+              <View style={styles.avatarOuter}>
+                <View style={styles.avatarWrap}>
                   {profileImage ? (
-                    <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                    <Image source={{ uri: profileImage }} style={styles.avatarImage} />
                   ) : (
-                    <View style={styles.placeholderIcon}>
-                      <Text style={{ fontSize: 32, color: COLORS.sub }}>+</Text>
+                    <View style={styles.avatarPlaceholder}>
+                      <User size={36} color={COLORS.sub} />
                     </View>
                   )}
+        </View>
+        <TouchableOpacity
+          onPress={() => setImagePickerModal(true)}
+          style={styles.cameraBadgeOuter}
+          activeOpacity={0.8}
+        >
+          <View style={styles.cameraBadgeInner}>
+            <Camera size={14} color="#fff" /> {/* EXACT SAME ICON */}
                 </View>
               </TouchableOpacity>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, color: COLORS.sub }}>Tap to upload (optional)</Text>
-                <Text style={{ fontSize: 11, color: COLORS.sub, marginTop: 2 }}>JPEG/PNG • Max 5MB</Text>
+            </View>
+              </TouchableOpacity>
+              <View style={{ justifyContent: "center" }}>
+                <Text style={styles.photoHint}>Tap to upload (optional)</Text>
+                <Text style={[styles.photoHint, { fontSize: 11 }]}>
+                JPG/PNG • Max 5MB
+              </Text>
               </View>
             </View>
           </View>
@@ -1317,6 +1333,71 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 9,
     backgroundColor: "transparent",
+      },
+    photoHint: { 
+      fontSize: 12, 
+      color: COLORS.sub 
+    },
+
+    avatarOuter: {
+      width: 92,          
+      height: 92,
+      alignItems: "center",
+      justifyContent: "center",
+      position: "relative", 
+      borderRadius: 46,
+      borderWidth: 2,
+      borderColor: COLORS.border, 
+      backgroundColor: "#fff",
+    },
+
+    avatarWrap: {
+      width: 84,             
+      height: 84,
+      borderRadius: 42,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#fff",
+    },
+
+    avatarImage: {
+      width: "100%",
+      height: "100%",
+      resizeMode: "cover",
+    },
+
+    avatarPlaceholder: {
+      width: "100%",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "#f6f7f9",
+    },
+    cameraBadgeOuter: {
+      position: "absolute",
+      right: -8,              
+      bottom: -8,
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOpacity: 0.12,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 3,
+    },
+    cameraBadgeInner: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: COLORS.brand,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 2,
+      borderColor: "#fff",
   },
 });
 
