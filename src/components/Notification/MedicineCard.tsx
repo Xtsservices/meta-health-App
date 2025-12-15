@@ -326,7 +326,6 @@ const handleStatusUpdate = async (newStatus: number) => {
       Alert.alert("Error", errorMessage);
     }
   } catch (error: any) {
-    console.error("Medicine status update error:", error);
     Alert.alert("Error", error?.message || "Failed to update medicine status");
   } finally {
     setLoading(false);

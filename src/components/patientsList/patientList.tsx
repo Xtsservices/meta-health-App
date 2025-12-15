@@ -170,7 +170,6 @@ if (user?.patientStatus === 1) {
   url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
 }
       const response = await AuthFetch(url, token);
-      console.log("--123---:", response);
       if (response?.status === "success" && "data" in response) {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response?.data?.patients

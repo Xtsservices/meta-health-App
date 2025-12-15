@@ -296,7 +296,6 @@ export const formatDateTimeTL = (dateString?: string | null): string => {
     
     return `${month} ${day}, ${year} ${hours}:${minutes} ${ampm}`;
   } catch (e) {
-    console.error("Error formatting date:", dateString, e);
     return "-";
   }
 };

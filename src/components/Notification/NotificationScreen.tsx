@@ -93,7 +93,6 @@ const getNotificationData = async () => {
       setReminders({});
     }
   } catch (error) {
-    console.error("Error fetching notifications:", error);
     setReminders({});
   } finally {
     setLoading(false);

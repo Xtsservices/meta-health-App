@@ -121,7 +121,6 @@ const fetchDischargedPatients = useCallback(async () => {
       setAllPatients([]);
     }
   } catch (e) {
-    console.error("Error fetching discharged patients:", e);
     setAllPatients([]);
   } finally {
     setLoading(false);

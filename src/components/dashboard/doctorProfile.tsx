@@ -112,7 +112,6 @@ const requestCameraPermission = async (): Promise<boolean> => {
 
     return granted === PermissionsAndroid.RESULTS.GRANTED;
   } catch (err) {
-    console.warn("Camera permission error:", err);
     return false;
   }
 };

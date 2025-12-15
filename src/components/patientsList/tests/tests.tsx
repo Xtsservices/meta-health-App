@@ -198,7 +198,6 @@ const fetchUserData = async (userId: number) => {
       setModalVisible(true);
     }
   } catch (error) {
-    console.error("Error fetching user data:", error);
     Alert.alert("Error", "Failed to load user details");
   } finally {
     setLoadingUserData(false);
@@ -226,7 +225,6 @@ const fetchUserData = async (userId: number) => {
           try {
             const token = user?.token ?? (await AsyncStorage.getItem("token"));
             const res = await AuthDelete(`test/${timeline}/${row.id}`, token) as any;
-            console.log(res);
             if (res?.data?.message === "success") {
               setList((prev) => prev?.filter((x) => x?.id !== row?.id) || []);
               dispatch(showSuccess("Test deleted successfully"));

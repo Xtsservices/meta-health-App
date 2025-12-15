@@ -585,7 +585,6 @@ const DischargeSummarySheet: React.FC<Props> = ({
                   );
                 }
               } catch (openError) {
-                console.error("Error opening file:", openError);
                 Alert.alert(
                   "Can't Open Directly",
                   `File saved to:\n${displayPath}\n\nPlease use a file manager to open it.`

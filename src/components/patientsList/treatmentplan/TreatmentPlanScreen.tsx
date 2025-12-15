@@ -169,7 +169,6 @@ const EmptyTreatmentPlan = ({
 }) => {
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
-console.log("pppp",currentPatient)
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIllustration}>
@@ -508,7 +507,6 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
         setUserModalVisible(true);
       }
     } catch (error: any) {
-      console.error("Error fetching user data:", error);
       dispatch(showError("Failed to load user details"));
     } finally {
       setLoadingUserData(false);

@@ -286,18 +286,13 @@ const requestCameraPermission = async () => {
       });
 
       form.append("category", String(category));
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      
-      console.log("Uploading files:", files.map(f => f.name));
-      
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));      
       const res = await UploadFiles(
         `attachment/${user?.hospitalID}/${currentPatient?.patientTimeLineID}/${currentPatient?.id}/${user?.id}`,
         form,
         token
       );
-      
-      console.log("Upload Response:", res);
-      
+          
       if (res?.status === "success" && "data" in res) {
         dispatch(showSuccess("Report successfully uploaded"));
 
@@ -313,7 +308,6 @@ const requestCameraPermission = async () => {
         dispatch(showError("message" in res ? res.message : "Upload failed"));
       }
     } catch (err: any) {
-      console.error("Upload error:", err);
       dispatch(showError(err?.message || "Upload error"));
     } finally {
       setLoading(false);

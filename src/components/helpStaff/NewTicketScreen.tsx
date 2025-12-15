@@ -73,7 +73,6 @@ const NewTicketScreen: React.FC = () => {
       );
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     } catch (err) {
-      console.warn("Camera permission error:", err);
       return false;
     }
   };

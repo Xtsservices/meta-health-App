@@ -347,7 +347,6 @@ const SlotsManagement: React.FC = () => {
 
     // Add proper array checking
     if (!Array.isArray(slots)) {
-      console.warn("Slots is not an array:", slots);
       return [];
     }
 

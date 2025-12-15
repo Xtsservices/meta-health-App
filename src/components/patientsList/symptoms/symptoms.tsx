@@ -80,7 +80,6 @@ export default function SymptomsScreen() {
   const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
   const isOt = route.params?.ot;
   const user = useSelector((s: RootState) => s.currentUser);
-  console.log("Current user in SymptomsScreen:", user);
   const currentpatient = useSelector((s: RootState) => s.currentPatient);
   const timeline = currentpatient?.patientTimeLineID;
   
@@ -161,7 +160,6 @@ export default function SymptomsScreen() {
         setModalVisible(true);
       }
     } catch (error) {
-      console.error("Error fetching user data:", error);
       Alert.alert("Error", "Failed to load user details");
     } finally {
       setLoadingUserData(false);
@@ -208,7 +206,6 @@ export default function SymptomsScreen() {
   };
 
   const renderItem = ({ item }: { item: SymptomRow }) => (
-    console.log("Rendering symptom item:", item),
     <View style={[styles.row, { borderColor: COLORS.border }]}>
       <View style={styles.rowLeft}>
         <Text style={[styles.title, { color: COLORS.text }]}>{cap(item.symptom)}</Text>
