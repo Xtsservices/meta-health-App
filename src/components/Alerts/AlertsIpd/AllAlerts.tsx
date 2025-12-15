@@ -71,7 +71,7 @@ const AlertCard: React.FC<{
       <View style={styles.alertFooter}>
         <View style={styles.footerLeft}>
           {/* <Text style={styles.wardText}>Ward: {alert.ward}</Text> */}
-          <Text style={styles.dateText}>Date and Time: {formatDateTime(alert.datetime)}</Text>
+          <Text style={styles.dateText}>Added On: {formatDateTime(alert.addedOn)}</Text>
         </View>
         <TouchableOpacity
           style={styles.viewButton}
@@ -184,8 +184,8 @@ const AlertDetailModal: React.FC<{
               <Text style={styles.detailValue}>{alert.alertValue}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailKey}>Time:</Text>
-              <Text style={styles.detailValue}>{formatDateTime(alert.datetime)}</Text>
+              <Text style={styles.detailKey}>Added On:</Text>
+              <Text style={styles.detailValue}>{formatDateTime(alert.addedOn)}</Text>
             </View>
           </View>
 
