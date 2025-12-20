@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
@@ -110,8 +110,26 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
     const nurse = nurses.find(n => n.id === nurseId);
     return nurse ? `${nurse.firstName} ${nurse.lastName}` : `Nurse #${nurseId}`;
   };
+const sortedData = useMemo(() => {
+  if (!Array.isArray(data)) return [];
+
+  return [...data].sort((a, b) => {
+    const dateA = Date.parse(a.addedOn || "") || 0;
+    const dateB = Date.parse(b.addedOn || "") || 0;
+
+    // newest first
+    return dateB - dateA;
+  });
+}, [data]);
 
   const renderCard = ({ item }: { item: PatientData }) => {
+    console.log("iiiiitttttt",item)
+    const rejectedMedicines = item.medicinesList?.filter(med => 
+    med?.status === "rejected" && med?.rejectReason
+    ) || [];
+    console.log("000",rejectedMedicines)
+    const hasRejectedMedicine = rejectedMedicines.length > 0;
+    const firstRejection = rejectedMedicines[0]; 
     const totalTests = item.testList?.length ?? 0;
     const totalMeds = item.medicinesList?.length ?? 0;
     const itemIsPharmacy = item.type === 'medicine' || isPharmacy;
@@ -172,6 +190,10 @@ const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
         }
     };
 
+const isPharmacyWalkin =
+  isPharmacy &&
+  item.dept === "Walk-in" &&
+  item.type === "medicine";
 
     return (
       <TouchableOpacity
@@ -186,6 +208,18 @@ const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
           })
         }
       >
+       {hasRejectedMedicine && (
+        <View style={styles.rejectionBanner}>
+          <Text style={styles.rejectionText}>
+            ❌ Rejected: {firstRejection?.rejectReason}
+          </Text>
+          {firstRejection?.rejectedOn && (
+            <Text style={styles.rejectionDate}>
+              On: {formatDateTime(firstRejection?.rejectedOn)}
+            </Text>
+          )}
+        </View>
+      )}
         <View style={styles.cardHeaderRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.patientName, { color: COLORS.text }]}>
@@ -228,14 +262,14 @@ const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
 )}
 
 
-         {(item.firstName || item.lastName) && (
+         {/* {(item.firstName || item.lastName) && (
   <View style={styles.metaRow}>
     <Text style={styles.metaLabel}>Doctor</Text>
     <Text style={styles.metaValue}>
-      {`${item.firstName || ""} ${item.lastName || ""}`.trim() || "—"}
+      {`${item.firstName || ""}`}
     </Text>
   </View>
-)}
+)} */}
         
 {item.category && (
   <View style={styles.metaRow}>
@@ -247,12 +281,15 @@ const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
 )}
 
 
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Added On</Text>
-          <Text style={styles.metaValue}>
-            {item.addedOn ? formatDateTime(item.addedOn) : "—"}
-          </Text>
-        </View>
+<View style={styles.metaRow}>
+  <Text style={styles.metaLabel}>
+    {isPharmacyWalkin ? "Admission Date" : "Added On"}
+  </Text>
+  <Text style={styles.metaValue}>
+    {item.addedOn ? formatDateTime(item.addedOn) : "—"}
+  </Text>
+</View>
+
 
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>{itemsLabel}</Text>
@@ -352,7 +389,7 @@ const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
         </View>
       ) : (
         <FlatList
-          data={data}
+          data={sortedData}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderCard}
           showsVerticalScrollIndicator={false}
@@ -440,6 +477,27 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
+    rejectionBanner: {
+    backgroundColor: '#fee2e2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    padding: 12,
+    marginBottom: 12,
+    borderRadius: 8,
+  },
+  rejectionText: {
+    fontSize: FONT_SIZE.sm,
+    color: '#991b1b',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  rejectionDate: {
+    fontSize: FONT_SIZE.xs,
+    color: '#dc2626',
+    fontStyle: 'italic',
+  },
+
+
   prescriptionBadgeText: {
     fontSize: FONT_SIZE.xs,
     color: '#ffffff',

@@ -429,13 +429,21 @@ const Routing = () => {
           component={ReportsLab}
           options={{ title: 'Reports', headerTitleAlign: "center", headerShown: true }}
           />
-          <Stack.Screen name="TaxInvoiceTabs" 
-          component={taxInvoiceTabs}
-          options={{ title: 'Tax-Invoice', headerTitleAlign: "center", headerShown: true }}
+          <Stack.Screen
+            name="TaxInvoiceTabs"
+            component={taxInvoiceTabs}
+            options={({ route }) => ({
+              headerShown: true,
+              headerTitleAlign: "center",
+              title:
+                route.params?.mode === "billing"
+                  ? "Billing"
+                  : "Tax Invoice",
+            })}
           />
            <Stack.Screen name="InvoiceDetails" 
           component={invoiceDetails}
-          options={{ title: 'Invoice Details', headerTitleAlign: "center", headerShown: true }}
+          options={{ title: 'Details', headerTitleAlign: "center", headerShown: true }}
           />
 
           {/* pharmacy */}

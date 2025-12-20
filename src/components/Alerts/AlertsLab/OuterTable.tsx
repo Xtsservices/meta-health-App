@@ -195,7 +195,7 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
             const departmentData = await AuthFetch(
               `department/singledpt/${departmentID}`,
               token
-            );
+            ) as any;
             
             const departmentName =
              departmentData?.department?.[0]?.name ||
@@ -448,7 +448,7 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
           }`,
           {},
           token
-        );
+        )as any;
       }
 
       if (res?.data?.status === 200 ) {
@@ -535,10 +535,10 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
           `test/${user?.roleName}/${user?.hospitalID}/rejected/${patientID || order?.id}`,
           { rejectReason: reason },
           token
-        );
+        ) as any;
       }
 
-      if ( res?.data?.status === "success" || res?.status === 200 ) {
+      if ( res?.data?.status === "success" || res?.status === "success" ) {
         setActionValues((prev) => ({ ...prev, [orderId]: "Rejected" }));
         setSelectedRejectId(null);
         setRejectReasons((prev) => ({ ...prev, [orderId]: "" }));
@@ -1020,7 +1020,6 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
               </Text>
               <TouchableOpacity
                 onPress={() => setShowFilterModal(false)}
-                style={styles.closeButton}
               >
                 <Text style={styles.closeButtonText}>×</Text>
               </TouchableOpacity>

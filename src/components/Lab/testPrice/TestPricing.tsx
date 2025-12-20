@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   StatusBar,
+  Platform,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -40,7 +41,8 @@ import {
   Trash2Icon, 
   Edit2Icon,
   MoreVerticalIcon,
-  XIcon
+  XIcon,
+  SearchIcon
 } from "../../../utils/SvgIcons";
 import { showError, showSuccess } from "../../../store/toast.slice";
 
@@ -149,7 +151,7 @@ const TestCard: React.FC<{
     <View style={styles.testCard}>
       <View style={styles.cardHeader}>
         <View style={styles.testInfo}>
-          <Text style={styles.testName} numberOfLines={1}>{test.testName}</Text>
+          <Text style={styles.testName} numberOfLines={2}>{test.testName}</Text>
           <Text style={styles.testId}>ID: {test.labTestID}</Text>
         </View>
         <TouchableOpacity 
@@ -172,11 +174,11 @@ const TestCard: React.FC<{
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>LOINC Code</Text>
-            <Text style={styles.detailValue}>{test.lonicCode}</Text>
+            <Text style={styles.detailValue} numberOfLines={1}>{test.lonicCode}</Text>
           </View>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>HSN Code</Text>
-            <Text style={styles.detailValue}>{test.hsn}</Text>
+            <Text style={styles.detailValue} numberOfLines={1}>{test.hsn}</Text>
           </View>
         </View>
         
@@ -231,7 +233,7 @@ const TestPricing: React.FC = () => {
       const response = await AuthFetch(
         `test/getlabTestPricing/${user.hospitalID}/${departmentType}`,
         token
-      );
+      ) as any;
 
       if (response?.data?.testPricingList?.data?.length > 0) {
         setData(response.data.testPricingList.data);
@@ -282,7 +284,7 @@ const TestPricing: React.FC = () => {
       const response = await AuthFetch(
         `test/deleteLabTestPricing/${user.hospitalID}/${deleteId}`,
         token
-      );
+      ) as any;
 
       if (response?.data?.status === 200) {
         dispatch(showSuccess("Test deleted successfully"));
@@ -330,7 +332,7 @@ const TestPricing: React.FC = () => {
   if (loading && data.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.brand} />
+        <ActivityIndicator size="small" color={COLORS.brand} />
         <Text style={styles.loadingText}>Loading Test Pricing...</Text>
       </View>
     );
@@ -340,22 +342,24 @@ const TestPricing: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.brand} />
       
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Test Pricing</Text>
           <Text style={styles.headerSubtitle}>
-            Manage {departmentType.toLowerCase()} test pricing and configurations
+            Manage {departmentType.toLowerCase()} test pricing
           </Text>
         </View>
         <View style={styles.headerStats}>
           <Text style={styles.statsText}>{filteredData.length} Tests</Text>
         </View>
-      </View>
+      </View> */}
 
       <View style={styles.actionsContainer}>
         <View style={styles.searchContainer}>
+          <SearchIcon size={ICON_SIZE.sm} color={COLORS.sub} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search tests by name, ID, HSN or LOINC..."
+            placeholder="Search tests..."
             placeholderTextColor={COLORS.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -376,7 +380,7 @@ const TestPricing: React.FC = () => {
           onPress={handleAddNew}
           activeOpacity={0.8}
         >
-          <PlusIcon size={ICON_SIZE.md} color={COLORS.buttonText} />
+          <PlusIcon size={ICON_SIZE.sm} color={COLORS.buttonText} />
           <Text style={styles.addButtonText}>Add Test</Text>
         </TouchableOpacity>
       </View>
@@ -455,20 +459,27 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
   loadingText: {
-    marginTop: SPACING.md,
-    fontSize: FONT_SIZE.md,
+    marginTop: SPACING.sm,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
   },
   header: {
     backgroundColor: COLORS.brand,
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.md,
     paddingTop: Platform.OS === 'ios' ? SPACING.xl : SPACING.lg,
+    paddingBottom: SPACING.md,
   },
   headerContent: {
     marginBottom: SPACING.xs,
   },
+  headerTitle: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: "700",
+    color: COLORS.buttonText,
+    marginBottom: SPACING.xs / 2,
+  },
   headerSubtitle: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.xs,
     color: COLORS.buttonText,
     opacity: 0.9,
   },
@@ -476,19 +487,20 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 6,
+    paddingVertical: SPACING.xs / 2,
+    borderRadius: 4,
+    marginTop: SPACING.xs,
   },
   statsText: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: FONT_SIZE.xs - 1,
     fontWeight: "600",
     color: COLORS.buttonText,
   },
   actionsContainer: {
     flexDirection: "row",
     alignItems: "center",
-    padding: SPACING.lg,
-    gap: SPACING.md,
+    padding: SPACING.md,
+    gap: SPACING.sm,
     backgroundColor: COLORS.card,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
@@ -498,137 +510,141 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.bg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: SPACING.md,
+    borderRadius: 8,
+    paddingHorizontal: SPACING.sm,
+    minHeight: 40,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: SPACING.md,
-    fontSize: FONT_SIZE.md,
+    paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.text,
-    marginLeft: SPACING.sm,
+    marginLeft: SPACING.xs,
+    paddingHorizontal: SPACING.xs,
   },
   clearSearchButton: {
-    padding: SPACING.xs,
+    padding: SPACING.xs / 2,
   },
   addButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.brand,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: 12,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
     gap: SPACING.xs,
     shadowColor: COLORS.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    minHeight: 40,
   },
   addButtonText: {
     color: COLORS.buttonText,
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
   },
   list: {
     flex: 1,
   },
   listContent: {
-    padding: SPACING.lg,
-    paddingTop: SPACING.md,
+    padding: SPACING.md,
+    paddingTop: SPACING.sm,
   },
   testCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   testInfo: {
     flex: 1,
+    marginRight: SPACING.sm,
   },
   testName: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     color: COLORS.text,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.xs / 2,
+    lineHeight: 20,
   },
   testId: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.xs - 1,
     color: COLORS.sub,
     fontWeight: "500",
   },
   actionButton: {
-    padding: SPACING.xs,
-    marginLeft: SPACING.sm,
+    padding: SPACING.xs / 2,
   },
   dropdownContainer: {
     position: 'absolute',
-    top: 40,
+    top: 30,
     right: 0,
     backgroundColor: COLORS.card,
-    borderRadius: 12,
-    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+    paddingVertical: SPACING.xs / 2,
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
     borderWidth: 1,
     borderColor: COLORS.border,
     zIndex: 1000,
-    minWidth: 120,
+    minWidth: 100,
   },
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    gap: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    gap: SPACING.xs,
   },
   dropdownEditText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.xs,
     color: COLORS.text,
     fontWeight: '500',
   },
   dropdownDeleteText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.xs,
     color: COLORS.danger,
     fontWeight: '500',
   },
   testDetails: {
-    marginTop: SPACING.sm,
+    marginTop: SPACING.xs,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   detailItem: {
     flex: 1,
   },
   detailLabel: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: FONT_SIZE.xs - 1,
     color: COLORS.sub,
     fontWeight: '500',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   detailValue: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.sm - 1,
     color: COLORS.text,
     fontWeight: '600',
   },
@@ -642,12 +658,12 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   totalLabel: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.sm - 1,
     color: COLORS.text,
     fontWeight: '600',
   },
   totalPrice: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
     color: COLORS.success,
   },
@@ -655,41 +671,41 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: SPACING.xl,
+    padding: SPACING.lg,
   },
   noDataIcon: {
-    fontSize: 64,
-    marginBottom: SPACING.lg,
+    fontSize: 48,
+    marginBottom: SPACING.md,
     opacity: 0.5,
   },
   noDataText: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     color: COLORS.text,
     textAlign: "center",
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   noDataSubtext: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     textAlign: "center",
-    marginBottom: SPACING.xl,
-    lineHeight: 20,
+    marginBottom: SPACING.lg,
+    lineHeight: 18,
   },
   addFirstButton: {
     backgroundColor: COLORS.brand,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    borderRadius: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: 8,
     shadowColor: COLORS.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   addFirstButtonText: {
     color: COLORS.buttonText,
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
   },
   modalBackdrop: {
@@ -697,68 +713,68 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.overlay,
     justifyContent: "center",
     alignItems: "center",
-    padding: SPACING.lg,
+    padding: SPACING.md,
   },
   deleteModal: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
-    padding: SPACING.xl,
+    borderRadius: 12,
+    padding: SPACING.lg,
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 320,
     alignItems: "center",
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   deleteWarningIcon: {
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   deleteWarning: {
-    fontSize: 48,
+    fontSize: 40,
   },
   deleteTitle: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
     textAlign: "center",
   },
   deleteMessage: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     textAlign: "center",
-    marginBottom: SPACING.xl,
-    lineHeight: 22,
+    marginBottom: SPACING.lg,
+    lineHeight: 18,
   },
   deleteActions: {
     flexDirection: "row",
-    gap: SPACING.md,
+    gap: SPACING.sm,
     width: "100%",
   },
   cancelDeleteButton: {
     flex: 1,
-    paddingVertical: SPACING.md,
-    borderWidth: 1.5,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: "center",
   },
   cancelDeleteText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
   },
   confirmDeleteButton: {
     flex: 1,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
     backgroundColor: COLORS.danger,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: "center",
   },
   confirmDeleteText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.buttonText,
   },

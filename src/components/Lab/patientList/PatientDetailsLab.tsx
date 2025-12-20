@@ -35,6 +35,7 @@ import {
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
 import { showError } from "../../../store/toast.slice";
+import { all } from "axios";
 
 const FOOTER_H = FOOTER_HEIGHT;
 
@@ -136,34 +137,34 @@ const PatientDetailsLab: React.FC = () => {
       }
 
       // Fetch main patient details
-      let apiEndpoint = prescriptionURL
+      let activeApiEndpoint = prescriptionURL
         ? `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getWalkinPatientDetails`
         : `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getPatientDetails`;
 
-      const response = await AuthFetch(apiEndpoint, token);
+      let completedEndpoint = prescriptionURL
+        ? `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getWalkinReportsCompletedPatientDetails`
+        : `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getReportsCompletedPatientDetails`;
+
+      // Fetch both endpoints in parallel
+      const [activeResponse, completedResponse] = await Promise.all([
+        AuthFetch(activeApiEndpoint, token) as any,
+        AuthFetch(completedEndpoint, token) as any
+      ]);
 
       // Handle response structure
-      if (response?.data?.message === "success") {
-        setPatientDetails(response?.data?.patientList ?? []);
+      if (activeResponse?.data?.message === "success") {
+        setPatientDetails(activeResponse?.data?.patientList ?? []);
       } else {
         setPatientDetails([]);
-        dispatch(showError("No patient details found"));
       }
 
-      // Fetch completed patient data for reports tab
-      if (tab === "completed") {
-        let completedEndpoint = prescriptionURL
-          ? `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getWalkinReportsCompletedPatientDetails`
-          : `test/${user?.roleName}/${user?.hospitalID}/${user?.id}/${timeLineID}/getReportsCompletedPatientDetails`;
-
-        const completedResponse = await AuthFetch(completedEndpoint, token);
-
+      // Handle completed response
         if (completedResponse?.data?.message === "success") {
           setCompletedPatientData(completedResponse?.data?.patientList ?? []);
         } else {
           setCompletedPatientData([]);
         }
-      }
+  
     } catch (error) {
       dispatch(showError("Failed to fetch patient data"));
       setPatientDetails([]);
@@ -180,18 +181,65 @@ const PatientDetailsLab: React.FC = () => {
     } else {
       setLoading(false);
     }
-  }, [timeLineID, user, prescriptionURL, tab]);
+  }, [timeLineID, user, prescriptionURL]);
 
   useFocusEffect(
     React.useCallback(() => {
       if (timeLineID && user?.hospitalID) {
         fetchPatientData(true);
       }
-    }, [timeLineID, user, prescriptionURL, tab])
+    }, [timeLineID, user, prescriptionURL])
   );
 
   const onRefresh = () => {
     fetchPatientData(true);
+  };
+
+  // Combine all tests from both active and completed
+  const getAllTests = () => {
+    const allTests = [];
+    
+    // Add tests from active patient details
+    if (patientDetails?.length > 0) {
+      patientDetails?.forEach((patient, patientIndex) => {
+        const tests = Array.isArray(patient?.testsList) 
+          ? patient?.testsList 
+          : patient?.testsList ? [patient?.testsList] : [patient];
+        
+        tests?.forEach((test, testIndex) => {
+          allTests.push({
+            ...test,
+            source: 'active',
+            patientData: patient,
+            status: patient?.status ?? test?.status ?? "pending",
+            date: patient?.addedOn ?? patient?.latestTestTime ?? "",
+            isActive: true
+          });
+        });
+      });
+    }
+    
+    // Add tests from completed patient data
+    if (completedPatientData?.length > 0) {
+      completedPatientData?.forEach((patient, patientIndex) => {
+        const tests = Array.isArray(patient?.testsList) 
+          ? patient?.testsList 
+          : patient?.testsList ? [patient?.testsList] : [patient];
+        
+        tests?.forEach((test, testIndex) => {
+          allTests.push({
+            ...test,
+            source: 'completed',
+            patientData: patient,
+            status: "completed",
+            date: patient?.completedTime ?? patient?._completedTime ?? patient?.addedOn ?? "",
+            isActive: false
+          });
+        });
+      });
+    }
+    
+    return allTests;
   };
 
   if (loading && !refreshing) {
@@ -206,6 +254,8 @@ const PatientDetailsLab: React.FC = () => {
   }
 
   const currentPatient = patientDetails?.[0] ?? completedPatientData?.[0] ?? patient;
+  const allTests = getAllTests();
+  console.log("all",allTests)
 
   if (!currentPatient) {
     return (
@@ -248,41 +298,33 @@ const PatientDetailsLab: React.FC = () => {
           tab={tab}
         />
 
-        {/* Tests Section */}
-        {tab === "normal" && (
+        {/* Tests Section - Show ALL tests */}
           <View style={styles.testsSection}>
             <Text style={styles.sectionTitle}>Tests</Text>
-            {patientDetails?.length > 0 ? (
-              patientDetails?.map((patient, patientIndex) => {
-                // Handle both testsList array and single test object
-                const tests = Array.isArray(patient?.testsList) 
-                  ? patient?.testsList 
-                  : patient?.testsList ? [patient?.testsList] : [patient];
-                
-                return tests?.map((test, testIndex) => (
+            
+            {allTests?.length > 0 ? (
+              allTests?.map((testItem, index) => (
                   <TestCard
-                    key={`${test?.id ?? patient?.id}-${patientIndex}-${testIndex}`}
-                    testID={patient?.id}
-                    testName={test?.name ?? test?.test ?? patient?.test ?? "Unknown Test"}
-                    timeLineID={patient?.timeLineID ?? patient?.id}
-                    status={patient?.status ?? test?.status ?? "pending"}
-                    date={patient?.addedOn ?? patient?.latestTestTime ?? ""}
+                    key={`${testItem?.id ?? testItem?.test}-${testItem?.source}-${index}`}
+                    testID={testItem?.patientData?.id}
+                    testName={testItem?.name ?? testItem?.test ?? testItem?.patientData?.test ?? "Unknown Test"}
+                    timeLineID={testItem?.patientData?.timeLineID ?? testItem?.patientData?.id}
+                    status={testItem?.status}
+                    date={testItem?.date}
                     prescriptionURL={prescriptionURL}
-                    test={test?.name ?? test?.test}
-                    loincCode={test?.loinc_num_ ?? test?.loincCode}
-                    walkinID={patient?.id}
+                    test={testItem?.name ?? testItem?.test}
+                    loincCode={testItem?.loinc_num_ ?? testItem?.loincCode}
+                    walkinID={testItem?.patientData?.id}
                     patientData={currentPatient}
                     onStatusChange={() => fetchPatientData(true)}
                   />
-                ));
-              })
+                ))
             ) : (
               <View style={styles.noTestsContainer}>
                 <Text style={styles.noTestsText}>No tests available</Text>
               </View>
             )}
-          </View>
-        )}
+        </View>
       </ScrollView>
 
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>

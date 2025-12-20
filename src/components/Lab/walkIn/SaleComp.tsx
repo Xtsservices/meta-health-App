@@ -7,8 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
-  Image,
   Platform,
   StatusBar,
   ActivityIndicator,
@@ -19,6 +17,9 @@ import {
   Linking,
   FlatList,
   Pressable,
+  Modal,
+  PermissionsAndroid,
+  Image,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigation, useFocusEffect, useRoute } from "@react-navigation/native";
@@ -44,10 +45,12 @@ import {
 } from "../../../utils/validation";
 import Footer from "../../dashboard/footer";
 
-import { launchImageLibrary } from "react-native-image-picker";
+import { launchImageLibrary, launchCamera } from "react-native-image-picker";
 import { pick, types } from "@react-native-documents/picker";
 import RNFS from "react-native-fs";
-import { showError } from "../../../store/toast.slice";
+import { showError, showSuccess } from "../../../store/toast.slice";
+import { getCityValidationMessage, getNameValidationMessage, getPhoneValidationMessage } from "../../../utils/addPatientFormHelper";
+import { Camera, Image as ImageIcon, File, X, Eye, Plus, Minus } from "lucide-react-native";
 
 const FOOTER_H = FOOTER_HEIGHT;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -119,6 +122,64 @@ const FileUpload: React.FC<{
   type: "medicine" | "test";
 }> = ({ files, fileURLs, onFileChange, onFileRemove, type }) => {
   const dispatch = useDispatch();
+  const [showPickerModal, setShowPickerModal] = useState(false);
+
+  const requestCameraPermission = async () => {
+    if (Platform.OS !== "android") return true;
+
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        {
+          title: "Camera Permission",
+          message: "App needs access to your camera to take photos.",
+          buttonNeutral: "Ask Me Later",
+          buttonNegative: "Cancel",
+          buttonPositive: "OK",
+        }
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      dispatch(showError("Camera permission error"));
+      return false;
+    }
+  };
+
+  const openCamera = async () => {
+    try {
+      const hasPermission = await requestCameraPermission();
+      if (!hasPermission) {
+        dispatch(showError("Camera permission denied"));
+        return;
+      }
+
+      const res = await launchCamera({
+        mediaType: "photo",
+        quality: 0.8,
+      });
+
+      if (!res.didCancel && res.assets?.length) {
+        const file = res.assets[0];
+        const fileItem: FileItem = {
+          uri: file.uri!,
+          name: file.fileName || `photo_${Date.now()}.jpg`,
+          type: file.type || "image/jpeg",
+          size: file.fileSize,
+        };
+
+        // enforce 20MB limit
+        if (fileItem.size && fileItem.size > 20 * 1024 * 1024) {
+          dispatch(showError("File exceeds 20 MB limit"));
+          return;
+        }
+
+        onFileChange(fileItem);
+        setShowPickerModal(false);
+      }
+    } catch (err) {
+      dispatch(showError("Camera error"));
+    }
+  };
 
   const openGallery = async () => {
     try {
@@ -130,13 +191,13 @@ const FileUpload: React.FC<{
         maxHeight: 1024,
       });
 
-      if ((res as any).didCancel) return;
-      if ((res as any).errorCode) {
-        dispatch(showError((res as any).errorMessage || "Failed to pick image"));
+      if (res.didCancel) return;
+      if (res.errorCode) {
+        dispatch(showError(res.errorMessage || "Failed to pick image"));
         return;
       }
 
-      const asset = (res as any).assets?.[0];
+      const asset = res.assets?.[0];
       if (!asset?.uri) return;
 
       const file: FileItem = {
@@ -153,6 +214,7 @@ const FileUpload: React.FC<{
       }
 
       onFileChange(file);
+      setShowPickerModal(false);
     } catch (error) {
       dispatch(showError("Failed to pick image"));
     }
@@ -200,6 +262,7 @@ const FileUpload: React.FC<{
       const filtered = mapped.filter(Boolean) as FileItem[];
       if (filtered.length > 0) {
         filtered.forEach((f) => onFileChange(f));
+        setShowPickerModal(false);
       }
     } catch (error: any) {
       // If user cancelled — many libs throw; ignore
@@ -209,39 +272,147 @@ const FileUpload: React.FC<{
     }
   };
 
-  const showFilePickerOptions = () => {
-    Alert.alert(
-      "Select File Type",
-      "Choose how you want to upload the file",
-      [
-        { text: "Choose from Gallery", onPress: openGallery },
-        { text: "Choose Document", onPress: pickDocuments },
-        { text: "Cancel", style: "cancel" },
-      ],
-      { cancelable: true }
-    );
-  };
-
-  const handleViewFile = async (uri: string) => {
+  const handleViewFile = async (uri: string, fileType: string) => {
     try {
-      await Linking.openURL(uri);
-    } catch (e) {
-      dispatch(showError("Cannot open file - No app available to view this file"));
+      // Check if it's an image or PDF
+      const isImage = fileType.startsWith('image/');
+      const isPDF = fileType === 'application/pdf' || fileType.includes('pdf');
+      
+      // For images, we can try to open directly
+      if (isImage) {
+        const supported = await Linking.canOpenURL(uri);
+        if (supported) {
+          await Linking.openURL(uri);
+        } else {
+          // For local file:// URIs, we might need a different approach
+          if (uri.startsWith('file://')) {
+            dispatch(showError("Cannot open image. Please check if you have a gallery app installed."));
+          } else {
+            dispatch(showError("Cannot open file - No app available to view this file"));
+          }
+        }
+      } 
+      // For PDFs and other documents
+      else if (isPDF || uri.toLowerCase().endsWith('.pdf')) {
+        // Try to open with a PDF viewer
+        const supported = await Linking.canOpenURL(uri);
+        if (supported) {
+          await Linking.openURL(uri);
+        } else {
+          // For Android, try to use Google Drive or Chrome
+          if (Platform.OS === 'android') {
+            // Try to open with Chrome
+            const chromeUri = uri.replace('file://', 'content://');
+            try {
+              await Linking.openURL(`intent://view?url=${encodeURIComponent(chromeUri)}#Intent;package=com.android.chrome;scheme=https;end`);
+            } catch (e) {
+              dispatch(showError("Install Chrome or a PDF viewer to open this file"));
+            }
+          } else {
+            dispatch(showError("Install a PDF viewer to open this file"));
+          }
+        }
+      }
+      // For other file types
+      else {
+        const supported = await Linking.canOpenURL(uri);
+        if (supported) {
+          await Linking.openURL(uri);
+        } else {
+          dispatch(showError("No app available to open this file type"));
+        }
+      }
+    } catch (e: any) {
+      dispatch(showError("Failed to open file. Try downloading it first."));
     }
   };
 
+  const PickerModal = () => (
+    <Modal
+      visible={showPickerModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowPickerModal(false)}
+    >
+      <TouchableWithoutFeedback onPress={() => setShowPickerModal(false)}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select File Type</Text>
+                <TouchableOpacity
+                  onPress={() => setShowPickerModal(false)}
+                  style={styles.closeButton}
+                >
+                  <X size={24} color={COLORS.text} />
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.modalSubtitle}>
+                Choose how you want to upload the prescription
+              </Text>
+              
+              <View style={styles.modalOptions}>
+                <TouchableOpacity
+                  style={styles.modalOption}
+                  onPress={openCamera}
+                >
+                  <View style={[styles.optionIcon, { backgroundColor: COLORS.brand + '20' }]}>
+                    <Camera size={28} color={COLORS.brand} />
+                  </View>
+                  <Text style={styles.optionText}>Camera</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.modalOption}
+                  onPress={openGallery}
+                >
+                  <View style={[styles.optionIcon, { backgroundColor: COLORS.brand + '20' }]}>
+                    <ImageIcon size={28} color={COLORS.brand} />
+                  </View>
+                  <Text style={styles.optionText}>Gallery</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.modalOption}
+                  onPress={pickDocuments}
+                >
+                  <View style={[styles.optionIcon, { backgroundColor: COLORS.brand + '20' }]}>
+                    <File size={28} color={COLORS.brand} />
+                  </View>
+                  <Text style={styles.optionText}>Files</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowPickerModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { marginBottom: SPACING.sm }]}>{type === "medicine" ? "Upload Patient Prescription" : "Upload Patient Test Prescription"}</Text>
+      <Text style={[styles.sectionTitle, { marginBottom: SPACING.sm }]}>{type === "medicine" ? "Upload Patient Prescription" : "Upload Patient Test Prescription"} *</Text>
 
       {fileURLs?.length === 0 ? (
-        <TouchableOpacity style={styles.uploadArea} onPress={showFilePickerOptions} activeOpacity={0.7}>
+        <TouchableOpacity 
+          style={styles.uploadArea} 
+          onPress={() => setShowPickerModal(true)} 
+          activeOpacity={0.7}
+        >
           <Text style={styles.uploadText}>Tap to select files from your device</Text>
           <Text style={styles.uploadSubtext}>PDF, PNG, JPG — max 20 MB</Text>
         </TouchableOpacity>
       ) : (
         <View>
-          <Text style={styles.uploadedFilesTitle}>Uploaded</Text>
+          <Text style={styles.uploadedFilesTitle}>Uploaded Files ({fileURLs.length})</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.uploadedFilesList}>
               {fileURLs?.map((url, index) => {
@@ -250,25 +421,43 @@ const FileUpload: React.FC<{
 
                 return (
                   <View key={index} style={styles.uploadedFile}>
-                    {isImage ? (
-                      <Image source={{ uri: url }} style={styles.fileThumbnail} />
-                    ) : (
-                      <View style={styles.pdfThumbnail}>
-                        <Text style={{ color: COLORS.sub }}>PDF</Text>
-                      </View>
-                    )}
+                    <View style={styles.filePreviewContainer}>
+                      {isImage ? (
+                        <Image 
+                          source={{ uri: url }} 
+                          style={styles.fileThumbnail}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.pdfThumbnail}>
+                          <File size={32} color={COLORS.brand} />
+                          <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs, marginTop: 4 }}>PDF</Text>
+                        </View>
+                      )}
+                    
+                    </View>
 
                     <Text style={styles.fileName} numberOfLines={1}>
                       {file?.name || "Unknown File"}
                     </Text>
 
                     <View style={styles.fileActions}>
+                      {!isImage && (
+                        <TouchableOpacity
+                          style={styles.viewButton}
+                          onPress={() => handleViewFile(url, file?.type || '')}
+                          activeOpacity={0.7}
+                        >
+                          <Eye size={16} color={COLORS.brand} />
+                          <Text style={{ color: COLORS.brand, fontSize: FONT_SIZE.xs, marginLeft: 4 }}>View</Text>
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity
                         style={styles.deleteButton}
                         onPress={() => onFileRemove(index)}
                         activeOpacity={0.7}
                       >
-                        <Text style={{ color: COLORS.buttonText }}>Delete</Text>
+                        <Text style={{ color: COLORS.buttonText, fontSize: FONT_SIZE.xs }}>Delete</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -278,6 +467,8 @@ const FileUpload: React.FC<{
           </ScrollView>
         </View>
       )}
+      
+      <PickerModal />
     </View>
   );
 };
@@ -287,6 +478,7 @@ const SaleComp: React.FC = () => {
   const route = useRoute();
   const dispatch = useDispatch();
   const user = useSelector((state: any) => state.currentUser);
+
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const inputRefs = useRef<{ [key: string]: TextInput | null }>({});
@@ -294,7 +486,7 @@ const SaleComp: React.FC = () => {
   // Get type from route params or user role
   const routeParams = route.params as { type?: "medicine" | "test"; department?: string } || {};
   const type = routeParams.type || (user?.roleName === 'pharmacy' ? 'medicine' : 'test');
-  const department = routeParams.department || "Pathology";
+  const department = user?.roleName || "Pathology";
   const [medicineList, setMedicineList] = useState<MedicineType[]>([]);
   const [testList, setTestList] = useState<TestType[]>([]);
   const [selectedMedicine, setSelectedMedicine] = useState<MedicineType | null>(null);
@@ -399,7 +591,7 @@ const SaleComp: React.FC = () => {
       const response = await AuthFetch(
         `pharmacy/${user.hospitalID}/getMedicineInventory`,
         token
-      );
+      ) as any;
 
       if (response?.data?.status === 200) {
         const data = response?.data?.medicines;
@@ -453,7 +645,7 @@ const SaleComp: React.FC = () => {
           `test/getlabTestsdata/${user?.hospitalID}/${department}`,
           { text: searchQuery },
           token
-        );
+        ) as any;
 
         if (response?.data?.message === "success") {
           const testData = response?.data?.data ?? [];
@@ -566,13 +758,13 @@ const SaleComp: React.FC = () => {
         combined.find((m) => (m.name || "").toLowerCase().includes(lower));
       return match || null;
     } else {
-    const combined = [...testList, ...suggestions];
-    let match =
-      combined.find((t) => (t.name || "").toLowerCase() === lower) ||
-      combined.find((t) => (t.loinc_num_ || "").toLowerCase() === lower) ||
-      combined.find((t) => (t.name || "").toLowerCase().includes(lower));
+      const combined = [...testList, ...suggestions];
+      let match =
+        combined.find((t) => (t.name || "").toLowerCase() === lower) ||
+        combined.find((t) => (t.loinc_num_ || "").toLowerCase() === lower) ||
+        combined.find((t) => (t.name || "").toLowerCase().includes(lower));
 
-    return match || null;
+      return match || null;
     }
   };
 
@@ -580,7 +772,12 @@ const SaleComp: React.FC = () => {
     const addItemToList = (itemToAdd: any) => {
       if (type === "medicine") {
         if (!selectedMedicines.some((m) => m.id === itemToAdd.id)) {
-          const toAdd = { ...itemToAdd, quantity: 1 };
+          const toAdd = { 
+            ...itemToAdd, 
+            testNotes: noteInput ?? "",
+            status: "pending",
+            selectedQuantity: 1 // Start with quantity 1
+          };
           setSelectedMedicines((prev) => [...prev, toAdd]);
           setSelectedMedicine(null);
           setSearchQuery("");
@@ -594,19 +791,24 @@ const SaleComp: React.FC = () => {
         }
       } else {
         if (!selectedTests.some((t) => t.loinc_num_ === itemToAdd.loinc_num_)) {
-        const toAdd = { ...itemToAdd, testNotes: noteInput ?? "" };
-        setSelectedTests((prev) => [...prev, toAdd]);
-        // clear input states
-        setSelectedTest(null);
-        setSearchQuery("");
-        setNoteInput("");
-        setSuggestions([]);
-        // scroll to bottom to show newly added test
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 120);
-      } else {
-        dispatch(showError("Test already added"));
+          // Match web structure exactly
+          const toAdd = { 
+            ...itemToAdd, 
+            testNotes: noteInput ?? "",
+            status: "pending"  // ← ADD THIS
+          };
+          setSelectedTests((prev) => [...prev, toAdd]);
+          // clear input states
+          setSelectedTest(null);
+          setSearchQuery("");
+          setNoteInput("");
+          setSuggestions([]);
+          // scroll to bottom to show newly added test
+          setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }, 120);
+        } else {
+          dispatch(showError("Test already added"));
         }
       }
     };
@@ -638,12 +840,34 @@ const SaleComp: React.FC = () => {
     if (type === "medicine") {
       setSelectedMedicines((prev) => prev.filter((_, i) => i !== index));
     } else {
-    setSelectedTests((prev) => prev.filter((_, i) => i !== index));
+      setSelectedTests((prev) => prev.filter((_, i) => i !== index));
     }
   };
 
+  const handleQuantityChange = (index: number, increment: boolean) => {
+    setSelectedMedicines((prev) => {
+      const updated = [...prev];
+      const currentItem = updated[index];
+      const currentQuantity = currentItem?.selectedQuantity || 1;
+      const maxQuantity = currentItem.quantity || 1;
+      
+      let newQuantity;
+      if (increment) {
+        newQuantity = Math.min(currentQuantity + 1, maxQuantity);
+      } else {
+        newQuantity = Math.max(currentQuantity - 1, 1);
+      }
+      
+      updated[index] = {
+        ...currentItem,
+        selectedQuantity: newQuantity
+      };
+      return updated;
+    });
+  };
+
   const grossAmount = type === "medicine"
-    ? selectedMedicines.reduce((acc, item) => acc + (item?.sellingPrice ?? 0) * (item?.quantity ?? 0), 0)
+    ? selectedMedicines.reduce((acc, item) => acc + (item?.sellingPrice ?? 0) * (item?.selectedQuantity || 1), 0)
     : selectedTests.reduce((acc, item) => acc + (item.testPrice ?? 0), 0);
 
   const gstAmount = type === "medicine"
@@ -671,7 +895,7 @@ const SaleComp: React.FC = () => {
           discountReason: discountReason || "",
           discountReasonID: discountReasonID || "",               
           type,
-          department,
+          department: department,
           user,
         });
       } catch (error) {
@@ -691,101 +915,147 @@ const SaleComp: React.FC = () => {
 
   const placeholderColor = (COLORS as any).placeholder ?? COLORS.sub;
 
-  const renderMedicineItem = ({ item, index }: { item: MedicineType; index: number }) => {
-    const amount = ((item.sellingPrice ?? 0) * (item.quantity ?? 0)) * 1.18; // 18% GST for medicines
+  // Updated renderSelectedTests to match medicine card style
+  const renderSelectedTests = () => (
+    <View style={{ gap: SPACING.sm }}>
+      {selectedTests.map((test, index) => (
+        <View
+          key={`${test.loinc_num_}-${index}`}
+          style={[
+            styles.selectedItemCard,
+            {
+              backgroundColor: COLORS.brand + "10",
+              borderColor: COLORS.brand,
+            },
+          ]}
+        >
+          <View style={styles.selectedItemHeader}>
+            <Text style={[styles.selectedItemName, { color: COLORS.text }]}>
+              {test.name}
+            </Text>
+            <Text style={[styles.selectedItemPrice, { color: COLORS.brand }]}>
+              ₹{test.testPrice}
+            </Text>
+          </View>
+
+          <View style={styles.selectedItemDetails}>
+            <Text style={[styles.selectedItemMeta, { color: COLORS.sub }]}>
+              LOINC: {test.loinc_num_}
+            </Text>
+            <Text style={[styles.selectedItemMeta, { color: COLORS.sub }]}>
+              Dept: {test.department}
+            </Text>
+          </View>
+
+          {test.testNotes ? (
+            <Text style={[styles.selectedItemNote, { color: COLORS.sub }]}>
+              Note: {test.testNotes}
+            </Text>
+          ) : null}
+
+          <TouchableOpacity
+            onPress={() => handleRemoveItem(index)}
+            style={styles.removeBtn}
+          >
+            <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs, }}>
+              Remove
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+    </View>
+  );
+
+  // Updated renderMedicineItem to use card style with quantity controls
+  const renderMedicineItem = ({ item, index }: { item: MedicineType & { selectedQuantity?: number }; index: number }) => {
+    const amount = ((item.sellingPrice ?? 0) * (item.selectedQuantity || 1)) * 1.18; // 18% GST for medicines
+    const maxQuantity = item.quantity || 1;
+    const currentQuantity = item.selectedQuantity || 1;
+
     return (
-      <View key={`${item.id}-${index}`}>
-        <View style={[styles.tableRow, index === selectedMedicines.length - 1 ? { borderBottomWidth: 0 } : {}]}>
-          <View style={{ width: responsiveWidth(220), paddingHorizontal: SPACING.xs }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]} numberOfLines={2}>
-              {item.name || "—"}
+      <View
+        key={`${item.id}-${index}`}
+        style={[
+          styles.selectedItemCard,
+          {
+            backgroundColor: COLORS.brand + "10",
+            borderColor: COLORS.brand,
+          },
+        ]}
+      >
+        <View style={styles.selectedItemHeader}>
+          <Text style={[styles.selectedItemName, { color: COLORS.text }]}>
+            {item.name}
+          </Text>
+          <Text style={[styles.selectedItemPrice, { color: COLORS.brand }]}>
+            ₹{(item.sellingPrice ?? 0).toFixed(2)}
+          </Text>
+        </View>
+
+        <View style={styles.selectedItemDetails}>
+          <Text style={[styles.selectedItemMeta, { color: COLORS.sub }]}>
+            HSN: {item.hsn || "N/A"}
+          </Text>
+          <Text style={[styles.selectedItemMeta, { color: COLORS.sub }]}>
+            Expiry: {new Date(item.expiryDate).toLocaleDateString()}
+          </Text>
+        </View>
+
+        <Text style={[styles.selectedItemMeta, { color: COLORS.sub, marginTop: 4 }]}>
+          Available Stock: {maxQuantity}
+        </Text>
+
+        {/* Quantity Controls */}
+        <View style={styles.quantityControls}>
+          <Text style={[styles.quantityLabel, { color: COLORS.text }]}>
+            Quantity:
+          </Text>
+          <View style={styles.quantityButtons}>
+            <TouchableOpacity
+              style={[
+                styles.quantityButton,
+                currentQuantity <= 1 && styles.quantityButtonDisabled
+              ]}
+              onPress={() => handleQuantityChange(index, false)}
+              disabled={currentQuantity <= 1}
+            >
+              <Minus size={16} color={currentQuantity <= 1 ? COLORS.sub : COLORS.text} />
+            </TouchableOpacity>
+            
+            <Text style={[styles.quantityValue, { color: COLORS.text }]}>
+              {currentQuantity}
             </Text>
-            <Text style={[styles.tableCellSub, { color: COLORS.sub }]}>HSN: {item.hsn || "N/A"}</Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]}>
-              {new Date(item.expiryDate).toLocaleDateString()}
-            </Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(80), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{(item.sellingPrice ?? 0).toFixed(2)}</Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(100), paddingHorizontal: SPACING.xs, alignItems: "center" }}>
-            <TextInput
-              style={[styles.quantityInput, { color: COLORS.text }]}
-              value={item.quantity?.toString() || "1"}
-              keyboardType="numeric"
-              onChangeText={(text) => {
-                const newQuantity = Number(text) || 1;
-                if (newQuantity >= 1 && newQuantity <= (item.quantity ?? 1)) {
-                  setSelectedMedicines(prev =>
-                    prev.map((med, idx) =>
-                      idx === index ? { ...med, quantity: newQuantity } : med
-                    )
-                  );
-                }
-              }}
-            />
-          </View>
-
-          <View style={{ width: responsiveWidth(80), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]}>18%</Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{amount.toFixed(2)}</Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(90), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
-            <TouchableOpacity onPress={() => handleRemoveItem(index)}>
-              <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>Remove</Text>
+            
+            <TouchableOpacity
+              style={[
+                styles.quantityButton,
+                currentQuantity >= maxQuantity && styles.quantityButtonDisabled
+              ]}
+              onPress={() => handleQuantityChange(index, true)}
+              disabled={currentQuantity >= maxQuantity}
+            >
+              <Plus size={16} color={currentQuantity >= maxQuantity ? COLORS.sub : COLORS.text} />
             </TouchableOpacity>
           </View>
         </View>
-        {index !== selectedMedicines.length - 1 && <View style={{ height: 1, backgroundColor: COLORS.border }} />}
-      </View>
-    );
-  };
 
-  // Render test item for the list
-  const renderTestItem = ({ item, index }: { item: TestType; index: number }) => {
-    const amount = ((item.testPrice ?? 0) * (1 + (item.gst ?? 0) / 100));
-    return (
-      <View key={`${item.loinc_num_ || item.name}-${index}`}>
-        <View style={[styles.tableRow, index === selectedTests.length - 1 ? { borderBottomWidth: 0 } : {}]}>
-          <View style={{ width: responsiveWidth(220), paddingHorizontal: SPACING.xs }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]} numberOfLines={2}>
-              {item.name || "—"}
-            </Text>
-            {item.testNotes ? <Text style={[styles.tableCellSub, { color: COLORS.sub }]} numberOfLines={1}>{item.testNotes}</Text> : null}
-          </View>
-
-          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]} numberOfLines={1}>{item.loinc_num_ || "—"}</Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(80), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]}>{(item.gst ?? 0).toFixed(0)}%</Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(100), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{(item.testPrice ?? 0).toFixed(2)}</Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(120), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
-            <Text style={[styles.tableCellText, { color: COLORS.text }]}>₹{amount.toFixed(2)}</Text>
-          </View>
-
-          <View style={{ width: responsiveWidth(90), paddingHorizontal: SPACING.xs, alignItems: "flex-end" }}>
-            <TouchableOpacity onPress={() => handleRemoveItem(index)}>
-              <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>Remove</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.amountRow}>
+          <Text style={[styles.amountLabel, { color: COLORS.sub }]}>
+            Total (incl. 18% GST):
+          </Text>
+          <Text style={[styles.amountValue, { color: COLORS.text }]}>
+            ₹{amount.toFixed(2)}
+          </Text>
         </View>
-        {index !== selectedTests.length - 1 && <View style={{ height: 1, backgroundColor: COLORS.border }} />}
+
+        <TouchableOpacity
+          onPress={() => handleRemoveItem(index)}
+          style={styles.removeBtn}
+        >
+          <Text style={{ color: COLORS.danger, fontSize: FONT_SIZE.xs }}>
+            Remove
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -818,6 +1088,10 @@ const SaleComp: React.FC = () => {
                 onChangeText={(text) => {
                   setSearchQuery(text);
                   setSelectedMedicine(null);
+                  // Clear suggestions if search query is empty
+                  if (!text.trim()) {
+                    setSuggestions([]);
+                  }
                 }}
               />
               
@@ -848,6 +1122,8 @@ const SaleComp: React.FC = () => {
                           onPress={() => {
                             setSelectedMedicine(item);
                             setSearchQuery(item.name);
+                            // Clear suggestions when item is selected
+                            setSuggestions([]);
                           }}
                         >
                           <View style={{ flex: 1 }}>
@@ -939,7 +1215,7 @@ const SaleComp: React.FC = () => {
       <View style={styles.searchRow}>
         {/* Search Input - 75% width */}
         <View style={styles.searchInputContainer}>
-          <Text style={[styles.label, { color: COLORS.sub }]}>Test</Text>
+          <Text style={[styles.label, { color: COLORS.sub }]}>Test *</Text>
           <View style={{ position: "relative" }}>
             <TextInput
               placeholder="Type to search tests..."
@@ -956,6 +1232,10 @@ const SaleComp: React.FC = () => {
               onChangeText={(t) => {
                 setSearchQuery(t);
                 setSelectedTest(null);
+                // Clear suggestions if search query is empty
+                if (!t.trim()) {
+                  setSuggestions([]);
+                }
               }}
             />
             
@@ -986,6 +1266,8 @@ const SaleComp: React.FC = () => {
                         onPress={() => {
                           setSelectedTest(item);
                           setSearchQuery(item.name);
+                          // Clear suggestions when item is selected
+                          setSuggestions([]);
                         }}
                       >
                         <View style={{ flex: 1 }}>
@@ -1090,24 +1372,6 @@ const SaleComp: React.FC = () => {
     </>
   );
 
-  const renderTableHeaders = () => (
-    <View style={[styles.tableHeader]}>
-      <Text style={[styles.headerText, { width: responsiveWidth(220) }]}>
-        {type === "medicine" ? "Medicine Name" : "Test Name"}
-      </Text>
-      <Text style={[styles.headerText, { width: responsiveWidth(120) }]}>
-        {type === "medicine" ? "Expiry Date" : "LOINC"}
-      </Text>
-      <Text style={[styles.headerText, { width: responsiveWidth(80), textAlign: "right" }]}>Price</Text>
-      {type === "medicine" && (
-        <Text style={[styles.headerText, { width: responsiveWidth(100), textAlign: "center" }]}>Quantity</Text>
-      )}
-      <Text style={[styles.headerText, { width: responsiveWidth(80), textAlign: "right" }]}>GST</Text>
-      <Text style={[styles.headerText, { width: responsiveWidth(120), textAlign: "right" }]}>Amount</Text>
-      <Text style={[styles.headerText, { width: responsiveWidth(90), textAlign: "right" }]}>Action</Text>
-    </View>
-  );
-
   return (
     <KeyboardAvoidingView
       style={styles.safe}
@@ -1149,9 +1413,23 @@ const SaleComp: React.FC = () => {
                   placeholderTextColor={placeholderColor}
                   value={formData.name}
                   onChangeText={(text) => {
-                    setFormData((prev) => ({ ...prev, name: text }));
-                    if (formErrors.name) setFormErrors((p) => ({ ...p, name: undefined }));
+                    const cleanedText = text.replace(/[^A-Za-z\u00C0-\u024F\u1E00-\u1EFF\s'.-]/g, '');
+                    setFormData((prev) => ({ ...prev, name: cleanedText }));
+                    const error = getNameValidationMessage(cleanedText);
+                    if (error) {
+                      setFormErrors((p) => ({ ...p, name: error }));
+                    } else {
+                      setFormErrors((p) => ({ ...p, name: undefined }));
+                    }
                   }}
+                  onBlur={() => {
+                    const error = getNameValidationMessage(formData.name.trim());
+                    if (error && formData.name) {
+                      setFormErrors((p) => ({ ...p, name: error }));
+                    }
+                  }}
+                  maxLength={100}
+                  autoCapitalize="words"
                 />
                 {formErrors.name && <Text style={styles.errorText}>{formErrors.name}</Text>}
               </View>
@@ -1174,8 +1452,24 @@ const SaleComp: React.FC = () => {
                     keyboardType="phone-pad"
                     value={formData.mobileNumber}
                     onChangeText={(text) => {
-                      setFormData((prev) => ({ ...prev, mobileNumber: text }));
-                      if (formErrors.mobileNumber) setFormErrors((p) => ({ ...p, mobileNumber: undefined }));
+                      // Remove non-numeric characters
+                      const cleanedText = text.replace(/[^0-9]/g, '');
+                      setFormData((prev) => ({ ...prev, mobileNumber: cleanedText }));
+                      
+                      // Validate on change
+                      const error = getPhoneValidationMessage(cleanedText);
+                      if (error) {
+                        setFormErrors((p) => ({ ...p, mobileNumber: error }));
+                      } else {
+                        setFormErrors((p) => ({ ...p, mobileNumber: undefined }));
+                      }
+                    }}
+                    onBlur={() => {
+                      // Final validation on blur
+                      const error = getPhoneValidationMessage(formData.mobileNumber);
+                      if (error) {
+                        setFormErrors((p) => ({ ...p, mobileNumber: error }));
+                      }
                     }}
                     maxLength={10}
                   />
@@ -1198,9 +1492,33 @@ const SaleComp: React.FC = () => {
                     placeholderTextColor={placeholderColor}
                     value={formData.city}
                     onChangeText={(text) => {
-                      setFormData((prev) => ({ ...prev, city: text }));
-                      if (formErrors.city) setFormErrors((p) => ({ ...p, city: undefined }));
+                      // Remove any non-alphabet characters (only allow letters, spaces, and hyphens)
+                      const cleanedText = text.replace(/[^A-Za-z\u00C0-\u024F\u1E00-\u1EFF\s-]/g, '');
+                      
+                      // Prevent consecutive spaces
+                      const finalText = cleanedText.replace(/\s+/g, ' ');
+                      
+                      setFormData((prev) => ({ ...prev, city: finalText }));
+                      
+                      // Validate on change
+                      const error = getCityValidationMessage(finalText);
+                      if (error) {
+                        setFormErrors((p) => ({ ...p, city: error }));
+                      } else {
+                        setFormErrors((p) => ({ ...p, city: undefined }));
+                      }
                     }}
+                    onBlur={() => {
+                      // Final validation on blur
+                      const error = getCityValidationMessage(formData.city);
+                      if (error) {
+                        setFormErrors((p) => ({ ...p, city: error }));
+                      }
+                    }}
+                    maxLength={50}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    spellCheck={false}
                   />
                   {formErrors.city && <Text style={styles.errorText}>{formErrors.city}</Text>}
                 </View>
@@ -1227,30 +1545,19 @@ const SaleComp: React.FC = () => {
                   {type === "medicine" ? "Medicines Prescribed" : "Tests Prescribed"}
                 </Text>
 
-                {((type === "medicine" && selectedMedicines.length === 0) || (type === "test" && selectedTests.length === 0)) ? (
-                  <View style={styles.emptyStateSimple}>
-                    <Text style={{ color: COLORS.sub, textAlign: "center" }}>No {type === "medicine" ? "medicines" : "tests"} selected</Text>
-                    <Text style={{ color: COLORS.sub, marginTop: SPACING.xs, textAlign: "center" }}>
-                      Use the {type === "medicine" ? "selector" : "search"} above to add {type === "medicine" ? "medicines" : "tests"}
-                    </Text>
+                {type === "medicine" ? (
+                  <View style={{ marginTop: SPACING.sm, gap: SPACING.sm }}>
+                    {selectedMedicines.map((item, index) =>
+                      renderMedicineItem({ item, index })
+                    )}
                   </View>
                 ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ minWidth: Math.max(SCREEN_WIDTH - SPACING.lg * 2, 700) }}
-                  >
-                    <View style={[styles.tableContainer, { backgroundColor: COLORS.card, borderColor: COLORS.border, minWidth: 700 }]}>
-                      {renderTableHeaders()}
-                      <View>
-                        {type === "medicine" 
-                          ? selectedMedicines.map((item, index) => renderMedicineItem({ item, index }))
-                          : selectedTests.map((item, index) => renderTestItem({ item, index }))
-                        }
-                      </View>
-                    </View>
-                  </ScrollView>
+                  // ✅ TESTS → CARD LIST ONLY (NO TABLE, NO HORIZONTAL SCROLL)
+                  <View style={{ marginTop: SPACING.sm }}>
+                    {renderSelectedTests()}
+                  </View>
                 )}
+
               </View>
 
               {((type === "medicine" && selectedMedicines.length > 0) || (type === "test" && selectedTests.length > 0)) && (
@@ -1402,36 +1709,71 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
+    minWidth: 120,
+    maxWidth: 160,
+  },
+  filePreviewContainer: {
+    position: 'relative',
+    marginBottom: SPACING.sm,
   },
   fileThumbnail: {
-    width: responsiveWidth(64),
-    height: responsiveHeight(64),
+    width: responsiveWidth(35),
+    height: responsiveWidth(40),
     borderRadius: 8,
+    backgroundColor: COLORS.lightGrey,
+  },
+  viewOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   pdfThumbnail: {
-    width: responsiveWidth(64),
-    height: responsiveHeight(64),
+    width: responsiveWidth(80),
+    height: responsiveWidth(80),
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.lightGrey,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   fileName: {
     fontSize: FONT_SIZE.xs,
-    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
     maxWidth: responsiveWidth(100),
     textAlign: "center",
+    fontWeight: '500',
   },
   fileActions: {
     flexDirection: "row",
-    marginTop: SPACING.sm,
     gap: SPACING.xs,
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  viewButton: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: 6,
+    backgroundColor: COLORS.brand + '10',
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
   },
   deleteButton: {
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: 6,
     backgroundColor: COLORS.danger,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchRow: {
     flexDirection: "row",
@@ -1537,15 +1879,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: COLORS.card,
   },
-  quantityInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 4,
-    padding: SPACING.xs,
-    textAlign: 'center',
-    fontSize: FONT_SIZE.sm,
-    minWidth: 50,
-  },
   rowSimple: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1563,6 +1896,106 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: COLORS.border,
+  },
+  selectedItemCard: {
+    padding: SPACING.md,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  selectedItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.xs,
+  },
+  selectedItemName: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  selectedItemPrice: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: "700",
+  },
+  selectedItemDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
+  selectedItemMeta: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+  },
+  selectedItemNote: {
+    marginTop: 6,
+    fontSize: FONT_SIZE.xs,
+    fontStyle: "italic",
+    color: COLORS.sub,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: COLORS.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  quantityLabel: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+  },
+  quantityButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  quantityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.brand + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonDisabled: {
+    backgroundColor: COLORS.border,
+    opacity: 0.5,
+  },
+  quantityValue: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
+    minWidth: 40,
+    textAlign: 'center',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: SPACING.xs,
+    paddingTop: SPACING.xs,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border + '40',
+  },
+  amountLabel: {
+    fontSize: FONT_SIZE.xs,
+  },
+  amountValue: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
+  },
+  removeBtn: {
+    marginTop: SPACING.sm,
+    alignSelf: "flex-end",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 6,
+    backgroundColor: COLORS.danger + '20',
   },
   totalAmountValue: {
     fontSize: FONT_SIZE.lg,
@@ -1619,45 +2052,87 @@ const styles = StyleSheet.create({
   selectedItemText: {
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
+    color: COLORS.text,
   },
   selectedItemMeta: {
     fontSize: FONT_SIZE.xs,
     marginTop: SPACING.xs / 2,
-  },
-
-  /* Table styles */
-  tableContainer: {
-    borderWidth: 1,
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  tableHeader: {
-    flexDirection: "row",
-    padding: SPACING.sm,
-    backgroundColor: COLORS.card,
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-  },
-  headerText: {
-    fontSize: FONT_SIZE.sm,
-    fontWeight: "700",
     color: COLORS.sub,
   },
-  tableRow: {
-    flexDirection: "row",
-    padding: SPACING.sm,
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
+  /* Modal styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
   },
-  tableCellText: {
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: SPACING.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  modalTitle: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  closeButton: {
+    padding: SPACING.xs,
+  },
+  modalSubtitle: {
     fontSize: FONT_SIZE.sm,
-    fontWeight: "600",
+    color: COLORS.sub,
+    marginBottom: SPACING.lg,
+    textAlign: 'center',
   },
-  tableCellSub: {
-    fontSize: FONT_SIZE.xs,
-    marginTop: SPACING.xs / 2,
+  modalOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
+  },
+  modalOption: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: SPACING.xs,
+  },
+  optionIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  optionText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: COLORS.border,
+    borderRadius: 8,
+    padding: SPACING.md,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });
 

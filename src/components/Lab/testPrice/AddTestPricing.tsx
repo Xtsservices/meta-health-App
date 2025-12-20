@@ -87,7 +87,6 @@ const TestSuggestionItem: React.FC<{
     <View style={styles.suggestionContent}>
       <Text style={styles.suggestionName} numberOfLines={1}>{test.name}</Text>
       <Text style={styles.suggestionCode}>LOINC: {test.loinc_num_}</Text>
-      <Text style={styles.suggestionDepartment}>{test.department}</Text>
     </View>
     <View style={styles.selectIndicator}>
       <CheckIcon size={ICON_SIZE.sm} color={COLORS.brand} />
@@ -114,7 +113,7 @@ const TestListItem: React.FC<{
           <Text style={styles.testListSeparator}>•</Text>
           <Text style={styles.testListDetail}>HSN: {test.hsn}</Text>
           <Text style={styles.testListSeparator}>•</Text>
-          <Text style={styles.testListDetail}>GST: {test.gst}%</Text>
+          <Text style={styles.testListDetail}>{test.gst}% GST</Text>
           <Text style={styles.testListSeparator}>•</Text>
           <Text style={styles.testListDetail}>Base: ₹{test.testPrice}</Text>
         </View>
@@ -175,6 +174,8 @@ const AddTestPricing: React.FC = () => {
         testPrice: editData.testPrice,
         id: editData.labTestID,
       });
+      setSearchQuery(editData.testName);
+      setShowSuggestions(false);
     }
   }, [editData]);
 
@@ -193,7 +194,7 @@ const AddTestPricing: React.FC = () => {
           `data/lionicCode`,
           { text: query },
           token
-        );
+        ) as any;
 
         if (response?.data?.message === "success") {
           const testData = response?.data?.data;
@@ -288,9 +289,9 @@ const AddTestPricing: React.FC = () => {
   const getFieldPosition = (fieldName: string): number => {
     const positions: { [key: string]: number } = {
       testName: 0,
-      hsn: 120,
-      basePrice: 240,
-      gst: 240,
+      hsn: 100,
+      basePrice: 200,
+      gst: 200,
     };
     return positions[fieldName] || 0;
   };
@@ -357,7 +358,7 @@ const AddTestPricing: React.FC = () => {
           `test/updateLabTestPricing/${user.hospitalID}`,
           { testPricingData: selectedTestData },
           token
-        );
+        ) as any;
         
         if (response?.data?.status === 200) {
           dispatch(showSuccess("Test price updated successfully"));
@@ -389,7 +390,7 @@ const AddTestPricing: React.FC = () => {
           `test/addlabTestPricing/${user.hospitalID}`,
           { testPricingData: testList },
           token
-        );
+        )as any;
 
         if (response?.data?.status === 200) {
           dispatch(showSuccess("Test prices added successfully"));
@@ -443,7 +444,7 @@ const AddTestPricing: React.FC = () => {
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <XIcon size={ICON_SIZE.lg} color={COLORS.text} />
+          <XIcon size={ICON_SIZE.md} color={COLORS.text} />
         </TouchableOpacity>
       </View>
 
@@ -458,7 +459,7 @@ const AddTestPricing: React.FC = () => {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: FOOTER_H + insets.bottom + SPACING.xl }
+            { paddingBottom: FOOTER_H + insets.bottom + SPACING.lg }
           ]}
         >
           <View style={styles.form}>
@@ -466,6 +467,13 @@ const AddTestPricing: React.FC = () => {
               <Text style={styles.label}>
                 Test Name <Text style={styles.required}>*</Text>
               </Text>
+              {editData ? (
+                <TextInput
+                  style={[styles.input, styles.disabledInput]}
+                  value={selectedTestData.testName}
+                  editable={false}
+                />
+              ) : (
               <View style={styles.autocompleteContainer}>
                 <View style={styles.searchInputContainer}>
                   <SearchIcon size={ICON_SIZE.sm} color={COLORS.sub} />
@@ -474,20 +482,15 @@ const AddTestPricing: React.FC = () => {
                     style={[
                       styles.input,
                       styles.searchInput,
-                      editData && styles.disabledInput
                     ]}
-                    placeholder="Search and select test name..."
+                    placeholder="Search test name..."
                     placeholderTextColor={COLORS.placeholder}
                     value={searchQuery}
                     onChangeText={handleTestNameChange}
-                    editable={!editData}
                     returnKeyType="next"
-                    onSubmitEditing={() => scrollToField('hsn')}
                   />
                   {loading && (
-                    <View style={styles.loadingContainer}>
                       <ActivityIndicator size="small" color={COLORS.brand} />
-                    </View>
                   )}
                 </View>
                 {showSuggestions && fetchedTestList.length > 0 && (
@@ -497,10 +500,9 @@ const AddTestPricing: React.FC = () => {
                       renderItem={({ item }) => (
                         <TestSuggestionItem test={item} onSelect={selectTest} />
                       )}
-                      keyExtractor={(item) => item?.id?.toString()}
-                      style={styles.suggestionsList}
+                      keyExtractor={(item) => item.id.toString()}
                       keyboardShouldPersistTaps="always"
-                      nestedScrollEnabled={true}
+                      style={{ maxHeight: 200 }}
                     />
                   </View>
                 )}
@@ -510,6 +512,7 @@ const AddTestPricing: React.FC = () => {
                   </View>
                 )}
               </View>
+              )}
             </View>
 
             <View style={styles.inputGroup}>
@@ -518,7 +521,7 @@ const AddTestPricing: React.FC = () => {
               </Text>
               <TextInput
                 style={[styles.input, styles.disabledInput]}
-                placeholder="LOINC code will auto-fill when test is selected"
+                placeholder="LOINC code will auto-fill"
                 placeholderTextColor={COLORS.placeholder}
                 value={selectedTestData.lonicCode}
                 editable={false}
@@ -531,15 +534,29 @@ const AddTestPricing: React.FC = () => {
               </Text>
               <TextInput
                 ref={inputRefs.hsn}
-                style={styles.input}
-                placeholder="Enter HSN code"
+                style={[
+                  styles.input,
+                  selectedTestData.hsn.length > 0 && selectedTestData.hsn.length < 4 && styles.inputError
+                ]}
+                placeholder="Enter 4-8 digit HSN code"
                 placeholderTextColor={COLORS.placeholder}
                 value={selectedTestData.hsn}
-                onChangeText={(text) => setSelectedTestData(prev => ({ ...prev, hsn: text }))}
+                keyboardType="number-pad"
+                maxLength={8}
+                onChangeText={(text) => {
+      // Allow only numeric input
+      const numericText = text.replace(/[^0-9]/g, "");
+      setSelectedTestData(prev => ({ ...prev, hsn: numericText }));
+    }}
                 returnKeyType="next"
-                onSubmitEditing={() => scrollToField('basePrice')}
+                onSubmitEditing={() => scrollToField("basePrice")}
               />
-            </View>
+  {selectedTestData.hsn.length > 0 && selectedTestData.hsn.length < 4 && (
+    <Text style={styles.errorText}>
+      HSN code must be at least 4 digits
+    </Text>
+  )}
+</View>
 
             <View style={styles.row}>
               <View style={[styles.inputGroup, styles.halfWidth]}>
@@ -612,7 +629,7 @@ const AddTestPricing: React.FC = () => {
                 disabled={!isAddButtonEnabled}
                 activeOpacity={0.8}
               >
-                <PlusIcon size={ICON_SIZE.md} color={COLORS.buttonText} />
+                <PlusIcon size={ICON_SIZE.sm} color={COLORS.buttonText} />
                 <Text style={styles.addToListText}>Add to List</Text>
               </TouchableOpacity>
             )}
@@ -726,28 +743,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: SPACING.lg,
+    padding: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.card,
-    paddingTop: Platform.OS === 'ios' ? SPACING.xl : SPACING.lg,
+    paddingTop: Platform.OS === 'ios' ? SPACING.lg : SPACING.md,
   },
   headerContent: {
     flex: 1,
   },
   headerTitle: {
-    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.lg,
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.xs / 2,
   },
   headerSubtitle: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
-    lineHeight: 20,
+    lineHeight: 16,
   },
   closeButton: {
-    padding: SPACING.xs,
+    padding: SPACING.xs / 2,
   },
   content: {
     flex: 1,
@@ -756,51 +773,54 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   form: {
-    padding: SPACING.lg,
+    padding: SPACING.md,
   },
   inputGroup: {
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   row: {
     flexDirection: isSmallDevice ? "column" : "row",
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
   halfWidth: {
     flex: 1,
-    marginBottom: isSmallDevice ? SPACING.lg : 0,
+    marginBottom: isSmallDevice ? SPACING.md : 0,
   },
   label: {
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   required: {
     color: COLORS.danger,
   },
   input: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: SPACING.md,
-    fontSize: FONT_SIZE.md,
+    borderRadius: 8,
+    padding: SPACING.sm,
+    fontSize: FONT_SIZE.sm,
     backgroundColor: COLORS.card,
     color: COLORS.text,
+    minHeight: 40,
   },
   searchInputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: COLORS.card,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    minHeight: 40,
   },
   searchInput: {
     flex: 1,
     borderWidth: 0,
-    marginLeft: SPACING.sm,
+    marginLeft: SPACING.xs,
     paddingHorizontal: 0,
+    fontSize: FONT_SIZE.sm,
   },
   disabledInput: {
     backgroundColor: COLORS.pill,
@@ -809,59 +829,48 @@ const styles = StyleSheet.create({
   autocompleteContainer: {
     position: "relative",
   },
-  loadingContainer: {
-    marginLeft: SPACING.sm,
-  },
   suggestionsContainer: {
     position: "absolute",
     top: "100%",
     left: 0,
     right: 0,
     backgroundColor: COLORS.card,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    maxHeight: responsiveHeight(25),
+    borderRadius: 8,
+    maxHeight: 200,
     zIndex: 1000,
-    elevation: 8,
+    elevation: 4,
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    marginTop: SPACING.xs,
-  },
-  suggestionsList: {
-    maxHeight: responsiveHeight(25),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    marginTop: SPACING.xs / 2,
   },
   suggestionItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: SPACING.md,
+    padding: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    minHeight: 48,
   },
   suggestionContent: {
     flex: 1,
   },
   suggestionName: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "500",
     color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  suggestionCode: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.sub,
     marginBottom: 2,
   },
-  suggestionDepartment: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.brand,
-    fontWeight: "500",
+  suggestionCode: {
+    fontSize: FONT_SIZE.xs - 1,
+    color: COLORS.sub,
   },
   selectIndicator: {
-    marginLeft: SPACING.sm,
+    marginLeft: SPACING.xs,
   },
   noResultsContainer: {
     position: "absolute",
@@ -869,12 +878,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: COLORS.card,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: SPACING.md,
+    borderRadius: 8,
+    padding: SPACING.sm,
     zIndex: 1000,
-    marginTop: SPACING.xs,
+    marginTop: SPACING.xs / 2,
+    minHeight: 40,
+    justifyContent: 'center',
   },
   noResultsText: {
     fontSize: FONT_SIZE.sm,
@@ -883,15 +894,15 @@ const styles = StyleSheet.create({
   },
   totalCalculation: {
     backgroundColor: COLORS.pillBg,
-    padding: SPACING.lg,
-    borderRadius: 12,
-    marginBottom: SPACING.lg,
+    padding: SPACING.md,
+    borderRadius: 8,
+    marginBottom: SPACING.md,
   },
   calculationRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.xs / 2,
   },
   calculationLabel: {
     fontSize: FONT_SIZE.sm,
@@ -905,15 +916,21 @@ const styles = StyleSheet.create({
   calculationDivider: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginVertical: SPACING.sm,
+    marginVertical: SPACING.xs,
   },
   totalLabel: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
+  },  
+  errorText: {
+    color: COLORS.danger,
+    fontSize: FONT_SIZE.xs,
+    marginTop: SPACING.xs / 2,
+    marginLeft: SPACING.xs,
   },
   totalPrice: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
     color: COLORS.success,
   },
@@ -922,15 +939,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.brand,
-    padding: SPACING.lg,
-    borderRadius: 12,
-    marginBottom: SPACING.lg,
-    gap: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: 8,
+    marginBottom: SPACING.md,
+    gap: SPACING.xs,
     shadowColor: COLORS.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    minHeight: 40,
   },
   addToListButtonDisabled: {
     backgroundColor: COLORS.sub,
@@ -939,25 +957,25 @@ const styles = StyleSheet.create({
   },
   addToListText: {
     color: COLORS.buttonText,
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
   },
   testListContainer: {
-    marginTop: SPACING.lg,
+    marginTop: SPACING.md,
   },
   testListHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   testListTitle: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: "600",
     color: COLORS.text,
   },
   clearListButton: {
-    padding: SPACING.sm,
+    padding: SPACING.xs,
   },
   clearListText: {
     fontSize: FONT_SIZE.sm,
@@ -968,16 +986,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.card,
-    padding: SPACING.md,
-    borderRadius: 12,
-    marginBottom: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: 8,
+    marginBottom: SPACING.xs,
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 2,
+    elevation: 1,
   },
   testListContent: {
     flex: 1,
@@ -986,16 +1004,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.xs / 2,
   },
   testListName: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
     flex: 1,
+    marginRight: SPACING.xs,
   },
   testListTotal: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "700",
     color: COLORS.success,
   },
@@ -1005,55 +1024,56 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   testListDetail: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: FONT_SIZE.xs - 1,
     color: COLORS.sub,
   },
   testListSeparator: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: FONT_SIZE.xs - 1,
     color: COLORS.sub,
-    marginHorizontal: SPACING.xs,
+    marginHorizontal: SPACING.xs / 2,
   },
   removeButton: {
-    padding: SPACING.xs,
-    marginLeft: SPACING.sm,
+    padding: SPACING.xs / 2,
+    marginLeft: SPACING.xs,
   },
   footerActions: {
     flexDirection: isSmallDevice ? "column" : "row",
     justifyContent: "flex-end",
-    gap: SPACING.md,
-    padding: SPACING.lg,
-    paddingTop: SPACING.xl,
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    paddingTop: SPACING.lg,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     backgroundColor: COLORS.card,
   },
   cancelButton: {
     flex: isSmallDevice ? 0 : 1,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    borderWidth: 1.5,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: "center",
+    minHeight: 40,
   },
   cancelText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.text,
   },
   submitButton: {
     flex: isSmallDevice ? 0 : 2,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
     backgroundColor: COLORS.brand,
-    borderRadius: 12,
-    minWidth: responsiveWidth(35),
+    borderRadius: 8,
+    minHeight: 40,
     alignItems: "center",
     shadowColor: COLORS.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   submitButtonDisabled: {
     backgroundColor: COLORS.sub,
@@ -1061,7 +1081,7 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   submitText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.buttonText,
   },

@@ -1,7 +1,7 @@
 // store/toast.slice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-export type ToastKind = 'success' | 'error' | 'info';
+export type ToastKind = 'success' | 'error' | 'info' | 'warning';
 export type ToastPosition = 'top' | 'bottom';
 
 type ToastState = {
@@ -65,5 +65,8 @@ export const showError = (message: string, visibilityTime?: number, subtitle?: s
 
 export const showInfo = (message: string, visibilityTime?: number, subtitle?: string) =>
   showToast({ kind: 'info', message, subtitle, visibilityTime });
+
+export const showWarning = (message: string,visibilityTime?: number,subtitle?: string) =>
+  showToast({ kind: 'warning', message, subtitle, visibilityTime });
 
 export default toastSlice.reducer;

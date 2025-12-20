@@ -52,10 +52,23 @@ interface PaymentAmountsStr {
   cash: string;
 }
 
-/**
- * Stable PaymentMethodRow component moved OUTSIDE the screen so it won't be re-created on state changes.
- * Props include all necessary state slices and handlers. Use React.memo with a proper comparator.
- */
+interface MedicineType {
+  id: number | null;
+  name: string;
+  category: string;
+  hsn: string;
+  quantity: number | null;
+  costPrice: number | null;
+  sellingPrice: number | null;
+  manufacturer: string;
+  location: string;
+  expiryDate: string;
+  addedOn?: string;
+  gst?: number | string;
+  isActive?: number;
+  selectedQuantity?: number;
+}
+
 type PMProps = {
   method: PaymentMethod;
   label: string;
@@ -327,7 +340,7 @@ const dispatch = useDispatch();
   const [totalDue, setTotalDue] = useState(amount);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isBillingOrder = !!orderData;
-  const isReceptionPayment = !!receptionData; // 👈 NEW flag
+  const isReceptionPayment = !!receptionData;
   const ptype =isReceptionPayment ? receptionData?.pType === "Outpatient" ? 1 : 2 : undefined;
   useEffect(() => {
     // default: full amount via cash
@@ -411,9 +424,9 @@ const dispatch = useDispatch();
     if (fptype === "opd" || fptype === "outpatient") return true;
     if (orderptype === "opd" || orderptype === "outpatient")
       return true;
-    // 🔹 IPD / others → partial allowed (this covers pharmacy IPD also)
     return false;
   }, [type, department, formData, orderData, receptionData, route.params?.ptype]);
+  
   const isSubmitEnabled = useCallback(() => {
     const totalEntered = Object.values(
       enteredAmountNum
@@ -602,9 +615,18 @@ const handleSalesPayment = useCallback(
     }
 
     const isMedicineSale = type === "medicine";
-    const endpointPath = isMedicineSale
-      ? `medicineInventoryPatients/${user.hospitalID}/addPatientWithOrder`
-      : `medicineInventoryPatients/${user.hospitalID}/tests/walkinPatients/${department}`;
+    const deptToUse = department || user?.roleName || "Pathology";
+      const normalizedDept = deptToUse.toLowerCase().trim();
+      let endpointPath;
+      if (isMedicineSale) {
+        endpointPath = `medicineInventoryPatients/${user.hospitalID}/addPatientWithOrder`;
+      } else {
+        if (normalizedDept === "radiology") {
+          endpointPath = `medicineInventoryPatients/${user.hospitalID}/tests/walkinPatients/radiology`;
+        } else {
+          endpointPath = `medicineInventoryPatients/${user.hospitalID}/tests/walkinPatients/pathology`;
+        }
+      }
 
     const formDataToSend = new FormData();
 
@@ -619,30 +641,75 @@ const handleSalesPayment = useCallback(
 
         formDataToSend.append("files", {
           uri: uploadUri,
-          type: (file as any).mimeType || file.type || "application/octet-stream",
-          name: file.name || `file_${Date.now()}`,
+          type: file.type || "image/jpeg",
+          name: file.name || `file_${Date.now()}.jpg`,
         } as any);
       }
     }
 
-    // 🔹 Items: medicines vs tests
-    const itemsToUse = isMedicineSale ? selectedMedicines : selectedTests;
+    // 🔹 MEDICINE LIST (for medicine sales)
+      if (isMedicineSale) {
+        // Format medicine list exactly like web
+        const medicineListWithQuantity = (selectedMedicines || []).map(medicine => ({
+          id: medicine.id,
+          name: medicine.name,
+          category: medicine.category || "",
+          hsn: medicine.hsn || "",
+          expiryDate: medicine.expiryDate,
+          costPrice: Number(medicine.costPrice) || 0,
+          sellingPrice: Number(medicine.sellingPrice) || 0,
+          gst: medicine.gst?.toString() || "18.00", // Default 18% GST
+          totalQuantity: medicine.quantity?.toString() || "1",
+          quantity: medicine.selectedQuantity || 1, // Use selectedQuantity for actual purchase
+          manufacturer: medicine.manufacturer || "Unknown",
+          location: medicine.location || "Unknown",
+          isActive: medicine.isActive !== undefined ? medicine.isActive : 1
+        }));
 
-    if (isMedicineSale) {
-      formDataToSend.append("medicineList", JSON.stringify(itemsToUse || []));
-    } else {
-      formDataToSend.append("testsList", JSON.stringify(itemsToUse || []));
-    }
+        formDataToSend.append(
+          "medicineList",
+          JSON.stringify(medicineListWithQuantity)
+        );
+      } 
+      // 🔹 TEST LIST (for test sales)
+      else {
+        // Format tests list exactly like web
+        const testsWithStatus = (selectedTests || []).map(test => ({
+          loinc_num_: test.loinc_num_ || `TEST_${Date.now()}_${Math.random()}`,
+          name: test.name || "Unnamed Test",
+          department: deptToUse,
+          testPrice: Number(test.testPrice) || 0,
+          gst: Number(test.gst) || 0,
+          testNotes: test.testNotes || "",
+          status: "pending"
+        }));
 
-    // 🔹 Common fields
-    formDataToSend.append("patientData", JSON.stringify(formData || {}));
-    formDataToSend.append("userID", user?.id?.toString() || "");
 
-    if (!isMedicineSale) {
-      // For tests: Pathology / Radiology
+        formDataToSend.append(
+          "testsList",
+          JSON.stringify(
+            testsWithStatus.map(test => ({
+              ...test,
+              department: "" // exactly like web
+            }))
+          )
+        );
+      }
+
+      // 3. Patient data
+      const safePatientData =
+        formData && typeof formData === "object"
+          ? formData
+          : {};
+
+      formDataToSend.append(
+        "patientData",
+        JSON.stringify(safePatientData)
+      );
+
+      // 4. Other fields...
+      formDataToSend.append("userID", user?.id?.toString() || "");
       formDataToSend.append("department", department || "");
-    }
-
     formDataToSend.append("paymentMethod", JSON.stringify(paymentDetails || {}));
 
     const totalPaymentAmount = paymentDetails
@@ -661,10 +728,23 @@ const handleSalesPayment = useCallback(
     };
 
     formDataToSend.append("discount", JSON.stringify(discountData));
+  
+      // Log FormData contents (for debugging)
+      const formDataEntries: any = {};
+      for (let [key, value] of (formDataToSend as any)._parts) {
+        if (key === 'files') {
+          formDataEntries[key] = 'FILE_DATA';
+        } else {
+          formDataEntries[key] = value;
+        }
+      }
 
-
-    const response = await AuthPost(endpointPath, formDataToSend, token);
-    return response;
+      try {
+        const response = await AuthPost(endpointPath, formDataToSend, token);
+        return response;
+      } catch (error: any) {
+        throw error;
+      }
   },
   [
     pharmacyData,
@@ -916,8 +996,7 @@ const handleSalesPayment = useCallback(
     } else {
       // IPD (partial allowed) - only disallow overpay
       if (totalEntered > amount + 0.001) {
-        dispatch(showError(`Entered amount (₹${totalEntered.toFixed(2)}) cannot exceed total amount (₹${amount.toFixed(2)}).`))
-       
+        dispatch(showError(`Entered amount (₹${totalEntered.toFixed(2)}) cannot exceed total amount (₹${amount.toFixed(2)}).`));
         return;
       }
       if (
@@ -961,18 +1040,17 @@ const handleSalesPayment = useCallback(
         response = await handleReceptionPayment(
           paymentDataWithTime,
           token
-        );
+        ) as any;
       } else if (isBillingOrder && !pharmacyData) {
         response = await handleBillingPayment(
           paymentDataWithTime,
           token
-        );
+        )as any;
       } else {
-      
         response = await handleSalesPayment(
           paymentDataWithTime,
           token
-        );
+        )as any;
       }
 
       if (
@@ -983,17 +1061,33 @@ const handleSalesPayment = useCallback(
           ? "Payment completed successfully!"
           : isBillingOrder
           ? "Payment completed successfully!"
+          : type === "medicine"
+          ? "Patient and medicine order added successfully!"
           : "Patient and test order added successfully!";
-dispatch(showSuccess(successMessage))
-        navigation.navigate("TaxInvoiceTabs", { mode: "billing" })
-      } else {
-        dispatch(showError(response?.message ||"Failed to process payment"))
         
+        dispatch(showSuccess(successMessage));
+      
+        // Check if this is a new sale flow from SaleComp (test/medicine walk-in)
+        const isNewSaleFlow = 
+          (type === "test") &&
+          !receptionData &&
+          !pharmacyData &&
+          !labData &&
+          !isBillingOrder;
+        
+        if (isNewSaleFlow) {
+          // Navigate to patientListLab for new sales from SaleComp
+          navigation.navigate("PatientListLab");
+        } else {
+          // Keep existing navigation for other flows
+          navigation.navigate("TaxInvoiceTabs", { mode: "billing" });
+        }
+      } else {
+        dispatch(showError(response?.message || "Failed to process payment"));
       }
     } catch (error: any) {
-      dispatch(showError( error?.response?.data?.message ||
-      "Failed to process payment. Please try again."))
-      
+      dispatch(showError(error?.response?.data?.message ||
+        "Failed to process payment. Please try again."));
     } finally {
       setIsSubmitting(false);
     }
@@ -1008,9 +1102,9 @@ dispatch(showSuccess(successMessage))
     handleSalesPayment,
     handleReceptionPayment,
     user,
-    onPaymentSuccess,
     navigation,
-    type, // ADD type dependency
+    type,
+    dispatch,
   ]);
 
   // UI values derived
@@ -1033,7 +1127,6 @@ dispatch(showSuccess(successMessage))
   const totalEntered = Object.values(
     enteredAmountNum
   ).reduce((s, v) => s + v, 0);
-
 
   return (
     <SafeAreaView
@@ -1059,69 +1152,28 @@ dispatch(showSuccess(successMessage))
           style={{
             flexDirection: "row",
             alignItems: "center",
-          }}
-        >
-          <View
-            style={[
-              styles.themeToggleWrap,
-              {
-                borderColor: isDarkMode
-                  ? "rgba(255,255,255,0.06)"
-                  : "rgba(15,23,34,0.06)",
-                backgroundColor: isDarkMode
-                  ? "rgba(255,255,255,0.03)"
-                  : "#fff",
-              },
-            ]}
-          >
+   }}
+   >
             <TouchableOpacity
-              onPress={() => setIsDarkMode(true)}
-              activeOpacity={0.85}
+              onPress={() => setIsDarkMode(!isDarkMode)}
+              activeOpacity={0.7}
               style={[
-                styles.toggleOption,
-                isDarkMode
-                  ? styles.toggleOptionActive
-                  : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.toggleText,
-                  {
-                    color: isDarkMode ? "#fff" : "#0f1722",
+      styles.toggleSwitchWithText,
+      {
+        backgroundColor: isDarkMode ? COLORS.brand : "#e5e7eb",
+        justifyContent: isDarkMode ? "flex-end" : "flex-start",
                   },
                 ]}
               >
-                Dark
+                <View style={styles.toggleKnobWithText}>
+                  <Text style={styles.toggleTextInside}>
+                    {isDarkMode ? "ON" : "OFF"}
               </Text>
+                </View>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setIsDarkMode(false)}
-              activeOpacity={0.85}
-              style={[
-                styles.toggleOption,
-                !isDarkMode
-                  ? styles.toggleOptionActiveLight
-                  : null,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.toggleText,
-                  {
-                    color: !isDarkMode
-                      ? "#0f1722"
-                      : "#9ea3ad",
-                  },
-                ]}
-              >
-                Light
-              </Text>
-            </TouchableOpacity>
-          </View>
+              
           <View style={styles.headerSpacer} />
-        </View>
+</View>
       </View>
 
       <KeyboardAvoidingView
@@ -1250,7 +1302,9 @@ dispatch(showSuccess(successMessage))
                     ? "🏥 Reception Billing"
                     : isBillingOrder
                     ? "📋 Billing Order"
-                    : "🆕 New Patient"}
+                    : type === "medicine"
+                    ? "💊 Pharmacy Sale"
+                    : "🩺 Test Sale"}
                 </Text>
               </View>
 
@@ -1576,6 +1630,32 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
   },
+  toggleSwitchWithText: {
+  width: 70,
+  height: 32,
+  borderRadius: 16,
+  padding: 2,
+  flexDirection: "row",
+  alignItems: "center",
+},
+toggleKnobWithText: {
+  width: 34,
+  height: 28,
+  borderRadius: 14,
+  backgroundColor: "#fff",
+  justifyContent: "center",
+  alignItems: "center",
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.2,
+  shadowRadius: 1,
+  elevation: 2,
+},
+toggleTextInside: {
+  fontSize: 10,
+  fontWeight: "700",
+  color: COLORS.brand,
+},
   paymentMethodsSection: {
     marginBottom: SPACING.lg,
   },

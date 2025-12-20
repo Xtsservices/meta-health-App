@@ -41,6 +41,10 @@ export type MedicineItem = {
   gst: number;
   amount: number;
   nurseID?: number;
+  status?: string;
+  rejectReason?: string | null;
+  rejectedOn?: string | null;
+  rejectedBy?: number | null;
 };
 
 export type TestItem = {
@@ -186,7 +190,7 @@ const BillingTaxInvoiceMobile: React.FC = () => {
   };
     // For all other departments (pharmacy, lab, radiology, etc.)
     if (ptype === 21 || ptype === 1) return "OPD";
-    if (ptype === 2 || ptype === 3) return "IPD / Emergency";
+    if (ptype === 2 || ptype === 3) return "IPD ";
     return "Rejected";
   };
 
@@ -232,8 +236,9 @@ const BillingTaxInvoiceMobile: React.FC = () => {
       : [];
 
     const processed: PatientData[] = [];
-
+    console.log("Processed",processed)
     rawData.forEach((item: any, index: number) => {
+      console.log("111111pppp",item)
       // 🔹 1. Start with raw lists
       let tests = Array.isArray(item.testsList) ? [...item.testsList] : [];
       const meds = Array.isArray(item.medicinesList) ? [...item.medicinesList] : [];
@@ -438,6 +443,7 @@ const patient: PatientData = {
 
   // Pharmacy billing function
 // Pharmacy billing function
+// Pharmacy billing function - UPDATED to include prescriptionURL
 const fetchPharmacyBilling = async (token: string) => {
   if (!user?.hospitalID) return;
 
@@ -459,10 +465,21 @@ const fetchPharmacyBilling = async (token: string) => {
   }
 
   const response = await AuthFetch(url, token);
+  console.log("Pharmacy Billing Response:", response);
   
   if (response?.status === "success" && "data" in response) {
     const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
     const processed: PatientData[] = rawData.map((item: any, index: number) => {
+      console.log("Processing item:", item);
+      
+      // Check if any medicine has rejection data
+      const hasRejectedMedicine = Array.isArray(item.medicinesList) && 
+        item.medicinesList.some((med: any) => med.status === "rejected");
+      
+      // Get first rejected medicine if exists
+      const rejectedMedicine = hasRejectedMedicine ? 
+        item.medicinesList.find((med: any) => med.status === "rejected") : null;
+
       // Calculate total amount from medicines
       const totalAmount = Array.isArray(item.medicinesList) 
         ? item.medicinesList.reduce((sum: number, medicine: any) => {
@@ -483,16 +500,20 @@ const fetchPharmacyBilling = async (token: string) => {
       return {
         id: index + 1,
         patientID: String(item.patientID || item.pID || ""),
+        // 🔹 ADD THIS: Include pIdNew
+        pIdNew: String(item.pIdNew || item.patientID || `PHAR${index + 1}`),
         pName: item.pName || "Unknown Patient",
         dept: getDepartmentLabelBilling(item.ptype || deptNum),
-        addedOn: item.addedOn || item.datetime || "",
+        addedOn: item?.paymentDetails?.[0]?.timestamp || item?.addedOn || "",
         firstName: item.doctorFirstName || "",
         lastName: item.doctorLastName || "",
         category: item.location || "",
         patientTimeLineID: String(item.timeLineID || item.patientTimeLineID || ""),
         pType: deptNum === 1 ? "Outpatient" : "Inpatient",
         type: "medicine",
-        // ADDED: Include payment amounts
+        // 🔹 ADD THIS: Include prescriptionURL if available
+        prescriptionURL: item.prescriptionURL || undefined,
+        // Payment amounts
         totalAmount: totalAmount,
         paidAmount: paidAmount,
         dueAmount: dueAmount,
@@ -514,6 +535,11 @@ const fetchPharmacyBilling = async (token: string) => {
             gst: gst,
             amount: totalAmount,
             nurseID: m.nurseID,
+            // 🔹 ADD: Include rejection data if medicine is rejected
+            status: m.status || "completed",
+            rejectReason: m.rejectReason || null,
+            rejectedOn: m.rejectedOn || null,
+            rejectedBy: m.rejectedBy || null,
           };
         }) : [],
         testList: [],
@@ -526,6 +552,7 @@ const fetchPharmacyBilling = async (token: string) => {
       const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
       return dateB - dateA;
     });
+    console.log("Processed Pharmacy Data:", sorted);
     setData(sorted);
   }
 };
@@ -536,10 +563,11 @@ const fetchPharmacyBilling = async (token: string) => {
     const deptName = isRadiology ? 'radiology' : 'pathology';
     const url = `test/${deptName}/${user.hospitalID}/approved/getBillingData`;
     
-    const response = await AuthFetch(url, token);
+    const response = await AuthFetch(url, token)as any;
     // FIXED: Use the correct response structure from working code
+    console.log("555",response)
     
-    if ((response?.status === "success") && "data" in response &&"billingData" in response && Array.isArray(response)) {
+    if ((response?.status === "success") && Array.isArray(response?.data?.billingData)) {
     const billingData = response?.data?.billingData || response?.billingData || response?.data?.data || response?.data;
       
       // FIXED: Use the same filtering logic as working code
@@ -549,8 +577,10 @@ const fetchPharmacyBilling = async (token: string) => {
         if (departmentType === "2") return ptype === 2 || ptype === 3; // IPD (2 or 3)
         return true;
       });
+      console.log("filter",filteredData)
 
       const processed: PatientData[] = filteredData.map((item: any, index: number) => {
+        console.log("item",item)
         // Calculate total amount from tests
         const totalAmount = Array.isArray(item.testsList) 
           ? item.testsList.reduce((sum: number, test: any) => {
@@ -593,6 +623,7 @@ const fetchPharmacyBilling = async (token: string) => {
           dueAmount: dueAmount,
         };
       });
+      console.log("processed",processed)
 
       const sorted = processed.sort((a, b) => {
         const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
@@ -638,8 +669,10 @@ const fetchPharmacyBilling = async (token: string) => {
         
         const arr = Array.isArray(res?.data?.data) ? res.data?.data : [];
         arr.forEach((item: any) =>
+          
           allRawItems.push({ ...item, deptType: ep.deptType })
         );
+        
       } catch {
         // ignore one endpoint failure
       }
@@ -647,13 +680,14 @@ const fetchPharmacyBilling = async (token: string) => {
 
    const normalized: PatientData[] = allRawItems.map(
   (item: any, index: number) => {
+    
     const deptType =
       item.pType?.toString() ||
       item.deptType?.toString() ||
       (item.lab ? "1" : null) ||
       (item.pharmacy ? "2" : null) ||
       "1";
-
+console.log("item",item)
     const medicinesList: MedicineItem[] =
       item.pharmacy?.medicinesList?.map((m: any) => {
         const price = Number(m.sellingPrice) * Number(m.updatedQuantity) || 0;
@@ -770,6 +804,7 @@ const fetchPharmacyBilling = async (token: string) => {
       const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
       
       const processed: PatientData[] = rawData.map((item: any, index: number) => ({
+        
         id: index + 1,
         patientID: String(item.patientID || item.pID || ""),
         pName: item.pName || "Unknown Patient",
@@ -795,10 +830,12 @@ const fetchPharmacyBilling = async (token: string) => {
         testList: [],
         procedures: [],
       }));
+      console.log("000",processed)
 
       setData(processed);
     }
   };
+  
 
   // Lab/Radiology tax invoices function
   const fetchLabRadiologyTaxInvoices = async (token: string) => {
@@ -817,6 +854,7 @@ const fetchPharmacyBilling = async (token: string) => {
         if (departmentType === "2") return item.departmemtType === 2; // IPD
         return true;
       });
+      console.log("filter",filteredData)
 
       const processed: PatientData[] = filteredData.map((item: any, index: number) => ({
         id: index + 1,
@@ -869,7 +907,7 @@ const fetchPharmacyBilling = async (token: string) => {
           patientID: String(item.pID || item.patientID || ""),
           pName: item.pName || "Unknown Patient",
           dept: "Walk-in",
-          addedOn: item.addedOn || "",
+          addedOn: item?.paymentDetails?.[0]?.timestamp || item?.addedOn || "",
           firstName: "",
           lastName: "",
           category: "",

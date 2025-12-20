@@ -25,7 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../auth/auth";
 import Footer from "../dashboard/footer";
 import { LineChart, BarChart } from "react-native-chart-kit";
-import { formatDate } from "../../utils/dateTime";
+import { formatDate, formatDateTime } from "../../utils/dateTime";
 
 // Import responsive utils and colors
 import { 
@@ -91,13 +91,20 @@ interface TopMedication {
 interface PharmacyOrder {
   id: number;
   patientID?: number;
+  pID?: string;
   pName: string;
+  patientName?: string;
   departmentID?: number;
   addedOn: string;
   medicinesList: any[];
   location: string;
   paidAmount: string;
   alertStatus?: string;
+  createdAt?: string;
+  timestamp?: string;
+  ptype?: number;
+  doctorName?: string;
+  departmentName?: string;
 }
 
 interface LowStock {
@@ -160,18 +167,16 @@ const ConfirmDialog: React.FC<{
 };
 
 /* -------------------------- Header -------------------------- */
-const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onMenu }) => {
+const HeaderBar: React.FC<{ 
+  title: string; 
+  onMenu: () => void;
+}> = ({ title, onMenu }) => {
   return (
     <View style={styles.header}>
-      <View style={styles.headerContent}>
-        <View>
-          <Text style={styles.headerTitle}>{title}</Text>
-          <Text style={styles.headerSubtitle}>Pharmacy Management Dashboard</Text>
-        </View>
-        <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
-          <MenuIcon size={isSmallDevice ? ICON_SIZE.sm : ICON_SIZE.md} color={COLORS.buttonText} />
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.headerTitle}>{title}</Text>
+      <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
+        <MenuIcon size={isSmallDevice ? 24 : 30} color={COLORS.buttonText} />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -211,12 +216,35 @@ const StatCard: React.FC<{
   );
 };
 
+/* -------------------------- KPI Card -------------------------- */
+const KpiCard: React.FC<{
+  title: string;
+  value: number | string | null | undefined;
+  icon: React.ReactNode;
+  bg: string;
+}> = ({ title, value, icon, bg }) => {
+  const cardWidth = isTablet 
+    ? responsiveWidth(18) 
+    : (responsiveWidth(100) - SPACING.lg * 2 - SPACING.sm) / 2;
+
+  return (
+    <View style={[styles.card, { backgroundColor: bg, width: cardWidth }]}>
+      <View>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardValue}>{value ?? "--"}</Text>
+      </View>
+      <View style={[styles.iconWrap, { backgroundColor: COLORS.brandLight }]}>
+        {React.cloneElement(icon as React.ReactElement, { color: COLORS.brand })}
+      </View>
+    </View>
+  );
+};
+
 /* -------------------------- Chart Card -------------------------- */
 const ChartCard: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <View style={styles.chartCard}>
     <View style={styles.chartHeader}>
       <Text style={styles.chartTitle}>{title}</Text>
-     
     </View>
     {children}
   </View>
@@ -424,7 +452,7 @@ const DashboardPharma: React.FC = () => {
   const user = useSelector((s: RootState) => s.currentUser);
   const insets = useSafeAreaInsets();
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
-  const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;
+  const userImg = user?.avatarUrl || user?.profileImage || user?.imageURL;
 
   const hasBottomInsets = insets.bottom > 0;
 
@@ -708,6 +736,18 @@ const DashboardPharma: React.FC = () => {
     }
   };
 
+  const handleRowClick = (patient: PharmacyOrder) => {
+    // Handle patient row click - navigate to prescription details
+    navigation.navigate("OrderDetails", { 
+      orderId: patient.id,
+      patientData: patient
+    });
+  };
+
+  const onViewAllPress = () => {
+    navigation.navigate("AlertsLab");
+  };
+
   // Sidebar items for Pharmacy with SVG icons
   const sidebarItems: SidebarItem[] = [
     // Overview Section
@@ -818,49 +858,34 @@ const DashboardPharma: React.FC = () => {
     </TouchableOpacity>
   );
 
-  // Render prescription item
-  const renderPrescriptionItem = ({ item }: { item: PharmacyOrder }) => (
-    <TouchableOpacity style={styles.prescriptionItem} activeOpacity={0.7}>
-      <View style={styles.prescriptionHeader}>
-        <View style={styles.patientInfo}>
-          <Text style={styles.patientName}>{item?.pName}</Text>
-          <Text style={styles.patientId}>ID: {item?.patientID || 'N/A'}</Text>
-        </View>
-        <View style={[
-          styles.statusBadge,
-          { backgroundColor: item?.alertStatus?.toLowerCase() === 'pending' ? COLORS.warning + '20' : COLORS.success + '20' }
-        ]}>
-          <Text style={[
-            styles.statusText,
-            { color: item?.alertStatus?.toLowerCase() === 'pending' ? COLORS.warning : COLORS.success }
-          ]}>
-            {item?.alertStatus || 'Pending'}
-          </Text>
-        </View>
+  // Get patient type
+  const getPatientType = (patient: PharmacyOrder) => {
+    if (patient?.ptype === 1) return "OPD";
+    if (patient?.ptype === 2) return "IPD";
+    if (patient?.ptype === 3) return "Emergency";
+    if (patient?.ptype === 21) return "Discharged";
+    return "";
+  };
+
+  // Render patient row - matching reference code style
+  const renderPatientRow = ({ item }: { item: PharmacyOrder }) => (
+    <TouchableOpacity
+      style={styles.patientRow}
+      onPress={() => handleRowClick(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.patientInfo}>
+        <Text style={styles.patientId}>{item?.patientID || item?.pID || "--"}</Text>
+        <Text style={styles.patientName}>{item?.pName || item?.patientName || "--"}</Text>
+        <Text style={styles.patientType}>{getPatientType(item)}</Text>
       </View>
-      <View style={styles.prescriptionDetails}>
-        <View style={styles.detailRow}>
-          <Package2Icon size={14} color={COLORS.sub} />
-          <Text style={styles.detailText}>
-            {item?.medicinesList?.length || 0} items
-          </Text>
-        </View>
-        <View style={styles.detailRow}>
-          <ClockIcon size={14} color={COLORS.sub} />
-          <Text style={styles.detailText}>
-            {formatDate(item?.addedOn)}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.prescriptionFooter}>
-        <Text style={styles.amountText}>
-          {item?.paidAmount ? `₹${item.paidAmount}` : 'Not Paid'}
+      <View style={styles.patientDetails}>
+        <Text style={styles.doctor}>{item?.doctorName || "--"}</Text>
+        <Text style={styles.date}>
+          {formatDateTime(
+            item?.addedOn || item?.createdAt || item?.timestamp || ""
+          )}
         </Text>
-        <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.viewButton}>
-            <EyeIcon size={16} color={COLORS.brand} />
-          </TouchableOpacity>
-        </View>
       </View>
     </TouchableOpacity>
   );
@@ -895,65 +920,61 @@ const DashboardPharma: React.FC = () => {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Welcome Section */}
+        {/* Welcome Section - Fixed date badge positioning */}
         <View style={styles.welcomeSection}>
-          <View>
+          <View style={styles.welcomeTextContainer}>
             <Text style={styles.welcomeTitle}>Welcome back, {user?.firstName}!</Text>
             <Text style={styles.welcomeSubtitle}>Here's your pharmacy overview for today</Text>
           </View>
           <View style={styles.dateBadge}>
-            <Text style={styles.dateText}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+            <Text style={styles.dateText}>
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+              })}
+            </Text>
           </View>
         </View>
 
-{/* Stats Grid - 2x2 Layout */}
-<View style={styles.statsGrid}>
-  {isDashboardCountsLoading ? (
-    <ActivityIndicator size="small" color={COLORS.brand} />
-  ) : dashboardCounts ? (
-    <>
-      {/* First Row */}
-      <View style={styles.statsRow}>
-        <StatCard
-          title="Prescriptions Today"
-          value={dashboardCounts.prescriptionsToday}
-          icon={FileTextIcon}
-          color={COLORS.brand}
-          trend={12}
-        />
-        <StatCard
-          title="Pending Orders"
-          value={dashboardCounts.prescriptionsToday - dashboardCounts.acceptedPrescriptions}
-          icon={ClockIcon}
-          color={COLORS.warning}
-          trend={-5}
-        />
-      </View>
-      
-      {/* Second Row */}
-      <View style={styles.statsRow}>
-        <StatCard
-          title="Low Stock Items"
-          value={dashboardCounts.lowStockItems}
-          icon={AlertTriangleIcon}
-          color={COLORS.danger}
-          trend={8}
-        />
-        <StatCard
-          title="Revenue Today"
-          value={formatCurrency(dashboardCounts.revenueToday)}
-          icon={IndianRupeeIcon}
-          color={COLORS.success}
-          trend={15}
-        />
-      </View>
-    </>
-  ) : (
-    <View style={styles.noDataContainer}>
-      <Text style={styles.noDataText}>No dashboard data available</Text>
-    </View>
-  )}
-</View>
+        {/* Stats Grid - Using KpiCard from reference */}
+        <View style={styles.statsGrid}>
+          {isDashboardCountsLoading ? (
+            <ActivityIndicator size="small" color={COLORS.brand} />
+          ) : dashboardCounts ? (
+            <>
+              <KpiCard
+                title="Prescriptions Today"
+                value={dashboardCounts.prescriptionsToday}
+                icon={<FileTextIcon size={25} color={brandColor} />}
+                bg={COLORS.card}
+              />
+              <KpiCard
+                title="Pending Orders"
+                value={dashboardCounts.prescriptionsToday - dashboardCounts.acceptedPrescriptions}
+                icon={<ClockIcon size={25} color={brandColor} />}
+                bg={COLORS.card}
+              />
+              <KpiCard
+                title="Low Stock Items"
+                value={dashboardCounts.lowStockItems}
+                icon={<AlertTriangleIcon size={25} color={brandColor} />}
+                bg={COLORS.card}
+              />
+              <KpiCard
+                title="Revenue Today"
+                value={formatCurrency(dashboardCounts.revenueToday)}
+                icon={<IndianRupeeIcon size={25} color={brandColor} />}
+                bg={COLORS.card}
+              />
+            </>
+          ) : (
+            <View style={styles.noDataContainer}>
+              <Text style={styles.noDataText}>No dashboard data available</Text>
+            </View>
+          )}
+        </View>
 
         {/* Primary action */}
         <View style={styles.controlPanel}>
@@ -1065,25 +1086,27 @@ const DashboardPharma: React.FC = () => {
           </ChartCard>
         </View>
 
-        {/* Recent Prescriptions */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Recent Prescriptions</Text>
-              <Text style={styles.sectionSubtitle}>Latest patient orders and prescriptions</Text>
+        {/* Recent Prescriptions - Using reference style */}
+        <View style={styles.tableContainer}>
+          <View style={styles.tableHeader}>
+            <View style={styles.headerText}>
+              <Text style={styles.tableTitle}>Recent Prescriptions</Text>
+              <Text style={styles.tableSubtitle}>Latest patient orders and prescriptions</Text>
             </View>
-            <TouchableOpacity style={styles.viewAllButton}>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={onViewAllPress}
+            >
               <Text style={styles.viewAllText}>View All</Text>
-              <ChevronRightIcon size={isSmallDevice ? 14 : 16} color={COLORS.brand} />
+              <ChevronRightIcon size={16} color={COLORS.brand} />
             </TouchableOpacity>
           </View>
           {recentPrescriptions?.length > 0 ? (
             <FlatList
               data={recentPrescriptions}
-              renderItem={renderPrescriptionItem}
+              renderItem={renderPatientRow}
               keyExtractor={(item) => item?.id?.toString()}
               scrollEnabled={false}
-              style={styles.prescriptionsList}
             />
           ) : (
             <View style={styles.noDataContainer}>
@@ -1145,39 +1168,29 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg 
   },
 
-  /* Header */
+  /* Header - Fixed to match reference */
   header: {
-    height: isSmallDevice ? 100 : 120,
-    paddingHorizontal: SPACING.lg,
-    borderBottomWidth: 1,
+    height: isSmallDevice ? 80 : 100,
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.brand,
-    paddingTop: Platform.OS === 'ios' ? SPACING.xl : SPACING.lg,
-    justifyContent: 'center',
-  },
-  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    backgroundColor: COLORS.brand,
+    paddingTop: Platform.OS === 'ios' ? SPACING.lg : 0,
   },
   headerTitle: { 
-    fontSize: isSmallDevice ? FONT_SIZE.xl : FONT_SIZE.xxl, 
-    fontWeight: "800", 
-    color: COLORS.buttonText,
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: FONT_SIZE.sm,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: "500",
+    fontSize: isSmallDevice ? FONT_SIZE.lg : FONT_SIZE.xl, 
+    fontWeight: "700", 
+    color: COLORS.buttonText 
   },
   menuBtn: {
-    width: isSmallDevice ? 40 : 44,
-    height: isSmallDevice ? 40 : 44,
-    borderRadius: 12,
+    width: isSmallDevice ? 34 : 38,
+    height: isSmallDevice ? 34 : 38,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
 
   container: { 
@@ -1185,8 +1198,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg 
   },
   containerContent: { 
-    padding: SPACING.lg, 
-    gap: SPACING.xl 
+    padding: SPACING.md, 
+    gap: SPACING.lg 
   },
 
   loadingContainer: {
@@ -1207,6 +1220,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: SPACING.sm,
   },
+  welcomeTextContainer: {
+    flex: 1,
+  },
   welcomeTitle: {
     fontSize: FONT_SIZE.xl,
     fontWeight: '700',
@@ -1223,6 +1239,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 12,
+    marginLeft: SPACING.sm,
   },
   dateText: {
     fontSize: FONT_SIZE.xs,
@@ -1233,8 +1250,37 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: SPACING.md,
+    gap: SPACING.sm,
     justifyContent: "space-between"
+  },
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: SPACING.md,
+    borderRadius: 16,
+    shadowColor: COLORS.shadow,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardTitle: { 
+    color: COLORS.text, 
+    fontSize: FONT_SIZE.sm, 
+    opacity: 0.75, 
+    marginBottom: SPACING.xs 
+  },
+  cardValue: { 
+    color: COLORS.text, 
+    fontSize: FONT_SIZE.xl, 
+    fontWeight: "700" 
   },
   statCard: {
     backgroundColor: COLORS.card,
@@ -1255,11 +1301,6 @@ const styles = StyleSheet.create({
   statInfo: {
     flex: 1,
   },
-statsRow: {
-  flexDirection: "row",
-  gap: SPACING.md,
-  justifyContent: "space-between"
-},
   statTitle: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
@@ -1320,7 +1361,7 @@ statsRow: {
   chartCard: {
     backgroundColor: COLORS.card,
     borderRadius: 20,
-    padding: SPACING.lg,
+    padding: SPACING.md,
     shadowColor: COLORS.shadow,
     shadowOpacity: 0.08,
     shadowRadius: 16,
@@ -1337,16 +1378,6 @@ statsRow: {
     fontSize: FONT_SIZE.lg,
     fontWeight: "700",
     color: COLORS.text,
-  },
-  chartAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  chartActionText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.brand,
-    fontWeight: '600',
   },
   chartContainer: {
     alignItems: 'center',
@@ -1437,27 +1468,33 @@ statsRow: {
     fontWeight: '600',
   },
 
-  sectionCard: {
+  tableContainer: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
-    padding: SPACING.lg,
+    borderRadius: 16,
+    padding: SPACING.md,
     shadowColor: COLORS.shadow,
     shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  sectionHeader: {
+  tableHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: SPACING.lg,
+    alignItems: "center",
+    marginBottom: SPACING.md,
   },
- 
-  sectionSubtitle: {
+  headerText: {
+    flex: 1,
+  },
+  tableTitle: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  tableSubtitle: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
-    marginTop: 4,
+    marginTop: SPACING.xs,
   },
   viewAllButton: {
     flexDirection: "row",
@@ -1469,80 +1506,46 @@ statsRow: {
     color: COLORS.brand,
     fontWeight: "600",
   },
-  prescriptionsList: {
-    gap: SPACING.md,
-  },
-  prescriptionItem: {
-    backgroundColor: COLORS.field,
-    borderRadius: 16,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  prescriptionHeader: {
+
+  patientRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: SPACING.md,
+    alignItems: "center",
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
   },
   patientInfo: {
     flex: 1,
   },
+  patientId: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
   patientName: {
     fontSize: FONT_SIZE.md,
-    fontWeight: "700",
+    fontWeight: "600",
     color: COLORS.text,
-    marginBottom: 2,
+    marginTop: 2,
   },
-  patientId: {
+  patientType: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
-    fontWeight: '500',
+    marginTop: 2,
   },
-  statusBadge: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: 12,
+  patientDetails: {
+    alignItems: "flex-end",
   },
-  statusText: {
+  doctor: {
     fontSize: FONT_SIZE.xs,
-    fontWeight: "700",
-  },
-  prescriptionDetails: {
-    marginBottom: SPACING.md,
-    gap: SPACING.xs,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  detailText: {
-    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
-    fontWeight: '500',
+    marginTop: 2,
   },
-  prescriptionFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  amountText: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  viewButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: COLORS.brandLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+  date: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.placeholder,
+    marginTop: 2,
   },
 
   noDataContainer: {
@@ -1575,13 +1578,8 @@ statsRow: {
     width: "100%",
     maxWidth: responsiveWidth(90),
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 14,
     padding: SPACING.lg,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
   },
   modalTitle: { 
     fontSize: FONT_SIZE.lg, 
@@ -1591,21 +1589,18 @@ statsRow: {
   modalMsg: { 
     fontSize: FONT_SIZE.sm, 
     color: COLORS.text, 
-    marginTop: SPACING.sm,
-    lineHeight: 20,
+    marginTop: SPACING.sm 
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: SPACING.md,
-    marginTop: SPACING.lg,
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
   },
   modalBtn: {
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: 12,
-    minWidth: 100,
-    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    borderRadius: 10,
   },
   modalBtnGhost: {
     backgroundColor: COLORS.brandLight,
@@ -1621,15 +1616,12 @@ statsRow: {
     position: "absolute",
     left: 0,
     right: 0,
+    bottom: 0,
     backgroundColor: COLORS.card,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: COLORS.border,
     zIndex: 10,
     elevation: 6,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: -4 },
   },
   navShield: {
     position: "absolute",
@@ -1648,24 +1640,26 @@ statsRow: {
     bottom: 0,
     backgroundColor: COLORS.card,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.md,
     elevation: 8,
     shadowColor: COLORS.shadow,
     shadowOpacity: 0.2,
-    shadowRadius: 20,
-    shadowOffset: { width: 4, height: 0 },
+    shadowRadius: 10,
+    shadowOffset: { width: 2, height: 0 },
   },
   sidebarHeader: {
     paddingBottom: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
     marginBottom: SPACING.md,
   },
   closeButton: {
     position: "absolute",
     right: 0,
     top: -SPACING.sm,
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.pill,
@@ -1676,11 +1670,11 @@ statsRow: {
     paddingRight: 50,
   },
   userInfo: {
-    marginLeft: SPACING.md,
+    marginLeft: SPACING.sm,
     flex: 1,
   },
   userName: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
     color: COLORS.text,
     marginBottom: 2,
@@ -1689,31 +1683,30 @@ statsRow: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
     marginBottom: 2,
-    fontWeight: '500',
   },
   userDepartment: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: FONT_SIZE.xs,
     color: COLORS.brand,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   sidebarContent: {
     flex: 1,
   },
   section: {
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.lg,
   },
   sectionTitle: {
     fontSize: FONT_SIZE.xs,
-    fontWeight: "700",
+    fontWeight: "600",
     color: COLORS.sub,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   sidebarButton: {
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: SPACING.xs,
   },
   sidebarButtonActive: {
@@ -1722,10 +1715,10 @@ statsRow: {
   buttonContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.md,
+    gap: SPACING.sm,
   },
   buttonText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     flex: 1,
   },
@@ -1741,19 +1734,21 @@ statsRow: {
   alertText: {
     color: COLORS.buttonText,
     fontSize: FONT_SIZE.xs,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   bottomActions: {
     paddingTop: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
     gap: SPACING.sm,
   },
   bottomButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.md,
-    paddingVertical: SPACING.md,
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   modulesButton: {
     backgroundColor: COLORS.brandLight,
@@ -1762,7 +1757,7 @@ statsRow: {
     backgroundColor: COLORS.chipBP,
   },
   bottomButtonText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "600",
   },
   avatar: {
@@ -1773,6 +1768,6 @@ statsRow: {
   avatarText: {
     fontWeight: "800",
     color: COLORS.text,
-    fontSize: FONT_SIZE.lg,
+    fontSize: FONT_SIZE.md,
   },
 });
