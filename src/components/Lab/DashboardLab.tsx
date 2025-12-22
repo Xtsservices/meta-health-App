@@ -46,7 +46,7 @@ import { AuthFetch } from "../../auth/auth";
 import BarChartActualScheduled from "../dashboard/lineGraph";
 import Footer from "../dashboard/footer";
 import { formatDateTime } from "../../utils/dateTime";
-import MyTasks from "../../pages/nurseDashboard/MyTasks";
+// import MyTasks from "../../pages/nurseDashboard/MyTasks";
 
 // Utils
 import { 
@@ -258,7 +258,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       const response = await AuthFetch(
         `alerts/hospital/${user.hospitalID}/unseenCount`,
         token
-      );
+      ) as any ;
 
       if (response?.status === "success" && response?.data?.message === "success") {
         setAlertCount(response.data.count || 0);
@@ -467,7 +467,7 @@ const DashboardLab: React.FC = () => {
         const alertsResponse = await AuthFetch(
           `test/${roleName}/${user.hospitalID}/getAlerts`,
           token
-        );
+        ) as any;
 
         if (alertsResponse?.status === "success" && Array.isArray(alertsResponse?.data?.alerts)) {
           const alertsWithDepartments = await Promise.all(
@@ -514,7 +514,7 @@ const DashboardLab: React.FC = () => {
         const response = await AuthFetch(
           `test/${roleName}/${user.hospitalID}/${user.id}/getAllPatient`,
           token
-        );
+        ) as any;
 
         if (response?.message === "success" && Array.isArray(response?.patientList)) {
           const regularPatients = response?.patientList?.map((patient: any) => ({
@@ -544,7 +544,7 @@ const DashboardLab: React.FC = () => {
         const walkinResponse = await AuthFetch(
           `test/getWalkinTaxinvoicePatientsData/${user.hospitalID}/${roleName}`,
           token
-        );
+        ) as any;
 
         if (walkinResponse?.status === 200 && Array.isArray(walkinResponse?.data)) {
           const walkinPatients = walkinResponse?.data?.map((patient: any) => ({
@@ -592,7 +592,7 @@ const DashboardLab: React.FC = () => {
       const res = await AuthFetch(
         `test/${user.hospitalID}/${user.roleName}/getTestsDashboardCount`,
         token
-      );    
+      ) as any;    
       
       let countsData = null;
 
@@ -652,7 +652,7 @@ const DashboardLab: React.FC = () => {
         url = `test/${roleName}/${user.hospitalID}/fullYear?filter=month&filterYear=${year}&filterMonth=${month}`;
       }
 
-      const res = await AuthFetch(url, token);
+      const res = await AuthFetch(url, token) as any;
 
       let counts = [];
       
@@ -950,9 +950,9 @@ const DashboardLab: React.FC = () => {
             />
           </View>
 
-          <View>
+          {/* <View>
             <MyTasks />
-          </View>
+          </View> */}
         </View>
 
         <View style={styles.tableContainer}>

@@ -69,6 +69,7 @@ interface TestAlertsProps {
   onFilterChange: (filter: string) => void;
   alertFrom?: "lab" | "reception" | "pharmacy";
   onRefresh?: () => void;
+  onRejectionSuccess?: () => void;
 }
 
 interface RejectedAlertsProps {
@@ -87,6 +88,7 @@ interface AlertsTabsProps {
   onPatientExpand: (id: string | null) => void;
   alertFrom?: "lab" | "reception" | "pharmacy";
   onRefresh?: () => void;
+  onRejectionSuccess?: () => void;
 }
 
 // Sidebar Component
@@ -188,6 +190,7 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
   onFilterChange,
   alertFrom = "lab",
   onRefresh,
+  onRejectionSuccess,
 }) => {
   const isReception = alertFrom === "reception";
   const isPharmacy = alertFrom === "pharmacy";
@@ -203,10 +206,10 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
   return (
     <View style={styles.tabContent}>
       <PatientOuterTable
-         title={`${titlePrefix} - ${filter}`}
+        title={`${titlePrefix} - ${filter}`}
         data={currentAlerts ?? []}
         isButton={true}
-         alertFrom={alertFrom}
+        alertFrom={alertFrom}
         expandedPatientId={expandedPatientId}
         onPatientExpand={onPatientExpand}
         filter={filter}
@@ -216,13 +219,8 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
         totalPages={totalPages}
         onPageChange={onPageChange}
         onRefresh={onRefresh}
+        onRejectionSuccess={onRejectionSuccess}
       />
-
-      {/* <Text style={styles.resultsText}>
-        Showing {currentAlerts?.length ?? 0} of {filteredAlerts?.length ?? 0} result
-        {filteredAlerts?.length !== 1 ? "s" : ""}
-        {expandedPatientId && " • Patient details expanded above"}
-      </Text> */}
     </View>
   );
 };
@@ -260,6 +258,7 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
   onPatientExpand,
   alertFrom = "lab",
   onRefresh,
+  onRejectionSuccess,
 }) => {
   const [activeTab, setActiveTab] = useState("test-alerts");
   const rowsPerPage = 10;
@@ -287,6 +286,7 @@ const AlertsTabs: React.FC<AlertsTabsProps> = ({
               onFilterChange={onFilterChange}
               alertFrom={alertFrom}
               onRefresh={onRefresh}
+              onRejectionSuccess={onRejectionSuccess}
             />
           </View>
         );
@@ -366,6 +366,7 @@ const AlertsLab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const isReceptionAlerts = user?.roleName === "reception";
   const isPharmacyAlerts = user?.roleName === "pharmacy";
 
@@ -438,12 +439,14 @@ const AlertsLab: React.FC = () => {
           token
         );
         alertsData =response && "data" in response && response?.data?.data || [];
+        console.log("00000",alertsData)
       } else {
         // 👇 Existing lab alerts
         const response = await AuthFetch(
           `test/${user?.roleName}/${user?.hospitalID}/getAlerts`,
           token
         );
+        console.log("$$$$",response)
         alertsData =response && "data" in response && response?.data?.alerts || response && "alerts" in response && response?.alerts || [];
       }
       if (Array.isArray(alertsData)) {
@@ -469,17 +472,8 @@ const AlertsLab: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (user?.hospitalID) {
-      getAlerts();
-    } else {
-      setLoading(false);
-    }
-  }, [user?.hospitalID, user?.token, navigation]);
-
-  // Fetch rejected alerts
-  useEffect(() => {
-    const getRejectedOrders = async () => {
+  // Fetch rejected alerts - SEPARATE FUNCTION
+  const fetchRejectedOrders = async () => {
       try {
         const token = await AsyncStorage.getItem("token");
         
@@ -513,7 +507,19 @@ const AlertsLab: React.FC = () => {
           rejectedData = response && "data" in response &&  response?.data?.billingData || response && "billingData" in response &&  response?.billingData || [];
         }
         if (Array.isArray(rejectedData)) {
-          setRejectedOrders(rejectedData);
+        const sortedRejected = [...rejectedData].sort((a: any, b: any) => {
+          const dateA = new Date(
+            a?.addedOn || a?.createdAt || a?.rejectedOn || a?.timestamp || 0
+          ).getTime();
+
+          const dateB = new Date(
+            b?.addedOn || b?.createdAt || b?.rejectedOn || b?.timestamp || 0
+          ).getTime();
+
+          return dateB - dateA;
+        });
+
+          setRejectedOrders(sortedRejected);
         } else {
           setRejectedOrders([]);
         }
@@ -524,8 +530,14 @@ const AlertsLab: React.FC = () => {
       }
     };
 
-    if (user?.hospitalID) getRejectedOrders();
-  }, [user?.hospitalID, navigation]);
+  useEffect(() => {
+    if (user?.hospitalID) {
+      getAlerts();
+      fetchRejectedOrders();
+    } else {
+      setLoading(false);
+    }
+  }, [user?.hospitalID, user?.token, navigation, refreshKey]);
 
   // Apply department filter for Test Alerts
   useEffect(() => {
@@ -544,6 +556,12 @@ const AlertsLab: React.FC = () => {
     setCurrentPage(0);
   }, [filter, allAlerts]);
 
+  // HANDLE REJECTION SUCCESS
+  const handleRejectionSuccess = () => {
+    setRefreshKey(prev => prev + 1);
+    dispatch(showError("Alert rejected successfully"));
+  };
+
   const handleFilterChange = (newFilter: string) => {
     setFilter(newFilter);
     setExpandedPatientId(null);
@@ -561,6 +579,7 @@ const AlertsLab: React.FC = () => {
 
   const onRefresh = () => {
     getAlerts(true);
+    fetchRejectedOrders();
   };
 
   if (loading && !refreshing) {
@@ -596,6 +615,7 @@ const AlertsLab: React.FC = () => {
             onPatientExpand={handlePatientExpand}
             alertFrom={isPharmacyAlerts ? "pharmacy" : isReceptionAlerts ? "reception" : "lab"} 
             onRefresh={onRefresh}
+            onRejectionSuccess={handleRejectionSuccess}
           />
         </View>
       </KeyboardAvoidingView>

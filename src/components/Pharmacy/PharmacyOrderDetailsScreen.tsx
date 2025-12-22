@@ -15,7 +15,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthPost, AuthFetch } from "../../auth/auth";
-import { showSuccess, showError } from "../../store/toast.slice";
+import { showSuccess, showError, showWarning } from "../../store/toast.slice";
 
 // Utils
 import {
@@ -27,7 +27,7 @@ import {
 } from "../../utils/responsive";
 import { COLORS } from "../../utils/colour";
 import { formatDateTime } from "../../utils/dateTime";
-import { UserIcon, ArrowLeft, AlertCircle } from "lucide-react-native";
+import { UserIcon, ArrowLeft, AlertCircle, ChevronDown } from "lucide-react-native";
 import Footer from "../dashboard/footer";
 
 interface MedicineItem {
@@ -39,7 +39,7 @@ interface MedicineItem {
   price?: number;
   sellingPrice?: number;
   gst?: number;
-  qty?: number;
+  quantity?: number;
   updatedQuantity?: number;
   Frequency?: number;
   daysCount?: number;
@@ -95,31 +95,48 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
   };
 
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
+  const [originalQuantities, setOriginalQuantities] = useState<{ [key: string]: number }>({});
+  const [decreasedQuantities, setDecreasedQuantities] = useState<{ [key: string]: boolean }>({});
+  const [reasons, setReasons] = useState<{ [key: string]: string }>({});
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [nurses, setNurses] = useState<NurseType[]>([]);
   const [selectedNurse, setSelectedNurse] = useState<NurseType | null>(null);
   const [showNurseModal, setShowNurseModal] = useState(false);
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [currentMedicineId, setCurrentMedicineId] = useState<string | null>(null);
+  const [currentOriginalQuantity, setCurrentOriginalQuantity] = useState<number>(0);
+  const [tempReason, setTempReason] = useState("");
 
   // Check if this is IPD/Emergency (needs nurse selection)
   const isIpdOrEmergency = orderData?.departmemtType === 2 || orderData?.departmemtType === 3 || orderData?.ptype === 2 || orderData?.ptype === 3;
 
-  // Initialize quantities from order data
+  // Initialize quantities from order data - FIXED TO USE quantity FIELD
   useEffect(() => {
     const initialQuantities: { [key: string]: number } = {};
+    const initialOriginalQuantities: { [key: string]: number } = {};
+    const initialDecreasedQuantities: { [key: string]: boolean } = {};
     
     orderData?.medicinesList?.forEach((medicine) => {
-      const medId = medicine.medId ?? medicine.id;
+      const medId = medicine.medId?.toString() ?? medicine.id?.toString();
       const frequency = Number(medicine.Frequency) || 0;
       const days = Number(medicine.daysCount) || 0;
       
       if (medId) {
-        initialQuantities[medId.toString()] = frequency * days;
+        // Use quantity from data, otherwise calculate from frequency * days
+        const quantityFromData = medicine.quantity || (frequency * days);
+        initialQuantities[medId] = quantityFromData;
+        initialOriginalQuantities[medId] = quantityFromData; // Store original quantity
+        
+        // Mark as decreased if quantity is less than original (if we had original)
+        initialDecreasedQuantities[medId] = false;
       }
     });
     
     setQuantities(initialQuantities);
+    setOriginalQuantities(initialOriginalQuantities);
+    setDecreasedQuantities(initialDecreasedQuantities);
   }, [orderData]);
 
   // Fetch nurses for IPD/Emergency orders
@@ -134,7 +151,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
         const response = await AuthFetch(
           `doctor/${user.hospitalID}/getAllNurse`,
           token
-        );
+        ) as any;
 
         // Fix: Check the correct response structure
         if (response?.status === "success" && Array.isArray(response?.data?.data)) {
@@ -153,25 +170,87 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
     fetchNurses();
   }, [isIpdOrEmergency, user.hospitalID]);
 
-  const handleDecrement = (medId: string, currentQuantity: number) => {
-    if (currentQuantity > 1) {
+const handleDecrement = (medId: string, currentQty: number) => {
+  const originalQty = originalQuantities[medId] || currentQty;
+    if (currentQty > 1 && (currentQty - 1) < originalQty) {
+    if (!decreasedQuantities[medId]) {
+      setCurrentMedicineId(medId);
+      setCurrentOriginalQuantity(originalQty);
+      setTempReason(""); // Reset temp reason
+      setShowReasonModal(true);
+    } else {
+      // Already has reason - just decrease without popup
       setQuantities(prev => ({
         ...prev,
-        [medId]: currentQuantity - 1
+        [medId]: currentQty - 1
       }));
     }
-  };
-
-  const handleIncrement = (medId: string, currentQuantity: number) => {
+  } else if (currentQty > 1) {
+    // Normal decrement (still above or equal to original)
     setQuantities(prev => ({
       ...prev,
-      [medId]: currentQuantity + 1
+      [medId]: currentQty - 1
+    }));
+  }
+};
+
+  const handleIncrement = (medId: string, currentQty: number) => {
+    const originalQty = originalQuantities[medId] || currentQty;
+    
+    // If we increment back to or above original quantity, remove the decreased flag
+    if ((currentQty + 1) >= originalQty && decreasedQuantities[medId]) {
+      setDecreasedQuantities(prev => ({
+        ...prev,
+        [medId]: false
+      }));
+      
+      // Clear the reason if we're back at or above original quantity
+      setReasons(prev => {
+        const newReasons = { ...prev };
+        delete newReasons[medId];
+        return newReasons;
+      });
+    }
+    
+    setQuantities(prev => ({
+      ...prev,
+      [medId]: currentQty + 1
     }));
   };
 
+const handleConfirmDecrement = () => {
+  if (currentMedicineId && tempReason.trim()) {
+    const currentQty = quantities[currentMedicineId];
+    if (currentQty > 1) {
+      const newQuantity = currentQty - 1;
+      setQuantities(prev => ({
+        ...prev,
+        [currentMedicineId]: newQuantity
+      }));
+      
+      // Mark this medicine as "has been decreased below original"
+      setDecreasedQuantities(prev => ({
+        ...prev,
+        [currentMedicineId]: true
+      }));
+      
+      // Store the reason
+      setReasons(prev => ({
+        ...prev,
+        [currentMedicineId]: tempReason.trim()
+      }));
+      
+      setShowReasonModal(false);
+      setCurrentMedicineId(null);
+      setCurrentOriginalQuantity(0);
+      setTempReason("");
+    }
+  }
+};
+
   const calculateMedicineTotal = (medicine: MedicineItem) => {
-    const medId = medicine.medId ?? medicine.id;
-    const quantity = medId ? quantities[medId.toString()] : medicine.qty ?? 1;
+    const medId = medicine.medId?.toString() ?? medicine.id?.toString();
+    const quantity = medId ? quantities[medId] : medicine.quantity ?? 1;
     const unitPrice = medicine.sellingPrice ?? medicine.price ?? 0;
     const gst = medicine.gst ?? 18;
     
@@ -210,31 +289,40 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
 
       // Add updated quantities if any changes were made
       const hasQuantityChanges = Object.keys(quantities).some(medId => {
-        const medicine = orderData.medicinesList?.find(m => 
-          (m.medId ?? m.id).toString() === medId
-        );
-        if (!medicine) return false;
-        
-        const initialQuantity = (medicine.Frequency || 0) * (medicine.daysCount || 0);
-        return quantities[medId] !== initialQuantity;
+        const originalQty = originalQuantities[medId];
+        return quantities[medId] !== originalQty;
       });
 
       if (hasQuantityChanges) {
         payload.updatedQuantities = quantities;
       }
+
+      // Add reasons if any quantity was decreased
+      if (Object.keys(reasons).length > 0) {
+        payload.reasons = reasons;
+      }
+
       const response = await AuthPost(
         `medicineInventoryPatientsOrder/${user.hospitalID}/completed/${patientTimeLineID}/updatePatientOrderStatus`,
         payload,
         token
-      );
+      ) as any;
       if (response?.data?.status === 201 || response?.status === 201 || response?.data?.status === 200) {
         const successMessage = response?.data?.message || "Order approved successfully";
       dispatch(showSuccess(successMessage));
         navigation.goBack();
       } else {
-        const errorMessage = response?.data?.message || response?.message || "Failed to approve order";
-        dispatch(showError(errorMessage));
-      }
+          const errorMessage =
+            response?.data?.message ||
+            response?.message ||
+            "Failed to approve order";
+
+          if (errorMessage === "Stock is low for selected medicines") {
+            dispatch(showWarning(errorMessage));
+          } else {
+            dispatch(showError(errorMessage));
+          }
+        }
     } catch (error: any) {
       dispatch(showError(error?.response?.data?.message || "Failed to approve order"));
     } finally {
@@ -260,7 +348,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
         `medicineInventoryPatientsOrder/${user.hospitalID}/rejected/${patientTimeLineID}/updatePatientOrderStatus`,
         { rejectReason },
         token
-      );
+      ) as any;
       if (response?.data?.status === 200 || response?.data?.status === 201 || response?.data?.status === 200) {
         dispatch(showSuccess("Order rejected successfully"));
         setShowRejectModal(false);
@@ -354,7 +442,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
             </View>
             
             {/* Nurse Information for IPD/Emergency */}
-            
+            {isIpdOrEmergency && (
               <View style={styles.nurseSection}>
                 <View style={styles.row}>
                   <Text style={styles.label}>Nurse</Text>
@@ -367,6 +455,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
                       !selectedNurse && styles.nurseSelectorHighlighted,
                       nurseError && styles.nurseSelectorError
                     ]}>
+                      <UserIcon size={16} color={nurseError ? COLORS.danger : COLORS.brand} />
                       <Text style={[
                         styles.value,
                         !selectedNurse && styles.nursePlaceholder,
@@ -374,10 +463,10 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
                       ]}>
                         {selectedNurse 
                           ? `${selectedNurse.firstName} ${selectedNurse.lastName}`
-                          : "Tap to select nurse"
+                          : " Tap to select nurse"
                         }
                       </Text>
-                      <UserIcon size={16} color={nurseError ? COLORS.danger : COLORS.brand} />
+                      <ChevronDown size={16} color={nurseError ? COLORS.danger : COLORS.brand} />
                     </View>
                   </TouchableOpacity>
                 </View>
@@ -388,11 +477,11 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
                   </View>
                 ) : (
                   <Text style={styles.nurseHelpText}>
-                    * Nurse selection is required 
+                    * Nurse selection is required for IPD/Emergency orders
                   </Text>
                 )}
               </View>
-           
+            )}
           </View>
 
           {/* Medicines List */}
@@ -413,8 +502,9 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
               </View>
 
               {orderData.medicinesList.map((medicine, index) => {
-                const medId = (medicine.medId ?? medicine.id).toString();
-                const currentQuantity = quantities[medId] || medicine.qty || 1;
+                const medId = (medicine.medId?.toString() ?? medicine.id?.toString());
+                const currentQuantity = medId ? quantities[medId] : medicine.quantity || 1;
+                const originalQuantity = medId ? originalQuantities[medId] : currentQuantity;
                 const totalAmount = calculateMedicineTotal(medicine);
                 
                 return (
@@ -432,19 +522,31 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
                       <Text style={styles.tdSub}>
                         Price: ₹{medicine.sellingPrice || medicine.price || 0} • GST: {medicine.gst || 18}%
                       </Text>
+                      {decreasedQuantities[medId || ''] && (
+                        <View style={styles.reasonContainer}>
+                          <Text style={styles.reasonLabel}>Reason for decrease : {reasons[medId || '']}</Text>
+                        </View>
+                      )}
                     </View>
                     <View style={{ flex: 1, alignItems: "center" }}>
                       <View style={styles.quantityControls}>
                         <TouchableOpacity
                           style={styles.quantityButton}
-                          onPress={() => handleDecrement(medId, currentQuantity)}
+                          onPress={() => handleDecrement(medId || '', currentQuantity)}
                         >
                           <Text style={styles.quantityButtonText}>-</Text>
                         </TouchableOpacity>
-                        <Text style={styles.quantityValue}>{currentQuantity}</Text>
+                        <View style={styles.quantityDisplay}>
+                          <Text style={styles.quantityValue}>{currentQuantity}</Text>
+                          {currentQuantity < originalQuantity && (
+                            <Text style={styles.originalQuantityText}>
+                              /{originalQuantity}
+                            </Text>
+                          )}
+                        </View>
                         <TouchableOpacity
                           style={styles.quantityButton}
-                          onPress={() => handleIncrement(medId, currentQuantity)}
+                          onPress={() => handleIncrement(medId || '', currentQuantity)}
                         >
                           <Text style={styles.quantityButtonText}>+</Text>
                         </TouchableOpacity>
@@ -569,12 +671,74 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
         </View>
       </Modal>
 
+      {/* Quantity Decrease Reason Modal */}
+      <Modal
+        visible={showReasonModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowReasonModal(false);
+          setTempReason("");
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.reasonModal}>
+            <Text style={styles.modalTitle}>Reason for Decreasing Quantity</Text>
+            <Text style={styles.modalSubtitle}>
+              You're decreasing quantity below the original order.
+              Please provide a reason:
+            </Text>
+            
+            {currentMedicineId && (
+              <Text style={styles.quantityInfo}>
+                Original Quantity: {currentOriginalQuantity} → New Quantity: {quantities[currentMedicineId] - 1}
+              </Text>
+            )}
+            
+            <TextInput
+              style={styles.reasonInput}
+              placeholder="Enter reason for decreasing quantity..."
+              placeholderTextColor={COLORS.placeholder}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              value={tempReason}
+              onChangeText={setTempReason} // Just update state, don't close modal
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowReasonModal(false);
+                  setTempReason("");
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleConfirmDecrement}
+                disabled={!tempReason.trim()}
+              >
+                <Text style={styles.confirmButtonText}>
+                  Confirm Decrease
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Reject Reason Modal */}
       <Modal
         visible={showRejectModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowRejectModal(false)}
+        onRequestClose={() => {
+          setShowRejectModal(false);
+          setRejectReason("");
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.rejectModal}>
@@ -608,7 +772,7 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmRejectButton]}
                 onPress={handleRejectOrder}
-                disabled={isProcessing}
+                disabled={isProcessing || !rejectReason.trim()}
               >
                 <Text style={styles.confirmRejectButtonText}>
                   {isProcessing ? "Processing..." : "Confirm Reject"}
@@ -662,7 +826,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: SPACING.md,
-    paddingBottom: 160, // Increased padding to ensure content doesn't hide behind buttons
+    paddingBottom: 160,
   },
   card: {
     borderRadius: 14,
@@ -780,10 +944,31 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginBottom: 1,
   },
+  reasonContainer: {
+    marginTop: 4,
+    padding: 4,
+    backgroundColor: COLORS.warningLight,
+    borderRadius: 4,
+  },
+  reasonLabel: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.warning,
+    fontWeight: "600",
+    fontStyle:'italic'
+  },
+  reasonText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.warningDark,
+    marginTop: 2,
+  },
   quantityControls: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  quantityDisplay: {
+    flexDirection: "row",
+    alignItems: "baseline",
   },
   quantityButton: {
     width: 28,
@@ -804,6 +989,12 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     minWidth: 30,
     textAlign: "center",
+  },
+  originalQuantityText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginLeft: 2,
+    fontStyle: 'italic',
   },
   totalRow: {
     marginTop: 8,
@@ -885,6 +1076,13 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     maxHeight: "80%",
   },
+  reasonModal: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: SPACING.lg,
+    width: "100%",
+    maxWidth: 500,
+  },
   rejectModal: {
     backgroundColor: COLORS.card,
     borderRadius: 16,
@@ -904,6 +1102,16 @@ const styles = StyleSheet.create({
     color: COLORS.sub,
     marginBottom: SPACING.md,
     textAlign: "center",
+  },
+  quantityInfo: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.brand,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: SPACING.md,
+    backgroundColor: COLORS.brandLight,
+    padding: SPACING.sm,
+    borderRadius: 8,
   },
   nurseList: {
     maxHeight: 300,
@@ -937,7 +1145,7 @@ const styles = StyleSheet.create({
   },
   reasonInput: {
     borderWidth: 2,
-    borderColor: COLORS.danger,
+    borderColor: COLORS.warning,
     borderRadius: 8,
     padding: SPACING.sm,
     minHeight: 100,
@@ -962,10 +1170,18 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: COLORS.sub,
   },
+  confirmButton: {
+    backgroundColor: COLORS.brand,
+  },
   confirmRejectButton: {
     backgroundColor: COLORS.danger,
   },
   cancelButtonText: {
+    color: COLORS.buttonText,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: "600",
+  },
+  confirmButtonText: {
     color: COLORS.buttonText,
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",

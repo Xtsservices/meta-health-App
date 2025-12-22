@@ -38,10 +38,12 @@ const InvoiceDetailsMobile: React.FC = () => {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   const { invoice, source, nurses }: RouteParams = route.params;
+  console.log("invoicee",invoice)
   const getNurseName = (nurseId: number) => {
     const nurse = nurses?.find(n => n.id === nurseId);
     return nurse ? `${nurse.firstName} ${nurse.lastName}` : `Nurse #${nurseId}`;
   };
+  const hasPrescription = Boolean(invoice?.prescriptionURL);
   const isIPD = invoice?.dept?.includes('IPD');
   const firstMedicine = invoice?.medicinesList?.[0];
   const nurseId = (firstMedicine as any)?.nurseID;
@@ -172,26 +174,22 @@ if (isBillingSource && isPharmacyUser) {
             <Text style={styles.value}>{invoice.patientID}</Text>
           </View>
 
-          <View style={styles.row}>
+          {/* <View style={styles.row}>
             <Text style={styles.label}>Department</Text>
             <Text style={styles.value}>{invoice.dept}</Text>
-          </View>
+          </View> */}
 
           <View style={styles.row}>
             <Text style={styles.label}>Type</Text>
             <Text style={styles.value}>{invoice.pType || "-"}</Text>
           </View>
 
-          {(invoice.firstName || invoice.lastName) && (
             <View style={styles.row}>
               <Text style={styles.label}>Doctor</Text>
               <Text style={styles.value}>
-                {`${invoice.firstName || ""} ${
-                  invoice.lastName || ""
-                }`.trim()}
+                {`${user?.firstName || ""} ${user?.lastName || ""}`.trim()}
               </Text>
             </View>
-          )}
 
           {invoice.category && (
             <View style={styles.row}>
@@ -320,7 +318,7 @@ if (isBillingSource && isPharmacyUser) {
     {isBillingSource ? "Payment Summary" : "Invoice Total"}
   </Text>
 
-  {isBillingSource ? (
+  {isBillingSource && !hasPrescription ? (
     <>
       {/* Total Amount */}
       <View style={styles.breakdownRow}>
@@ -363,7 +361,10 @@ if (isBillingSource && isPharmacyUser) {
 
 
         {/* Pay button for Billing source */}
-       {isBillingSource && numericDue > 0 && (
+       {isBillingSource &&
+  numericDue > 0 &&
+  !hasPrescription &&
+  !(isPharmacyUser ) && (
   <View style={styles.payButtonContainer}>
     <TouchableOpacity
       style={[styles.payButton, { backgroundColor: COLORS.brand }]}

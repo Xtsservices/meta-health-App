@@ -656,7 +656,7 @@ export default function AddMedicineScreen() {
     options: string[];
     onSelect: (option: string) => void;
   }) => {
-    if (!visible || options.length === 0 || focusedInputType !== 'medicine') return null;
+    if (!visible || options.length === 0) return null;
 
     return (
       <View style={styles.dropdownContainer}>
@@ -740,6 +740,9 @@ export default function AddMedicineScreen() {
               placeholderTextColor={COLORS.placeholderText}
               value={row.medicineName}
               onChangeText={(t) => {
+                setFocusedRowId(rowId);
+                setFocusedInputType('medicine');
+
                 updateRow(rowId, {
                   medicineName: t,
                   isMedInDb: false,
@@ -1000,6 +1003,8 @@ export default function AddMedicineScreen() {
               placeholderTextColor={COLORS.placeholderText}
               value={searchTest[rowId] || ""}
               onChangeText={(t) => {
+                setFocusedRowId(rowId);
+                setFocusedInputType('test');
                 setSearchTest(prev => ({ ...prev, [rowId]: t }));
                 updateRow(rowId, {
                   isTestValidated: false,
@@ -1010,13 +1015,6 @@ export default function AddMedicineScreen() {
               onFocus={() => {
                 setFocusedRowId(rowId);
                 setFocusedInputType('test');
-              }}
-              onBlur={() => {
-                setTimeout(() => {
-                  if (focusedInputType !== 'test') {
-                    updateRowField(rowId, 'showTestDropdown', false);
-                  }
-                }, 200);
               }}
             />
             <TestDropdown
@@ -1194,8 +1192,13 @@ export default function AddMedicineScreen() {
     setFocusedRowId(null);
     setFocusedInputType(null);
     // Clear option caches for dropdowns (this hides dropdowns without changing rows)
-    setMedicineOptions({});
-    setTestOptions({});
+    setRows(prev =>
+    prev.map(r => ({
+      ...r,
+      showMedicineDropdown: false,
+      showTestDropdown: false,
+    }))
+  );
   };
 
   return (

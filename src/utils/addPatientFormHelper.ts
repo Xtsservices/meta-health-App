@@ -303,3 +303,73 @@ export const validateAddPatientForm = (
     errorMessage,
   };
 };
+
+
+export const getNameValidationMessage = (name: string): string | undefined => {
+  const trimmed = name.trim();
+  
+  if (!trimmed) {
+    return "Name is required";
+  }
+  
+  const nameRegex = /^[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\s]+$/;
+  
+  if (!nameRegex.test(trimmed)) {
+    return "Name should contain only letters and spaces";
+  }
+  if (trimmed.length < 2) {
+    return "Name should be at least 2 characters long";
+  }
+  if (trimmed.length > 50) {
+    return "Name should not exceed 50 characters";
+  }
+  if (trimmed.includes("  ")) {
+    return "Name should not contain consecutive spaces";
+  }
+  if (name !== trimmed) {
+    return "Name should not start or end with spaces";
+  }
+  if (!/[A-Za-z]/.test(trimmed)) {
+    return "Name must contain at least one letter";
+  }
+  
+  return undefined;
+};
+
+export const getCityValidationMessage = (city: string): string | undefined => {
+  const trimmed = city.trim();
+  
+  if (!trimmed) {
+    return "City is required";
+  }
+  const cityRegex = /^[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\s-]+$/;
+  
+  if (!cityRegex.test(trimmed)) {
+    return "City should contain only letters, spaces, and hyphens";
+  }
+  if (trimmed.length < 2) {
+    return "City should be at least 2 characters long";
+  }
+  
+  // Check maximum length
+  if (trimmed.length > 50) {
+    return "City should not exceed 50 characters";
+  }
+  
+  // Check for consecutive spaces
+  if (trimmed.includes("  ")) {
+    return "City should not contain consecutive spaces";
+  }
+  
+  // Check if city starts or ends with space
+  if (city !== trimmed) {
+    return "City should not start or end with spaces";
+  }
+  
+  // Check for at least one non-space character
+  if (!/[A-Za-z]/.test(trimmed)) {
+    return "City must contain at least one letter";
+  }
+  
+  return undefined;
+};

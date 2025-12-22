@@ -192,110 +192,61 @@ const FilterModal: React.FC<{
 };
 
 // Patient Row Component
+// Patient Row Component - Updated version
 const PatientRow: React.FC<{
   patient: PatientCardData;
   onViewDetails: (patient: PatientCardData) => void;
   tabIndex: number;
   departmentName: string;
 }> = ({ patient, onViewDetails, tabIndex, departmentName }) => {
-  const getStatusText = (status?: string) => {
-    return status?.charAt(0)?.toUpperCase() + status?.slice(1) || "Active";
+  const getStatusText = (status?: string) =>
+    status ? status.charAt(0).toUpperCase() + status.slice(1) : "Active";
+
+  const getPatientTypeText = (patient: PatientCardData) => {
+    if (patient?.ptype === 3 || patient?.isFromAlert === false) return "Walk-In";
+    if (patient?.patientStartStatus === 1) return "OPD";
+    if (patient?.patientStartStatus !== undefined) return "IPD";
+    return "Walk-In";
   };
 
-  const getPatientTypeText = (ptype?: number) => {
-    switch (ptype) {
-      case 1: return "IPD";
-      case 2: return "OPD";
-      case 3: return "Walk-In";
-      default: return "--";
-    }
-  };
+  const name =
+    patient?.pName?.charAt(0)?.toUpperCase() + patient?.pName?.slice(1) ||
+    patient?.patientName?.charAt(0)?.toUpperCase() +
+      patient?.patientName?.slice(1) ||
+    "";
 
-  const paddedId = String(patient?.id ?? "").padStart(4, "0");
-  const name = patient?.pName?.charAt(0)?.toUpperCase() + patient?.pName?.slice(1) ?? 
-               patient?.patientName?.charAt(0)?.toUpperCase() + patient?.patientName?.slice(1) ?? 
-               "-- ";
-  const phone = patient?.phoneNumber ?? patient?.phone ?? "—";
-  const ward = patient?.ward_name ?? "—";
+  const phone = patient?.phoneNumber || patient?.phone || "";
+  const ward = patient?.ward_name || "";
+  const patientTypeText = getPatientTypeText(patient);
 
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
+      activeOpacity={0.85}
       style={styles.card}
       onPress={() => onViewDetails(patient)}
     >
-      <View style={styles.cardRow}>
+      {/* TOP ROW */}
+      <View style={styles.cardTopRow}>
         <View style={styles.avatar}>
           {patient?.photo ? (
-            <Image
-              source={{ uri: patient?.photo }}
-              style={styles.avatarImage}
-            />
+            <Image source={{ uri: patient.photo }} style={styles.avatarImage} />
           ) : (
-            <UserIcon size={ICON_SIZE.md} color={COLORS.sub} />
+            <UserIcon size={22} color={COLORS.sub} />
           )}
         </View>
 
-        <View style={styles.meta}>
-          <Text
-            style={styles.name}
-            numberOfLines={1}
-          >
+        <View style={styles.cardMain}>
+          <Text style={styles.name} numberOfLines={1}>
             {name}
           </Text>
 
           <View style={styles.infoRow}>
-            <Text
-              style={styles.sub}
-              numberOfLines={1}
-            >
-              ID: {paddedId}
-            </Text>
+            {patient?.patientID && (
+              <Text style={styles.sub}>ID: {patient.patientID}</Text>
+            )}
             <Text style={styles.dot}>•</Text>
-            <Text style={styles.badge}>
-              {getPatientTypeText(patient?.ptype)}
-            </Text>
+            <Text style={styles.badge}>{patientTypeText}</Text>
           </View>
-
-          <View style={styles.detailRow}>
-            <PhoneIcon size={FONT_SIZE.xs} color={COLORS.sub} />
-            <Text style={styles.sub} numberOfLines={1}>
-              {phone}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <DepartmentIcon size={FONT_SIZE.xs} color={COLORS.sub} />
-            <Text style={styles.sub} numberOfLines={1}>
-              {departmentName}
-            </Text>
-          </View>
-
-          {ward !== "—" && (
-            <View style={styles.detailRow}>
-              <WardIcon size={FONT_SIZE.xs} color={COLORS.sub} />
-              <Text style={styles.sub} numberOfLines={1}>
-                {ward}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.detailRow}>
-            <StatusIcon size={FONT_SIZE.xs} color={COLORS.sub} />
-            <GradientStatusBadge
-              status={patient?.status ?? "active"}
-              text={getStatusText(patient?.status)}
-            />
-          </View>
-
-          {tabIndex === 1 && patient?._completedTime && (
-            <View style={styles.detailRow}>
-              <CalendarIcon size={FONT_SIZE.xs} color={COLORS.sub} />
-              <Text style={styles.sub}>
-                Completed: {formatDateTime(patient?._completedTime)}
-              </Text>
-            </View>
-          )}
         </View>
 
         <TouchableOpacity
@@ -305,15 +256,55 @@ const PatientRow: React.FC<{
             onViewDetails(patient);
           }}
         >
-          <EyeIcon size={ICON_SIZE.sm} color={COLORS.text} />
-          <Text style={styles.viewBtnText}>
-            View
-          </Text>
+          <EyeIcon size={18} color={COLORS.brand} />
+          <Text style={styles.viewBtnText}>View</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* DETAILS */}
+      <View style={styles.cardDetails}>
+        {phone ? (
+          <View style={styles.detailRow}>
+            <PhoneIcon size={14} color={COLORS.sub} />
+            <Text style={styles.sub}>{phone}</Text>
+          </View>
+        ) : null}
+
+        {departmentName ? (
+          <View style={styles.detailRow}>
+            <DepartmentIcon size={14} color={COLORS.sub} />
+            <Text style={styles.sub}>{departmentName}</Text>
+          </View>
+        ) : null}
+
+          {ward ? (
+            <View style={styles.detailRow}>
+              <WardIcon size={14} color={COLORS.sub} />
+              <Text style={styles.sub}>{ward}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.detailRow}>
+            <StatusIcon size={14} color={COLORS.sub} />
+            <GradientStatusBadge
+              status={patient?.status ?? "active"}
+              text={getStatusText(patient?.status)}
+            />
+          </View>
+
+          {tabIndex === 1 && patient?._completedTime ? (
+            <View style={styles.detailRow}>
+              <CalendarIcon size={14} color={COLORS.sub} />
+              <Text style={styles.sub}>
+                Completed: {formatDateTime(patient._completedTime)}
+              </Text>
+            </View>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
 };
+
 
 // Main Component
 const PatientListLab: React.FC = () => {
@@ -377,7 +368,7 @@ const PatientListLab: React.FC = () => {
           const departmentData = await AuthFetch(
             `department/singledpt/${departmentID}`,
             token
-          );
+          ) as any;
           
           // Handle different response structures
           let departmentName = "--";
@@ -407,9 +398,9 @@ const PatientListLab: React.FC = () => {
     return newDepartmentNames;
   }, []);
 
-  // Helper function to get department name for a patient
+  // Update the getDepartmentName function
   const getDepartmentName = (patient: PatientCardData) => {
-    if (!patient) return "--";
+    if (!patient) return "";
     
     const departmentID = patient?.departmentID;
     
@@ -418,10 +409,13 @@ const PatientListLab: React.FC = () => {
     }
     
     // Fallback to existing department fields
-    return patient?.dept ?? 
-           patient?.departmentName ?? 
-           patient?.department_name ?? 
-           "--";
+    const deptName = patient?.dept ?? 
+                    patient?.departmentName ?? 
+                    patient?.department_name ?? 
+                    "";
+    
+    // Return empty string if it's "--"
+    return deptName === "--" ? "" : deptName;
   };
 
   // Fetch patient list
@@ -443,8 +437,7 @@ const PatientListLab: React.FC = () => {
         const response = await AuthFetch(
           `test/getWalkinTaxinvoicePatientsData/${user.hospitalID}/${user.roleName}`,
           token
-        );
-        
+        ) as any ;
         if (response?.data?.status === 200) {
           patientList = response?.data?.data ?? [];
         } else {
@@ -455,7 +448,7 @@ const PatientListLab: React.FC = () => {
         const response = await AuthFetch(
           `test/${user.roleName}/${user.hospitalID}/${user.id}/getAllPatient`,
           token
-        );
+        ) as any;
         if (response?.data?.message === "success") {
           patientList = response?.data?.patientList ?? [];
           
@@ -471,7 +464,7 @@ const PatientListLab: React.FC = () => {
             const walkinResponse = await AuthFetch(
               `test/getWalkinTaxinvoicePatientsData/${user.hospitalID}/${user.roleName}`,
               token
-            );
+            ) as any;
             if (walkinResponse?.data?.status === 200) {
               patientList = [...patientList, ...(walkinResponse?.data?.data ?? [])];
             }
@@ -502,6 +495,16 @@ const PatientListLab: React.FC = () => {
       setRefreshing(false);
     }
   }, [user, patientType, dispatch, fetchDepartmentNames, checkAuth]);
+const getCompletedSortDate = (p: any) => {
+  return new Date(
+    p._completedTime ||
+    p.completedTime ||
+    p.latestTestTime ||
+    p.updatedOn ||
+    p.addedOn ||
+    0
+  ).getTime();
+};
 
   // Fetch completed reports
   const getReportsCompletedData = useCallback(async (isRefresh = false) => {
@@ -522,7 +525,7 @@ const PatientListLab: React.FC = () => {
         const walkinResponse = await AuthFetch(
           `test/${user.roleName}/${user.hospitalID}/${user.id}/getAllWalkinReportsCompletedPatients`,
           token
-        );
+        ) as any;
         
         if (walkinResponse?.data?.message === "success") {
           const walkinPatients = (walkinResponse?.data?.patientList ?? [])?.map((p: any) => {
@@ -533,10 +536,15 @@ const PatientListLab: React.FC = () => {
               return latest;
             }, null);
             
-            return {
-              ...p,
-              _completedTime: latestTest ?? p.addedOn
-            };
+return {
+  ...p,
+  _completedTime: latestTest ?? p.addedOn,
+  sortDate: getCompletedSortDate({
+    ...p,
+    _completedTime: latestTest ?? p.addedOn,
+  }),
+};
+
           });
           patientList = walkinPatients;
         }
@@ -558,10 +566,23 @@ const PatientListLab: React.FC = () => {
             filteredList = filteredList?.filter((each: any) => each.patientStartStatus === 1);
           }
 
-          const processedPatients = filteredList?.map((p: any) => ({
-            ...p,
-            _completedTime: p.completedTime ?? p.addedOn
-          }));
+const processedPatients = filteredList?.map((p: any) => {
+  const completed =
+    p.completedTime ||
+    p.latestTestTime ||
+    p.updatedOn ||
+    p.addedOn;
+
+  return {
+    ...p,
+    _completedTime: completed,
+    sortDate: getCompletedSortDate({
+      ...p,
+      _completedTime: completed,
+    }),
+  };
+});
+
 
           patientList = patientType === 0 ? [...patientList, ...processedPatients] : processedPatients;
         }
@@ -569,8 +590,9 @@ const PatientListLab: React.FC = () => {
 
       // Sort by _completedTime descending (latest first)
       patientList?.sort((a: any, b: any) => 
-        new Date(b._completedTime).getTime() - new Date(a._completedTime).getTime()
+        (b.sortDate ?? 0) - (a.sortDate ?? 0)
       );
+
 
       setCompletedPatientData(patientList);
 
@@ -657,7 +679,7 @@ const PatientListLab: React.FC = () => {
     } else {
       // For "Confirmed Patient Care Alerts" tab, use existing navigation
       const route = departmentType === 'radiology' 
-        ? "PatientDetailsRadio" 
+        ? "PatientDetailsLab" 
         : "PatientDetailsLab";
       
       navigation.navigate(route, { state: newState });
@@ -678,6 +700,19 @@ const PatientListLab: React.FC = () => {
   const onRefresh = () => {
     loadData(true);
   };
+    const getPatientTypeLabel = (type: number) => {
+  switch (type) {
+    case 1:
+      return "Inpatient Services";
+    case 2:
+      return "Outpatient Care";
+    case 3:
+      return "Walk-In";
+    default:
+      return "All Patients";
+  }
+};
+
 
   const renderHeader = () => (
     <View style={styles.header}>
@@ -700,9 +735,10 @@ const PatientListLab: React.FC = () => {
           onPress={() => setShowFilterModal(true)}
         >
           <FilterIcon size={ICON_SIZE.sm} color={COLORS.brand} />
-          <Text style={styles.filterButtonText}>
-            Filter
-          </Text>
+<Text style={styles.filterButtonText}>
+  {getPatientTypeLabel(patientType)}
+</Text>
+
         </TouchableOpacity>
       </View>
     </View>
@@ -803,7 +839,7 @@ const PatientListLab: React.FC = () => {
                 </Text>
               </LinearGradient>
             ) : (
-              <Text style={[styles.tabText, { color: COLORS.sub }]}>
+              <Text style={styles.tabText}>
                 Confirmed Patient Care Alerts
               </Text>
             )}
@@ -839,7 +875,7 @@ const PatientListLab: React.FC = () => {
 
         <FlatList
           data={pagedData}
-          keyExtractor={(item, index) => `${item?.id}-${index}`}
+          keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
             <PatientRow
               patient={item}
@@ -848,21 +884,17 @@ const PatientListLab: React.FC = () => {
               departmentName={getDepartmentName(item)}
             />
           )}
-          ListEmptyComponent={renderEmpty}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
           contentContainerStyle={[
             styles.listContent,
             { paddingBottom: bottomPad },
           ]}
-          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={renderPagination}
-          scrollIndicatorInsets={{ bottom: bottomPad }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
               colors={[COLORS.brand]}
-              tintColor={COLORS.brand}
             />
           }
         />
@@ -912,28 +944,30 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     marginHorizontal: SPACING.md,
     marginTop: SPACING.md,
-    borderRadius: 12,
-    padding: 4,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    borderRadius: 16,
+    padding: 6,              // ⬅️ gives breathing space
+    height: 50,              // ⬅️ MAIN HEIGHT FIX
     elevation: 3,
-    overflow: 'hidden',
   },
+
   tab: {
     flex: 1,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
+    borderRadius: 12,
+  justifyContent: "center",
+  alignItems: "center",
+},
+
   tabActive: {
     // Gradient handled by LinearGradient component
   },
-  tabGradient: {
-    paddingVertical: SPACING.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+tabGradient: {
+  flex: 1,                 // ⬅️ MUST
+  width: "100%",
+  borderRadius: 12,
+  justifyContent: "center",
+  alignItems: "center",
+},
+
   tabText: {
     fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: "600",
@@ -989,73 +1023,72 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     flexGrow: 1,
   },
-  card: {
-    borderRadius: 14,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  cardRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.bg,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: SPACING.sm,
-  },
-  avatarImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 24,
-  },
-  meta: {
-    flex: 1,
-  },
-  name: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
-  sub: {
-    fontSize: FONT_SIZE.sm,
-    marginTop: 2,
-    color: COLORS.sub,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-    gap: 6,
-  },
-  dot: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.sub,
-  },
-  badge: {
-    fontSize: FONT_SIZE.sm,
-    fontWeight: "700",
-    color: COLORS.brand,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 4,
-  },
-  // Gradient Status Badge Styles
+card: {
+  backgroundColor: COLORS.card,
+  borderRadius: 16,
+  padding: SPACING.md,
+  borderWidth: 1,
+  borderColor: COLORS.border,
+  shadowColor: "#000",
+  shadowOpacity: 0.08,
+  shadowRadius: 8,
+  shadowOffset: { width: 0, height: 4 },
+  elevation: 4,
+},
+
+cardTopRow: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+
+cardMain: {
+  flex: 1,
+  marginLeft: SPACING.sm,
+},
+
+cardDetails: {
+  marginTop: SPACING.sm,
+  paddingTop: SPACING.sm,
+  borderTopWidth: 1,
+  borderTopColor: COLORS.border,
+  gap: 6,
+},
+
+avatar: {
+  width: 52,
+  height: 52,
+  borderRadius: 26,
+  backgroundColor: COLORS.bg,
+  alignItems: "center",
+  justifyContent: "center",
+  borderWidth: 1.5,
+  borderColor: COLORS.border,
+},
+
+avatarImage: {
+  width: "100%",
+  height: "100%",
+  borderRadius: 26,
+},
+
+name: {
+  fontSize: FONT_SIZE.md,
+  fontWeight: "700",
+  color: COLORS.text,
+},
+
+infoRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  marginTop: 4,
+},
+
+detailRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 8,
+},
   gradientStatusBadge: {
     paddingHorizontal: SPACING.xs,
     paddingVertical: 4,
@@ -1066,23 +1099,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: COLORS.buttonText,
   },
-  viewBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  viewBtnText: {
-    fontSize: FONT_SIZE.sm,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
+viewBtn: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 6,
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+  borderWidth: 1.5,
+  borderColor: COLORS.brand,
+},
+
+viewBtnText: {
+  fontSize: FONT_SIZE.sm,
+  fontWeight: "700",
+  color: COLORS.brand,
+},
+
   emptyWrap: {
     paddingVertical: 60,
     alignItems: "center",

@@ -320,7 +320,7 @@ const PharmacyExpenses: React.FC = () => {
                 <SearchIcon size={20} color={COLORS.sub} style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search supplier, contact, manufacturer, code..."
+                  placeholder="Search supplier, contact, manufacturer"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholderTextColor={COLORS.sub}
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: COLORS.card,
     borderRadius: 12,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.xs,
     borderWidth: 1,
     borderColor: COLORS.border,
   },

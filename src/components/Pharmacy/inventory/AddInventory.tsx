@@ -108,7 +108,7 @@ const AddInventory: React.FC = ({ navigation }: any) => {
       const response = await AuthFetch(
         `medicineInventoryLogs/${user.hospitalID}/getInventoryLogs`,
         token
-      );
+      ) as any;
 
       let data: any[] = [];
       if (response?.status === 200) {
@@ -269,56 +269,83 @@ const AddInventory: React.FC = ({ navigation }: any) => {
   }: {
     item: ExpenseData;
     index: number;
-  }) => (
+  }) => {
+  const isLast = index === paginatedData.length - 1;
+
+  return (
     <TouchableOpacity
-      style={styles.inventoryCard}
+      activeOpacity={0.92}
       onPress={() => navigateToInventoryDetail(item)}
+      style={styles.timelineCard}
     >
-      <View style={styles.cardHeader}>
-        <View style={styles.agencyInfo}>
-          <Text style={styles.agencyName}>{item?.agencyName || "Unknown Agency"}</Text>
-          <Text style={styles.manufacturer}>{item?.manufacturer || "Unknown Manufacturer"}</Text>
+      {/* Timeline Column */}
+      <View style={styles.timelineCol}>
+        <View style={styles.circleOuter}>
+          <View style={styles.circleInner} />
         </View>
-        <View style={styles.statusBadge}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>Active</Text>
-        </View>
+        {!isLast && <View style={styles.timelineLine} />}
       </View>
 
-      <View style={styles.cardDetails}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Contact:</Text>
-          <Text style={styles.detailValue}>{item?.contactNo || "N/A"}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Agent Code:</Text>
-          <Text style={styles.detailValue}>{item?.agentCode ?? "N/A"}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Added By:</Text>
-          <Text style={styles.detailValue}>
-            {`${item?.firstName || ""} ${item?.lastName || ""}`.trim() || "Unknown User"}
+      {/* Content */}
+      <View style={styles.cardContent}>
+        {/* Header */}
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {item?.agentCode || "Unknown Agency"}
           </Text>
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeBadgeText}>Inventory</Text>
+          </View>
         </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Items:</Text>
-          <Text style={styles.detailValue}>
-            {Array.isArray(item?.medicinesList) ? item.medicinesList.length : 0} medicines
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.cardFooter}>
-        <Text style={styles.dateText}>
-          {item?.addedOn ? formatDate(item.addedOn) : "Unknown Date"}
+        {/* Details */}
+        <Text style={styles.detailText}>
+          Manufacturer:{" "}
+          <Text style={styles.detailStrong}>
+            {item?.manufacturer || "—"}
+          </Text>
         </Text>
-        <View style={styles.arrowContainer}>
-          <ChevronRightIcon size={16} color={COLORS.brand || '#14b8a6'} />
+
+        <Text style={styles.detailText}>
+          Added By:{" "}
+          <Text style={styles.detailStrong}>
+            {`${item?.firstName || ""} ${item?.lastName || ""}`.trim() ||
+              "Unknown"}
+          </Text>
+        </Text>
+
+        <Text style={styles.detailText}>
+          Agent Code:{" "}
+          <Text style={styles.detailStrong}>
+            {item?.agentCode || 0}
+          </Text>
+        </Text>
+        
+        <Text style={styles.detailText}>
+          Contact:{" "}
+          <Text style={styles.detailStrong}>
+            {item?.contactNo || "N/A"}
+          </Text>
+        </Text>
+
+        <Text style={styles.detailText}>
+          Added On:{" "}
+          <Text style={styles.detailStrong}>
+            {item?.addedOn ? formatDate(item.addedOn) : "—"}
+          </Text>
+        </Text>
+
+        {/* Click Here Arrow */}
+        <View style={styles.clickRow}>
+          <View style={styles.clickContainer}>
+            <Text style={styles.clickText}>Click to view details</Text>
+            <ChevronRightIcon size={14} color={COLORS.brand || '#14b8a6'} />
+          </View>
         </View>
       </View>
     </TouchableOpacity>
   );
-
+};
   // compute bottom padding for scroll content so the footer doesn't cover it
   const contentBottomPadding = FOOTER_HEIGHT + (insets.bottom || 0) + SPACING.lg;
 
@@ -366,9 +393,9 @@ const AddInventory: React.FC = ({ navigation }: any) => {
                   placeholderTextColor={COLORS.sub || '#6b7280'}
                 />
               </View>
-              <TouchableOpacity style={styles.filterButton}>
+              {/* <TouchableOpacity style={styles.filterButton}>
                 <FilterIcon size={18} color={COLORS.brand || '#14b8a6'} />
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </View>
           </View>
 
@@ -538,6 +565,25 @@ const styles = StyleSheet.create({
   headerContent: {
     flex: 1,
   },
+  clickRow: {
+  marginTop: 10,
+  alignItems: 'flex-end',
+},
+clickContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  backgroundColor: COLORS.brand + '15',
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  borderRadius: 6,
+},
+clickText: {
+  fontSize: 11,
+  color: COLORS.brand || '#14b8a6',
+  fontWeight: '500',
+  fontStyle:'italic'
+},
   headerTitle: {
     fontSize: FONT_SIZE.xl,
     fontWeight: "700",
@@ -676,6 +722,107 @@ const styles = StyleSheet.create({
   sectionTitleContainer: {
     flex: 1,
   },
+timelineCard: {
+  flexDirection: "row",
+  backgroundColor: "#ffffff",
+  borderRadius: 18,
+  borderWidth: 1,
+  borderColor: "#e5e7eb",
+  marginBottom: 18,
+  paddingVertical: 18,
+  paddingHorizontal: 16,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.07,
+  shadowRadius: 8,
+  elevation: 4,
+},
+
+timelineCol: {
+  width: 44,
+  alignItems: "center",
+},
+
+circleOuter: {
+  width: 30,
+  height: 30,
+  borderRadius: 15,
+  borderWidth: 2,
+  borderColor: "#5ec8b5",
+  justifyContent: "center",
+  alignItems: "center",
+  backgroundColor: "#ffffff",
+  zIndex: 2,
+},
+
+circleInner: {
+  width: 12,
+  height: 12,
+  borderRadius: 6,
+  backgroundColor: "#5ec8b5",
+},
+
+timelineLine: {
+  width: 2,
+  flex: 1,
+  backgroundColor: "#e5e7eb",
+  marginTop: 6,
+},
+
+cardContent: {
+  flex: 1,
+  paddingLeft: 6,
+},
+
+cardHeaderRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 6,
+},
+
+cardTitle: {
+  fontSize: FONT_SIZE.lg,
+  fontWeight: "700",
+  color: "#111827",
+},
+
+typeBadge: {
+  backgroundColor: "#e6f6f2",
+  paddingHorizontal: 12,
+  paddingVertical: 4,
+  borderRadius: 10,
+},
+
+typeBadgeText: {
+  fontSize: FONT_SIZE.xs,
+  fontWeight: "700",
+  color: "#2fa48f",
+},
+
+detailText: {
+  fontSize: FONT_SIZE.sm,
+  color: "#6b7280",
+  marginTop: 6,
+  lineHeight: 20,
+},
+
+detailStrong: {
+  color: "#111827",
+  fontWeight: "600",
+},
+statusRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+},
+
+statusBadgeText: {
+  fontSize: FONT_SIZE.xs,
+  fontWeight: "700",
+  color: "#9ca3af",
+},
+
   sectionTitle: {
     fontSize: FONT_SIZE.lg,
     fontWeight: "600",
@@ -733,18 +880,6 @@ const styles = StyleSheet.create({
   inventoryList: {
     gap: SPACING.sm,
   },
-  inventoryCard: {
-    backgroundColor: COLORS.card || '#ffffff',
-    borderRadius: 12,
-    padding: SPACING.lg,
-    borderWidth: 1,
-    borderColor: COLORS.border || '#e5e7eb',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -754,38 +889,7 @@ const styles = StyleSheet.create({
   agencyInfo: {
     flex: 1,
   },
-  agencyName: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: "600",
-    color: COLORS.text || '#1f2937',
-    marginBottom: 2,
-  },
-  manufacturer: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.sub || '#6b7280',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.success + '15',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.success + '30',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.success || '#10b981',
-    marginRight: 4,
-  },
-  statusText: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.success || '#10b981',
-    fontWeight: "500",
-  },
+
   cardDetails: {
     gap: 6,
     marginBottom: SPACING.md,
@@ -804,18 +908,7 @@ const styles = StyleSheet.create({
     color: COLORS.text || '#1f2937',
     fontWeight: "500",
   },
-  cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: (COLORS.border || '#e5e7eb') + '30',
-  },
-  dateText: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.sub || '#6b7280',
-  },
+
   arrowContainer: {
     width: 24,
     height: 24,
@@ -854,6 +947,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: SPACING.lg,
   },
+  
   emptyStateButton: {
     borderRadius: 8,
     overflow: 'hidden',
@@ -942,6 +1036,156 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card || '#ffffff',
     zIndex: 9,
   },
+  inventoryCard: {
+  flexDirection: "row",
+  backgroundColor: COLORS.card,
+  borderRadius: 16,
+  borderWidth: 1,
+  borderColor: COLORS.border,
+  marginBottom: SPACING.md,
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.08,
+  shadowRadius: 12,
+  elevation: 6,
+  overflow: "hidden",
+},
+
+leftAccent: {
+  width: 5,
+  backgroundColor: COLORS.brand,
+},
+
+cardBody: {
+  flex: 1,
+  padding: SPACING.lg,
+},
+
+cardTopRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: SPACING.sm,
+},
+
+agencyName: {
+  fontSize: FONT_SIZE.md,
+  fontWeight: "700",
+  color: COLORS.text,
+},
+
+manufacturer: {
+  fontSize: FONT_SIZE.sm,
+  color: COLORS.sub,
+  marginTop: 2,
+},
+
+statusBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  backgroundColor: COLORS.success + "15",
+  paddingHorizontal: SPACING.sm,
+  paddingVertical: 4,
+  borderRadius: 999,
+  borderWidth: 1,
+  borderColor: COLORS.success + "30",
+},
+
+statusDot: {
+  width: 6,
+  height: 6,
+  borderRadius: 3,
+  backgroundColor: COLORS.success,
+  marginRight: 6,
+},
+
+statusText: {
+  fontSize: FONT_SIZE.xs,
+  color: COLORS.success,
+  fontWeight: "600",
+},
+
+divider: {
+  height: 1,
+  backgroundColor: COLORS.border,
+  opacity: 0.4,
+  marginVertical: SPACING.md,
+},
+
+metaRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+},
+
+metaItem: {
+  alignItems: "center",
+  flex: 1,
+},
+
+metaLabel: {
+  fontSize: FONT_SIZE.xs,
+  color: COLORS.sub,
+  marginBottom: 4,
+},
+
+metaValue: {
+  fontSize: FONT_SIZE.sm,
+  fontWeight: "600",
+  color: COLORS.text,
+},
+
+cardFooter: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginTop: 14,
+  paddingTop: 10,
+  borderTopWidth: 1,
+  borderTopColor: "#f1f5f9",
+},
+
+statusLabel: {
+  fontSize: FONT_SIZE.xs,
+  letterSpacing: 1,
+  fontWeight: "700",
+  color: "#9ca3af",
+},
+
+statusPill: {
+  backgroundColor: "#f0fdf9",
+  borderRadius: 10,
+  paddingHorizontal: 16,
+  paddingVertical: 6,
+  borderWidth: 1,
+  borderColor: "#99f6e4",
+},
+
+statusPillText: {
+  fontSize: FONT_SIZE.xs,
+  fontWeight: "700",
+  color: "#0f766e",
+},
+
+dateText: {
+  fontSize: FONT_SIZE.xs,
+  color: COLORS.sub,
+},
+
+cta: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 4,
+  backgroundColor: COLORS.brand + "15",
+  paddingHorizontal: SPACING.md,
+  paddingVertical: 6,
+  borderRadius: 999,
+},
+
+ctaText: {
+  fontSize: FONT_SIZE.sm,
+  fontWeight: "600",
+  color: COLORS.brand,
+},
+
 });
 
 export default AddInventory;

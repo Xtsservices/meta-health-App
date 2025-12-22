@@ -40,7 +40,19 @@ const toastConfig: ToastConfig = {
       text2NumberOfLines={0}  // Added: enables wrapping
     />
   ),
+  warning: (props) => (
+    <BaseToast
+      {...props}
+      style={{ borderLeftColor: '#f59e0b', borderRadius: 10 }}
+      contentContainerStyle={{ paddingHorizontal: 16 }}
+      text1Style={{ fontSize: 15, fontWeight: '700', }}
+      text2Style={{ fontSize: 13 }}
+      text1NumberOfLines={0}
+      text2NumberOfLines={0}
+    />
+  ),
 };
+
 
 const ToastHost: React.FC = () => {
   const dispatch = useDispatch();

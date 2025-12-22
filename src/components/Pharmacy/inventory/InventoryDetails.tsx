@@ -211,14 +211,6 @@ const InventoryDetails: React.FC = () => {
                 <Text style={styles.detailValue}>{qty} Units</Text>
               </View>
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Min Stock Level</Text>
-                <Text style={styles.detailValue}>{item?.lowStockValue ?? 100} Units</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Max Stock Level</Text>
-                <Text style={styles.detailValue}>1000 Units</Text>
-              </View>
-              <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Stock Status</Text>
                 <View
                   style={[
@@ -353,12 +345,12 @@ const InventoryDetails: React.FC = () => {
             <Text style={styles.label}>Contact Number</Text>
             <Text style={styles.value}>{inventoryData?.contactNo ?? "N/A"}</Text>
           </View>
-          <View style={styles.row}>
+          {/* <View style={styles.row}>
             <Text style={styles.label}>Email Address</Text>
             <Text style={[styles.value, { maxWidth: "60%" }]} numberOfLines={1}>
               {inventoryData?.email ?? "N/A"}
             </Text>
-          </View>
+          </View> */}
           <View style={styles.row}>
             <Text style={styles.label}>Added By</Text>
             <Text style={styles.value}>

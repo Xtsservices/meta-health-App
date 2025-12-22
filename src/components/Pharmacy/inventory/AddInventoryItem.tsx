@@ -14,19 +14,15 @@ import {
   Pressable,
   FlatList,
   Dimensions,
-  Keyboard,
-  findNodeHandle,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
-import { RouteProp, useRoute } from "@react-navigation/native";
+import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import { RootState } from "../../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch, AuthPost } from "../../../auth/auth";
 import {
   SPACING,
   FONT_SIZE,
-  responsiveWidth,
-  responsiveHeight,
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
 
@@ -102,8 +98,10 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
   const route = useRoute<RouteProp<AddInventoryItemRouteProps, "AddInventoryItem">>();
   const { editData, editId } = route.params || {};
   const user = useSelector((state: RootState) => state.currentUser);
+  const nav = useNavigation();
 
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [medicineInStockData, setMedicineInStockData] = useState<any[]>([]);
   const [manufactureData, setManufactureData] = useState<any[]>([]);
@@ -139,6 +137,12 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
     hsn: false,
   });
 
+  const resetForm = () => {
+    setMedicineData(initialMedicineData);
+    setSelectedItems({ medicine: null, agency: null, manufacturer: null, hsn: null });
+    setSearchQuery({ medicine: "", category: "", agency: "", manufacturer: "", hsn: "" });
+  };
+
   // Refs for scroll handling
   const scrollViewRef = useRef<ScrollView>(null);
   const inputRefs = useRef<{[key: string]: TextInput}>({});
@@ -163,7 +167,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       const manufactureResponse = await AuthFetch(
         `medicineInventoryManufacture/${user.hospitalID}/getAllManufacture`,
         token
-      );
+      )as any;
 
       let manufactureDataArray: any[] = [];
       if (Array.isArray(manufactureResponse)) manufactureDataArray = manufactureResponse;
@@ -175,7 +179,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
 
       setManufactureData(manufactureDataArray ?? []);
 
-      const medicineResponse = await AuthFetch(`pharmacy/${user.hospitalID}/getMedicineInventory`, token);
+      const medicineResponse = await AuthFetch(`pharmacy/${user.hospitalID}/getMedicineInventory`, token) as any;
 
       let medicineDataArray: any[] = [];
       if (Array.isArray(medicineResponse)) medicineDataArray = medicineResponse;
@@ -277,7 +281,6 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
     }
   }, [medicineData.agencyName, medicineData.manufacturer, manufactureData]);
 
-  // Handler functions for dropdown selections
   const handleSelectMedicine = (medicine: any) => {
     setSelectedItems(prev => ({ ...prev, medicine }));
     setMedicineData(prev => ({
@@ -287,13 +290,19 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       manufacturer: medicine?.manufacturer ?? "",
       hsn: medicine?.hsn ?? "",
     }));
-    setSearchQuery(prev => ({ ...prev, medicine: medicine?.name ?? "" }));
+    setSearchQuery(prev => ({ 
+      ...prev, 
+      medicine: "",
+      category: medicine?.category ? "" : prev.category,
+      manufacturer: medicine?.manufacturer ? "" : prev.manufacturer,
+      hsn: medicine?.hsn ? "" : prev.hsn
+    }));
     setShowDropdown(prev => ({ ...prev, medicine: false }));
   };
 
   const handleSelectCategory = (category: string) => {
     setMedicineData(prev => ({ ...prev, category }));
-    setSearchQuery(prev => ({ ...prev, category }));
+    setSearchQuery(prev => ({ ...prev, category: "" }));
     setShowDropdown(prev => ({ ...prev, category: false }));
   };
 
@@ -307,7 +316,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       agentCode: agency?.agentCode ?? null,
       agencyID: agency?.id ?? null,
     }));
-    setSearchQuery(prev => ({ ...prev, agency: agency?.agencyName ?? "" }));
+    setSearchQuery(prev => ({ ...prev, agency: "" }));
     setShowDropdown(prev => ({ ...prev, agency: false }));
   };
 
@@ -317,7 +326,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       ...prev,
       manufacturer: manufacturer?.manufacturer ?? "",
     }));
-    setSearchQuery(prev => ({ ...prev, manufacturer: manufacturer?.manufacturer ?? "" }));
+    setSearchQuery(prev => ({ ...prev, manufacturer: "" }));
     setShowDropdown(prev => ({ ...prev, manufacturer: false }));
   };
 
@@ -327,7 +336,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       ...prev,
       hsn: item?.hsn ?? "",
     }));
-    setSearchQuery(prev => ({ ...prev, hsn: item?.hsn ?? "" }));
+    setSearchQuery(prev => ({ ...prev, hsn: "" }));
     setShowDropdown(prev => ({ ...prev, hsn: false }));
   };
 
@@ -362,11 +371,31 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
     if (editId) {
       handleEditMedicine();
     } else {
-      setMedicineList((prev) => [...prev, { ...medicineData }]);
-      setMedicineData(initialMedicineData);
-      setSelectedItems({ medicine: null, agency: null, manufacturer: null, hsn: null });
-      setSearchQuery({ medicine: "", category: "", agency: "", manufacturer: "", hsn: "" });
+      const newMedicine: MedicineData = {
+        name: medicineData.name,
+        category: medicineData.category,
+        hsn: medicineData.hsn,
+        quantity: medicineData.quantity,
+        costPrice: medicineData.costPrice,
+        sellingPrice: medicineData.sellingPrice,
+        lowStockValue: medicineData.lowStockValue,
+        email: medicineData.email,
+        expiryDate: medicineData.expiryDate,
+        gst: medicineData.gst,
+        agencyName: medicineData.agencyName,
+        agencyID: medicineData.agencyID,
+        contactNo: medicineData.contactNo,
+        agentCode: medicineData.agentCode,
+        manufacturer: medicineData.manufacturer,
+      };
+      
+      setMedicineList((prev) => [...prev, newMedicine]);
+      resetForm();
       dispatch(showSuccess("Medicine added to list"));
+      
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
   };
 
@@ -384,10 +413,10 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
         `medicineInventoryLogs/${user?.hospitalID}/editMedicineInventoryData/${editId}`,
         { medicineList: medicineData },
         token
-      );
+      ) as any;
 
       const isSuccess =
-        response?.data?.status === 200 || response?.data?.status === 200 || response?.success === true;
+        response?.data?.status === 200 || response?.success === true;
 
       if (isSuccess) {
         dispatch(showSuccess("Medicine updated successfully"));
@@ -407,7 +436,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       dispatch(showError("No medicines added to the list"));
       return;
     }
-    setLoading(true);
+    setSaving(true);
     try {
       const token = await AsyncStorage.getItem("token");
       if (!token) {
@@ -419,21 +448,21 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
         `medicineInventoryLogs/${user?.hospitalID}/addInventoryLogs`,
         { medicineList: medicineList, user },
         token
-      );
+      ) as any;
       
       const isSuccess =
         response?.status === 200 || response?.data?.status === 200 || response?.success === true;
 
       if (isSuccess) {
         dispatch(showSuccess("Inventory added successfully"));
-        navigation.goBack();
+        navigation.navigate('AddInventory' as never);
       } else {
         dispatch(showError("Failed to add inventory"));
       }
     } catch (error) {
       dispatch(showError("Something went wrong"));
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -501,30 +530,30 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                 </Text>
                 {type === 'medicine' && (
                   <View style={styles.suggDetails}>
-                    <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                    <Text style={{ color: COLORS.sub, fontSize: 11 }}>
                       Category: {item?.category}
                     </Text>
-                    <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                    <Text style={{ color: COLORS.sub, fontSize: 11 }}>
                       HSN: {item?.hsn}
                     </Text>
                   </View>
                 )}
                 {type === 'agency' && (
                   <View style={styles.suggDetails}>
-                    <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                    <Text style={{ color: COLORS.sub, fontSize: 11 }}>
                       Contact: {item?.contactNo}
                     </Text>
-                    <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                    <Text style={{ color: COLORS.sub, fontSize: 11 }}>
                       Agent Code: {item?.agentCode}
                     </Text>
                   </View>
                 )}
                 {type === 'manufacturer' && (
                   <View style={styles.suggDetails}>
-                    <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                    <Text style={{ color: COLORS.sub, fontSize: 11 }}>
                       Agency: {item?.agencyName}
                     </Text>
-                    <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+                    <Text style={{ color: COLORS.sub, fontSize: 11 }}>
                       Contact: {item?.contactNo}
                     </Text>
                   </View>
@@ -539,19 +568,18 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
           )}
           ListEmptyComponent={
             <View style={styles.suggRowCenter}>
-              <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
+              <Text style={{ color: COLORS.sub, fontSize: 12 }}>
                 No {type} found
               </Text>
             </View>
           }
           nestedScrollEnabled
-          style={{ maxHeight: responsiveHeight(25) }}
+          style={{ maxHeight: 200 }}
         />
       </View>
     );
   };
 
-  // Updated renderField with dropdown support and scroll handling
   const renderField = (
     label: string,
     value: any,
@@ -561,47 +589,64 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
     required: boolean = false,
     dropdownType?: 'medicine' | 'category' | 'agency' | 'manufacturer' | 'hsn',
     yOffset: number = 0
-  ) => (
-    <View style={styles.field}>
-      <Text style={styles.label}>
-        {label} {required && <Text style={styles.required}>*</Text>}
-      </Text>
-      <View style={{ position: "relative" }}>
-        <TextInput
-          ref={(ref) => {
-            if (ref && dropdownType) {
-              inputRefs.current[dropdownType] = ref;
-            }
-          }}
-          style={styles.input}
-          value={searchQuery[dropdownType || 'medicine'] || (value !== null && value !== undefined ? String(value) : "")}
-          onChangeText={(text) => {
-            if (dropdownType) {
-              setSearchQuery(prev => ({ ...prev, [dropdownType]: text }));
-            }
-            onChange(text);
-          }}
-          placeholder={placeholder}
-          placeholderTextColor={COLORS.sub}
-          keyboardType={type === "number" ? "numeric" : "default"}
-          onFocus={() => {
-            if (dropdownType && searchQuery[dropdownType]) {
-              setShowDropdown(prev => ({ ...prev, [dropdownType]: true }));
-            }
-            handleInputFocus(dropdownType || 'field', yOffset);
-          }}
-          onBlur={() => {
-            setTimeout(() => {
-              if (dropdownType) {
-                setShowDropdown(prev => ({ ...prev, [dropdownType]: false }));
+  ) => {
+    const displayValue = dropdownType 
+      ? medicineData[dropdownType === 'medicine' ? 'name' : 
+                    dropdownType === 'category' ? 'category' : 
+                    dropdownType === 'agency' ? 'agencyName' : 
+                    dropdownType === 'manufacturer' ? 'manufacturer' : 
+                    'hsn']
+      : (value !== null && value !== undefined ? String(value) : "");
+
+    return (
+      <View style={styles.field}>
+        <Text style={styles.label}>
+          {label} {required && <Text style={styles.required}>*</Text>}
+        </Text>
+        <View style={{ position: "relative" }}>
+          <TextInput
+            ref={(ref) => {
+              if (ref && dropdownType) {
+                inputRefs.current[dropdownType] = ref;
               }
-            }, 200);
-          }}
-        />
-        {dropdownType && renderDropdown(dropdownType)}
+            }}
+            style={styles.input}
+            value={displayValue}
+            onChangeText={(text) => {
+              if (dropdownType) {
+                setSearchQuery(prev => ({ ...prev, [dropdownType]: text }));
+                const fieldToUpdate = dropdownType === 'medicine' ? 'name' : 
+                                     dropdownType === 'category' ? 'category' : 
+                                     dropdownType === 'agency' ? 'agencyName' : 
+                                     dropdownType === 'manufacturer' ? 'manufacturer' : 
+                                     'hsn';
+                onChange(text);
+              } else {
+                onChange(text);
+              }
+            }}
+            placeholder={placeholder}
+            placeholderTextColor={COLORS.sub}
+            keyboardType={type === "number" ? "numeric" : "default"}
+            onFocus={() => {
+              if (dropdownType && searchQuery[dropdownType]) {
+                setShowDropdown(prev => ({ ...prev, [dropdownType]: true }));
+              }
+              handleInputFocus(dropdownType || 'field', yOffset);
+            }}
+            onBlur={() => {
+              setTimeout(() => {
+                if (dropdownType) {
+                  setShowDropdown(prev => ({ ...prev, [dropdownType]: false }));
+                }
+              }, 200);
+            }}
+          />
+          {dropdownType && renderDropdown(dropdownType)}
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -618,6 +663,26 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollContent}
         >
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <Text style={styles.headerTitle}>
+                {editId ? "Edit Medicine" : "Add New Medicine"}
+              </Text>
+              <Text style={styles.headerSubtitle}>
+                Fill in the medicine details below
+              </Text>
+            </View>
+            {!editId && medicineList.length > 0 && (
+              <Pressable 
+                style={styles.clearBtn}
+                onPress={() => setMedicineList([])}
+              >
+                <Text style={styles.clearText}>Clear All</Text>
+              </Pressable>
+            )}
+          </View>
+
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Medicine Details</Text>
 
@@ -722,7 +787,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
             {/* Expiry Date */}
             <View style={styles.field}>
               <Text style={styles.label}>Expiry Date <Text style={styles.required}>*</Text></Text>
-              <TouchableOpacity 
+              <Pressable 
                 style={styles.dateInput} 
                 onPress={() => {
                   setShowDatePicker(true);
@@ -733,7 +798,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                   {medicineData.expiryDate || "Select expiry date"}
                 </Text>
                 <CalendarIcon size={18} color={COLORS.sub} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
             {showDatePicker && (
               <DateTimePicker
@@ -817,33 +882,76 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
 
           {/* Add Medicine Button */}
           {!editId && (
-            <TouchableOpacity style={styles.primaryButton} onPress={handleAddMedicine} disabled={loading}>
+            <Pressable style={styles.addButton} onPress={handleAddMedicine} disabled={loading}>
               {loading ? (
                 <ActivityIndicator size="small" color={COLORS.buttonText} />
               ) : (
                 <>
                   <PlusIcon size={18} color={COLORS.buttonText} />
-                  <Text style={styles.primaryButtonText}>Add Medicine to List</Text>
+                  <Text style={styles.addButtonText}>Add Medicine to List</Text>
                 </>
               )}
-            </TouchableOpacity>
+            </Pressable>
           )}
 
-          {/* Medicine List */}
+          {/* Added Medicines List */}
           {medicineList?.length > 0 && (
-            <View style={[styles.card, { paddingBottom: SPACING.md }]}>
-              <Text style={styles.cardTitle}>Added Medicines ({medicineList?.length})</Text>
-              {medicineList?.map((medicine, index) => (
-                <View key={index} style={styles.medicineItem}>
-                  <View style={styles.medicineInfo}>
-                    <Text style={styles.medicineName}>{medicine.name}</Text>
-                    <Text style={styles.medicineDetails}>
-                      {medicine.category} • {medicine.quantity} units • ₹{medicine.costPrice}
+            <View style={styles.card}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.cardTitle}>
+                  Added Medicines ({medicineList.length})
+                </Text>
+              </View>
+
+              {medicineList.map((medicine, index) => (
+                <View key={index} style={styles.medicineCard}>
+                  {/* Header */}
+                  <View style={styles.medicineCardHeader}>
+                    <Text style={styles.medicineName} numberOfLines={1}>
+                      {medicine.name}
                     </Text>
+                    <Pressable
+                      onPress={() => removeMedicine(index)}
+                      style={styles.removeIcon}
+                      hitSlop={10}
+                    >
+                      <XIcon size={20} color={COLORS.danger} />
+                    </Pressable>
                   </View>
-                  <TouchableOpacity style={styles.removeButton} onPress={() => removeMedicine(index)}>
-                    <XIcon size={16} color={COLORS.danger} />
-                  </TouchableOpacity>
+
+                  {/* Details */}
+                  <View style={styles.medicineDetails}>
+                    <View style={styles.medicineRow}>
+                      <Text style={styles.medicineLabel}>Category:</Text>
+                      <Text style={styles.medicineValue}>{medicine.category}</Text>
+                    </View>
+                    <View style={styles.medicineRow}>
+                      <Text style={styles.medicineLabel}>HSN Code:</Text>
+                      <Text style={styles.medicineValue}>{medicine.hsn}</Text>
+                    </View>
+                    <View style={styles.medicineRow}>
+                      <Text style={styles.medicineLabel}>Expiry:</Text>
+                      <Text style={styles.medicineValue}>{medicine.expiryDate}</Text>
+                    </View>
+                    <View style={styles.medicineRow}>
+                      <Text style={styles.medicineLabel}>Quantity:</Text>
+                      <Text style={[styles.medicineValue, styles.quantityValue]}>
+                        {medicine.quantity}
+                      </Text>
+                    </View>
+                    <View style={styles.medicineRow}>
+                      <Text style={styles.medicineLabel}>Cost:</Text>
+                      <Text style={[styles.medicineValue, styles.costValue]}>
+                        ₹{medicine.costPrice}
+                      </Text>
+                    </View>
+                    <View style={styles.medicineRow}>
+                      <Text style={styles.medicineLabel}>Selling:</Text>
+                      <Text style={[styles.medicineValue, styles.sellingValue]}>
+                        ₹{medicine.sellingPrice}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               ))}
             </View>
@@ -851,26 +959,41 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
 
           {/* Submit Button */}
           {(medicineList?.length > 0 || editId) && (
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-              onPress={editId ? handleEditMedicine : handleSubmit}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color={COLORS.buttonText} />
-              ) : (
-                <>
-                  {editId ? <EditIcon size={18} color={COLORS.buttonText} /> : <PlusIcon size={18} color={COLORS.buttonText} />}
-                  <Text style={styles.submitButtonText}>{editId ? "Update Medicine" : "Save Inventory"}</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={styles.buttonRow}>
+              <Pressable
+                style={[styles.cancelButton, (loading || saving) && styles.disabledButton]}
+                onPress={() => navigation.goBack()}
+                disabled={loading || saving}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.submitButton, (loading || saving) && styles.disabledButton]}
+                onPress={editId ? handleEditMedicine : handleSubmit}
+                disabled={loading || saving}
+              >
+                {(loading || saving) ? (
+                  <ActivityIndicator size="small" color={COLORS.buttonText} />
+                ) : (
+                  <>
+                    {editId ? (
+                      <EditIcon size={18} color={COLORS.buttonText} />
+                    ) : (
+                      <PlusIcon size={18} color={COLORS.buttonText} />
+                    )}
+                    <Text style={styles.submitButtonText}>
+                      {editId ? "Update Medicine" : "Save Inventory"}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
           )}
 
           <View style={{ height: 120 }} /> {/* Extra spacing for keyboard */}
         </ScrollView>
 
-        {/* Footer - pass active and brandColor */}
+        {/* Footer */}
         <View style={styles.footerWrap}>
           <Footer active={"billing"} brandColor={COLORS.brand} />
         </View>
@@ -891,85 +1014,123 @@ const styles = StyleSheet.create({
     flex: 1, 
   },
   scrollContent: {
-    padding: SPACING.md,
-    paddingBottom: SPACING.xxl, // Extra padding for scroll
+    padding: 16,
+    paddingBottom: 100,
   },
 
+  // Header
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: COLORS.sub,
+  },
+  clearBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: COLORS.danger,
+    borderRadius: 8,
+  },
+  clearText: {
+    fontSize: 12,
+    color: COLORS.danger,
+    fontWeight: "700",
+  },
+
+  // Card
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
   },
   cardTitle: {
-    fontSize: FONT_SIZE.md,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "800",
     color: COLORS.text,
-    marginBottom: SPACING.sm,
+    marginBottom: 12,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
 
+  // Form
   row: { 
     flexDirection: "row", 
-    marginBottom: SPACING.sm 
+    gap: 12,
+    marginBottom: 12,
   },
   col: { 
-    flex: 1, 
-    marginRight: SPACING.sm 
+    flex: 1,
   },
   field: { 
-    marginBottom: SPACING.sm 
+    marginBottom: 12,
   },
   label: { 
-    fontSize: FONT_SIZE.sm, 
-    fontWeight: "600", 
+    fontSize: 12, 
+    fontWeight: "800", 
     color: COLORS.sub, 
-    marginBottom: SPACING.xs 
+    marginBottom: 6,
   },
   required: { 
-    color: COLORS.danger 
+    color: COLORS.danger,
+    fontWeight: "700",
   },
   input: {
     backgroundColor: COLORS.field,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    fontSize: FONT_SIZE.sm,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
     color: COLORS.text,
   },
-  
-  // Dropdown styles
+
+  // Dropdown
   suggBox: {
     position: "absolute",
     left: 0,
     right: 0,
-    top: "100%",
-    marginTop: SPACING.xs,
+    top: 58,
     borderWidth: 1,
-    borderRadius: SPACING.sm,
-    maxHeight: responsiveHeight(25),
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    backgroundColor: COLORS.card,
+    maxHeight: 220,
     overflow: "hidden",
     zIndex: 10,
-    elevation: 4,
     shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 5,
   },
   suggRow: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.border,
-    flexDirection: "row",
-    alignItems: "center",
+    gap: 2,
   },
   suggDetails: {
     flexDirection: "row",
@@ -977,106 +1138,165 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   suggRowCenter: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   suggestionText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: 14,
+    color: COLORS.text,
     fontWeight: "600",
   },
   suggestionPrice: {
-    fontSize: FONT_SIZE.md,
+    fontSize: 14,
     fontWeight: "700",
   },
 
+  // Date Picker
   dateInput: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.field,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   dateText: { 
-    fontSize: FONT_SIZE.sm, 
-    color: COLORS.text 
+    fontSize: 15, 
+    color: COLORS.text,
+    fontWeight: "500",
   },
   placeholderText: { 
-    fontSize: FONT_SIZE.sm, 
-    color: COLORS.sub 
+    fontSize: 15, 
+    color: COLORS.sub,
+    fontWeight: "500",
   },
 
-  primaryButton: {
+  // Add Button
+  addButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.brand,
-    paddingVertical: SPACING.md,
-    borderRadius: 10,
-    marginVertical: SPACING.sm,
-    gap: SPACING.sm,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginVertical: 8,
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.brand,
   },
-  primaryButtonText: { 
+  addButtonText: { 
     color: COLORS.buttonText, 
-    fontSize: FONT_SIZE.md, 
-    fontWeight: "700", 
-    marginLeft: 8 
+    fontSize: 14, 
+    fontWeight: "700",
   },
 
-  medicineItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  // Medicine Card
+  medicineCard: {
     backgroundColor: COLORS.field,
-    padding: SPACING.sm,
-    borderRadius: 8,
-    marginBottom: SPACING.xs,
-    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1.5,
     borderColor: COLORS.border,
   },
-  medicineInfo: { 
-    flex: 1, 
-    paddingRight: SPACING.sm 
+  medicineCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
   },
-  medicineName: { 
-    fontSize: FONT_SIZE.md, 
-    fontWeight: "700", 
-    color: COLORS.text 
+  medicineName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.text,
+    flex: 1,
   },
-  medicineDetails: { 
-    fontSize: FONT_SIZE.sm, 
-    color: COLORS.sub 
+  removeIcon: {
+    padding: 4,
   },
-  removeButton: { 
-    padding: SPACING.xs 
+  medicineDetails: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  medicineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: "45%",
+  },
+  medicineLabel: {
+    fontSize: 12,
+    color: COLORS.sub,
+    fontWeight: "600",
+    marginRight: 4,
+  },
+  medicineValue: {
+    fontSize: 12,
+    color: COLORS.text,
+    fontWeight: "700",
+  },
+  quantityValue: {
+    color: COLORS.brand,
+    backgroundColor: COLORS.brandLight,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  costValue: {
+    color: COLORS.success,
+  },
+  sellingValue: {
+    color: COLORS.brand,
   },
 
+  // Action Buttons
+  buttonRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  cancelButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.pill,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  cancelButtonText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   submitButton: {
+    flex: 2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.brand,
-    paddingVertical: SPACING.md,
-    borderRadius: 10,
-    marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
-    gap: SPACING.sm,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.brand,
   },
-  submitButtonDisabled: { 
-    backgroundColor: COLORS.sub 
+  submitButtonText: {
+    color: COLORS.buttonText,
+    fontSize: 14,
+    fontWeight: "700",
   },
-  submitButtonText: { 
-    color: COLORS.buttonText, 
-    fontSize: FONT_SIZE.md, 
-    fontWeight: "700", 
-    marginLeft: 8 
+  disabledButton: {
+    opacity: 0.6,
   },
 
+  // Footer
   footerWrap: {
     position: "absolute",
     left: 0,

@@ -33,6 +33,13 @@ import { COLORS } from "../../../utils/colour";
 import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
 import Footer from "../../dashboard/footer";
+import {
+  Pill,
+  Syringe,
+  Droplet,
+  Activity,
+  Package,
+} from "lucide-react-native";
 
 interface StockData {
   id: number;
@@ -85,7 +92,7 @@ const InStock: React.FC = () => {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
 
   // Modals
   const [openModal, setOpenModal] = useState(false);
@@ -115,7 +122,7 @@ const InStock: React.FC = () => {
     
     try {
       const token = await AsyncStorage.getItem("token");
-      const resp = await AuthFetch(`pharmacy/${user.hospitalID}/getMedicineInventory`, token);
+      const resp = await AuthFetch(`pharmacy/${user?.hospitalID}/getMedicineInventory`, token) as any;
       
 let medicines: any[] = [];
 try {
@@ -136,7 +143,15 @@ try {
   medicines = [];
 }
 
-setData(medicines || []);
+      const normalized = (medicines || []).map((m) => ({
+        ...m,
+        totalQuantity: Number(m.totalQuantity) || 0,
+        costPrice: m.costPrice != null ? Number(m.costPrice) : undefined,
+        sellingPrice: m.sellingPrice != null ? Number(m.sellingPrice) : undefined,
+      }));
+
+      setData(normalized);
+
     } catch (e) {
       setData([]);
     } finally {
@@ -148,9 +163,13 @@ setData(medicines || []);
   // Utilities for status
   const isExpired = (expiry?: string) => {
     if (!expiry) return false;
+    try {
     const exp = new Date(expiry);
     const now = new Date();
     return exp.setHours(0, 0, 0, 0) < now.setHours(0, 0, 0, 0);
+    } catch {
+      return false;
+    }
   };
 
   const getStockStatus = (item: StockData) => {
@@ -163,31 +182,57 @@ setData(medicines || []);
   const getStockStatusColor = (status: string) => {
     switch (status) {
       case "In Stock":
-        return { bg: COLORS.gradientSuccessStart + "33", color: COLORS.green };
+        return COLORS.green;
       case "Low Stock":
-        return { bg: COLORS.gradientWarningStart + "22", color: COLORS.warn };
+        return COLORS.warn;
       case "Out of Stock":
-        return { bg: COLORS.chipBP, color: COLORS.red };
+        return COLORS.red;
       case "Expired":
-        return { bg: COLORS.pillBg, color: COLORS.primaryDark };
+        return COLORS.primaryDark;
       default:
-        return { bg: COLORS.card, color: COLORS.sub };
-    }
-  };
+      return COLORS.sub;
+  }
+};
+const getMedicineIcon = (category?: string) => {
+  switch (category) {
+    case "Tablets":
+    case "Capsules":
+      return Pill;
+
+    case "Injection":
+    case "Injections":
+    case "IV Line":
+      return Syringe;
+
+    case "Syrup":
+    case "Drops":
+      return Droplet;
+
+    default:
+      return Package; // fallback
+  }
+};
+
 
   // Effect: filter & search
   useEffect(() => {
     let filtered = [...data];
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       filtered = filtered.filter((item) => {
-        return (
-          (item.name || "").toLowerCase().includes(q) ||
-          (item.category || "").toLowerCase().includes(q) ||
-          (item.hsn || "").toLowerCase().includes(q) ||
-          (item.manufacturer || "").toLowerCase().includes(q) ||
-          (item.batchNumber || "").toLowerCase().includes(q)
+        const searchableFields = [
+          item.name || "",
+          item.category || "",
+          item.hsn || "",
+          item.manufacturer || "",
+          item.batchNumber || "",
+          item.location || "",
+          item.supplier || "",
+        ];
+        
+        return searchableFields.some(field => 
+          field.toLowerCase().includes(q)
         );
       });
     }
@@ -227,20 +272,35 @@ setData(medicines || []);
   const endIndex = Math.min(totalItems, startIndex + itemsPerPage);
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
-  // Stats
   const stats = useMemo(() => {
-    const now = new Date();
     const total = data.length;
-    const expired = data.filter((d) => isExpired(d.expiryDate)).length;
-    const lowStock = data.filter((d) => (d.totalQuantity || 0) > 0 && (d.totalQuantity || 0) < (d.minStock || 50) && !isExpired(d.expiryDate)).length;
-    const outOfStock = data.filter((d) => (d.totalQuantity || 0) === 0 && !isExpired(d.expiryDate)).length;
-    return { total, expired, lowStock, outOfStock };
+
+    const expired = data.filter(d =>
+      isExpired(d.expiryDate)
+    ).length;
+
+    const outOfStock = data.filter(d =>
+      Number(d.totalQuantity) === 0 && !isExpired(d.expiryDate)
+    ).length;
+
+    const lowStock = data.filter(d =>
+      Number(d.totalQuantity) > 0 &&
+      Number(d.totalQuantity) < (d.minStock || 50) &&
+      !isExpired(d.expiryDate)
+    ).length;
+
+    const inStock = data.filter(d =>
+      Number(d.totalQuantity) >= (d.minStock || 50) &&
+      !isExpired(d.expiryDate)
+    ).length;
+
+    return { total, inStock, lowStock, outOfStock, expired };
   }, [data]);
 
-const uniqueCategories = useMemo(() => {
-  const categories = data.map((d) => d.category).filter(Boolean);
-  return Array.from(new Set(categories));
-}, [data]);
+  const uniqueCategories = useMemo(() => {
+    const categories = data.map((d) => d.category).filter(Boolean);
+    return Array.from(new Set(categories));
+  }, [data]);
 
   const formatDate = (d?: string) => {
     if (!d) return "-";
@@ -258,29 +318,57 @@ const uniqueCategories = useMemo(() => {
       return;
     }
 
-    const headers = ["Med ID", "Med Name", "Category", "HSN", "Stock Qty", "Cost Price", "Sale Price", "Expiry Date", "Status"];
-    const rows = filteredData.map((it) => [
-      String(it.id || ""),
-      it.name || "",
-      it.category || "",
-      it.hsn || "",
-      String(it.totalQuantity || 0),
-      String(it.costPrice || ""),
-      String(it.sellingPrice || ""),
-      it.expiryDate ? formatDate(it.expiryDate) : "",
-      getStockStatus(it),
-    ]);
-
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${(c || "").toString().replace(/"/g, '""')}"`).join(",")).join("\n");
-
     try {
-      await Share.share({ 
-        message: csv, 
-        title: "Stock Export.csv",
-        filename: "stock_export.csv"
+      // Create CSV content
+      const headers = [
+        "Med ID", 
+        "Med Name", 
+        "Category", 
+        "HSN", 
+        "Stock Qty", 
+        "Cost Price", 
+        "Sale Price", 
+        "Expiry Date", 
+        "Status",
+        "Manufacturer",
+        "Location",
+        "Batch Number"
+      ];
+      
+      const rows = filteredData.map((it) => [
+        String(it.id || ""),
+        `"${(it.name || "").replace(/"/g, '""')}"`,
+        it.category || "",
+        it.hsn || "",
+        String(it.totalQuantity || 0),
+        String(it.costPrice || ""),
+        String(it.sellingPrice || ""),
+        it.expiryDate ? formatDate(it.expiryDate) : "",
+        getStockStatus(it),
+        it.manufacturer || "",
+        it.location || "",
+        it.batchNumber || ""
+      ]);
+
+      // Create proper CSV
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.join(","))
+      ].join("\n");
+
+      // Create a blob/file for sharing
+      const base64Data = btoa(unescape(encodeURIComponent(csvContent)));
+      
+      // For React Native, we'll use Share API
+      await Share.share({
+        title: "Stock Export",
+        message: csvContent, // On iOS, this will be shared as text
+        url: `data:text/csv;base64,${base64Data}`, // On Android, this might work better
+        filename: `stock_export_${new Date().toISOString().split('T')[0]}.csv`
       });
+
     } catch (e) {
-      Alert.alert("Export failed", "Could not share CSV file");
+      Alert.alert("Export failed", "Could not export CSV file. Please try again.");
     }
   };
 
@@ -298,7 +386,7 @@ const uniqueCategories = useMemo(() => {
 
     try {
       const token = await AsyncStorage.getItem("token");
-      await AuthFetch(`pharmacy/${user.hospitalID}/postMedicineInventory`, token, payload, "POST");
+      await AuthFetch(`pharmacy/${user?.hospitalID}/postMedicineInventory`, token, payload, "POST");
       await fetchMedicineInventory();
       setOpenModal(false);
       setNewStock({ name: "", category: "", totalQuantity: 0 });
@@ -334,19 +422,23 @@ const uniqueCategories = useMemo(() => {
     const status = getStockStatus(item);
     const statusColors = getStockStatusColor(status);
     const unitLabel = item.category === "Tablets" || item.category === "Capsules" ? "Tablets" : item.category === "Syrup" ? "Bottles" : "Units";
+const statusColor = getStockStatusColor(status);
+const IconComponent = getMedicineIcon(item.category);
 
     return (
       <View style={styles.row}>
         <View style={styles.leftCell}>
           <View style={styles.medicationCell}>
-            <LinearGradient
-              colors={[COLORS.gradientStart, COLORS.gradientEnd]}
-              style={styles.medicationIcon}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.medicationIconText}>💊</Text>
-            </LinearGradient>
+           <View style={styles.medicationIcon}>
+
+              <View style={styles.medicationIcon}>
+  <IconComponent
+    size={18}
+    color={COLORS.brand} // #14b8a6
+    strokeWidth={2}
+  />
+</View>
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.medicationName} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.medicationId}>ID: MED{String(item.id).padStart(3, "0")}</Text>
@@ -366,7 +458,9 @@ const uniqueCategories = useMemo(() => {
         <View style={styles.rightCell}>
           <Text style={styles.expiryDate}>Exp: {formatDate(item.expiryDate)}</Text>
           <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}> 
-            <Text style={[styles.statusText, { color: statusColors.color }]}>{status}</Text>
+<Text style={[styles.statusText, { color: statusColor }]}>
+  {status}
+</Text>
           </View>
         </View>
       </View>
@@ -426,6 +520,12 @@ const uniqueCategories = useMemo(() => {
     fetchMedicineInventory(true);
   };
 
+  const clearFilters = () => {
+    setSearchQuery("");
+    setSelectedCategory(null);
+    setSelectedFilter("All Status");
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -440,7 +540,50 @@ const uniqueCategories = useMemo(() => {
             />
           }
         >
-          {/* Header */}
+          {/* Summary Cards - MOVED TO TOP */}
+          <View style={styles.summaryCards}>
+            <LinearGradient
+              colors={[COLORS.card, COLORS.card2]}
+              style={styles.summaryCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.cardTitle}>Total Items</Text>
+              <Text style={styles.cardValue}>{stats.total.toLocaleString()}</Text>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={[COLORS.card, COLORS.card2]}
+              style={styles.summaryCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.cardTitle}>Low Stock</Text>
+              <Text style={[styles.cardValue, { color: COLORS.warn }]}>{stats.lowStock}</Text>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={[COLORS.card, COLORS.card2]}
+              style={styles.summaryCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.cardTitle}>Out of Stock</Text>
+              <Text style={[styles.cardValue, { color: COLORS.red }]}>{stats.outOfStock}</Text>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={[COLORS.card, COLORS.card2]}
+              style={styles.summaryCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <Text style={styles.cardTitle}>Expired Items</Text>
+              <Text style={[styles.cardValue, { color: COLORS.primaryDark }]}>{stats.expired}</Text>
+            </LinearGradient>
+          </View>
+
+          {/* Search and Filter Section - MOVED BELOW STATS CARDS */}
           <View style={styles.headerSection}>
             <View style={styles.searchContainer}>
               <TextInput
@@ -492,6 +635,15 @@ const uniqueCategories = useMemo(() => {
                 </LinearGradient>
               </TouchableOpacity>
 
+              {(searchQuery || selectedCategory || selectedFilter !== "All Status") && (
+                <TouchableOpacity 
+                  style={styles.clearFilterBtn}
+                  onPress={clearFilters}
+                >
+                  <Text style={styles.clearFilterText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity style={styles.exportBtn} onPress={handleExport}>
                 <LinearGradient
                   colors={[COLORS.gradientSuccessStart, COLORS.gradientSuccessEnd]}
@@ -506,49 +658,6 @@ const uniqueCategories = useMemo(() => {
             </View>
           </View>
 
-          {/* Summary Cards */}
-          <View style={styles.summaryCards}>
-            <LinearGradient
-              colors={[COLORS.card, COLORS.card2]}
-              style={styles.summaryCard}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.cardTitle}>Total Items</Text>
-              <Text style={styles.cardValue}>{stats.total.toLocaleString()}</Text>
-            </LinearGradient>
-
-            <LinearGradient
-              colors={[COLORS.card, COLORS.card2]}
-              style={styles.summaryCard}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.cardTitle}>Low Stock</Text>
-              <Text style={[styles.cardValue, { color: COLORS.warn }]}>{stats.lowStock}</Text>
-            </LinearGradient>
-
-            <LinearGradient
-              colors={[COLORS.card, COLORS.card2]}
-              style={styles.summaryCard}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.cardTitle}>Out of Stock</Text>
-              <Text style={[styles.cardValue, { color: COLORS.red }]}>{stats.outOfStock}</Text>
-            </LinearGradient>
-
-            <LinearGradient
-              colors={[COLORS.card, COLORS.card2]}
-              style={styles.summaryCard}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.cardTitle}>Expired Items</Text>
-              <Text style={[styles.cardValue, { color: COLORS.primaryDark }]}>{stats.expired}</Text>
-            </LinearGradient>
-          </View>
-
           {/* Header for table */}
           <View style={styles.tableHeader}>
             <Text style={styles.tableTitle}>Inventory Stock Levels</Text>
@@ -560,7 +669,10 @@ const uniqueCategories = useMemo(() => {
                 {[5, 10, 20].map((size) => (
                   <TouchableOpacity 
                     key={size}
-                    onPress={() => setItemsPerPage(size)} 
+                    onPress={() => {
+                      setItemsPerPage(size);
+                      setCurrentPage(1);
+                    }} 
                     style={[
                       styles.perPageBtn, 
                       itemsPerPage === size && styles.perPageActive
@@ -589,7 +701,9 @@ const uniqueCategories = useMemo(() => {
                   <Text style={styles.emptyTitle}>No items found</Text>
                   {searchQuery || selectedCategory || selectedFilter !== "All Status" ? (
                     <Text style={styles.emptySub}>Try adjusting your search or filters</Text>
-                  ) : null}
+                  ) : (
+                    <Text style={styles.emptySub}>Add your first medication to get started</Text>
+                  )}
                 </View>
               ) : (
                 <FlatList
@@ -759,11 +873,12 @@ const styles = StyleSheet.create({
     paddingBottom: FOOTER_HEIGHT + SPACING.lg 
   },
   
-  // Header Section
+  // Header Section - Now positioned after stats
   headerSection: {
     flexDirection: "column",
     gap: SPACING.sm,
     marginBottom: SPACING.md,
+    marginTop: SPACING.sm,
   },
   searchContainer: {
     backgroundColor: COLORS.card,
@@ -804,6 +919,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   
+  // Clear Filter Button
+  clearFilterBtn: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.error + "20",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+  },
+  clearFilterText: {
+    color: COLORS.error,
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
+  },
+  
   // Action Buttons
   exportBtn: {
     borderRadius: 12,
@@ -839,12 +969,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Summary Cards
+  // Summary Cards - Now at the top
   summaryCards: { 
     flexDirection: "row", 
     justifyContent: "space-between", 
     gap: SPACING.sm, 
-    marginVertical: SPACING.md,
+    marginVertical: SPACING.sm,
     flexWrap: 'wrap'
   },
   summaryCard: {
@@ -876,7 +1006,8 @@ const styles = StyleSheet.create({
     flexDirection: "row", 
     justifyContent: "space-between", 
     alignItems: "center", 
-    marginBottom: SPACING.sm 
+    marginBottom: SPACING.sm,
+    marginTop: SPACING.md,
   },
   tableTitle: { 
     fontSize: FONT_SIZE.lg, 
@@ -987,13 +1118,15 @@ const styles = StyleSheet.create({
     alignItems: "center", 
     gap: SPACING.sm 
   },
-  medicationIcon: {
-    width: ICON_SIZE.lg,
-    height: ICON_SIZE.lg,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+medicationIcon: {
+  width: ICON_SIZE.lg,
+  height: ICON_SIZE.lg,
+  borderRadius: 10,
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: COLORS.brand + "15", // light tint
+},
+
   medicationIconText: { 
     fontSize: 16 
   },
