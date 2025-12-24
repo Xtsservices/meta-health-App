@@ -21,7 +21,8 @@ import { Eye, EyeOff, Check } from 'lucide-react-native';
 import { AuthFetch, UsePost } from '../auth/auth';
 import { currentUser } from '../store/store';
 import { roleRoutes, scopeLinks } from '../utils/roleNames';
-import { showError,  showSuccess } from '../store/toast.slice';
+import { showError, showSuccess } from '../store/toast.slice';
+import { Role_NAME } from '../utils/role';
 
 // import { setCurrentUser } from '../../store/store';
 // import { setError, setSuccess } from '../../store/error/error.action';
@@ -34,13 +35,13 @@ const isTablet = width >= 768 && width < 1024;
 const Login: React.FC = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-const [keyboardHeight, setKeyboardHeight] = useState(0);
-const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   // Form state
   const [formData, setFormData] = useState({
     email: {
@@ -59,39 +60,36 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
   const isFormValid =
     formData.email.value.trim() !== '' && formData.password.value.trim() !== '';
 
-
-
   useEffect(() => {
-  const showSub = Keyboard.addListener(
-    Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-    (e) => {
-      const kbH = e?.endCoordinates?.height ?? 0;
-      setKeyboardHeight(kbH);
-      setKeyboardOpen(true);
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      e => {
+        const kbH = e?.endCoordinates?.height ?? 0;
+        setKeyboardHeight(kbH);
+        setKeyboardOpen(true);
 
-      // Let layout settle, then scroll to reveal the bottom (login button)
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          scrollRef.current?.scrollToEnd({ animated: true });
-        }, 50);
-      });
-    }
-  );
+        // Let layout settle, then scroll to reveal the bottom (login button)
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            scrollRef.current?.scrollToEnd({ animated: true });
+          }, 50);
+        });
+      },
+    );
 
-  const hideSub = Keyboard.addListener(
-    Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-    () => {
-      setKeyboardOpen(false);
-      setKeyboardHeight(0);
-    }
-  );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardOpen(false);
+        setKeyboardHeight(0);
+      },
+    );
 
-  return () => {
-    showSub.remove();
-    hideSub.remove();
-  };
-}, []);
-
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const login = async () => {
     if (!isFormValid) return;
@@ -99,24 +97,36 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
     setIsSubmitting(true);
     try {
       const body = {
-         email: formData.email.value,
+        email: formData.email.value,
         password: formData.password.value,
-      }
+      };
+      // console.log('Login body:', body);
 
       const response = await UsePost('user/emailLogin', body);
-      const data ="data" in response && response?.data;
-      if (response?.status === 'success'  ) {
-      
+      const data = 'data' in response && response?.data;
+      // console.log('Login response:', response);
+      if (response?.status === 'success') {
         await AsyncStorage.setItem('token', data?.token);
-       if (data?.id != null) {
-  await AsyncStorage.setItem('userID', String(data.id));
-}
-        
+        if (data?.id != null) {
+          await AsyncStorage.setItem('userID', String(data.id));
+        }
+
         dispatch(showSuccess('Successfully Logged In'));
-       
-        if (data?.role === 2002 || data?.role === 2003) {
+        
+        if (Role_NAME.ambulanceAdmin === data?.role) {
+            dispatch(currentUser(data));
+          navigation.navigate('AmbulanceAdminDashboard' as never);
+        } 
+        else if(Role_NAME.ambulanceDriver === data?.role) {
+            dispatch(currentUser(data));
+          navigation.navigate('AmbulanceDriverDashboard' as never);
+        }
+        
+        else if (data?.role === 2002 || data?.role === 2003) {
+            dispatch(currentUser(data));
           navigation.navigate('Nurse' as never);
         } else if (roleRoutes[data.role]) {
+            dispatch(currentUser(data));
           navigation.navigate(roleRoutes[data.role] as never);
         } else {
           const userScopes = data?.scope?.split('#');
@@ -124,51 +134,53 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
             const scope = parseInt(userScopes[0], 10);
             const link = scopeLinks[scope];
             if (link) {
-               if (data?.scope === "5008" || data?.scope === "5007") {
-                        const newRoleName = data?.scope === "5007" ? "surgeon" : "anesthetist"
-                        const updatedUser = {
-                      ...data,
-                      roleName: newRoleName
-                    };
-                     dispatch(currentUser(updatedUser))
-              navigation.navigate(`OtDashboard` as never);}
-
+              if (data?.scope === '5008' || data?.scope === '5007') {
+                const newRoleName =
+                  data?.scope === '5007' ? 'surgeon' : 'anesthetist';
+                const updatedUser = {
+                  ...data,
+                  roleName: newRoleName,
+                };
+                dispatch(currentUser(updatedUser));
+                navigation.navigate(`OtDashboard` as never);
+              }
             }
           } else {
-             dispatch(currentUser(data));
+            dispatch(currentUser(data));
             navigation.navigate('Home' as never);
           }
         }
       } else {
-        dispatch( showError("message" in response && response?.message));
+        dispatch(showError('message' in response && response?.message));
       }
     } catch (error: any) {
+      // console.log('Login error:', error);
       dispatch(showError(error?.response?.data?.message || 'Login failed'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-//   if (isLoading) {
-//     return (
-//       <View style={[styles.container, styles.centerContent]}>
-//         <ActivityIndicator size="large" color="#14b8a6" />
-//       </View>
-//     );
-//   }
+  //   if (isLoading) {
+  //     return (
+  //       <View style={[styles.container, styles.centerContent]}>
+  //         <ActivityIndicator size="large" color="#14b8a6" />
+  //       </View>
+  //     );
+  //   }
 
-  return (   
+  return (
     <View style={styles.container}>
       <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={[
-    styles.scrollContent,
-    { paddingBottom: (keyboardOpen ? keyboardHeight : 24) + 16 },
-  ]}
-  showsVerticalScrollIndicator={false}
-  bounces={false}
-  keyboardShouldPersistTaps="handled"
-  contentInsetAdjustmentBehavior="automatic"
+        ref={scrollRef}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: (keyboardOpen ? keyboardHeight : 24) + 16 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        keyboardShouldPersistTaps="handled"
+        contentInsetAdjustmentBehavior="automatic"
       >
         <View style={styles.rightSection}>
           <View style={styles.loginContainer}>
@@ -196,9 +208,9 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
                   autoCapitalize="none"
                   autoCorrect={false}
                   value={formData.email.value}
-                  onChangeText={(text) => {
+                  onChangeText={text => {
                     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                    setFormData((prevValue) => ({
+                    setFormData(prevValue => ({
                       ...prevValue,
                       email: {
                         value: text,
@@ -220,8 +232,8 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     value={formData.password.value}
-                    onChangeText={(text) => {
-                      setFormData((prevValue) => ({
+                    onChangeText={text => {
+                      setFormData(prevValue => ({
                         ...prevValue,
                         password: {
                           value: text,
@@ -236,8 +248,12 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
                     style={styles.passwordToggle}
                     onPress={() => setShowPassword(!showPassword)}
                   >
-                    {showPassword ? <Eye color="#666" size={24} /> : <EyeOff color="#666" size={24} />}
-                     
+                    {showPassword ? (
+                      <Eye color="#666" size={24} />
+                    ) : (
+                      <EyeOff color="#666" size={24} />
+                    )}
+
                     {/* <Ionicons
                       name={showPassword ? 'eye' : 'eye-off'}
                       size={24}
@@ -248,13 +264,15 @@ const [keyboardOpen, setKeyboardOpen] = useState(false);
               </View>
 
               {/* Form Options */}
-              {/* <View style={styles.formOptions}>
-                
-
-                <TouchableOpacity>
-                  <Text style={styles.forgotLink}>Forgot Password?</Text>
+              <View style={styles.formOptions}>
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('RegisterAmbulance' as never)
+                  }
+                >
+                  <Text style={styles.forgotLink}>Register Ambulance</Text>
                 </TouchableOpacity>
-              </View> */}
+              </View>
 
               {/* Login Button */}
               <TouchableOpacity
@@ -283,7 +301,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#4fd1c7',
     height: '100%',
-    width: '100%'
+    width: '100%',
   },
   centerContent: {
     justifyContent: 'center',
@@ -293,7 +311,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minHeight: height,
     backgroundColor: '#14b8a6',
-    flexDirection: 'column'
+    flexDirection: 'column',
   },
   leftSection: {
     alignItems: 'center',
