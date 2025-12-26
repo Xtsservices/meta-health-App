@@ -178,11 +178,12 @@
 // }
 // auth.ts
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'http://192.168.0.21:3000/api/v1';
-// const BASE_URL = 'http://192.168.1.3:3000/api/v1';
+// const BASE_URL = 'http://43.205.232.252:3000/api/v1/';
 
+const BASE_URL = 'http://172.16.4.124:3000/api/v1';
+
+export { BASE_URL };
 // --- helpers ---
 const handleError = (err: any) => {
   if (err?.response?.data?.message) return { message: err.response.data.message, status: 'error' };
@@ -239,11 +240,11 @@ const api = axios.create({
 function logAuthHeader(headers: Record<string, any> | undefined, label: string) {
   const auth = headers?.Authorization || headers?.authorization || headers?.['x-access-token'];
   if (!auth) {
-    console.log(`[auth] ${label}: no auth header`);
+    // console.log(`[auth] ${label}: no auth header`);
     return;
   }
   const preview = String(auth).slice(0, 24) + '...';
-  console.log(`[auth] ${label}:`, preview);
+  // console.log(`[auth] ${label}:`, preview);
 }
 
 interface ApiRequestParams {
@@ -347,7 +348,7 @@ export async function apiRequest({
     };
 
     if (data !== null && typeof data === 'object') config.data = data;
-
+// console.log('API Request Config:', config);
     logAuthHeader(config.headers as any, 'primary');
     const res = await api.request(config);
     return { data: res.data, status: 'success' };

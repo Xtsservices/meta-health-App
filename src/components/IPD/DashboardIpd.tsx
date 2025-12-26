@@ -218,7 +218,7 @@ const DashboardIpd: React.FC = () => {
       }
 
     } catch (e) {
-      console.error("Inpatient stats fetch error");
+      // console.error("Inpatient stats fetch error");
     } finally {
       setLoading(false);
     }
@@ -298,7 +298,7 @@ const DashboardIpd: React.FC = () => {
     try {
       await AsyncStorage.multiRemove(["token", "userID"]);
     } catch (e) {
-      console.warn("Logout storage cleanup error");
+      // console.warn("Logout storage cleanup error");
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);

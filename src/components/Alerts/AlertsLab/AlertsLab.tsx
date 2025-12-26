@@ -439,14 +439,14 @@ const AlertsLab: React.FC = () => {
           token
         );
         alertsData =response && "data" in response && response?.data?.data || [];
-        console.log("00000",alertsData)
+        // console.log("00000",alertsData)
       } else {
         // 👇 Existing lab alerts
         const response = await AuthFetch(
           `test/${user?.roleName}/${user?.hospitalID}/getAlerts`,
           token
         );
-        console.log("$$$$",response)
+        // console.log("$$$$",response)
         alertsData =response && "data" in response && response?.data?.alerts || response && "alerts" in response && response?.alerts || [];
       }
       if (Array.isArray(alertsData)) {

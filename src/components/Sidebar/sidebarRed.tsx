@@ -136,7 +136,7 @@ const CriticalCareSidebar: React.FC<Props> = ({
         setAlertCount(response?.count || 0);
       }
     } catch (error) {
-      console.error("Error fetching alert count");
+      // console.error("Error fetching alert count");
     }
   };
 

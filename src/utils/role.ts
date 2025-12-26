@@ -13,7 +13,39 @@ export type Role_list_Type = {
   6001: string;
   2002:string;
   4000:string;
+  9001:string;
+  9002:string;
 };
+
+export const Role_list: Role_list_Type = {
+  10007: "sAdmin",
+  8888:"customerCare",
+  9999: "admin",
+  4001: "doctor",
+  2003: "nurse",
+  1003: "staff",
+  3001: "management",
+  6001: "reception",
+  2002:"headNurse",
+  4000:"hod",
+  9001:"ambulanceAdmin",
+  9002:"ambulanceDriver",
+};
+export const Role_NAME = {
+  sAdmin: 10007,
+  customerCare:8888,
+  admin: 9999,
+  management: 3001,
+  doctor: 4001,
+  nurse: 2003,
+  staff: 1003,
+  reception: 6001,
+  headNurse:2002,
+  hod:4000,
+  ambulanceAdmin:9001,
+  ambulanceDriver:9002,
+};
+
 export type SCOPE_LIST_Type = {
   inpatient: number;
   outpatient: number;
@@ -27,30 +59,6 @@ export type SCOPE_LIST_Type = {
   radiology: number;
   pharmacy: number;
   reception: number;
-};
-export const Role_list: Role_list_Type = {
-  10007: "sAdmin",
-  8888:"customerCare",
-  9999: "admin",
-  4001: "doctor",
-  2003: "nurse",
-  1003: "staff",
-  3001: "management",
-  6001: "reception",
-  2002:"headNurse",
-  4000:"hod"
-};
-export const Role_NAME = {
-  sAdmin: 10007,
-  customerCare:8888,
-  admin: 9999,
-  management: 3001,
-  doctor: 4001,
-  nurse: 2003,
-  staff: 1003,
-  reception: 6001,
-  headNurse:2002,
-  hod:4000
 };
 
 export const SCOPE_LIST: SCOPE_LIST_Type = {

@@ -255,7 +255,6 @@ const PatientDetailsLab: React.FC = () => {
 
   const currentPatient = patientDetails?.[0] ?? completedPatientData?.[0] ?? patient;
   const allTests = getAllTests();
-  console.log("all",allTests)
 
   if (!currentPatient) {
     return (
