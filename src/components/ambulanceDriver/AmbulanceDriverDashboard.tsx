@@ -3,282 +3,216 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
-  ScrollView,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
+import { COLORS } from '../../utils/colour';
+import { SPACING, FONT_SIZE, responsiveHeight } from '../../utils/responsive';
 
-const { width } = Dimensions.get('window');
-const isSmallDevice = width < 768;
-
-interface Assignment {
-  id: number;
-  ambulanceName: string;
-  ambulanceNumber: string;
-  fromDate: string;
-  toDate: string;
-  fromTime: string;
-  toTime: string;
-  shiftType: string;
-  status: string;
-  remarks?: string;
-}
-
-interface DashboardStats {
-  totalAssignments: number;
-  activeAssignments: number;
-  completedAssignments: number;
-}
-
-const COLORS = {
-  primary: '#14b8a6',
-  success: '#10b981',
-  error: '#ef4444',
-  warning: '#f59e0b',
-  successLight: '#d1fae5',
-  errorLight: '#fee2e2',
-  warningLight: '#fef3c7',
-};
+// Dummy trip request data - Replace with real API data
+const DUMMY_TRIP_REQUESTS = [
+  {
+    id: 'trip_001',
+    patientName: 'Rajesh Kumar',
+    pickupAddress: 'AIIMS, Sri Aurobindo Marg, New Delhi',
+    dropAddress: 'Max Hospital, Saket, New Delhi',
+    distance: '12.5 km',
+    estimatedTime: '25 mins',
+    priority: 'High',
+    requestTime: '10:30 AM',
+  },
+  {
+    id: 'trip_002',
+    patientName: 'Priya Sharma',
+    pickupAddress: 'Safdarjung Hospital, New Delhi',
+    dropAddress: 'Apollo Hospital, Jasola, New Delhi',
+    distance: '8.2 km',
+    estimatedTime: '18 mins',
+    priority: 'Medium',
+    requestTime: '10:45 AM',
+  },
+];
 
 const AmbulanceDriverDashboard: React.FC = () => {
   const navigation = useNavigation();
 
-  // Dummy data
-  const [stats] = useState<DashboardStats>({
-    totalAssignments: 12,
-    activeAssignments: 3,
-    completedAssignments: 9,
-  });
+  const [tripRequests, setTripRequests] = useState(DUMMY_TRIP_REQUESTS);
+  const [currentRequestIndex, setCurrentRequestIndex] = useState(0);
+  const [isOnline, setIsOnline] = useState(false);
 
-  const [assignments] = useState<Assignment[]>([
-    {
-      id: 1,
-      ambulanceName: 'City Ambulance A1',
-      ambulanceNumber: 'MH-12-AB-1234',
-      fromDate: '2025-12-23',
-      toDate: '2025-12-23',
-      fromTime: '08:00',
-      toTime: '16:00',
-      shiftType: 'day',
-      status: 'active',
-      remarks: 'Regular shift',
-    },
-    {
-      id: 2,
-      ambulanceName: 'Emergency Van B2',
-      ambulanceNumber: 'MH-12-CD-5678',
-      fromDate: '2025-12-24',
-      toDate: '2025-12-24',
-      fromTime: '20:00',
-      toTime: '04:00',
-      shiftType: 'night',
-      status: 'upcoming',
-      remarks: 'Night shift coverage',
-    },
-    {
-      id: 3,
-      ambulanceName: 'Medical Transport C3',
-      ambulanceNumber: 'MH-12-EF-9012',
-      fromDate: '2025-12-22',
-      toDate: '2025-12-22',
-      fromTime: '09:00',
-      toTime: '17:00',
-      shiftType: 'general',
-      status: 'completed',
-    },
-    {
-      id: 4,
-      ambulanceName: 'Rescue Unit D4',
-      ambulanceNumber: 'MH-12-GH-3456',
-      fromDate: '2025-12-25',
-      toDate: '2025-12-25',
-      fromTime: '06:00',
-      toTime: '14:00',
-      shiftType: 'day',
-      status: 'upcoming',
-    },
-  ]);
 
-  const [driverInfo] = useState({
-    name: 'Rajesh Kumar',
-    mobile: '+91 98765 43210',
-    licenseNumber: 'MH1420190012345',
-    email: 'rajesh.kumar@example.com',
-  });
 
-  const handleLogout = () => {
+
+  const handleToggleOnline = () => {
+    setIsOnline(!isOnline);
+    if (!isOnline) {
+      Alert.alert('Status', 'You are now online and will receive trip requests');
+    } else {
+      Alert.alert('Status', 'You are now offline');
+    }
+  };
+
+  const handleAcceptTrip = () => {
+    const currentTrip = tripRequests[currentRequestIndex];
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      'Accept Trip',
+      `Accept trip for ${currentTrip.patientName}?`,
       [
-        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Logout',
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Accept',
           onPress: () => {
-            (navigation as any).navigate('Login');
+            // TODO: Accept trip via API
+            console.log('Trip accepted:', currentTrip.id);
+            Alert.alert('Success', 'Trip accepted! Navigating to Active Trip...');
+            // Navigate to Active Trip screen
+            navigation.navigate('AmbulanceDriverActiveTrip' as never);
           },
         },
       ]
     );
   };
 
-  const handleAssignmentDetails = (assignment: Assignment) => {
+  const handleRejectTrip = () => {
+    const currentTrip = tripRequests[currentRequestIndex];
     Alert.alert(
-      'Assignment Details',
-      `${assignment.ambulanceName}\n${assignment.ambulanceNumber}\nShift: ${assignment.shiftType}\nStatus: ${assignment.status}`,
-      [{ text: 'OK' }]
+      'Reject Trip',
+      `Reject trip for ${currentTrip.patientName}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: () => {
+            // Move to next request
+            if (currentRequestIndex < tripRequests.length - 1) {
+              setCurrentRequestIndex(currentRequestIndex + 1);
+            } else {
+              setTripRequests([]);
+              Alert.alert('Info', 'No more trip requests available');
+            }
+          },
+        },
+      ]
     );
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active':
-        return COLORS.success;
-      case 'upcoming':
-        return COLORS.warning;
-      case 'completed':
-        return COLORS.primary;
-      default:
-        return '#6b7280';
-    }
-  };
-
-  const getStatusBgColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'active':
-        return COLORS.successLight;
-      case 'upcoming':
-        return COLORS.warningLight;
-      case 'completed':
-        return '#e0f2f1';
-      default:
-        return '#f3f4f6';
-    }
-  };
-
-  const renderAssignmentCard = ({ item }: { item: Assignment }) => {
-    return (
-      <TouchableOpacity
-        style={styles.assignmentCard}
-        onPress={() => handleAssignmentDetails(item)}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardTitleSection}>
-            <Text style={styles.ambulanceName}>{item.ambulanceName}</Text>
-            <Text style={styles.vehicleNumber}>{item.ambulanceNumber}</Text>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(item.status) },
-            ]}
-          >
-            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
-          </View>
-        </View>
-
-        <View style={styles.cardBody}>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Date:</Text>
-            <Text style={styles.value}>{formatDate(item.fromDate)}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Time:</Text>
-            <Text style={styles.value}>{`${item.fromTime} - ${item.toTime}`}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Shift Type:</Text>
-            <Text style={styles.value}>{item.shiftType}</Text>
-          </View>
-          {item.remarks && (
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Remarks:</Text>
-              <Text style={styles.value}>{item.remarks}</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const currentTrip = tripRequests[currentRequestIndex];
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.headerTitle}>Ambulance Driver</Text>
-              <Text style={styles.headerSubtitle}>Dashboard</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>Driver Dashboard</Text>
+          <Text style={styles.headerSubtitle}>Ambulance Driver</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.onlineButton, isOnline && styles.onlineButtonActive]}
+          onPress={handleToggleOnline}
+        >
+          <View style={[styles.statusDot, isOnline && styles.statusDotActive]} />
+          <Text style={[styles.onlineText, isOnline && styles.onlineTextActive]}>
+            {isOnline ? 'Online' : 'Offline'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Trip Request Queue */}
+      <ScrollView style={styles.requestContainer} showsVerticalScrollIndicator={false}>
+        {tripRequests.length > 0 && currentTrip ? (
+          <View style={styles.requestCard}>
+            <View style={styles.requestHeader}>
+              <View style={styles.priorityBadge}>
+                <Text style={styles.priorityText}>{currentTrip.priority} Priority</Text>
+              </View>
+              <Text style={styles.requestTime}>{currentTrip.requestTime}</Text>
             </View>
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-            >
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
-          </View>
 
-          {/* Driver Info */}
-          <View style={styles.driverInfoCard}>
-            <Text style={styles.driverName}>{driverInfo.name}</Text>
-            <Text style={styles.driverDetail}>📱 {driverInfo.mobile}</Text>
-            <Text style={styles.driverDetail}>🪪 {driverInfo.licenseNumber}</Text>
-            <Text style={styles.driverDetail}>✉️ {driverInfo.email}</Text>
-          </View>
-        </View>
+            <View style={styles.requestBody}>
+              <Text style={styles.patientName}>{currentTrip.patientName}</Text>
 
-        {/* Stats Section */}
-        <View style={styles.statsSection}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.totalAssignments}</Text>
-            <Text style={styles.statLabel}>Total Assignments</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: COLORS.successLight }]}>
-            <Text style={[styles.statNumber, { color: COLORS.success }]}>
-              {stats.activeAssignments}
-            </Text>
-            <Text style={styles.statLabel}>Active</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: '#e0f2f1' }]}>
-            <Text style={[styles.statNumber, { color: COLORS.primary }]}>
-              {stats.completedAssignments}
-            </Text>
-            <Text style={styles.statLabel}>Completed</Text>
-          </View>
-        </View>
+              <View style={styles.addressContainer}>
+                <View style={styles.addressRow}>
+                  <View style={styles.iconCircle}>
+                    <Text style={styles.iconText}>P</Text>
+                  </View>
+                  <View style={styles.addressTextContainer}>
+                    <Text style={styles.addressLabel}>Pickup</Text>
+                    <Text style={styles.addressText}>{currentTrip.pickupAddress}</Text>
+                  </View>
+                </View>
 
-        {/* Assignments List */}
-        <View style={styles.listSection}>
-         
-          <Text style={styles.sectionTitle}>My Assignments</Text>
-          {assignments.length > 0 ? (
-            <FlatList
-              data={assignments}
-              renderItem={renderAssignmentCard}
-              keyExtractor={(item) => item.id.toString()}
-              scrollEnabled={false}
-            />
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No assignments yet</Text>
+                <View style={styles.dashedLine} />
+
+                <View style={styles.addressRow}>
+                  <View style={[styles.iconCircle, styles.iconCircleDrop]}>
+                    <Text style={styles.iconText}>D</Text>
+                  </View>
+                  <View style={styles.addressTextContainer}>
+                    <Text style={styles.addressLabel}>Drop</Text>
+                    <Text style={styles.addressText}>{currentTrip.dropAddress}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.tripInfoRow}>
+                <View style={styles.tripInfoItem}>
+                  <Text style={styles.tripInfoLabel}>Distance</Text>
+                  <Text style={styles.tripInfoValue}>{currentTrip.distance}</Text>
+                </View>
+                <View style={styles.tripInfoDivider} />
+                <View style={styles.tripInfoItem}>
+                  <Text style={styles.tripInfoLabel}>Est. Time</Text>
+                  <Text style={styles.tripInfoValue}>{currentTrip.estimatedTime}</Text>
+                </View>
+              </View>
             </View>
-          )}
-        </View>
+
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={handleRejectTrip}
+              >
+                <Text style={styles.rejectButtonText}>Reject</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.acceptButton]}
+                onPress={handleAcceptTrip}
+              >
+                <Text style={styles.acceptButtonText}>Accept Trip</Text>
+              </TouchableOpacity>
+            </View>
+
+            {tripRequests.length > 1 && (
+              <Text style={styles.queueText}>
+                {currentRequestIndex + 1} of {tripRequests.length} requests
+              </Text>
+            )}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>No Trip Requests</Text>
+            <Text style={styles.emptyStateText}>
+              {isOnline
+                ? 'Waiting for trip requests...'
+                : 'Go online to receive trip requests'}
+            </Text>
+          </View>
+        )}
       </ScrollView>
-      <AmbulanceDriverFooter active="dashboard" brandColor={COLORS.primary} />
+
+      {/* Footer Navigation */}
+      <AmbulanceDriverFooter active="dashboard" />
     </View>
   );
 };
@@ -286,183 +220,229 @@ const AmbulanceDriverDashboard: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 80,
+    backgroundColor: COLORS.bg,
   },
   header: {
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: isSmallDevice ? 16 : 24,
-    paddingTop: isSmallDevice ? 20 : 24,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.brand,
+    borderBottomWidth: 0,
+    elevation: 4,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
   headerTitle: {
-    fontSize: isSmallDevice ? 24 : 28,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: '700',
-    color: '#fff',
+    color: COLORS.primaryText,
   },
   headerSubtitle: {
-    fontSize: isSmallDevice ? 14 : 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: 4,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.primaryText,
+    marginTop: 2,
+    opacity: 0.9,
   },
-  logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  logoutButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  driverInfoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  driverName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  driverDetail: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  statsSection: {
+  onlineButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: isSmallDevice ? 16 : 24,
-    paddingVertical: 20,
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#e0f2f1',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
     alignItems: 'center',
-    shadowColor: '#000',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  onlineButtonActive: {
+    backgroundColor: COLORS.card,
+    borderColor: COLORS.card,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    marginRight: 8,
+  },
+  statusDotActive: {
+    backgroundColor: COLORS.success,
+  },
+  onlineText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.primaryText,
+  },
+  onlineTextActive: {
+    color: COLORS.brand,
+  },
+  requestContainer: {
+    flex: 1,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+  },
+  requestCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    elevation: 3,
+    shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#14b8a6',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  listSection: {
-    paddingHorizontal: isSmallDevice ? 16 : 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 16,
-  },
-  assignmentCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#14b8a6',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(20, 184, 166, 0.05)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(20, 184, 166, 0.1)',
-  },
-  cardTitleSection: {
-    flex: 1,
-  },
-  ambulanceName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#333',
-  },
-  vehicleNumber: {
-    fontSize: 13,
-    color: '#999',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  cardBody: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  infoRow: {
+  requestHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: SPACING.md,
   },
-  label: {
-    fontSize: 12,
-    color: '#666',
+  priorityBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    backgroundColor: '#FFEBEE',
+    borderRadius: 6,
+  },
+  priorityText: {
+    fontSize: FONT_SIZE.xs,
     fontWeight: '600',
-    width: '35%',
+    color: COLORS.danger,
   },
-  value: {
-    fontSize: 13,
-    color: '#333',
-    fontWeight: '500',
+  requestTime: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+  },
+  requestBody: {
+    marginBottom: SPACING.lg,
+  },
+  patientName: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+  },
+  addressContainer: {
+    marginBottom: SPACING.md,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.sm,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.brandLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.sm,
+  },
+  iconCircleDrop: {
+    backgroundColor: '#FFF3E0',
+  },
+  iconText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '700',
+    color: COLORS.brand,
+  },
+  addressTextContainer: {
     flex: 1,
-    textAlign: 'right',
   },
-  emptyState: {
-    paddingVertical: 40,
+  addressLabel: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginBottom: 2,
+  },
+  addressText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    lineHeight: 18,
+  },
+  dashedLine: {
+    height: 20,
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.border,
+    borderStyle: 'dashed',
+    marginLeft: 15,
+    marginVertical: -6,
+  },
+  tripInfoRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.bg,
+    borderRadius: 8,
+    padding: SPACING.sm,
+  },
+  tripInfoItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  tripInfoDivider: {
+    width: 1,
+    backgroundColor: COLORS.border,
+    marginHorizontal: 10,
+  },
+  tripInfoLabel: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginBottom: 4,
+  },
+  tripInfoValue: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyStateText: {
-    fontSize: 16,
+  rejectButton: {
+    backgroundColor: '#FFEBEE',
+  },
+  rejectButtonText: {
+    fontSize: FONT_SIZE.lg,
     fontWeight: '600',
-    color: '#999',
+    color: COLORS.danger,
+  },
+  acceptButton: {
+    backgroundColor: COLORS.success,
+  },
+  acceptButtonText: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '600',
+    color: COLORS.buttonText,
+  },
+  queueText: {
+    textAlign: 'center',
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginTop: SPACING.sm,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: responsiveHeight(5),
+  },
+  emptyStateTitle: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
+    textAlign: 'center',
   },
 });
 

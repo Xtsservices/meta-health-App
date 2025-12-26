@@ -1,32 +1,36 @@
-// App.tsx
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Provider } from 'react-redux';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message';
 
 import Routing from './src/navigation/routing';
-import  store  from './src/store/store'; 
+import store from './src/store/store';
 import ToastHost from './src/components/ToastHost';
+import { initSocket } from './src/socket/socket';
+import SocketBootstrap from './src/socket/SocketBootstrap';
 
-function App() {
+const App = () => {
+  useEffect(() => {
+    initSocket(); // ✅ connect once
+  }, []);
+
   return (
     <Provider store={store}>
-      <View style={styles.container}>
-        <SafeAreaProvider>
+      <SafeAreaProvider>
+        {/* 🔌 Socket lifecycle lives here */}
+        <SocketBootstrap />
+
+        <View style={styles.container}>
           <Routing />
           <ToastHost />
-        </SafeAreaProvider>
-      </View>
+        </View>
+      </SafeAreaProvider>
     </Provider>
   );
-}
-
+};
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
 });
 
 export default App;
