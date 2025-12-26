@@ -1,0 +1,11 @@
+// src/socket/SocketBootstrap.tsx
+import React from 'react';
+import { useRegisterSocket } from './useRegisterSocket';
+
+const SocketBootstrap = () => {
+  console.log('SocketBootstrap rendered');
+  useRegisterSocket();
+  return null; // no UI
+};
+
+export default SocketBootstrap;

@@ -2,11 +2,13 @@ import React, { useEffect } from 'react';
 import { Image, StyleSheet, Dimensions, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AuthFetch } from '../auth/auth';
 import { useDispatch } from 'react-redux';
+
+import { AuthFetch } from '../auth/auth';
 import { currentUser } from '../store/store';
 import { showError } from '../store/toast.slice';
 import { Role_NAME } from '../utils/role';
+
 
 const { width } = Dimensions.get('window');
 
@@ -14,20 +16,22 @@ const SplashScreen = () => {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
 
+
+
+  // 🔹 AUTH FLOW
   useEffect(() => {
     const checkLogin = async () => {
       try {
         const token = await AsyncStorage.getItem('token');
         const userId = await AsyncStorage.getItem('userID');
 
-        // ❌ No token → Go to Login
         if (!token || !userId) {
           navigation.replace('Login');
           return;
         }
 
-        // Try auto-login
         const res = await AuthFetch(`user/${Number(userId)}`, token);
+        console.log("User data fetched:", res);
         const user = res?.data?.user;
 
         if (!user) {
@@ -35,25 +39,15 @@ const SplashScreen = () => {
           return;
         }
 
-        // Store in redux
+        dispatch(currentUser(user));
 
-        // Route selection
-        if (Role_NAME.ambulanceAdmin === user?.role) {
-          dispatch(currentUser(user));
-          navigation.navigate('AmbulanceAdminDashboard' as never);
-        } else if (Role_NAME.ambulanceDriver === user?.role) {
-          dispatch(currentUser(user));
-          navigation.navigate('AmbulanceDriverDashboard' as never);
-        } else if (user.scope === '5008' || user.scope === '5007') {
-          const newRoleName = user.scope === '5007' ? 'surgeon' : 'anesthetist';
-          const updatedUser = {
-            ...user,
-            roleName: newRoleName,
-          };
-          dispatch(currentUser(updatedUser));
+        if (user.role === Role_NAME.ambulanceAdmin) {
+          navigation.replace('AmbulanceAdminDashboard');
+        } else if (user.role === Role_NAME.ambulanceDriver) {
+          navigation.replace('AmbulanceDriverDashboard');
+        } else if (user.scope === '5007' || user.scope === '5008') {
           navigation.replace('OtDashboard');
         } else {
-          dispatch(currentUser(user));
           navigation.replace('Home');
         }
       } catch (e) {
@@ -62,9 +56,7 @@ const SplashScreen = () => {
       }
     };
 
-    // Give small delay to show splash
     const timer = setTimeout(checkLogin, 1400);
-
     return () => clearTimeout(timer);
   }, []);
 
@@ -78,7 +70,7 @@ const SplashScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
   },

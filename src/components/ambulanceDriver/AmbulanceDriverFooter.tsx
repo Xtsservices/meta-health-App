@@ -1,5 +1,4 @@
-// AmbulanceDriverFooter.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,22 +11,23 @@ import { useNavigation } from '@react-navigation/native';
 import {
   LayoutDashboardIcon,
   SettingsIcon,
-  ShoppingCartIcon,
-  UserIcon,
+  ClockIcon,
+  MapPinIcon,
 } from '../../utils/SvgIcons';
+import { ensureLocationPermission, getCurrentLocation } from '../../utils/locationUtils';
 
 const { width: W } = Dimensions.get('window');
 
 export type AmbulanceDriverTabKey =
   | 'dashboard'
-  | 'assignments'
-  | 'profile'
+  | 'activeTrip'
+  | 'history'
   | 'settings';
 
 type Props = {
-  active?: AmbulanceDriverTabKey; // default 'dashboard'
-  brandColor?: string; // default '#14b8a6'
-  onTabPress?: (tab: AmbulanceDriverTabKey) => void; // optional custom handler
+  active?: AmbulanceDriverTabKey;
+  brandColor?: string;
+  onTabPress?: (tab: AmbulanceDriverTabKey) => void;
 };
 
 type ItemProps = {
@@ -39,8 +39,8 @@ type ItemProps = {
 const getTabLabel = (k: AmbulanceDriverTabKey): string => {
   const labels = {
     dashboard: 'Dashboard',
-    assignments: 'Assignments',
-    profile: 'Profile',
+    activeTrip: 'Active Trip',
+    history: 'History',
     settings: 'Settings',
   };
   return labels[k];
@@ -49,8 +49,8 @@ const getTabLabel = (k: AmbulanceDriverTabKey): string => {
 const getTabIcon = (k: AmbulanceDriverTabKey): React.ElementType => {
   const icons = {
     dashboard: LayoutDashboardIcon,
-    assignments: ShoppingCartIcon,
-    profile: UserIcon,
+    activeTrip: MapPinIcon,
+    history: ClockIcon,
     settings: SettingsIcon,
   };
   return icons[k];
@@ -78,7 +78,6 @@ const Item: React.FC<ItemProps> = ({ k, active, onPress }) => {
       >
         {label}
       </Text>
-      {/* Top indicator for active tab */}
       <View
         style={[
           styles.activeBar,
@@ -96,6 +95,30 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
 }) => {
   const navigation = useNavigation<any>();
 
+         // 🔹 LOCATION (NON-BLOCKING)
+        useEffect(() => {
+          const initLocation = async () => {
+            try {
+              const granted = await ensureLocationPermission();
+              if (!granted) return;
+      
+              // ⏳ small delay prevents native crash
+              setTimeout(async () => {
+                try {
+                  const loc = await getCurrentLocation();
+                  console.log('📍 Initial location:', loc);
+                } catch (e) {
+                  console.log('⚠️ Location failed:', e.message);
+                }
+              }, 800);
+            } catch (e) {
+              console.log('⚠️ Permission error:', e);
+            }
+          };
+      
+          initLocation();
+        }, []);
+
   const handleTabPress = (k: AmbulanceDriverTabKey) => {
     // Call custom handler if provided
     if (onTabPress) {
@@ -108,11 +131,11 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
       case 'dashboard':
         navigation.navigate('AmbulanceDriverDashboard');
         break;
-      case 'assignments':
-        navigation.navigate('AmbulanceDriverAssignments');
+      case 'activeTrip':
+        navigation.navigate('AmbulanceDriverActiveTrip');
         break;
-      case 'profile':
-        navigation.navigate('AmbulanceDriverProfile');
+      case 'history':
+        navigation.navigate('AmbulanceDriverHistory');
         break;
       case 'settings':
         navigation.navigate('AmbulanceDriverSettings');
@@ -125,8 +148,8 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
   return (
     <View style={[styles.footer, { backgroundColor: brandColor }]}>
       <Item k="dashboard" active={active} onPress={handleTabPress} />
-      <Item k="assignments" active={active} onPress={handleTabPress} />
-      <Item k="profile" active={active} onPress={handleTabPress} />
+      <Item k="activeTrip" active={active} onPress={handleTabPress} />
+      <Item k="history" active={active} onPress={handleTabPress} />
       <Item k="settings" active={active} onPress={handleTabPress} />
     </View>
   );

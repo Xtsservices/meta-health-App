@@ -138,9 +138,9 @@ import AddDriver from '../components/ambulance/AddDriver';
 // import addReports from "../components/patientsList/reports/addReports";
 
 import AmbulanceDriverDashboard from '../components/ambulanceDriver/AmbulanceDriverDashboard';
-import AmbulanceDriverAssignments from '../components/ambulanceDriver/AmbulanceDriverAssignments';
-import AmbulanceDriverProfile from '../components/ambulanceDriver/AmbulanceDriverProfile';
+import AmbulanceDriverActiveTrip from '../components/ambulanceDriver/AmbulanceDriverActiveTrip';
 import AmbulanceDriverSettings from '../components/ambulanceDriver/AmbulanceDriverSettings';
+import AmbulanceDriverHistory from '../components/ambulanceDriver/AmbulanceDriverHistory';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -1263,19 +1263,19 @@ const Routing = () => {
           }}
         />
         <Stack.Screen
-          name="AmbulanceDriverAssignments"
-          component={AmbulanceDriverAssignments}
+          name="AmbulanceDriverActiveTrip"
+          component={AmbulanceDriverActiveTrip}
           options={{
-            title: 'My Assignments',
+            title: 'Active Trip',
             headerTitleAlign: 'center',
             headerShown: false,
           }}
         />
         <Stack.Screen
-          name="AmbulanceDriverProfile"
-          component={AmbulanceDriverProfile}
+          name="AmbulanceDriverHistory"
+          component={AmbulanceDriverHistory}
           options={{
-            title: 'My Profile',
+            title: 'Trip History',
             headerTitleAlign: 'center',
             headerShown: false,
           }}

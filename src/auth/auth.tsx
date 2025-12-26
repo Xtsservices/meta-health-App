@@ -181,9 +181,10 @@ import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
 // const BASE_URL = 'http://43.205.232.252:3000/api/v1/';
 
-const BASE_URL = 'http://172.16.4.124:3000/api/v1';
+const BASE_URL = 'http://192.168.0.5:3000/api/v1';
+const BASE_URL_SOCKET ='http://192.168.0.5:3000'
 
-export { BASE_URL };
+export { BASE_URL, BASE_URL_SOCKET };
 // --- helpers ---
 const handleError = (err: any) => {
   if (err?.response?.data?.message) return { message: err.response.data.message, status: 'error' };
