@@ -15,7 +15,13 @@ export const useRegisterSocket = () => {
       if (!user?.id) return;
 
       socket.emit('register-user', {
-        userId: user.id
+        userId: user.id,
+        message: 'Hello from Patient App',
+      });
+
+      //read the response
+      socket.on('register-user', data => {
+        console.log('🤝 Handshake response:', data);
       });
     };
 

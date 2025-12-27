@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,22 @@ import {
   StyleSheet,
   Platform,
   Dimensions,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
   LayoutDashboardIcon,
   SettingsIcon,
   ClockIcon,
   MapPinIcon,
 } from '../../utils/SvgIcons';
-import { ensureLocationPermission, getCurrentLocation } from '../../utils/locationUtils';
+import {
+  ensureLocationPermission,
+  startLocationTracking,
+  stopLocationTracking,
+} from '../../utils/locationUtils';
+import { RootState } from '../../store/store';
+import { useSelector } from 'react-redux';
 
 const { width: W } = Dimensions.get('window');
 
@@ -94,30 +101,85 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
   onTabPress,
 }) => {
   const navigation = useNavigation<any>();
+  const user = useSelector((s: RootState) => s.currentUser);
+  const trackingStartedRef = useRef(false);
+  
+  console.log("Current user:", user);
 
-         // 🔹 LOCATION (NON-BLOCKING)
-        useEffect(() => {
-          const initLocation = async () => {
-            try {
-              const granted = await ensureLocationPermission();
-              if (!granted) return;
-      
-              // ⏳ small delay prevents native crash
-              setTimeout(async () => {
-                try {
-                  const loc = await getCurrentLocation();
-                  console.log('📍 Initial location:', loc);
-                } catch (e) {
-                  console.log('⚠️ Location failed:', e.message);
-                }
-              }, 800);
-            } catch (e) {
-              console.log('⚠️ Permission error:', e);
-            }
-          };
-      
-          initLocation();
-        }, []);
+  // 🔹 START CONTINUOUS BACKGROUND LOCATION TRACKING
+  useFocusEffect(
+    React.useCallback(() => {
+      const initBackgroundTracking = async () => {
+        // Only start if user is logged in and is a driver
+        if (!user?.id) {
+          console.log('⚠️ No user ID found, skipping location tracking');
+          return;
+        }
+
+        // Prevent multiple tracking instances
+        if (trackingStartedRef.current) {
+          console.log('⚠️ Tracking already started');
+          return;
+        }
+
+        try {
+          console.log('🔄 Initializing location tracking...');
+          
+          // Request location permissions first
+          const granted = await ensureLocationPermission();
+          if (!granted) {
+            console.log('❌ Location permission not granted');
+            Alert.alert(
+              'Location Required',
+              'Location permission is required to track ambulance location.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+
+          console.log('✅ Location permission granted');
+
+          // Add a delay to ensure socket is ready and prevent native crash
+          await new Promise<void>(resolve => setTimeout(() => resolve(), 1500));
+
+          console.log('🚀 Starting background location tracking...');
+
+          // Start continuous background tracking
+          const driverId = String(user.id); // Ensure it's a string
+          const ambulanceID = String(user?.ambulance?.ambulanceID); // Ensure it's a string
+          if(!ambulanceID && !driverId) {
+            console.log('⚠️ No ambulance ID or driver ID found, skipping location tracking');
+            return;
+          }
+          await startLocationTracking(driverId, ambulanceID);
+          trackingStartedRef.current = true;
+          
+          console.log('✅ Background tracking started for driver:', driverId);
+        } catch (error) {
+          console.error('❌ Failed to start background tracking:', error);
+          // Don't show alert for minor errors, just log
+          console.log('⚠️ Will retry tracking on next app launch');
+        }
+      };
+
+      // Small delay before starting to ensure app is fully initialized
+      const timer = setTimeout(() => {
+        initBackgroundTracking();
+      }, 10000);
+
+      // Cleanup: Stop tracking when screen loses focus
+      return () => {
+        clearTimeout(timer);
+        if (trackingStartedRef.current && user?.id) {
+          console.log('🛑 Stopping background tracking on screen blur...');
+          stopLocationTracking().catch(err => {
+            console.error('Error stopping tracking:', err);
+          });
+          trackingStartedRef.current = false;
+        }
+      };
+    }, [user?.id, user?.ambulance?.ambulanceID])
+  );
 
   const handleTabPress = (k: AmbulanceDriverTabKey) => {
     // Call custom handler if provided

@@ -11,6 +11,7 @@ export const initSocket = (serverUrl = DEFAULT_URL) => {
   socket = io(serverUrl, {
     transports: ["polling", "websocket"], // polling first, then websocket
     reconnection: true,
+    autoConnect: true,
     reconnectionAttempts: Infinity,
     reconnectionDelayMax: 5000,
   });
