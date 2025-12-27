@@ -178,6 +178,7 @@ const AddPatientForm: React.FC = () => {
         AuthFetch(`user/${user?.hospitalID}/list/${Role_NAME.doctor}`, token),
         AuthFetch(`ward/${user?.hospitalID}`, token), // NEW: Fetch wards
       ]);
+      console.log(wardRes, "wards response")
       if (deptRes?.status === "success" && "data" in deptRes) setDepartmentList(deptRes?.data?.departments || []);
       if (docRes?.status === "success" && "data" in docRes) setDoctorList(docRes?.data?.users || []);
       if (wardRes?.status === "success" && "data" in wardRes) setWardList(wardRes?.data?.wards || []); // NEW: Set ward list
@@ -544,7 +545,7 @@ const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
   }: {
     selectedValue: any;
     onValueChange: (item: any) => void;
-    items: { label: string; value: any }[];
+    items: { label: string; value: any; disabled?: boolean; key?: string }[];
     placeholder: string;
     enabled?: boolean;
   }) => {
@@ -554,13 +555,19 @@ const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
       <View style={[styles.pickerContainer, { borderColor: COLORS.border, opacity: enabled ? 1 : 0.6 }]}>
         <Picker
           selectedValue={selectedValue}
-          onValueChange={onValueChange}
+          onValueChange={(value, index) => {
+    const item = items[index];
+    if (item?.disabled) {
+      return; // 🔹 prevent selecting FULL wards
+    }
+    onValueChange(value);
+  }}
           style={styles.picker}
           dropdownIconColor={COLORS.brand}
           enabled={enabled}
         >
           {items.map(item => (
-            <Picker.Item key={item.value} label={item.label} value={item.value} />
+            <Picker.Item key={item.value} label={item.label} value={item.value} enabled={!item.disabled}/>
           ))}
         </Picker>
         <View style={styles.pickerOverlay}>
@@ -1109,16 +1116,23 @@ else if (name === "email") {
                   </Text>
                   <CustomPicker
                     selectedValue={formData.wardID.value}
+                     items={wardList
+          .filter((w) => w.availableBeds !== null)
+          .map((w) => ({
+            key: String(w.id),
+            label: `${capitalizeFirstLetter(w.name)}${
+              w.availableBeds === 0 ? " (Full)" : ""
+            }`,
+            disabled: w.availableBeds === 0 ,
+            value: w.id,
+          }))}
                     onValueChange={(id) => {
                       setFormData((prev) => ({
                         ...prev,
                         wardID: { value: id, valid: true, showError: false, message: "" },
                       }));
                     }}
-                    items={wardList?.map(ward => ({
-                      label: capitalizeFirstLetter(ward.name),
-                      value: ward.id
-                    }))}
+                    
                     placeholder="Select Ward"
                   />
                   {formData.wardID.showError && (

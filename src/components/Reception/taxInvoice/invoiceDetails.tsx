@@ -340,7 +340,7 @@ if (isBillingSource && isPharmacyUser) {
 
       {/* Due Amount (outstanding) */}
       <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Due Amount:</Text>
+        <Text style={styles.totalLabel}>Total Due Amount:</Text>
         <Text
           style={[
             styles.totalValue,

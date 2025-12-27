@@ -172,7 +172,8 @@ const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
         }
     };
 
-
+const testLabel = totalTests <= 1 ? "test" : "tests";
+const medLabel  = totalMeds <= 1  ? "med"  : "meds";
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: COLORS.card }]}
@@ -257,13 +258,13 @@ const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>{itemsLabel}</Text>
           <Text style={styles.metaValue}>
-            {isPharmacy 
-              ? `${totalMeds} medicines` 
-              : isReception 
-                ? `${totalTests} tests ${totalMeds} meds` 
-                : `${totalTests} tests`
-            }
-          </Text>
+  {isPharmacy
+    ? `${totalMeds} ${medLabel}`
+    : isReception
+      ? `${totalTests} ${testLabel} ${totalMeds} ${medLabel}`
+      : `${totalTests} ${testLabel}`
+  }
+</Text>
         </View>
 
         {!isReception && 

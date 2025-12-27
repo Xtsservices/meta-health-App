@@ -1162,13 +1162,13 @@ const DashboardReception: React.FC = () => {
   key: "taxinvoice",
   label: "Tax Invoice",
   icon: Receipt,
-  onPress: () => navigation.navigate("TaxInvoiceTabs", { mode: "allTax" }),
+  onPress: () => navigation.navigate("TaxInvoiceTabs", { mode: "allTax" , fromBilling: false}),
 },
 {
   key: "billing",
   label: "Billing",
   icon: Receipt,
-  onPress: () => navigation.navigate("TaxInvoiceTabs", { mode: "billing" }),
+  onPress: () => navigation.navigate("TaxInvoiceTabs", { mode: "billing" , fromBilling: true}),
 },
 
     { 
@@ -1272,9 +1272,7 @@ const DashboardReception: React.FC = () => {
           />
         </ChartCard>
 
-        <View style={styles.notesSection}>
-          <MyTasks />
-        </View>
+       
 
         <ChartCard 
           title="Out Patient (OPD)" 
@@ -1310,6 +1308,9 @@ const DashboardReception: React.FC = () => {
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"dashboard"} brandColor={COLORS.brand} />
       </View>
+      {insets.bottom > 0 && (
+             <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+           )}
 
       <Sidebar
         open={menuOpen}
@@ -1332,6 +1333,7 @@ const DashboardReception: React.FC = () => {
         onConfirm={confirmLogout}
         confirmText="Logout"
       />
+      
     </View>
   );
 };
@@ -1902,6 +1904,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
   },
   footerWrap: {
+    position:"absolute",
     left: 0,
     right: 0,
     bottom: 0,
@@ -2088,6 +2091,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     minWidth: 32,
     textAlign: "center",
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    zIndex: 9,
   },
 
 });

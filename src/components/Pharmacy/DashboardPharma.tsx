@@ -740,7 +740,8 @@ const DashboardPharma: React.FC = () => {
       icon: FileTextIcon,
       onPress: () => navigation.navigate("TaxInvoiceTabs", { 
         mode: "billing",
-        department: "pharmacy" 
+        department: "pharmacy" ,
+         fromBilling: true
       }),
     },
     {
@@ -749,7 +750,8 @@ const DashboardPharma: React.FC = () => {
       icon: ReceiptIcon,
       onPress: () => navigation.navigate("TaxInvoiceTabs", { 
         mode: "allTax",
-        department: "pharmacy" 
+        department: "pharmacy" ,
+         fromBilling: false
       }),
     },
     {

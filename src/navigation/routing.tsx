@@ -431,7 +431,8 @@ const Routing = () => {
           />
           <Stack.Screen name="TaxInvoiceTabs" 
           component={taxInvoiceTabs}
-          options={{ title: 'Tax-Invoice', headerTitleAlign: "center", headerShown: true }}
+          // options={({ route }) => ({ title: (route?.params as any)?.title ?? "Notification", headerTitleAlign: "center", headerShown: true })}
+          options={({ route }) => ({ title: route?.params?.fromBilling ? "Billing" : "Tax-Invoice", headerTitleAlign: "center", headerShown: true })}
           />
            <Stack.Screen name="InvoiceDetails" 
           component={invoiceDetails}

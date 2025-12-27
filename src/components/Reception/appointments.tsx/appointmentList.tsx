@@ -30,8 +30,9 @@ import { AuthFetch, AuthPost, AuthPut } from "../../../auth/auth";
 import { showError, showSuccess } from "../../../store/toast.slice";
 import { Role_NAME } from "../../../utils/role";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { FONT_SIZE, responsiveHeight, responsiveWidth, SPACING } from "../../../utils/responsive";
+import { FONT_SIZE, responsiveHeight, responsiveWidth, SCREEN_WIDTH, SPACING } from "../../../utils/responsive";
 import { useFocusEffect } from "@react-navigation/native";
+import dayjs from "dayjs";
 
 type StatusType = "scheduled" | "completed" | "canceled";
 
@@ -129,6 +130,9 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
   const [rescheduleReason, setRescheduleReason] = useState<string>("");
   const [noSlotsMessage, setNoSlotsMessage] = useState<string | null>(null);
   const [slotLoading, setSlotLoading] = useState(false);
+// Cancel confirmation
+const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
+const [rowToCancel, setRowToCancel] = useState<AppointmentType | null>(null);
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -251,7 +255,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
   }, [fetchDoctors, user?.token]);
 
   useEffect(() => {
-    if (didFetchDepartments.current && user?.token) {
+    if (didFetchDepartments.current) {
       fetchDepartments();
       didFetchDepartments.current = false;
     }
@@ -342,7 +346,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
         `doctor/${user.hospitalID}/${doctorId}/${dateStr}/getDoctorAppointmentsSlotsByDate`,
         token
       );
-      if (res?.status === "success" && "data" in res) {
+            if (res?.status === "success" && "data" in res) {
         const slots: SlotResp[] = (res.data.data || []).map((s: SlotResp) => ({
           id: s.id,
           fromTime: s.fromTime,
@@ -351,20 +355,38 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
           persons: s.persons,
           bookedIds: s.bookedIds,
         }));
-        const hasAvailable = slots.some(
-          s => (s.availableSlots ?? 0) > 0
+
+        // 🔹 NEW: if selected date is today => only show future slots (by end time)
+        const now = dayjs();
+        const isToday = dayjs(dateStr).isSame(now, "day");
+
+        let filteredSlots = slots;
+
+        if (isToday) {
+          const currentTime = now.format("HH:mm"); // "HH:mm"
+
+          filteredSlots = slots.filter((s) => {
+            const slotEndTime = (s.toTime || "").substring(0, 5); // "HH:mm"
+            return slotEndTime > currentTime; // keep only future slots
+          });
+        }
+
+        const hasAvailable = filteredSlots.some(
+          (s) => (s.availableSlots ?? 0) > 0
         );
+
         if (!hasAvailable) {
           setAvailableSlots([]);
           setNoSlotsMessage("No available slots for the selected date.");
         } else {
-          setAvailableSlots(slots);
+          setAvailableSlots(filteredSlots);
           setNoSlotsMessage(null);
         }
       } else {
         setAvailableSlots([]);
         setNoSlotsMessage("No available slots for the selected date.");
       }
+
     } catch {
       setAvailableSlots([]);
       setNoSlotsMessage("Failed to load slots. Try another date.");
@@ -457,7 +479,6 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
     setRescheduleReason("");
     setAvailableSlots([]);
     setNoSlotsMessage(null);
-    setRescheduleDateObj(new Date());
   };
 
   const closeRescheduleModal = () => {
@@ -484,7 +505,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
         <Text style={styles.titleText}>{buildTitle()}</Text>
 
         {/* Doctor Filter */}
-        <View style={styles.filterRow}>
+       
           <View style={styles.filterCol}>
             <Text style={styles.label}>Doctor</Text>
             <View style={styles.pickerWrapper}>
@@ -521,7 +542,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        
 
         {/* Row: Refresh + Count */}
         <View style={styles.filterBottomRow}>
@@ -636,7 +657,11 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
 
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.cancelBtn]}
-                    onPress={() => handleCancel(row.id)}
+                    onPress={() => {
+  setRowToCancel(row);
+  setCancelConfirmVisible(true);
+}}
+
                   >
                     <Text style={styles.actionBtnText}>Cancel</Text>
                   </TouchableOpacity>
@@ -758,7 +783,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
                 }
               >
                 <Text style={styles.dateButtonText}>
-                  {rescheduledDate || "Select date"}
+                  {rescheduledDate ? formatDate(rescheduledDate) : "Select date"}
                 </Text>
               </TouchableOpacity>
 
@@ -766,7 +791,8 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
                 <DateTimePicker
                   value={rescheduleDateObj}
                   mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  display={Platform.OS === "android" ? "spinner" : "default"}    
+                 minimumDate={new Date()}
                   onChange={onRescheduleDatePick}
                 />
               )}
@@ -888,6 +914,49 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
           </KeyboardAvoidingView>
         </Modal>
       )}
+
+      {/* Confirm Cancel Dialog */}
+{cancelConfirmVisible && (
+  <Modal
+    transparent
+    visible={cancelConfirmVisible}
+    animationType="fade"
+    onRequestClose={() => setCancelConfirmVisible(false)}
+  >
+    <View style={styles.modalBackdrop}>
+      <View style={styles.modalCard}>
+        <Text style={styles.modalTitle}>Cancel Appointment</Text>
+        <Text style={styles.modalMsg}>
+          Are you sure you want to cancel this appointment?
+        </Text>
+
+        <View style={styles.modalActions}>
+          <TouchableOpacity
+            onPress={() => setCancelConfirmVisible(false)}
+            style={[styles.modalBtn, styles.modalBtnGhost]}
+          >
+            <Text style={[styles.modalBtnText, { color: COLORS.brand }]}>
+              No
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              if (rowToCancel?.id) handleCancel(rowToCancel.id);
+              setCancelConfirmVisible(false);
+            }}
+            style={[styles.modalBtn, styles.modalBtnDanger]}
+          >
+            <Text style={[styles.modalBtnText, { color: "#fff" }]}>
+              Yes, Cancel
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+)}
+
     </View>
   );
 };
@@ -946,7 +1015,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   picker: {
-    height: responsiveHeight(6),
+    height: Platform.OS === "ios" ? responsiveHeight(6) : undefined,
+  minHeight: responsiveHeight(7),   // ensures no cut dropdown on small phones
+  maxHeight: responsiveHeight(8),   // prevents oversized picker on tablets
+  paddingVertical: 6,
     width: "100%",
     color: "black",
   },
@@ -1239,5 +1311,36 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#ffffff",
   },
+  modalBackdrop: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.35)",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: SPACING.lg,
+},
+
+modalMsg: {
+  fontSize: FONT_SIZE.sm,
+  color: COLORS.sub,
+  marginTop: SPACING.xs,
+  lineHeight: 20,
+},
+modalActions: {
+  flexDirection: "row",
+  justifyContent: "flex-end",
+  gap: SPACING.sm,
+  marginTop: SPACING.sm,
+},
+modalBtnGhost: {
+  backgroundColor: COLORS.brandLight,
+},
+modalBtnDanger: {
+  backgroundColor: COLORS.danger,
+},
+modalBtnText: {
+  fontWeight: "700",
+  fontSize: FONT_SIZE.sm,
+},
+
 });
 

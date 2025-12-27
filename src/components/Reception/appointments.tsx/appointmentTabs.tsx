@@ -123,6 +123,9 @@ const AppointmentTabsMobile: React.FC = () => {
        <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
   <Footer active={"appointments"} brandColor={COLORS.brand} />
 </View>
+ {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
 
       </KeyboardAvoidingView>
     </View>
@@ -182,5 +185,13 @@ const styles = StyleSheet.create({
   zIndex: 10,
   elevation: 6,
 },
+ navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    zIndex: 9,
+  },
 
 });

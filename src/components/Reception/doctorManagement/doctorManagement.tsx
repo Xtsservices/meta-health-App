@@ -12,6 +12,7 @@ import {
   SafeAreaView,
   Dimensions,
   Platform,
+  TextInput,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -66,7 +67,7 @@ const DoctorManagementMobile: React.FC = () => {
   const [slotCreating, setSlotCreating] = useState<boolean>(false);
   const [slotModalVisible, setSlotModalVisible] = useState(false);
   const [activeDoctorForSlots, setActiveDoctorForSlots] = useState<Doctor | null>(null);
-
+  const [searchQuery, setSearchQuery] = useState("");
   // simple local pagination
   const [page, setPage] = useState<{ limit: number; page: number }>({
     limit: 10,
@@ -139,6 +140,10 @@ const DoctorManagementMobile: React.FC = () => {
     }
   }, [user?.hospitalID, user?.token, departments, dispatch]);
 
+useEffect(() => {
+  setPage(prev => ({ ...prev, page: 1 }));
+}, [searchQuery]);
+
   useEffect(() => {
     if (!user?.hospitalID) return;
     fetchDepartments();
@@ -151,16 +156,24 @@ const DoctorManagementMobile: React.FC = () => {
 
   /* ------------------------------ Pagination -------------------------------- */
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(doctors.length / Math.max(1, page.limit))
-  );
+  // 🔍 filter by doctor name (case-insensitive)
+const filteredDoctors = useMemo(() => {
+  const q = searchQuery.trim().toLowerCase();
+  if (!q) return doctors;
+  return doctors.filter(d => d.name?.toLowerCase().includes(q));
+}, [doctors, searchQuery]);
 
-  const pagedDoctors = useMemo(() => {
-    const start = (page.page - 1) * page.limit;
-    const end = start + page.limit;
-    return doctors.slice(start, end);
-  }, [doctors, page]);
+const totalPages = Math.max(
+  1,
+  Math.ceil(filteredDoctors.length / Math.max(1, page.limit))
+);
+
+const pagedDoctors = useMemo(() => {
+  const start = (page.page - 1) * page.limit;
+  const end = start + page.limit;
+  return filteredDoctors.slice(start, end);
+}, [filteredDoctors, page]);
+
 
   /* -------------------------- Slots via SlotModal --------------------------- */
 
@@ -367,7 +380,7 @@ const DoctorManagementMobile: React.FC = () => {
   const renderPaginationBar = () => (
     <View style={[styles.pagination, { borderTopColor: COLORS.border }]}>
       <Text style={[styles.resultsText, { color: COLORS.sub }]}>
-        Results: {doctors.length}
+        Results: {filteredDoctors.length}
       </Text>
 
       <View style={styles.pageRight}>
@@ -443,6 +456,21 @@ const DoctorManagementMobile: React.FC = () => {
           Manage doctor schedules & appointment slots
         </Text>
       </View>
+
+    <View style={styles.searchContainer}>
+  <TextInput
+    value={searchQuery}
+    onChangeText={setSearchQuery}
+    placeholder="Search doctor by name"
+    placeholderTextColor={COLORS.placeholderText}
+    style={[
+      styles.searchInput,
+      { borderColor: COLORS.border, color: COLORS.text, backgroundColor: COLORS.card },
+    ]}
+  />
+</View>
+
+
 
       {/* List */}
       {loading ? (
@@ -665,4 +693,16 @@ const styles = StyleSheet.create({
     height: FOOTER_H,
     justifyContent: "center",
   },
+  searchContainer: {
+  paddingHorizontal: SPACING.md,
+  paddingBottom: SPACING.sm,
+},
+searchInput: {
+  borderWidth: 1,
+  borderRadius: 10,
+  paddingHorizontal: SPACING.md,
+  paddingVertical: Platform.OS === "ios" ? 10 : 6,
+  fontSize: FONT_SIZE.sm,
+},
+
 });

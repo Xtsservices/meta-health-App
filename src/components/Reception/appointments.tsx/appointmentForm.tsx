@@ -127,8 +127,8 @@ const BookAppointment: React.FC = () => {
           `user/${user?.hospitalID}/list/${Role_NAME.doctor}`,
           token
         );
-        if (doctorResponse?.status === "success" && "users" in doctorResponse && "data" in doctorResponse ) {
-          const docs = doctorResponse?.users || doctorResponse.data?.users || [];
+        if (doctorResponse?.status === "success"  && "data" in doctorResponse ) {
+          const docs =  doctorResponse.data?.users || [];
           setDoctorList(docs);
           setFilteredDoctors(docs);
         }
@@ -274,28 +274,46 @@ const BookAppointment: React.FC = () => {
           token
         );
         if (response?.status === "success" && "data" in response) {
-          const slots: SlotInfo[] =
-            response?.data?.data?.map((slot: any) => ({
-              id: slot.id,
-              fromTime: slot.fromTime,
-              toTime: slot.toTime,
-              availableSlots: slot.availableSlots,
-              persons: slot.persons ?? slot.personsCount ?? undefined,
-              bookedIds: slot.bookedIds ?? undefined,
-            })) || [];
+  const slots: SlotInfo[] =
+    response?.data?.data?.map((slot: any) => ({
+      id: slot.id,
+      fromTime: slot.fromTime,
+      toTime: slot.toTime,
+      availableSlots: slot.availableSlots,
+      persons: slot.persons ?? slot.personsCount ?? undefined,
+      bookedIds: slot.bookedIds ?? undefined,
+    })) || [];
 
-          const hasAvailableSlot = slots.some(
-            (s: SlotInfo) => s.availableSlots > 0
-          );
+  // ----------- NEW CODE START -----------
+  const now = dayjs();
+  const isToday = dayjs(formattedDate).isSame(now, "day");
 
-          if (!hasAvailableSlot) {
-            setAvailableSlots([]);
-            setNoSlotsPopup(true);
-          } else {
-            setAvailableSlots(slots);
-            setNoSlotsPopup(false);
-          }
-        } else {
+  let filteredSlots = slots;
+
+  if (isToday) {
+    const currentTime = now.format("HH:mm");
+
+    filteredSlots = slots.filter(s => {
+      const slotTime = s.toTime.substring(0, 5);  
+      return slotTime >= currentTime;               // only current/future slots
+    });
+  }
+  // ----------- NEW CODE END -------------
+
+  const hasAvailableSlot = filteredSlots.some(
+    (s: SlotInfo) => s.availableSlots > 0
+  );
+
+  if (!hasAvailableSlot) {
+    setAvailableSlots([]);
+    setNoSlotsPopup(true);
+  } else {
+    setAvailableSlots(filteredSlots);
+    setNoSlotsPopup(false);
+  }
+}
+
+         else {
           setAvailableSlots([]);
           setNoSlotsPopup(true);
         }
@@ -434,6 +452,7 @@ const debouncedSubmit = useMemo(
     () => debounce(handleSubmitAppointment, DEBOUNCE_DELAY),
     [handleSubmitAppointment]
   );
+const FIELD_HEIGHT = responsiveHeight(6);  // perfect universal height
 
   return (
     <View style={styles.container}>
@@ -463,8 +482,8 @@ const debouncedSubmit = useMemo(
        
 
         {/* Mobile / Age */}
-        <View style={styles.row}>
-          <View style={styles.col}>
+       
+          <View style={styles.block}>
             <Text style={styles.label}>Mobile Number *</Text>
             <TextInput
               style={styles.input}
@@ -476,18 +495,18 @@ const debouncedSubmit = useMemo(
               onChangeText={(text) => handleTextChange("mobileNumber", text)}
             />
           </View>
-           <View style={styles.col}>
+           <View style={styles.block}>
             <Text style={styles.label}>Age *</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter age"
+              placeholder="Enter age ex: 3D or 3M or 3Y"
               placeholderTextColor={COLORS.placeholder}
               value={String(appointmentFormData.age.value || "")}
               
               onChangeText={(text) => handleTextChange("age", text)}
             />
           </View>
-        </View>
+        
           {/* Email ID */}
         <View style={styles.block}>
             <Text style={styles.label}>Email ID *</Text>
@@ -630,7 +649,7 @@ const debouncedSubmit = useMemo(
                  mode="date"
                  display={Platform.OS === "android" ? "spinner" : "default"}
                   
-                 minimumDate={new Date(1900, 0, 1)}
+                 minimumDate={new Date()}
                   onChange={handleDateChange}
               />
             )}
@@ -807,29 +826,36 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
 
-  input: {
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: SPACING.sm,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    fontSize: FONT_SIZE.md,
-    color: COLORS.text,
-    backgroundColor: "#f9fafb",
-  },
+ input: {
+  height: responsiveHeight(6),
+  borderWidth: 1.5,
+  borderColor: COLORS.border,
+  borderRadius: SPACING.sm,
+  paddingHorizontal: SPACING.sm,
+  fontSize: FONT_SIZE.md,
+  color: COLORS.text,
+  backgroundColor: "#f9fafb",
+  justifyContent: "center",
+},
 
-  pickerContainer: {
-    borderWidth: 1.5,
-    borderRadius: SPACING.sm,
-    borderColor: COLORS.border,
-    overflow: "hidden",
-    backgroundColor: "#f9fafb",
-  },
-  picker: {
-    height: responsiveHeight(6),
-    width: "100%",
-    color: "black",
-  },
+
+ pickerContainer: {
+  height: responsiveHeight(6),
+  borderWidth: 1.5,
+  borderRadius: SPACING.sm,
+  borderColor: COLORS.border,
+  overflow: "hidden",
+  backgroundColor: "#f9fafb",
+  justifyContent: "center",
+},
+
+picker: {
+  height:  responsiveHeight(6),
+  width: "100%",
+  color: "black",
+  justifyContent: "center",
+},
+
 
   chipRow: {
     flexDirection: "row",

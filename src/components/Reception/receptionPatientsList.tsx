@@ -256,11 +256,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
       return;
     }
 
-    // optional: avoid API spam for 1–2 digits
-    if (mobile.length < 3) {
-      setSearchResults([]);
-      return;
-    }
+    
 
     let cancelled = false;
 
@@ -435,7 +431,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
           </Text>
           <View style={styles.pickerOuter}>
             <Picker
-              mode="dropdown"
+              
               selectedValue={filter}
               onValueChange={(val) => setFilter(Number(val))}
               style={[
@@ -479,7 +475,6 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
           <View style={styles.pickerOuter}>
             <Picker
               enabled={filter !== 1}
-              mode="dropdown"
               selectedValue={wardID}
               onValueChange={(val) => setWardID(Number(val))}
               style={[
@@ -520,7 +515,6 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
           </Text>
           <View style={styles.pickerOuter}>
             <Picker
-              mode="dropdown"
               selectedValue={year}
               onValueChange={(val) => setYear(String(val))}
               style={[
@@ -564,7 +558,6 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
           </Text>
           <View style={styles.pickerOuter}>
             <Picker
-              mode="dropdown"
               selectedValue={month}
               onValueChange={(val) => setMonth(String(val))}
               style={[

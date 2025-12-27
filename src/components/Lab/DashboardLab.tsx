@@ -800,7 +800,8 @@ const DashboardLab: React.FC = () => {
         icon: FileTextIcon,
         onPress: () => navigation.navigate("TaxInvoiceTabs", { 
           mode: "billing",
-          department: departmentType 
+          department: departmentType ,
+           fromBilling: true
         }),
       },
       {
@@ -810,6 +811,7 @@ const DashboardLab: React.FC = () => {
         onPress: () => navigation.navigate("TaxInvoiceTabs", { 
           mode: "allTax",
           department: departmentType 
+          , fromBilling: false
         }),
       },
       

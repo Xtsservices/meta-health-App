@@ -46,7 +46,7 @@ interface MedicineItem {
   qty?: number;
   updatedQuantity?: number;
   addedOn?: string;
-
+  category?:string;
 
   Frequency?: number;
   daysCount?: number;
@@ -360,7 +360,7 @@ const InnerTable: React.FC<InnerTableProps> = ({
     ? `Nurse #${med.nurseID}`
     : "Tap to select nurse";
 
-
+console.log(med, "med details")
     return (
       <View key={med?.id || `med-${index}`} style={styles.testCard}>
         <View style={styles.testHeader}>
@@ -379,7 +379,7 @@ const InnerTable: React.FC<InnerTableProps> = ({
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Type:</Text>
               <Text style={styles.detailValue}>
-                {med.medicineType || "N/A"}
+                {med.category || "N/A"}
               </Text>
             </View>
 
