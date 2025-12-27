@@ -23,6 +23,7 @@ const SplashScreen = () => {
     const checkLogin = async () => {
       try {
         const token = await AsyncStorage.getItem('token');
+        console.log("Token retrieved:", token);
         const userId = await AsyncStorage.getItem('userID');
 
         if (!token || !userId) {

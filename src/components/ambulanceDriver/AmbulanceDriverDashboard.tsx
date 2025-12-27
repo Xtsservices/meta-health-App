@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,60 +6,86 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
 import { COLORS } from '../../utils/colour';
 import { SPACING, FONT_SIZE, responsiveHeight } from '../../utils/responsive';
-
-// Dummy trip request data - Replace with real API data
-const DUMMY_TRIP_REQUESTS = [
-  {
-    id: 'trip_001',
-    patientName: 'Rajesh Kumar',
-    pickupAddress: 'AIIMS, Sri Aurobindo Marg, New Delhi',
-    dropAddress: 'Max Hospital, Saket, New Delhi',
-    distance: '12.5 km',
-    estimatedTime: '25 mins',
-    priority: 'High',
-    requestTime: '10:30 AM',
-  },
-  {
-    id: 'trip_002',
-    patientName: 'Priya Sharma',
-    pickupAddress: 'Safdarjung Hospital, New Delhi',
-    dropAddress: 'Apollo Hospital, Jasola, New Delhi',
-    distance: '8.2 km',
-    estimatedTime: '18 mins',
-    priority: 'Medium',
-    requestTime: '10:45 AM',
-  },
-];
+import { 
+  acceptTripRequest, 
+  rejectTripRequest,
+  TripRequest,
+  setupTripRequestsListener,
+  requestDriverBookingRequests
+} from '../../services/tripRequestService';
+import { RootState } from '../../store/store';
 
 const AmbulanceDriverDashboard: React.FC = () => {
   const navigation = useNavigation();
+  const user = useSelector((state: RootState) => state.currentUser);
 
-  const [tripRequests, setTripRequests] = useState(DUMMY_TRIP_REQUESTS);
-  const [currentRequestIndex, setCurrentRequestIndex] = useState(0);
+  const [tripRequests, setTripRequests] = useState<TripRequest[]>([]);
   const [isOnline, setIsOnline] = useState(false);
+  const [loading, setLoading] = useState(false);
 
 
 
+  // Handle trip requests received from socket
+  const handleTripRequestsReceived = useCallback((requests: TripRequest[]) => {
+    console.log('📨 Trip requests received:', requests.length);
+    setTripRequests(requests);
+    setLoading(false);
+  }, []);
+
+  // Setup Socket.IO real-time listener when online (NO POLLING)
+  useEffect(() => {
+    if (!isOnline || !user?.id) {
+      console.log('⏸️ Not starting listener - Online:', isOnline, 'User ID:', user?.id);
+      return;
+    }
+
+    console.log('🚀 Starting Socket.IO real-time listener for user:', user.id);
+    setLoading(true);
+
+    // Setup real-time listener - Socket will automatically push data when available
+    const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
+    const cleanup = setupTripRequestsListener(userId, handleTripRequestsReceived);
+
+    return () => {
+      console.log('🛑 Stopping Socket.IO real-time listener');
+      cleanup();
+    };
+  }, [isOnline, user?.id, handleTripRequestsReceived]);
+
+  // Refresh trip requests when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isOnline && user?.id) {
+        console.log('🔄 Screen focused - requesting trip updates');
+        const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
+        requestDriverBookingRequests(userId);
+      }
+    }, [isOnline, user?.id])
+  );
 
   const handleToggleOnline = () => {
     setIsOnline(!isOnline);
     if (!isOnline) {
       Alert.alert('Status', 'You are now online and will receive trip requests');
+      // Requests will be loaded automatically by the socket polling effect
     } else {
       Alert.alert('Status', 'You are now offline');
+      setTripRequests([]); // Clear requests when going offline
     }
   };
 
-  const handleAcceptTrip = () => {
-    const currentTrip = tripRequests[currentRequestIndex];
+  const handleAcceptTrip = async (trip: TripRequest) => {
     Alert.alert(
       'Accept Trip',
-      `Accept trip for ${currentTrip.patientName}?`,
+      `Accept trip for ${trip.patientName}?`,
       [
         {
           text: 'Cancel',
@@ -67,23 +93,66 @@ const AmbulanceDriverDashboard: React.FC = () => {
         },
         {
           text: 'Accept',
-          onPress: () => {
-            // TODO: Accept trip via API
-            console.log('Trip accepted:', currentTrip.id);
-            Alert.alert('Success', 'Trip accepted! Navigating to Active Trip...');
-            // Navigate to Active Trip screen
-            navigation.navigate('AmbulanceDriverActiveTrip' as never);
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const token = await AsyncStorage.getItem('token');
+              
+              if (!token) {
+                Alert.alert('Error', 'Authentication required');
+                return;
+              }
+
+              // Accept trip via API
+              await acceptTripRequest(trip.requestID, token);
+              
+              console.log('Trip accepted:', trip.id);
+              
+              // Pass trip data to Active Trip screen
+              const tripData = {
+                id: trip.id,
+                patientName: trip.patientName,
+                pickupAddress: trip.pickupAddress,
+                dropAddress: trip.dropAddress,
+                distance: trip.distance,
+                estimatedTime: trip.estimatedTime,
+                priority: trip.priority,
+                requestTime: trip.requestTime,
+                status: 'accepted',
+                requestID: trip.requestID,
+                bookingID: trip.bookingID,
+                fromLatitude: trip.fromLatitude,
+                fromLongitude: trip.fromLongitude,
+                toLatitude: trip.toLatitude,
+                toLongitude: trip.toLongitude,
+              };
+              
+              Alert.alert('Success', 'Trip accepted! Navigating to Active Trip...');
+              
+              // Navigate to Active Trip screen with data
+              (navigation as any).navigate('AmbulanceDriverActiveTrip', { tripData });
+              
+              // Request fresh trip data via socket
+              if (user?.id) {
+                const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
+                requestDriverBookingRequests(userId);
+              }
+            } catch (error: any) {
+              console.error('Error accepting trip:', error);
+              Alert.alert('Error', error?.message || 'Failed to accept trip. Please try again.');
+            } finally {
+              setLoading(false);
+            }
           },
         },
       ]
     );
   };
 
-  const handleRejectTrip = () => {
-    const currentTrip = tripRequests[currentRequestIndex];
+  const handleRejectTrip = async (trip: TripRequest) => {
     Alert.alert(
       'Reject Trip',
-      `Reject trip for ${currentTrip.patientName}?`,
+      `Reject trip for ${trip.patientName}?`,
       [
         {
           text: 'Cancel',
@@ -92,21 +161,39 @@ const AmbulanceDriverDashboard: React.FC = () => {
         {
           text: 'Reject',
           style: 'destructive',
-          onPress: () => {
-            // Move to next request
-            if (currentRequestIndex < tripRequests.length - 1) {
-              setCurrentRequestIndex(currentRequestIndex + 1);
-            } else {
-              setTripRequests([]);
-              Alert.alert('Info', 'No more trip requests available');
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const token = await AsyncStorage.getItem('token');
+              
+              if (!token) {
+                Alert.alert('Error', 'Authentication required');
+                return;
+              }
+
+              // Reject trip via API
+              await rejectTripRequest(trip.requestID, token);
+              
+              console.log('Trip rejected:', trip.id);
+              
+              // Request fresh trip data via socket
+              if (user?.id) {
+                const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
+                requestDriverBookingRequests(userId);
+              }
+              
+              Alert.alert('Success', 'Trip rejected');
+            } catch (error: any) {
+              console.error('Error rejecting trip:', error);
+              Alert.alert('Error', error?.message || 'Failed to reject trip. Please try again.');
+            } finally {
+              setLoading(false);
             }
           },
         },
       ]
     );
   };
-
-  const currentTrip = tripRequests[currentRequestIndex];
 
   return (
     <View style={styles.container}>
@@ -116,6 +203,7 @@ const AmbulanceDriverDashboard: React.FC = () => {
           <Text style={styles.headerTitle}>Driver Dashboard</Text>
           <Text style={styles.headerSubtitle}>Ambulance Driver</Text>
         </View>
+        
         <TouchableOpacity
           style={[styles.onlineButton, isOnline && styles.onlineButtonActive]}
           onPress={handleToggleOnline}
@@ -129,76 +217,82 @@ const AmbulanceDriverDashboard: React.FC = () => {
 
       {/* Trip Request Queue */}
       <ScrollView style={styles.requestContainer} showsVerticalScrollIndicator={false}>
-        {tripRequests.length > 0 && currentTrip ? (
-          <View style={styles.requestCard}>
-            <View style={styles.requestHeader}>
-              <View style={styles.priorityBadge}>
-                <Text style={styles.priorityText}>{currentTrip.priority} Priority</Text>
-              </View>
-              <Text style={styles.requestTime}>{currentTrip.requestTime}</Text>
-            </View>
-
-            <View style={styles.requestBody}>
-              <Text style={styles.patientName}>{currentTrip.patientName}</Text>
-
-              <View style={styles.addressContainer}>
-                <View style={styles.addressRow}>
-                  <View style={styles.iconCircle}>
-                    <Text style={styles.iconText}>P</Text>
-                  </View>
-                  <View style={styles.addressTextContainer}>
-                    <Text style={styles.addressLabel}>Pickup</Text>
-                    <Text style={styles.addressText}>{currentTrip.pickupAddress}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.dashedLine} />
-
-                <View style={styles.addressRow}>
-                  <View style={[styles.iconCircle, styles.iconCircleDrop]}>
-                    <Text style={styles.iconText}>D</Text>
-                  </View>
-                  <View style={styles.addressTextContainer}>
-                    <Text style={styles.addressLabel}>Drop</Text>
-                    <Text style={styles.addressText}>{currentTrip.dropAddress}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.tripInfoRow}>
-                <View style={styles.tripInfoItem}>
-                  <Text style={styles.tripInfoLabel}>Distance</Text>
-                  <Text style={styles.tripInfoValue}>{currentTrip.distance}</Text>
-                </View>
-                <View style={styles.tripInfoDivider} />
-                <View style={styles.tripInfoItem}>
-                  <Text style={styles.tripInfoLabel}>Est. Time</Text>
-                  <Text style={styles.tripInfoValue}>{currentTrip.estimatedTime}</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.rejectButton]}
-                onPress={handleRejectTrip}
-              >
-                <Text style={styles.rejectButtonText}>Reject</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.acceptButton]}
-                onPress={handleAcceptTrip}
-              >
-                <Text style={styles.acceptButtonText}>Accept Trip</Text>
-              </TouchableOpacity>
-            </View>
-
-            {tripRequests.length > 1 && (
-              <Text style={styles.queueText}>
-                {currentRequestIndex + 1} of {tripRequests.length} requests
-              </Text>
-            )}
+        {loading && tripRequests.length === 0 ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color={COLORS.brand} />
+            <Text style={styles.emptyStateText}>Loading trip requests...</Text>
           </View>
+        ) : tripRequests.length > 0 ? (
+          <>
+            <Text style={styles.requestsHeader}>
+              {tripRequests.length} Trip Request{tripRequests.length > 1 ? 's' : ''} Available
+            </Text>
+            {tripRequests.map((trip) => (
+              <View key={trip.id} style={styles.requestCard}>
+                <View style={styles.requestHeader}>
+                  <View style={styles.priorityBadge}>
+                    <Text style={styles.priorityText}>{trip.priority} Priority</Text>
+                  </View>
+                  <Text style={styles.requestTime}>{trip.requestTime}</Text>
+                </View>
+
+                <View style={styles.requestBody}>
+                  <Text style={styles.patientName}>{trip.patientName}</Text>
+
+                  <View style={styles.addressContainer}>
+                    <View style={styles.addressRow}>
+                      <View style={styles.iconCircle}>
+                        <Text style={styles.iconText}>P</Text>
+                      </View>
+                      <View style={styles.addressTextContainer}>
+                        <Text style={styles.addressLabel}>Pickup</Text>
+                        <Text style={styles.addressText}>{trip.pickupAddress}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.dashedLine} />
+
+                    <View style={styles.addressRow}>
+                      <View style={[styles.iconCircle, styles.iconCircleDrop]}>
+                        <Text style={styles.iconText}>D</Text>
+                      </View>
+                      <View style={styles.addressTextContainer}>
+                        <Text style={styles.addressLabel}>Drop</Text>
+                        <Text style={styles.addressText}>{trip.dropAddress}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.tripInfoRow}>
+                    <View style={styles.tripInfoItem}>
+                      <Text style={styles.tripInfoLabel}>Distance</Text>
+                      <Text style={styles.tripInfoValue}>{trip.distance}</Text>
+                    </View>
+                    <View style={styles.tripInfoDivider} />
+                    <View style={styles.tripInfoItem}>
+                      <Text style={styles.tripInfoLabel}>Est. Time</Text>
+                      <Text style={styles.tripInfoValue}>{trip.estimatedTime}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.rejectButton]}
+                    onPress={() => handleRejectTrip(trip)}
+                  >
+                    <Text style={styles.rejectButtonText}>Reject</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.acceptButton]}
+                    onPress={() => handleAcceptTrip(trip)}
+                  >
+                    <Text style={styles.acceptButtonText}>Accept Trip</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </>
         ) : (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>No Trip Requests</Text>
@@ -235,11 +329,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
+
   },
   headerTitle: {
     fontSize: FONT_SIZE.xxl,
     fontWeight: '700',
     color: COLORS.primaryText,
+    marginTop: 10,
+
   },
   headerSubtitle: {
     fontSize: FONT_SIZE.sm,
@@ -283,6 +380,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.md,
+  },
+  requestsHeader: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.xs,
   },
   requestCard: {
     backgroundColor: COLORS.card,
