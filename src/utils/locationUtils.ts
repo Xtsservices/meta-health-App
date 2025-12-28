@@ -8,6 +8,12 @@ export interface Location {
   longitude: number;
 }
 
+const THROTTLE_TIME = 5000; // 5 seconds
+
+//export this
+export const locationUtils = {
+  THROTTLE_TIME
+};
 
 const sleep = (time: number) =>
   new Promise<void>(resolve => setTimeout(resolve, time));
@@ -15,10 +21,12 @@ const sleep = (time: number) =>
 let backgroundWatchId: number | null = null;
 let lastEmitTime = 0; // Track last emission time for throttling
 
+
+
 const backgroundTask = async (taskData?: { driverId: string , ambulanceID: string }) => {
   const driverId = taskData?.driverId;
   const ambulanceID = taskData?.ambulanceID;
-
+  console.log("driverId for geolocation:", driverId, "ambulanceID for geolocation:", ambulanceID);
   if (!driverId) {
     console.error('backgroundTask: Missing driverId in task parameters');
     return;
@@ -28,14 +36,40 @@ const backgroundTask = async (taskData?: { driverId: string , ambulanceID: strin
 
   try {
     // Set up continuous location watching
+    console.log("🎯 start geo location - setting up watchPosition")
+    
+    // Add a timeout to detect if location is not being received
+    let locationReceived = false;
+    const warningTimeout = setTimeout(() => {
+      if (!locationReceived) {
+        console.warn('⚠️ No location updates received after 30 seconds!');
+        console.warn('⚠️ This may be due to weak GPS signal indoors.');
+        console.warn('⚠️ The app will keep trying...');
+      }
+    }, 30000);
+    
+    // Start watching position with NETWORK provider first (faster, works indoors)
+    console.log("📡 Starting location watch with network + GPS...");
     backgroundWatchId = Geolocation.watchPosition(
       position => {
+        if (!locationReceived) {
+          console.log("✅ FIRST LOCATION RECEIVED!");
+          clearTimeout(warningTimeout);
+        }
+        locationReceived = true;
         try {
-          // ⏱️ THROTTLE: Only emit every 10 seconds
+          // ⏱️ THROTTLE: Only emit every 5 seconds
+          console.log('📍 Background position received:', position);
+          console.log('📍 Position details:', {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: new Date(position.timestamp).toISOString()
+          });
           const now = Date.now();
-          if (now - lastEmitTime < 10000) {
-            console.log('⏭️ Skipping update (throttled), next in:', Math.ceil((10000 - (now - lastEmitTime)) / 1000), 'seconds');
-            return; // Skip if less than 10 seconds since last emit
+          if (now - lastEmitTime < THROTTLE_TIME) {
+            console.log('⏭️ Skipping update (throttled), next in:', Math.ceil((THROTTLE_TIME - (now - lastEmitTime)) / 1000), 'seconds');
+            return; // Skip if less than 5 seconds since last emit
           }
           lastEmitTime = now;
 
@@ -54,7 +88,8 @@ const backgroundTask = async (taskData?: { driverId: string , ambulanceID: strin
               heading: position.coords.heading,
               speed: position.coords.speed,
             };
-            
+
+            console.log('📍 Emitting location update:', locationData);
             // Emit continuous live location update
             socket.emit('location-update', locationData);
             console.log('📍 Location update emitted:', {
@@ -72,22 +107,31 @@ const backgroundTask = async (taskData?: { driverId: string , ambulanceID: strin
         }
       },
       error => {
-        console.error('❌ Background location error:', error.code, error.message);
+        console.error('❌ Background location error:', {
+          code: error.code,
+          message: error.message,
+          PERMISSION_DENIED: error.code === 1,
+          POSITION_UNAVAILABLE: error.code === 2,
+          TIMEOUT: error.code === 3
+        });
       },
       {
-        enableHighAccuracy: true,
+        enableHighAccuracy: false, // ⚡ Use NETWORK location (faster, works indoors!)
         distanceFilter: 0, // Update even when stationary (0 = no filter)
         interval: 5000, // Update every 5 seconds (Android)
-        fastestInterval: 5000, // Minimum 5 seconds between updates
-        timeout: 15000,
-        maximumAge: 5000,
+        fastestInterval: 3000, // Minimum 3 seconds between updates
+        timeout: 60000, // 60 seconds timeout - very forgiving
+        maximumAge: 10000, // Allow cached location up to 10 seconds old
         useSignificantChanges: false, // Disable significant changes only mode
       },
     );
+    
+    console.log("✅ watchPosition configured with ID:", backgroundWatchId);
+    console.log("ℹ️ Using NETWORK location provider for faster indoor positioning");
 
     // Keep the background task alive
     while (BackgroundService.isRunning()) {
-      await sleep(10000); // Check every 10 seconds
+      await sleep(THROTTLE_TIME); // Check every 5 seconds
       console.log('🔄 Background service still running...');
     }
   } catch (error) {
@@ -103,8 +147,14 @@ const backgroundTask = async (taskData?: { driverId: string , ambulanceID: strin
 };
 
 export const startLocationTracking = async (driverId: string, ambulanceID: string) => {
-  console.log('🚀 Starting location tracking for driver:', driverId);
-  
+  console.log('🚀 Starting location tracking for driver:', driverId, 'ambulanceID:', ambulanceID);
+  console.log(BackgroundService,"BackgroundService")
+
+  if (!driverId || !ambulanceID) {
+    console.error('❌ Missing driverId or ambulanceID');
+    return;
+  }
+
   try {
     // Check if already running
     if (BackgroundService.isRunning()) {
@@ -271,12 +321,12 @@ export const getCurrentLocation = (): Promise<Location> => {
         //here we need to socket io emit this coords
         const socket = getSocket();
         console.log("socketboom", socket);
-        if (socket && socket.connected) {
-          console.log("Emitting location update==================", { ...position.coords });
-          socket.emit("location-update", {
-            ...position.coords,
-          });
-        }
+        // if (socket && socket.connected) {
+        //   console.log("Emitting location update==================", { ...position.coords });
+        //   socket.emit("location-update", {
+        //     ...position.coords,
+        //   });
+        // }
         resolve({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
@@ -410,4 +460,185 @@ export const calculateDistance = (from: Location, to: Location): number => {
 
 const toRad = (value: number): number => {
   return (value * Math.PI) / 180;
+};
+
+/**
+ * Geocoding cache to reduce API calls and improve performance
+ */
+const geocodeCache = new Map<string, string>();
+
+/**
+ * Reverse geocode coordinates to get human-readable address
+ * Uses multiple fallback services with caching and timeout
+ * @param latitude - Latitude as string or number
+ * @param longitude - Longitude as string or number
+ * @returns Promise<string> - Human-readable address or coordinates
+ */
+export const reverseGeocode = async (
+  latitude: string | number,
+  longitude: string | number
+): Promise<string> => {
+  const lat = typeof latitude === 'string' ? latitude : latitude.toString();
+  const lon = typeof longitude === 'string' ? longitude : longitude.toString();
+  
+  // Check cache first
+  const cacheKey = `${lat},${lon}`;
+  if (geocodeCache.has(cacheKey)) {
+    console.log('🔄 Using cached address for:', cacheKey);
+    return geocodeCache.get(cacheKey)!;
+  }
+
+  // Try Nominatim (OpenStreetMap) - Free, no API key
+  try {
+    const address = await reverseGeocodeWithNominatim(lat, lon);
+    if (address) {
+      geocodeCache.set(cacheKey, address);
+      return address;
+    }
+  } catch (error) {
+    console.warn('⚠️ Nominatim geocoding failed, trying fallback:', error);
+  }
+
+  // Try OpenCage as fallback (optional - requires API key)
+  try {
+    const address = await reverseGeocodeWithOpenCage(lat, lon);
+    if (address) {
+      geocodeCache.set(cacheKey, address);
+      return address;
+    }
+  } catch (error) {
+    console.warn('⚠️ OpenCage geocoding failed:', error);
+  }
+
+  // Fallback: return formatted coordinates
+  const fallback = `Location: ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}`;
+  console.warn('⚠️ All geocoding services failed, using coordinates');
+  geocodeCache.set(cacheKey, fallback);
+  return fallback;
+};
+
+/**
+ * Reverse geocode using Nominatim (OpenStreetMap)
+ */
+const reverseGeocodeWithNominatim = async (
+  latitude: string,
+  longitude: string
+): Promise<string | null> => {
+  try {
+    // Timeout after 5 seconds
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('⏱️ Nominatim request timeout');
+      controller.abort();
+    }, 5000);
+
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'MetaHealthApp/1.0',
+          'Accept': 'application/json',
+        },
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.display_name) {
+      return data.display_name;
+    }
+    
+    // Fallback: construct address from components
+    const address = data.address || {};
+    const parts = [
+      address.road || address.street,
+      address.suburb || address.neighbourhood,
+      address.city || address.town || address.village,
+      address.state,
+    ].filter(Boolean);
+    
+    return parts.length > 0 ? parts.join(', ') : null;
+  } catch (error: any) {
+    console.error('Nominatim error:', error.message);
+    return null;
+  }
+};
+
+/**
+ * Reverse geocode using OpenCage (optional fallback)
+ * Get free API key at: https://opencagedata.com/
+ */
+const reverseGeocodeWithOpenCage = async (
+  latitude: string,
+  longitude: string
+): Promise<string | null> => {
+  // Optional: Add your OpenCage API key here for better reliability
+  // Free tier: 2,500 requests/day
+  const apiKey = 'AIzaSyCrmF3351j82RVuTZbVBJ-X3ufndylJsvo';
+
+  if (!apiKey) {
+    return null; // Skip if not configured
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(
+      `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}`,
+      {
+        signal: controller.signal,
+      }
+    );
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.results?.[0]?.formatted || null;
+  } catch (error: any) {
+    console.error('OpenCage error:', error.message);
+    return null;
+  }
+};
+
+/**
+ * Calculate estimated time based on distance
+ * @param distanceKm - Distance in kilometers
+ * @returns Formatted time string (e.g., "25 mins" or "1h 15m")
+ */
+export const calculateEstimatedTime = (distanceKm: number): string => {
+  const averageSpeed = 30; // km/h (city traffic)
+  const timeInHours = distanceKm / averageSpeed;
+  const timeInMinutes = Math.round(timeInHours * 60);
+  
+  if (timeInMinutes < 60) {
+    return `${timeInMinutes} mins`;
+  } else {
+    const hours = Math.floor(timeInMinutes / 60);
+    const minutes = timeInMinutes % 60;
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+};
+
+/**
+ * Format distance in a human-readable way
+ * @param distanceKm - Distance in kilometers
+ * @returns Formatted distance string (e.g., "1.5 km" or "500 m")
+ */
+export const formatDistance = (distanceKm: number): string => {
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)} m`;
+  }
+  return `${distanceKm.toFixed(1)} km`;
 };
