@@ -16,11 +16,11 @@ export const useRegisterSocket = () => {
 
       socket.emit('register-user', {
         userId: user.id,
-        message: 'Hello from Patient App',
+        message: 'Hello from Driver App',
       });
 
       //read the response
-      socket.on('register-user', data => {
+      socket.on('register-success', data => {
         console.log('🤝 Handshake response:', data);
       });
     };

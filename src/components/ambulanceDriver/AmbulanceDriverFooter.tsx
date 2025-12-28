@@ -17,6 +17,7 @@ import {
 } from '../../utils/SvgIcons';
 import {
   ensureLocationPermission,
+  startDriverTracking,
   startLocationTracking,
   stopLocationTracking,
 } from '../../utils/locationUtils';
@@ -24,6 +25,9 @@ import { RootState } from '../../store/store';
 import { useSelector } from 'react-redux';
 
 const { width: W } = Dimensions.get('window');
+
+// Delay used when initializing background tasks to allow app/socket to fully stabilize (ms)
+const THROTTLE_TIME = 5000;
 
 export type AmbulanceDriverTabKey =
   | 'dashboard'
@@ -144,6 +148,9 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
 
           console.log('🚀 Starting background location tracking...');
 
+          
+
+
           // Start continuous background tracking
           const driverId = String(user.id); // Ensure it's a string
           const ambulanceID = String(user?.ambulance?.ambulanceID); // Ensure it's a string
@@ -151,6 +158,7 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
             console.log('⚠️ No ambulance ID or driver ID found, skipping location tracking');
             return;
           }
+
           await startLocationTracking(driverId, ambulanceID);
           trackingStartedRef.current = true;
           
@@ -165,7 +173,7 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
       // Small delay before starting to ensure app is fully initialized
       const timer = setTimeout(() => {
         initBackgroundTracking();
-      }, 10000);
+      }, THROTTLE_TIME);
 
       // Cleanup: Stop tracking when screen loses focus
       return () => {

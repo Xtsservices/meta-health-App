@@ -1,4 +1,4 @@
-import { AuthFetch } from '../auth/auth';
+import { AuthFetch, AuthPost } from '../auth/auth';
 import { getSocket } from '../socket/socket';
 
 // Interface for API response
@@ -51,6 +51,7 @@ async function reverseGeocode(
   longitude: string
 ): Promise<string> {
   try {
+    // return latitude + ',' + longitude; // --- TEMPORARY BYPASS ---
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
       {
@@ -246,16 +247,18 @@ export async function acceptTripRequest(
   token?: string | null
 ): Promise<any> {
   try {
+    console.log('Accepting trip request:', requestID);
     // TODO: Replace with actual API endpoint
-    const response: any = await AuthFetch(
-      `ambulance/driver/acceptTrip?requestID=${requestID}`,
+    const response: any = await AuthPost(
+      `ambulance/driver/bookings/${requestID}/accept`,
+      {},
       token
     );
-
+    console.log('Trip accepted successfully:', response.data);
     if (response.status === 'error') {
       throw new Error(response.message || 'Failed to accept trip');
     }
-
+    console.log('Trip accepted successfully:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error accepting trip:', error);

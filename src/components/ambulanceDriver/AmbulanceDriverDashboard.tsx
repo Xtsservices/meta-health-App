@@ -12,8 +12,9 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
+import NoTripRequests from './NoTripRequests';
 import { COLORS } from '../../utils/colour';
-import { SPACING, FONT_SIZE, responsiveHeight } from '../../utils/responsive';
+import { SPACING, FONT_SIZE } from '../../utils/responsive';
 import { 
   acceptTripRequest, 
   rejectTripRequest,
@@ -22,6 +23,7 @@ import {
   requestDriverBookingRequests
 } from '../../services/tripRequestService';
 import { RootState } from '../../store/store';
+import { getSocket } from '../../socket/socket';
 
 const AmbulanceDriverDashboard: React.FC = () => {
   const navigation = useNavigation();
@@ -30,6 +32,59 @@ const AmbulanceDriverDashboard: React.FC = () => {
   const [tripRequests, setTripRequests] = useState<TripRequest[]>([]);
   const [isOnline, setIsOnline] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Monitor socket connection status and update isOnline automatically
+  useFocusEffect(
+    useCallback(() => {
+      const socket = getSocket();
+      
+      if (!socket) {
+        console.log('⚠️ Socket not initialized');
+        setIsOnline(false);
+        return;
+      }
+
+      // Set initial status
+      setIsOnline(socket.connected);
+      console.log('🔌 Initial socket status:', socket.connected ? 'Connected' : 'Disconnected');
+
+      // Listen for connection events
+      const handleConnect = () => {
+        console.log('✅ Socket connected - Driver is now ONLINE');
+        setIsOnline(true);
+      };
+
+      const handleDisconnect = (reason: string) => {
+        console.log('❌ Socket disconnected - Driver is now OFFLINE. Reason:', reason);
+        setIsOnline(false);
+        setTripRequests([]); // Clear requests when offline
+      };
+
+      const handleConnectError = (error: Error) => {
+        console.log('⚠️ Socket connection error:', error.message);
+        setIsOnline(false);
+      };
+
+      //NEW_BOOKING_REQUEST
+      console.log('📩 New booking request received start:');
+      socket.on('NEW_BOOKING_REQUEST', (data) => {
+        console.log('📩 New booking request received:', data);
+        // Handle the new booking request (e.g., show a notification)
+      });
+
+      socket.on('connect', handleConnect);
+      socket.on('disconnect', handleDisconnect);
+      socket.on('connect_error', handleConnectError);
+
+      // Cleanup listeners when screen loses focus
+      return () => {
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
+        socket.off('connect_error', handleConnectError);
+        socket.off('NEW_BOOKING_REQUEST');
+      };
+    }, [])
+  );
 
 
 
@@ -72,14 +127,15 @@ const AmbulanceDriverDashboard: React.FC = () => {
   );
 
   const handleToggleOnline = () => {
-    setIsOnline(!isOnline);
-    if (!isOnline) {
-      Alert.alert('Status', 'You are now online and will receive trip requests');
-      // Requests will be loaded automatically by the socket polling effect
-    } else {
-      Alert.alert('Status', 'You are now offline');
-      setTripRequests([]); // Clear requests when going offline
-    }
+    // Status is now automatic based on socket connection
+    // This button is just informational
+    Alert.alert(
+      'Connection Status',
+      isOnline 
+        ? 'You are connected to the server and receiving trip requests automatically.' 
+        : 'You are disconnected. Please check your internet connection.',
+      [{ text: 'OK' }]
+    );
   };
 
   const handleAcceptTrip = async (trip: TripRequest) => {
@@ -104,13 +160,14 @@ const AmbulanceDriverDashboard: React.FC = () => {
               }
 
               // Accept trip via API
-              await acceptTripRequest(trip.requestID, token);
+              console.log('Accepting trip request:', trip);
+              await acceptTripRequest(trip.bookingID, token);
               
               console.log('Trip accepted:', trip.id);
               
               // Pass trip data to Active Trip screen
               const tripData = {
-                id: trip.id,
+                id: trip.bookingID,
                 patientName: trip.patientName,
                 pickupAddress: trip.pickupAddress,
                 dropAddress: trip.dropAddress,
@@ -207,10 +264,11 @@ const AmbulanceDriverDashboard: React.FC = () => {
         <TouchableOpacity
           style={[styles.onlineButton, isOnline && styles.onlineButtonActive]}
           onPress={handleToggleOnline}
+          activeOpacity={0.7}
         >
           <View style={[styles.statusDot, isOnline && styles.statusDotActive]} />
           <Text style={[styles.onlineText, isOnline && styles.onlineTextActive]}>
-            {isOnline ? 'Online' : 'Offline'}
+            {isOnline ? 'Connected' : 'Disconnected'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -218,9 +276,9 @@ const AmbulanceDriverDashboard: React.FC = () => {
       {/* Trip Request Queue */}
       <ScrollView style={styles.requestContainer} showsVerticalScrollIndicator={false}>
         {loading && tripRequests.length === 0 ? (
-          <View style={styles.emptyState}>
+          <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.brand} />
-            <Text style={styles.emptyStateText}>Loading trip requests...</Text>
+            <Text style={styles.loadingText}>Loading trip requests...</Text>
           </View>
         ) : tripRequests.length > 0 ? (
           <>
@@ -294,14 +352,7 @@ const AmbulanceDriverDashboard: React.FC = () => {
             ))}
           </>
         ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>No Trip Requests</Text>
-            <Text style={styles.emptyStateText}>
-              {isOnline
-                ? 'Waiting for trip requests...'
-                : 'Go online to receive trip requests'}
-            </Text>
-          </View>
+          <NoTripRequests isOnline={isOnline} />
         )}
       </ScrollView>
 
@@ -533,20 +584,15 @@ const styles = StyleSheet.create({
     color: COLORS.sub,
     marginTop: SPACING.sm,
   },
-  emptyState: {
+  loadingContainer: {
     alignItems: 'center',
-    paddingVertical: responsiveHeight(5),
+    paddingVertical: SPACING.xl * 3,
   },
-  emptyStateTitle: {
-    fontSize: FONT_SIZE.xl,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: FONT_SIZE.sm,
+  loadingText: {
+    fontSize: FONT_SIZE.md,
     color: COLORS.sub,
-    textAlign: 'center',
+    marginTop: SPACING.md,
+    fontWeight: '500',
   },
 });
 
