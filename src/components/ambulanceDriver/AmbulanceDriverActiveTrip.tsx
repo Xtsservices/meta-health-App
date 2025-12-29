@@ -13,18 +13,22 @@ import {
   Dimensions,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
-import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
+import {
+  useRoute,
+  useNavigation,
+  useFocusEffect,
+} from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState } from '../../store/store';
 import { AuthFetch, AuthPost } from '../../auth/auth';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
-import { 
-  reverseGeocode, 
-  calculateDistance, 
+import {
+  reverseGeocode,
+  calculateDistance,
   calculateEstimatedTime,
   formatDistance,
-  getCurrentLocation
+  getCurrentLocation,
 } from '../../utils/locationUtils';
 import {
   getDirections,
@@ -102,7 +106,7 @@ const SwipeButton: React.FC<{
           }).start();
         }
       },
-    })
+    }),
   ).current;
 
   return (
@@ -127,6 +131,11 @@ const SwipeButton: React.FC<{
 };
 
 const AmbulanceDriverActiveTrip: React.FC = () => {
+  // Cancel Trip Modal State
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
+
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const user = useSelector((state: RootState) => state.currentUser);
@@ -139,14 +148,22 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   const [otpLoading, setOtpLoading] = useState(false);
   const [arrivedLoading, setArrivedLoading] = useState(false);
   const [distanceToPickup, setDistanceToPickup] = useState<number | null>(null);
-  const [currentLocation, setCurrentLocation] = useState<{latitude: number; longitude: number} | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [mapRegion, setMapRegion] = useState<MapRegion | null>(null);
   const [showSwipeButton, setShowSwipeButton] = useState(false);
   const [topCardCollapsed, setTopCardCollapsed] = useState(false);
   const [bottomCardCollapsed, setBottomCardCollapsed] = useState(false);
-  const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinates[]>([]);
+  const [routeCoordinates, setRouteCoordinates] = useState<RouteCoordinates[]>(
+    [],
+  );
   const [loadingRoute, setLoadingRoute] = useState(false);
-  const lastCameraUpdate = useRef<{latitude: number; longitude: number} | null>(null);
+  const lastCameraUpdate = useRef<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [userInteractingWithMap, setUserInteractingWithMap] = useState(false);
 
   // Check if trip data was passed from navigation (when accepting a trip)
@@ -162,7 +179,7 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       try {
         const location = await getCurrentLocation();
         setCurrentLocation(location);
-        
+
         // Update map region to show current location
         if (!mapRegion && location) {
           setMapRegion({
@@ -196,13 +213,16 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
         const location = await getCurrentLocation();
         const distance = calculateDistance(
           { latitude: location.latitude, longitude: location.longitude },
-          { latitude: activeTrip.pickupLatitude, longitude: activeTrip.pickupLongitude }
+          {
+            latitude: activeTrip.pickupLatitude,
+            longitude: activeTrip.pickupLongitude,
+          },
         );
         setDistanceToPickup(distance);
-        
+
         // Show swipe button when within 200 meters of pickup
         setShowSwipeButton(distance <= 0.2);
-        
+
         console.log(`Distance to pickup: ${distance.toFixed(2)} km`);
       } catch (error) {
         console.error('Error checking distance to pickup:', error);
@@ -232,26 +252,29 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
         return;
       }
 
-      const response: any = await AuthFetch(`ambulance/driver/activeBooking`, token);
+      const response: any = await AuthFetch(
+        `ambulance/driver/activeBooking`,
+        token,
+      );
 
-      console.log("activeBooking response", response);
+      console.log('activeBooking response', response);
 
       // Handle nested data structure
       const bookingData = response?.data?.booking || response?.booking;
-      
+
       if (bookingData) {
         const booking = bookingData;
-        
+
         // Parse pickup and drop coordinates from API
         const pickupLat = parseFloat(booking.fromLatitude);
         const pickupLon = parseFloat(booking.fromLongitude);
         const dropLat = parseFloat(booking.toLatitude);
         const dropLon = parseFloat(booking.toLongitude);
-        
+
         // Calculate straight-line distance for priority
         const distanceKm = calculateDistance(
           { latitude: pickupLat, longitude: pickupLon },
-          { latitude: dropLat, longitude: dropLon }
+          { latitude: dropLat, longitude: dropLon },
         );
 
         // Get addresses using reverse geocoding
@@ -269,7 +292,8 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
           dropAddress,
           distance: formatDistance(distanceKm),
           estimatedTime: calculateEstimatedTime(distanceKm),
-          priority: distanceKm > 15 ? 'High' : distanceKm > 5 ? 'Medium' : 'Low',
+          priority:
+            distanceKm > 15 ? 'High' : distanceKm > 5 ? 'Medium' : 'Low',
           status: booking.status,
           requestTime: booking.requestedAt,
           pickupLatitude: pickupLat,
@@ -300,7 +324,7 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   useFocusEffect(
     React.useCallback(() => {
       fetchActiveTrip();
-    }, [fetchActiveTrip])
+    }, [fetchActiveTrip]),
   );
 
   // Fetch route from Google Directions API when trip changes or location updates
@@ -314,14 +338,22 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
         let destination;
 
         // When heading to pickup (accepted status)
-        if (activeTrip.status === 'accepted' && activeTrip.pickupLatitude && activeTrip.pickupLongitude) {
+        if (
+          activeTrip.status === 'accepted' &&
+          activeTrip.pickupLatitude &&
+          activeTrip.pickupLongitude
+        ) {
           destination = {
             latitude: activeTrip.pickupLatitude,
             longitude: activeTrip.pickupLongitude,
           };
         }
         // When in journey (in_progress status)
-        else if (activeTrip.status === 'in_progress' && activeTrip.dropLatitude && activeTrip.dropLongitude) {
+        else if (
+          activeTrip.status === 'in_progress' &&
+          activeTrip.dropLatitude &&
+          activeTrip.dropLongitude
+        ) {
           destination = {
             latitude: activeTrip.dropLatitude,
             longitude: activeTrip.dropLongitude,
@@ -331,9 +363,14 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
           return;
         }
 
-        console.log('🗺️ Fetching route from current location to destination...');
-        const directionsResult: DirectionsResult = await getDirections(origin, destination);
-        
+        console.log(
+          '🗺️ Fetching route from current location to destination...',
+        );
+        const directionsResult: DirectionsResult = await getDirections(
+          origin,
+          destination,
+        );
+
         // Remove the first coordinate if it's too close to current location (< 5 meters)
         // This prevents duplicate points at the start
         let cleanedCoordinates = directionsResult.coordinates;
@@ -341,18 +378,22 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
           const firstPoint = cleanedCoordinates[0];
           const distanceToFirst = Math.sqrt(
             Math.pow(firstPoint.latitude - origin.latitude, 2) +
-            Math.pow(firstPoint.longitude - origin.longitude, 2)
+              Math.pow(firstPoint.longitude - origin.longitude, 2),
           );
           // If first point is very close to origin (< 0.00005 degrees ≈ 5 meters), remove it
           if (distanceToFirst < 0.00005) {
             cleanedCoordinates = cleanedCoordinates.slice(1);
           }
         }
-        
+
         setRouteCoordinates(cleanedCoordinates);
-        console.log(`✅ Route loaded with ${cleanedCoordinates.length} waypoints`);
-        console.log(`📊 Distance: ${directionsResult.distance}, Duration: ${directionsResult.duration}`);
-        
+        console.log(
+          `✅ Route loaded with ${cleanedCoordinates.length} waypoints`,
+        );
+        console.log(
+          `📊 Distance: ${directionsResult.distance}, Duration: ${directionsResult.duration}`,
+        );
+
         // Update trip data with accurate distance and time from Google
         if (activeTrip) {
           setActiveTrip({
@@ -378,42 +419,56 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
 
     return () => clearInterval(routeRefreshInterval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTrip?.status, activeTrip?.pickupLatitude, activeTrip?.pickupLongitude, activeTrip?.dropLatitude, activeTrip?.dropLongitude, currentLocation]);
+  }, [
+    activeTrip?.status,
+    activeTrip?.pickupLatitude,
+    activeTrip?.pickupLongitude,
+    activeTrip?.dropLatitude,
+    activeTrip?.dropLongitude,
+    currentLocation,
+  ]);
 
   // Single unified map control - handles initial centering and live tracking
   useEffect(() => {
     if (!mapRef.current || !activeTrip || !currentLocation) return;
-    
+
     // Don't auto-move map if user is manually interacting with it
     if (userInteractingWithMap) return;
 
     // Check if location has changed significantly (more than ~10 meters)
     const hasLocationChangedSignificantly = () => {
       if (!lastCameraUpdate.current) return true;
-      
-      const latDiff = Math.abs(currentLocation.latitude - lastCameraUpdate.current.latitude);
-      const lngDiff = Math.abs(currentLocation.longitude - lastCameraUpdate.current.longitude);
-      
+
+      const latDiff = Math.abs(
+        currentLocation.latitude - lastCameraUpdate.current.latitude,
+      );
+      const lngDiff = Math.abs(
+        currentLocation.longitude - lastCameraUpdate.current.longitude,
+      );
+
       // ~0.0001 degrees = ~11 meters
       return latDiff > 0.0001 || lngDiff > 0.0001;
     };
 
     // Only fit to coordinates on first load (when trip first becomes active)
     const isInitialLoad = !mapRegion;
-    
+
     if (isInitialLoad) {
       // Initial load: fit all points in view
       const coordinates = [
-        { latitude: currentLocation.latitude, longitude: currentLocation.longitude }
+        {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+        },
       ];
-      
+
       if (activeTrip.pickupLatitude && activeTrip.pickupLongitude) {
         coordinates.push({
           latitude: activeTrip.pickupLatitude,
           longitude: activeTrip.pickupLongitude,
         });
       }
-      
+
       if (activeTrip.dropLatitude && activeTrip.dropLongitude) {
         coordinates.push({
           latitude: activeTrip.dropLatitude,
@@ -430,64 +485,82 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       }, 500);
     } else if (hasLocationChangedSignificantly()) {
       // During active tracking: smoothly follow ambulance only if moved significantly
-      if (activeTrip.status === 'accepted' || activeTrip.status === 'in_progress') {
-        mapRef.current.animateCamera({
-          center: {
-            latitude: currentLocation.latitude,
-            longitude: currentLocation.longitude,
+      if (
+        activeTrip.status === 'accepted' ||
+        activeTrip.status === 'in_progress'
+      ) {
+        mapRef.current.animateCamera(
+          {
+            center: {
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+            },
+            zoom: 15, // Moderate zoom for navigation
           },
-          zoom: 15, // Moderate zoom for navigation
-        }, { duration: 2000 }); // Slower animation for smoother movement
-        
+          { duration: 2000 },
+        ); // Slower animation for smoother movement
+
         lastCameraUpdate.current = currentLocation;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLocation?.latitude, currentLocation?.longitude, activeTrip?.id, userInteractingWithMap]);
+  }, [
+    currentLocation?.latitude,
+    currentLocation?.longitude,
+    activeTrip?.id,
+    userInteractingWithMap,
+  ]);
 
   // Swipe button success handler - Mark driver as arrived
   const handleSwipeConfirm = async () => {
     if (!activeTrip) return;
 
-    Alert.alert(
-      'Confirm Arrival',
-      'Have you reached the pickup location?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes, I\'ve Arrived',
-          onPress: async () => {
-            try {
-              setArrivedLoading(true);
-              const token = await AsyncStorage.getItem('token');
-              console.log("activeTrip",activeTrip)
-              const response: any = await AuthPost(
-                `ambulance/driver/bookings/${activeTrip.id}/arrived`,
-                {},
-                token
+    Alert.alert('Confirm Arrival', 'Have you reached the pickup location?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: "Yes, I've Arrived",
+        onPress: async () => {
+          try {
+            setArrivedLoading(true);
+            const token = await AsyncStorage.getItem('token');
+            console.log('activeTrip', activeTrip);
+            const response: any = await AuthPost(
+              `ambulance/driver/bookings/${activeTrip.id}/arrived`,
+              {},
+              token,
+            );
+
+            console.log('Arrived response:', response);
+
+            if (
+              response?.status === 'success' ||
+              (response as any)?.message?.includes('arrived')
+            ) {
+              Alert.alert(
+                'Success',
+                'Arrival confirmed! Please collect the OTP from the patient.',
               );
-
-              console.log('Arrived response:', response);
-
-              if (response?.status === 'success' || (response as any)?.message?.includes('arrived')) {
-                Alert.alert('Success', 'Arrival confirmed! Please collect the OTP from the patient.');
-                // Update local state
-                setActiveTrip({ ...activeTrip, status: 'arrived' });
-                // Show OTP modal
-                setOtpModalVisible(true);
-              } else {
-                throw new Error((response as any)?.message || 'Failed to mark arrival');
-              }
-            } catch (error: any) {
-              console.log('Arrival error:', error);
-              Alert.alert('Error', error?.message || 'Failed to mark arrival. Please try again.');
-            } finally {
-              setArrivedLoading(false);
+              // Update local state
+              setActiveTrip({ ...activeTrip, status: 'arrived' });
+              // Show OTP modal
+              setOtpModalVisible(true);
+            } else {
+              throw new Error(
+                (response as any)?.message || 'Failed to mark arrival',
+              );
             }
-          },
+          } catch (error: any) {
+            console.log('Arrival error:', error);
+            Alert.alert(
+              'Error',
+              error?.message || 'Failed to mark arrival. Please try again.',
+            );
+          } finally {
+            setArrivedLoading(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   // Verify OTP to start journey
@@ -500,16 +573,19 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
     try {
       setOtpLoading(true);
       const token = await AsyncStorage.getItem('token');
-      
+
       const response: any = await AuthPost(
         `ambulance/driver/bookings/${activeTrip?.id}/verifyOtp`,
         { otp },
-        token
+        token,
       );
 
       console.log('OTP verification response:', response);
 
-      if (response?.status === 'success' || (response as any)?.message?.includes('verified')) {
+      if (
+        response?.status === 'success' ||
+        (response as any)?.message?.includes('verified')
+      ) {
         setOtpModalVisible(false);
         setOtp('');
         Alert.alert('Success', 'OTP verified! Journey started.');
@@ -517,22 +593,28 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
         if (activeTrip) {
           setActiveTrip({ ...activeTrip, status: 'in_progress' });
         }
-        
+
         // Zoom to current location after OTP verification
         if (currentLocation && mapRef.current) {
-          mapRef.current.animateToRegion({
-            latitude: currentLocation.latitude,
-            longitude: currentLocation.longitude,
-            latitudeDelta: 0.005, // Very zoomed in
-            longitudeDelta: 0.005,
-          }, 1000);
+          mapRef.current.animateToRegion(
+            {
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+              latitudeDelta: 0.005, // Very zoomed in
+              longitudeDelta: 0.005,
+            },
+            1000,
+          );
         }
       } else {
         throw new Error((response as any)?.message || 'Invalid OTP');
       }
     } catch (error: any) {
       console.error('OTP verification error:', error);
-      Alert.alert('Error', error?.message || 'Failed to verify OTP. Please try again.');
+      Alert.alert(
+        'Error',
+        error?.message || 'Failed to verify OTP. Please try again.',
+      );
     } finally {
       setOtpLoading(false);
     }
@@ -541,40 +623,39 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   const handleCompleteTrip = () => {
     if (!activeTrip) return;
 
-    Alert.alert(
-      'Complete Trip',
-      'Mark this trip as completed?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Complete',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const token = await AsyncStorage.getItem('token');
-              
-              // TODO: Replace with actual complete trip endpoint
-              const response = await AuthPost(
-                `ambulance/driver/bookings/${activeTrip.id}/complete`,
-                {},
-                token
-              );
+    Alert.alert('Complete Trip', 'Mark this trip as completed?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Complete',
+        onPress: async () => {
+          try {
+            setLoading(true);
+            const token = await AsyncStorage.getItem('token');
 
-              console.log('Complete trip response:', response);
-              
-              Alert.alert('Success', 'Trip completed successfully!');
-              setActiveTrip(null);
-              navigation.navigate('AmbulanceDriverDashboard');
-            } catch (error: any) {
-              console.error('Complete trip error:', error);
-              Alert.alert('Error', error?.message || 'Failed to complete trip. Please try again.');
-            } finally {
-              setLoading(false);
-            }
-          },
+            // TODO: Replace with actual complete trip endpoint
+            const response = await AuthPost(
+              `ambulance/driver/bookings/${activeTrip.id}/complete`,
+              {},
+              token,
+            );
+
+            console.log('Complete trip response:', response);
+
+            Alert.alert('Success', 'Trip completed successfully!');
+            setActiveTrip(null);
+            navigation.navigate('AmbulanceDriverDashboard');
+          } catch (error: any) {
+            console.error('Complete trip error:', error);
+            Alert.alert(
+              'Error',
+              error?.message || 'Failed to complete trip. Please try again.',
+            );
+          } finally {
+            setLoading(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   // Determine if driver is close enough to pickup location (within 200 meters)
@@ -628,30 +709,34 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
             )}
 
             {/* Pickup Marker */}
-            {activeTrip.pickupLatitude && activeTrip.pickupLongitude && activeTrip.status === 'accepted' && (
-              <Marker
-                coordinate={{
-                  latitude: activeTrip.pickupLatitude,
-                  longitude: activeTrip.pickupLongitude,
-                }}
-                title="Pickup Location"
-                description={activeTrip.pickupAddress}
-                pinColor={COLORS.success}
-              />
-            )}
+            {activeTrip.pickupLatitude &&
+              activeTrip.pickupLongitude &&
+              activeTrip.status === 'accepted' && (
+                <Marker
+                  coordinate={{
+                    latitude: activeTrip.pickupLatitude,
+                    longitude: activeTrip.pickupLongitude,
+                  }}
+                  title="Pickup Location"
+                  description={activeTrip.pickupAddress}
+                  pinColor={COLORS.success}
+                />
+              )}
 
             {/* Drop Marker */}
-            {activeTrip.dropLatitude && activeTrip.dropLongitude && activeTrip.status === 'in_progress' && (
-              <Marker
-                coordinate={{
-                  latitude: activeTrip.dropLatitude,
-                  longitude: activeTrip.dropLongitude,
-                }}
-                title="Drop Location"
-                description={activeTrip.dropAddress}
-                pinColor={COLORS.error}
-              />
-            )}
+            {activeTrip.dropLatitude &&
+              activeTrip.dropLongitude &&
+              activeTrip.status === 'in_progress' && (
+                <Marker
+                  coordinate={{
+                    latitude: activeTrip.dropLatitude,
+                    longitude: activeTrip.dropLongitude,
+                  }}
+                  title="Drop Location"
+                  description={activeTrip.dropAddress}
+                  pinColor={COLORS.error}
+                />
+              )}
 
             {/* Road-based Route Polyline from Google Directions */}
             {routeCoordinates.length > 0 && currentLocation && (
@@ -659,31 +744,45 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
                 {/* Outer glow/shadow effect for better visibility */}
                 <Polyline
                   coordinates={[
-                    { latitude: currentLocation.latitude, longitude: currentLocation.longitude },
+                    {
+                      latitude: currentLocation.latitude,
+                      longitude: currentLocation.longitude,
+                    },
                     ...routeCoordinates,
                   ]}
-                  strokeColor={activeTrip.status === 'accepted' ? COLORS.primary + '40' : COLORS.success + '40'}
+                  strokeColor={
+                    activeTrip.status === 'accepted'
+                      ? COLORS.primary + '40'
+                      : COLORS.success + '40'
+                  }
                   strokeWidth={10}
                   lineCap="round"
                   lineJoin="round"
                   geodesic={true}
                 />
-                
+
                 {/* Main route polyline with proper joining */}
                 <Polyline
                   coordinates={[
                     // Start from current ambulance location
-                    { latitude: currentLocation.latitude, longitude: currentLocation.longitude },
+                    {
+                      latitude: currentLocation.latitude,
+                      longitude: currentLocation.longitude,
+                    },
                     // Include all route waypoints from Google Directions
                     ...routeCoordinates,
                   ]}
-                  strokeColor={activeTrip.status === 'accepted' ? COLORS.primary : COLORS.success}
+                  strokeColor={
+                    activeTrip.status === 'accepted'
+                      ? COLORS.primary
+                      : COLORS.success
+                  }
                   strokeWidth={6}
                   lineCap="round"
                   lineJoin="round"
                   geodesic={true}
                 />
-                
+
                 {/* Optional: Add small markers at regular intervals for visual feedback */}
                 {routeCoordinates
                   .filter((_, index) => index % 20 === 0 && index > 0) // Every 20th point
@@ -697,25 +796,34 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
                         <View style={styles.routePointDot} />
                       </View>
                     </Marker>
-                  ))
-                }
+                  ))}
               </>
             )}
-            
+
             {/* Loading indicator for route - dashed line while fetching */}
-            {loadingRoute && routeCoordinates.length === 0 && currentLocation && activeTrip.pickupLatitude && activeTrip.pickupLongitude && (
-              <Polyline
-                coordinates={[
-                  { latitude: currentLocation.latitude, longitude: currentLocation.longitude },
-                  { latitude: activeTrip.pickupLatitude, longitude: activeTrip.pickupLongitude },
-                ]}
-                strokeColor={COLORS.gray}
-                strokeWidth={3}
-                lineDashPattern={[10, 5]}
-                lineCap="round"
-                lineJoin="round"
-              />
-            )}
+            {loadingRoute &&
+              routeCoordinates.length === 0 &&
+              currentLocation &&
+              activeTrip.pickupLatitude &&
+              activeTrip.pickupLongitude && (
+                <Polyline
+                  coordinates={[
+                    {
+                      latitude: currentLocation.latitude,
+                      longitude: currentLocation.longitude,
+                    },
+                    {
+                      latitude: activeTrip.pickupLatitude,
+                      longitude: activeTrip.pickupLongitude,
+                    },
+                  ]}
+                  strokeColor={COLORS.gray}
+                  strokeWidth={3}
+                  lineDashPattern={[10, 5]}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
           </MapView>
 
           {/* Re-center button - appears when user manually moves map */}
@@ -725,10 +833,13 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
               onPress={() => {
                 setUserInteractingWithMap(false);
                 if (currentLocation && mapRef.current) {
-                  mapRef.current.animateCamera({
-                    center: currentLocation,
-                    zoom: 15,
-                  }, { duration: 1000 });
+                  mapRef.current.animateCamera(
+                    {
+                      center: currentLocation,
+                      zoom: 15,
+                    },
+                    { duration: 1000 },
+                  );
                 }
               }}
             >
@@ -738,31 +849,41 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
           )}
 
           {/* Floating Info Card with Collapse */}
-          <View style={[
-            styles.floatingInfoCard,
-            topCardCollapsed && styles.floatingInfoCardCollapsed
-          ]}>
+          <View
+            style={[
+              styles.floatingInfoCard,
+              topCardCollapsed && styles.floatingInfoCardCollapsed,
+            ]}
+          >
             <View style={styles.floatingHeader}>
               <View style={styles.statusBadge}>
-                <View style={[
-                  styles.statusDot,
-                  activeTrip.status === 'accepted' && { backgroundColor: COLORS.warning },
-                  activeTrip.status === 'arrived' && { backgroundColor: COLORS.info },
-                  activeTrip.status === 'in_progress' && { backgroundColor: COLORS.success },
-                ]} />
+                <View
+                  style={[
+                    styles.statusDot,
+                    activeTrip.status === 'accepted' && {
+                      backgroundColor: COLORS.warning,
+                    },
+                    activeTrip.status === 'arrived' && {
+                      backgroundColor: COLORS.info,
+                    },
+                    activeTrip.status === 'in_progress' && {
+                      backgroundColor: COLORS.success,
+                    },
+                  ]}
+                />
                 <Text style={styles.statusText}>
                   {activeTrip.status === 'accepted' && 'Heading to Pickup'}
                   {activeTrip.status === 'arrived' && 'Arrived at Pickup'}
                   {activeTrip.status === 'in_progress' && 'Journey in Progress'}
                 </Text>
               </View>
-              
+
               {/* Live Location Indicator */}
               <View style={styles.liveIndicator}>
                 <View style={styles.liveDot} />
                 <Text style={styles.liveText}>LIVE</Text>
               </View>
-              
+
               {/* Collapse/Expand Toggle Button */}
               <TouchableOpacity
                 style={styles.collapseButton}
@@ -776,39 +897,163 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
 
             {!topCardCollapsed && (
               <>
-                {activeTrip.priority && (
-                  <View style={[
-                    styles.priorityBadgeInline,
-                    activeTrip.priority === 'High' && styles.priorityHigh,
-                    activeTrip.priority === 'Medium' && styles.priorityMedium,
-                  ]}>
-                    <Text style={styles.priorityText}>{activeTrip.priority}</Text>
+               
+                {/* Cancel Trip Button (visible for accepted or arrived status) */}
+               {(activeTrip.status === 'accepted' ||
+  activeTrip.status === 'arrived') && (
+  <TouchableOpacity
+    onPress={() => setCancelModalVisible(true)}
+    style={{
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 1.5,
+      borderColor: '#E53935', // red outline
+      backgroundColor: 'transparent',
+      alignSelf: 'center',
+      marginTop: 12,
+    }}
+    activeOpacity={0.7}
+  >
+    <Text
+      style={{
+        color: '#E53935',
+        fontSize: 16,
+        fontWeight: '600',
+      }}
+    >
+      Cancel Trip
+    </Text>
+  </TouchableOpacity>
+)}
+
+
+                {/* Cancel Trip Modal (moved to root level for visibility) */}
+                <Modal
+                  visible={cancelModalVisible}
+                  transparent={true}
+                  animationType="slide"
+                  onRequestClose={() => setCancelModalVisible(false)}
+                >
+                  <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                      <Text style={styles.modalTitle}>Cancel Trip</Text>
+                      <Text style={styles.modalSubtitle}>
+                        Please provide a reason for cancelling this trip
+                      </Text>
+                      <TextInput
+                        style={styles.cancelReasonInput}
+                        value={cancelReason}
+                        onChangeText={setCancelReason}
+                        placeholder="Enter reason..."
+                        placeholderTextColor={COLORS.gray}
+                        multiline
+                        numberOfLines={3}
+                        maxLength={200}
+                        editable={!cancelLoading}
+                      />
+                      <View style={styles.modalButtons}>
+                        <TouchableOpacity
+                          style={[styles.modalButton, styles.modalButtonCancel]}
+                          onPress={() => {
+                            setCancelModalVisible(false);
+                            setCancelReason('');
+                          }}
+                          disabled={cancelLoading}
+                        >
+                          <Text style={styles.modalButtonText}>Back</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.modalButton,
+                            styles.modalButtonVerify,
+                            !cancelReason.trim() && { opacity: 0.5 },
+                          ]}
+                          onPress={async () => {
+                            if (!cancelReason.trim()) return;
+                            try {
+                              setCancelLoading(true);
+                              const token = await AsyncStorage.getItem('token');
+                              const response = await AuthPost(
+                                `ambulance/driver/bookings/${activeTrip?.id}/cancel`,
+                                { reason: cancelReason.trim() },
+                                token,
+                              );
+                              if (
+                                response?.status === 'success' ||
+                                (response as any)?.message?.includes(
+                                  'cancelled',
+                                )
+                              ) {
+                                Alert.alert(
+                                  'Trip Cancelled',
+                                  'The trip has been cancelled.',
+                                );
+                                setActiveTrip(null);
+                                setCancelModalVisible(false);
+                                setCancelReason('');
+                                navigation.navigate('AmbulanceDriverDashboard');
+                              } else {
+                                throw new Error(
+                                  (response as any)?.message ||
+                                    'Failed to cancel trip',
+                                );
+                              }
+                            } catch (error: any) {
+                              Alert.alert(
+                                'Error',
+                                error?.message ||
+                                  'Failed to cancel trip. Please try again.',
+                              );
+                            } finally {
+                              setCancelLoading(false);
+                            }
+                          }}
+                          disabled={cancelLoading || !cancelReason.trim()}
+                        >
+                          {cancelLoading ? (
+                            <ActivityIndicator color="#fff" />
+                          ) : (
+                            <Text style={styles.modalButtonTextVerify}>
+                              Cancel Trip
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                )}
+                </Modal>
 
                 <View style={styles.patientInfo}>
-                  <Text style={styles.patientName}>👤 {activeTrip.patientName}</Text>
+                  <Text style={styles.patientName}>
+                    👤 {activeTrip.patientName}
+                  </Text>
                   {activeTrip.distance && activeTrip.estimatedTime && (
                     <View style={styles.tripMetricsHorizontal}>
-                      <Text style={styles.metricSmall}>📍 {activeTrip.distance}</Text>
-                      <Text style={styles.metricSmall}>⏱️ {activeTrip.estimatedTime}</Text>
+                      <Text style={styles.metricSmall}>
+                        📍 {activeTrip.distance}
+                      </Text>
+                      <Text style={styles.metricSmall}>
+                        ⏱️ {activeTrip.estimatedTime}
+                      </Text>
                     </View>
                   )}
                 </View>
 
                 {/* Show distance to pickup when heading to pickup */}
-                {activeTrip.status === 'accepted' && distanceToPickup !== null && (
-                  <View style={styles.distanceAlert}>
-                    <Text style={styles.distanceAlertText}>
-                      {formatDistance(distanceToPickup)} from pickup location
-                    </Text>
-                    {!isNearPickup && (
-                      <Text style={styles.distanceAlertSubtext}>
-                        Get within 200m to confirm arrival
+                {activeTrip.status === 'accepted' &&
+                  distanceToPickup !== null && (
+                    <View style={styles.distanceAlert}>
+                      <Text style={styles.distanceAlertText}>
+                        {formatDistance(distanceToPickup)} from pickup location
                       </Text>
-                    )}
-                  </View>
-                )}
+                      {!isNearPickup && (
+                        <Text style={styles.distanceAlertSubtext}>
+                          Get within 200m to confirm arrival
+                        </Text>
+                      )}
+                    </View>
+                  )}
               </>
             )}
           </View>
@@ -816,10 +1061,12 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       )}
 
       {/* Bottom Action Panel with Collapse */}
-      <View style={[
-        styles.bottomPanel,
-        bottomCardCollapsed && styles.bottomPanelCollapsed
-      ]}>
+      <View
+        style={[
+          styles.bottomPanel,
+          bottomCardCollapsed && styles.bottomPanelCollapsed,
+        ]}
+      >
         {/* Collapse/Expand Toggle Button */}
         <TouchableOpacity
           style={styles.bottomCollapseButton}
@@ -845,14 +1092,20 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
                       disabled={arrivedLoading}
                     />
                     {arrivedLoading && (
-                      <ActivityIndicator style={styles.activityIndicator} color={COLORS.primary} />
+                      <ActivityIndicator
+                        style={styles.activityIndicator}
+                        color={COLORS.primary}
+                      />
                     )}
                   </View>
                 ) : (
                   <View style={styles.infoSection}>
-                    <Text style={styles.infoSectionTitle}>Navigate to Pickup Location</Text>
+                    <Text style={styles.infoSectionTitle}>
+                      Navigate to Pickup Location
+                    </Text>
                     <Text style={styles.infoSectionText}>
-                      Follow the map directions. Swipe button will appear when you reach.
+                      Follow the map directions. Swipe button will appear when
+                      you reach.
                     </Text>
                   </View>
                 )}
@@ -862,7 +1115,9 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
             {/* Status: arrived - Waiting for OTP */}
             {activeTrip.status === 'arrived' && (
               <View style={styles.otpSection}>
-                <Text style={styles.otpSectionTitle}>Ready to Start Journey</Text>
+                <Text style={styles.otpSectionTitle}>
+                  Ready to Start Journey
+                </Text>
                 <Text style={styles.otpSectionText}>
                   Please collect OTP from patient to begin
                 </Text>
@@ -878,7 +1133,9 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
             {/* Status: in_progress - Journey to Destination */}
             {activeTrip.status === 'in_progress' && (
               <View style={styles.journeySection}>
-                <Text style={styles.journeySectionTitle}>Journey in Progress 🚑</Text>
+                <Text style={styles.journeySectionTitle}>
+                  Journey in Progress 🚑
+                </Text>
                 <Text style={styles.journeySectionText}>
                   Navigating to {activeTrip.dropAddress}
                 </Text>
@@ -890,7 +1147,9 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.completeButtonText}>✓ Complete Trip</Text>
+                    <Text style={styles.completeButtonText}>
+                      ✓ Complete Trip
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -966,6 +1225,60 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  cancelTripButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.error,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    elevation: 2,
+  },
+  cancelTripButtonText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  cancelReasonInput: {
+    borderWidth: 2,
+    borderColor: COLORS.error,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    minHeight: 60,
+    maxHeight: 120,
+    marginBottom: 20,
+    color: COLORS.black,
+    backgroundColor: COLORS.lightGray,
+    textAlignVertical: 'top',
+  },
+  // cancelReasonInput: {
+  //   borderWidth: 2,
+  //   borderColor: COLORS.error,
+  //   borderRadius: 12,
+  //   padding: 14,
+  //   fontSize: 16,
+  //   minHeight: 60,
+  //   maxHeight: 120,
+  //   marginBottom: 20,
+  //   color: COLORS.black,
+  //   backgroundColor: COLORS.lightGray,
+  //   textAlignVertical: 'top',
+  // },
+  //  cancelReasonInput: {
+  //   borderWidth: 2,
+  //   borderColor: COLORS.error,
+  //   borderRadius: 12,
+  //   padding: 14,
+  //   fontSize: 16,
+  //   minHeight: 60,
+  //   maxHeight: 120,
+  //   marginBottom: 20,
+  //   color: COLORS.black,
+  //   backgroundColor: COLORS.lightGray,
+  //   textAlignVertical: 'top',
+  // },
+
   container: {
     flex: 1,
     backgroundColor: COLORS.lightGray,
@@ -979,7 +1292,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.gray,
   },
-  
+
   // Map Styles
   mapContainer: {
     flex: 1,
@@ -988,7 +1301,7 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-  
+
   // Re-center Button
   recenterButton: {
     position: 'absolute',
@@ -1017,7 +1330,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.primary,
   },
-  
+
   // Floating Info Card on Map
   floatingInfoCard: {
     position: 'absolute',
@@ -1162,7 +1475,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     marginTop: 4,
   },
-  
+
   // Bottom Panel Styles
   bottomPanel: {
     backgroundColor: COLORS.white,
@@ -1203,7 +1516,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: 'bold',
   },
-  
+
   // Swipe Button Styles
   swipeSection: {
     alignItems: 'center',
@@ -1257,7 +1570,7 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: 'bold',
   },
-  
+
   // Info Section Styles
   infoSection: {
     alignItems: 'center',
@@ -1274,7 +1587,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  
+
   // OTP Section Styles
   otpSection: {
     alignItems: 'center',
@@ -1307,7 +1620,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.white,
   },
-  
+
   // Journey Section Styles
   journeySection: {
     alignItems: 'center',
@@ -1342,7 +1655,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.white,
   },
-  
+
   // No Trip Section
   noTripSection: {
     alignItems: 'center',
@@ -1359,7 +1672,7 @@ const styles = StyleSheet.create({
     color: COLORS.gray,
     textAlign: 'center',
   },
-  
+
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -1427,7 +1740,7 @@ const styles = StyleSheet.create({
   activityIndicator: {
     marginTop: 10,
   },
-  
+
   // Ambulance Marker Styles
   ambulanceMarker: {
     width: 50,
@@ -1447,7 +1760,7 @@ const styles = StyleSheet.create({
   ambulanceIcon: {
     fontSize: 28,
   },
-  
+
   // Route Point Markers
   routePointMarker: {
     width: 12,
