@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Platform, PermissionsAndroid } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Platform, PermissionsAndroid, KeyboardAvoidingView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDispatch } from 'react-redux';
 import { UploadFiles } from '../../auth/auth';
+import { Role_NAME } from '../../utils/role';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { showSuccess, showError } from '../../store/toast.slice';
 
 const AddDriver: React.FC = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
+
 
   const [form, setForm] = useState({ 
     firstName: '', 
@@ -20,6 +22,8 @@ const AddDriver: React.FC = () => {
     aadharNumber: '', 
     drivingLicenceNumber: '' 
   });
+  // staffType: 'driver' | 'support'
+  const [staffType, setStaffType] = useState<'driver' | 'support'>('driver');
   const [images, setImages] = useState<{ 
     aadharImage?: any; 
     licenceFrontImage?: any; 
@@ -90,20 +94,25 @@ const AddDriver: React.FC = () => {
       errs.push('Aadhar number must be exactly 12 digits');
     }
     
-    // Driving licence validation
-    if (!form.drivingLicenceNumber || form.drivingLicenceNumber.trim().length === 0) {
-      errs.push('Driving licence number is required');
+    // Driving licence validation - required only for drivers
+    if (staffType === 'driver') {
+      if (!form.drivingLicenceNumber || form.drivingLicenceNumber.trim().length === 0) {
+        errs.push('Driving licence number is required for drivers');
+      }
     }
-    
-    // Image validations - all are mandatory
+
+    // Image validations
     if (!images.aadharImage || !images.aadharImage.uri) {
       errs.push('Aadhar image is required');
     }
-    if (!images.licenceFrontImage || !images.licenceFrontImage.uri) {
-      errs.push('Driving licence front image is required');
-    }
-    if (!images.licenceBackImage || !images.licenceBackImage.uri) {
-      errs.push('Driving licence back image is required');
+    // Licence images required only for drivers
+    if (staffType === 'driver') {
+      if (!images.licenceFrontImage || !images.licenceFrontImage.uri) {
+        errs.push('Driving licence front image is required for drivers');
+      }
+      if (!images.licenceBackImage || !images.licenceBackImage.uri) {
+        errs.push('Driving licence back image is required for drivers');
+      }
     }
 
     if (errs.length) {
@@ -127,7 +136,13 @@ const AddDriver: React.FC = () => {
       fd.append('email', form.email);
       fd.append('password', form.password);
       fd.append('aadharNumber', form.aadharNumber);
-      fd.append('drivingLicenceNumber', form.drivingLicenceNumber);
+      // include driving licence number only for drivers
+      if (staffType === 'driver') {
+        fd.append('drivingLicenceNumber', form.drivingLicenceNumber);
+      }
+      // include role id based on chosen staff type
+      const roleId = staffType === 'driver' ? Role_NAME.ambulanceDriver : Role_NAME.ambulanceStaff;
+      fd.append('role', String(roleId));
 
       // Append files if present
       if (images.aadharImage && images.aadharImage.uri) {
@@ -137,37 +152,39 @@ const AddDriver: React.FC = () => {
           type: images.aadharImage.type || 'image/jpeg',
         } as any);
       }
-      if (images.licenceFrontImage && images.licenceFrontImage.uri) {
-        fd.append('licenceFrontImage', {
-          uri: images.licenceFrontImage.uri,
-          name: images.licenceFrontImage.fileName || `licence_front_${Date.now()}.jpg`,
-          type: images.licenceFrontImage.type || 'image/jpeg',
-        } as any);
+      // Append licence images only for drivers
+      if (staffType === 'driver') {
+        if (images.licenceFrontImage && images.licenceFrontImage.uri) {
+          fd.append('licenceFrontImage', {
+            uri: images.licenceFrontImage.uri,
+            name: images.licenceFrontImage.fileName || `licence_front_${Date.now()}.jpg`,
+            type: images.licenceFrontImage.type || 'image/jpeg',
+          } as any);
+        }
+        if (images.licenceBackImage && images.licenceBackImage.uri) {
+          fd.append('licenceBackImage', {
+            uri: images.licenceBackImage.uri,
+            name: images.licenceBackImage.fileName || `licence_back_${Date.now()}.jpg`,
+            type: images.licenceBackImage.type || 'image/jpeg',
+          } as any);
+        }
       }
-      if (images.licenceBackImage && images.licenceBackImage.uri) {
-        fd.append('licenceBackImage', {
-          uri: images.licenceBackImage.uri,
-          name: images.licenceBackImage.fileName || `licence_back_${Date.now()}.jpg`,
-          type: images.licenceBackImage.type || 'image/jpeg',
-        } as any);
-      }
-
-      const res: any = await UploadFiles('ambulance/addDriver', fd, token);
+  console.log(fd,"ambulance/addDriver")
+  const res: any = await UploadFiles('ambulance/addDriver', fd, token);
       
       // Only navigate back on successful response
       if (res?.status === 'success') {
-        dispatch(showSuccess(res.message || 'Driver added successfully'));
+        dispatch(showSuccess(res.message || 'Staff added successfully'));
         
         // Navigate back to drivers list
         navigation.goBack();
       } else {
         // Show error but keep on same screen with data intact
-        dispatch(showError(res?.message || 'Failed to add driver'));
+  dispatch(showError(res?.message || 'Failed to add staff'));
       }
-    } catch (err) {
-      // console.error('addDriver error', err);
+    } catch {
       // Show error but keep on same screen with data intact
-      dispatch(showError('Failed to add driver. Please try again.'));
+  dispatch(showError('Failed to add staff. Please try again.'));
     } finally {
       setSubmitting(false);
     }
@@ -223,11 +240,30 @@ const AddDriver: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+  <View style={styles.kbInner}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+        {/* Staff type selector moved to top */}
+        <View style={styles.typeSelectorRow}>
+          <TouchableOpacity
+            onPress={() => setStaffType('driver')}
+            style={[styles.typeButton, staffType === 'driver' && styles.typeButtonActive]}
+          >
+            <Text style={[styles.typeButtonText, staffType === 'driver' && styles.typeButtonTextActive]}>Driver</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setStaffType('support')}
+            style={[styles.typeButton, staffType === 'support' && styles.typeButtonActive]}
+          >
+            <Text style={[styles.typeButtonText, staffType === 'support' && styles.typeButtonTextActive]}>Supporting Staff</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.formSection}>
           <Text style={styles.sectionLabel}>Personal Information</Text>
           <TextInput 
@@ -263,6 +299,7 @@ const AddDriver: React.FC = () => {
             placeholderTextColor="#999" 
           />
           
+          
           <View style={styles.passwordContainer}>
             <TextInput 
               placeholder="Password (min 6 chars, 1 number, 1 special) *" 
@@ -292,13 +329,15 @@ const AddDriver: React.FC = () => {
             style={styles.input} 
             placeholderTextColor="#999" 
           />
-          <TextInput 
-            placeholder="Driving Licence Number *" 
-            value={form.drivingLicenceNumber} 
-            onChangeText={(v) => handleChange('drivingLicenceNumber', v)} 
-            style={styles.input} 
-            placeholderTextColor="#999" 
-          />
+          {staffType === 'driver' && (
+            <TextInput 
+              placeholder="Driving Licence Number *" 
+              value={form.drivingLicenceNumber} 
+              onChangeText={(v) => handleChange('drivingLicenceNumber', v)} 
+              style={styles.input} 
+              placeholderTextColor="#999" 
+            />
+          )}
         </View>
 
         <View style={styles.formSection}>
@@ -320,64 +359,68 @@ const AddDriver: React.FC = () => {
               </Text>
             )}
           </View>
+          {staffType === 'driver' && (
+            <>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Driving Licence Front *</Text>
+                <View style={styles.uploadContainer}>
+                  <TouchableOpacity style={styles.uploadButton} onPress={() => pickImage('licenceFrontImage', true)}>
+                    <Text style={styles.uploadButtonText}>📷 Camera</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.uploadButton, styles.uploadButtonLast]} onPress={() => pickImage('licenceFrontImage', false)}>
+                    <Text style={styles.uploadButtonText}>📁 Choose File</Text>
+                  </TouchableOpacity>
+                </View>
+                {images.licenceFrontImage?.uri && (
+                  <Text style={styles.selectedFileText} numberOfLines={1} ellipsizeMode="middle">
+                    ✓ {images.licenceFrontImage?.fileName || 'Image selected'}
+                  </Text>
+                )}
+              </View>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Driving Licence Front *</Text>
-            <View style={styles.uploadContainer}>
-              <TouchableOpacity style={styles.uploadButton} onPress={() => pickImage('licenceFrontImage', true)}>
-                <Text style={styles.uploadButtonText}>📷 Camera</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.uploadButton, styles.uploadButtonLast]} onPress={() => pickImage('licenceFrontImage', false)}>
-                <Text style={styles.uploadButtonText}>📁 Choose File</Text>
-              </TouchableOpacity>
-            </View>
-            {images.licenceFrontImage?.uri && (
-              <Text style={styles.selectedFileText} numberOfLines={1} ellipsizeMode="middle">
-                ✓ {images.licenceFrontImage?.fileName || 'Image selected'}
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Driving Licence Back *</Text>
-            <View style={styles.uploadContainer}>
-              <TouchableOpacity style={styles.uploadButton} onPress={() => pickImage('licenceBackImage', true)}>
-                <Text style={styles.uploadButtonText}>📷 Camera</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.uploadButton, styles.uploadButtonLast]} onPress={() => pickImage('licenceBackImage', false)}>
-                <Text style={styles.uploadButtonText}>📁 Choose File</Text>
-              </TouchableOpacity>
-            </View>
-            {images.licenceBackImage?.uri && (
-              <Text style={styles.selectedFileText} numberOfLines={1} ellipsizeMode="middle">
-                ✓ {images.licenceBackImage?.fileName || 'Image selected'}
-              </Text>
-            )}
-          </View>
-        </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity 
-          style={styles.cancelButton} 
-          onPress={() => navigation.goBack()}
-          disabled={submitting}
-        >
-          <Text style={styles.cancelText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]} 
-          onPress={handleAddDriver} 
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.submitText}>Add Driver</Text>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Driving Licence Back *</Text>
+                <View style={styles.uploadContainer}>
+                  <TouchableOpacity style={styles.uploadButton} onPress={() => pickImage('licenceBackImage', true)}>
+                    <Text style={styles.uploadButtonText}>📷 Camera</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.uploadButton, styles.uploadButtonLast]} onPress={() => pickImage('licenceBackImage', false)}>
+                    <Text style={styles.uploadButtonText}>📁 Choose File</Text>
+                  </TouchableOpacity>
+                </View>
+                {images.licenceBackImage?.uri && (
+                  <Text style={styles.selectedFileText} numberOfLines={1} ellipsizeMode="middle">
+                    ✓ {images.licenceBackImage?.fileName || 'Image selected'}
+                  </Text>
+                )}
+              </View>
+            </>
           )}
-        </TouchableOpacity>
+        </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={styles.cancelButton} 
+            onPress={() => navigation.goBack()}
+            disabled={submitting}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.submitButton, submitting && styles.submitButtonDisabled]} 
+            onPress={handleAddDriver} 
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.submitText}>Add Staff</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -521,6 +564,35 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  typeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  typeButtonActive: {
+    backgroundColor: '#14b8a6',
+    borderColor: '#14b8a6',
+  },
+  typeButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  typeButtonTextActive: {
+    color: '#fff',
+  },
+  kbInner: {
+    flex: 1,
   },
 });
 

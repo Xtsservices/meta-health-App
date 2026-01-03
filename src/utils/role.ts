@@ -15,6 +15,7 @@ export type Role_list_Type = {
   4000:string;
   9001:string;
   9002:string;
+  9003:string;
 };
 
 export const Role_list: Role_list_Type = {
@@ -30,6 +31,7 @@ export const Role_list: Role_list_Type = {
   4000:"hod",
   9001:"ambulanceAdmin",
   9002:"ambulanceDriver",
+  9003:"ambulanceStaff",
 };
 export const Role_NAME = {
   sAdmin: 10007,
@@ -44,6 +46,7 @@ export const Role_NAME = {
   hod:4000,
   ambulanceAdmin:9001,
   ambulanceDriver:9002,
+  ambulanceStaff:9003,
 };
 
 export type SCOPE_LIST_Type = {

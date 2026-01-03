@@ -24,6 +24,22 @@ import {
 } from '../../services/tripRequestService';
 import { RootState } from '../../store/store';
 import { getSocket } from '../../socket/socket';
+import { initNotificationSound, releaseNotificationSound } from '../../utils/notificationSound';
+
+// Helper function to get priority colors based on priority type
+const getPriorityColors = (priority: string) => {
+  if (priority === 'Emergency') {
+    return {
+      backgroundColor: '#FFEBEE',
+      textColor: COLORS.danger,
+    };
+  }
+  // Normal priority - yellow
+  return {
+    backgroundColor: '#FFF8E1',
+    textColor: '#F9A825',
+  };
+};
 
 const AmbulanceDriverDashboard: React.FC = () => {
   const navigation = useNavigation();
@@ -32,6 +48,14 @@ const AmbulanceDriverDashboard: React.FC = () => {
   const [tripRequests, setTripRequests] = useState<TripRequest[]>([]);
   const [isOnline, setIsOnline] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Initialize notification sound on mount
+  useEffect(() => {
+    initNotificationSound();
+    return () => {
+      releaseNotificationSound();
+    };
+  }, []);
 
   // Monitor socket connection status and update isOnline automatically
   useFocusEffect(
@@ -288,8 +312,8 @@ const AmbulanceDriverDashboard: React.FC = () => {
             {tripRequests.map((trip) => (
               <View key={trip.id} style={styles.requestCard}>
                 <View style={styles.requestHeader}>
-                  <View style={styles.priorityBadge}>
-                    <Text style={styles.priorityText}>{trip.priority} Priority</Text>
+                  <View style={[styles.priorityBadge, { backgroundColor: getPriorityColors(trip.priority).backgroundColor }]}>
+                    <Text style={[styles.priorityText, { color: getPriorityColors(trip.priority).textColor }]}>{trip.priority}</Text>
                   </View>
                   <Text style={styles.requestTime}>{trip.requestTime}</Text>
                 </View>
@@ -459,13 +483,11 @@ const styles = StyleSheet.create({
   priorityBadge: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: '#FFEBEE',
     borderRadius: 6,
   },
   priorityText: {
     fontSize: FONT_SIZE.xs,
     fontWeight: '600',
-    color: COLORS.danger,
   },
   requestTime: {
     fontSize: FONT_SIZE.xs,

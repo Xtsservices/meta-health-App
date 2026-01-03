@@ -1,5 +1,6 @@
 import { AuthFetch, AuthPost } from '../auth/auth';
 import { getSocket } from '../socket/socket';
+import { playNotificationSound } from '../utils/notificationSound';
 
 // Interface for API response
 export interface TripRequestResponse {
@@ -16,6 +17,9 @@ export interface TripRequestAPI {
   fromLongitude: string;
   toLatitude: string;
   toLongitude: string;
+  fromAddress: string;
+  toAddress: string;
+  bookingType: 'NORMAL' | 'SOS';
   bookingStatus: string;
   requestStatus: string;
   requestedAt: string;
@@ -40,53 +44,6 @@ export interface TripRequest {
   toLongitude: string;
   bookingStatus: string;
   requestStatus: string;
-}
-
-/**
- * Reverse geocode coordinates to get human-readable address
- * Using Nominatim (OpenStreetMap) API - free and no API key required
- */
-async function reverseGeocode(
-  latitude: string,
-  longitude: string
-): Promise<string> {
-  try {
-    // return latitude + ',' + longitude; // --- TEMPORARY BYPASS ---
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
-      {
-        headers: {
-          'User-Agent': 'MetaHealthApp/1.0', // Required by Nominatim
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Geocoding failed');
-    }
-
-    const data = await response.json();
-    
-    // Build a readable address from the response
-    if (data.display_name) {
-      return data.display_name;
-    }
-    
-    // Fallback: construct address from components
-    const address = data.address || {};
-    const parts = [
-      address.road || address.street,
-      address.suburb || address.neighbourhood,
-      address.city || address.town || address.village,
-      address.state,
-    ].filter(Boolean);
-    
-    return parts.length > 0 ? parts.join(', ') : `${latitude}, ${longitude}`;
-  } catch (error) {
-    console.error('Reverse geocoding error:', error);
-    // Return coordinates as fallback
-    return `${latitude}, ${longitude}`;
-  }
 }
 
 /**
@@ -132,15 +89,11 @@ function calculateEstimatedTime(distanceKm: number): string {
 }
 
 /**
- * Determine priority based on distance and booking status
+ * Determine priority based on booking type
+ * SOS = Emergency, NORMAL = Normal
  */
-function determinePriority(distance: number, bookingStatus: string): string {
-  if (bookingStatus === 'emergency' || distance > 15) {
-    return 'High';
-  } else if (distance > 5) {
-    return 'Medium';
-  }
-  return 'Low';
+function determinePriority(bookingType: 'NORMAL' | 'SOS'): string {
+  return bookingType === 'SOS' ? 'Emergency' : 'Normal';
 }
 
 /**
@@ -178,59 +131,55 @@ export async function fetchTripRequests(
 
     const requests: TripRequestAPI[] = response.data.requests;
 
-    // Process each request and get location names
-    const formattedRequests = await Promise.all(
-      requests.map(async (request) => {
-        // Get location names using reverse geocoding
-        const [pickupAddress, dropAddress] = await Promise.all([
-          reverseGeocode(request.fromLatitude, request.fromLongitude),
-          reverseGeocode(request.toLatitude, request.toLongitude),
-        ]);
+    // Process each request - use addresses directly from backend
+    const formattedRequests = requests.map((request) => {
+      // Use addresses directly from backend
+      const pickupAddress = request.fromAddress || `${request.fromLatitude}, ${request.fromLongitude}`;
+      const dropAddress = request.toAddress || `${request.toLatitude}, ${request.toLongitude}`;
 
-        // Calculate distance
-        const distanceKm = calculateDistance(
-          parseFloat(request.fromLatitude),
-          parseFloat(request.fromLongitude),
-          parseFloat(request.toLatitude),
-          parseFloat(request.toLongitude)
-        );
+      // Calculate distance
+      const distanceKm = calculateDistance(
+        parseFloat(request.fromLatitude),
+        parseFloat(request.fromLongitude),
+        parseFloat(request.toLatitude),
+        parseFloat(request.toLongitude)
+      );
 
-        // Format distance
-        const distance =
-          distanceKm < 1
-            ? `${Math.round(distanceKm * 1000)} m`
-            : `${distanceKm.toFixed(1)} km`;
+      // Format distance
+      const distance =
+        distanceKm < 1
+          ? `${Math.round(distanceKm * 1000)} m`
+          : `${distanceKm.toFixed(1)} km`;
 
-        // Calculate estimated time
-        const estimatedTime = calculateEstimatedTime(distanceKm);
+      // Calculate estimated time
+      const estimatedTime = calculateEstimatedTime(distanceKm);
 
-        // Determine priority
-        const priority = determinePriority(distanceKm, request.bookingStatus);
+      // Determine priority based on booking type
+      const priority = determinePriority(request.bookingType);
 
-        // Format request time
-        const requestTime = formatRequestTime(request.requestedAt);
+      // Format request time
+      const requestTime = formatRequestTime(request.requestedAt);
 
-        return {
-          id: `trip_${request.requestID}`,
-          patientName: `Patient #${request.patientUserID}`, // You might want to fetch actual patient name from another API
-          pickupAddress,
-          dropAddress,
-          distance,
-          estimatedTime,
-          priority,
-          requestTime,
-          requestID: request.requestID,
-          bookingID: request.bookingID,
-          patientUserID: request.patientUserID,
-          fromLatitude: request.fromLatitude,
-          fromLongitude: request.fromLongitude,
-          toLatitude: request.toLatitude,
-          toLongitude: request.toLongitude,
-          bookingStatus: request.bookingStatus,
-          requestStatus: request.requestStatus,
-        };
-      })
-    );
+      return {
+        id: `trip_${request.requestID}`,
+        patientName: `Patient #${request.patientUserID}`,
+        pickupAddress,
+        dropAddress,
+        distance,
+        estimatedTime,
+        priority,
+        requestTime,
+        requestID: request.requestID,
+        bookingID: request.bookingID,
+        patientUserID: request.patientUserID,
+        fromLatitude: request.fromLatitude,
+        fromLongitude: request.fromLongitude,
+        toLatitude: request.toLatitude,
+        toLongitude: request.toLongitude,
+        bookingStatus: request.bookingStatus,
+        requestStatus: request.requestStatus,
+      };
+    });
 
     return formattedRequests;
   } catch (error) {
@@ -309,7 +258,7 @@ export function setupTripRequestsSocketListener(
   console.log('🔌 Setting up trip requests socket listener for user:', userId);
 
   // Listen for driver booking requests from backend
-  const handleDriverBookingRequests = async (data: { requests: TripRequestAPI[] }) => {
+  const handleDriverBookingRequests = (data: { requests: TripRequestAPI[] }) => {
     console.log('📨 Received driver booking requests:', data);
     
     try {
@@ -318,59 +267,58 @@ export function setupTripRequestsSocketListener(
         return;
       }
 
-      // Process each request and get location names
-      const formattedRequests = await Promise.all(
-        data.requests.map(async (request) => {
-          // Get location names using reverse geocoding
-          const [pickupAddress, dropAddress] = await Promise.all([
-            reverseGeocode(request.fromLatitude, request.fromLongitude),
-            reverseGeocode(request.toLatitude, request.toLongitude),
-          ]);
+      // Play notification sound when new requests arrive
+      playNotificationSound();
 
-          // Calculate distance
-          const distanceKm = calculateDistance(
-            parseFloat(request.fromLatitude),
-            parseFloat(request.fromLongitude),
-            parseFloat(request.toLatitude),
-            parseFloat(request.toLongitude)
-          );
+      // Process each request - use addresses directly from backend
+      const formattedRequests = data.requests.map((request) => {
+        // Use addresses directly from backend
+        const pickupAddress = request.fromAddress || `${request.fromLatitude}, ${request.fromLongitude}`;
+        const dropAddress = request.toAddress || `${request.toLatitude}, ${request.toLongitude}`;
 
-          // Format distance
-          const distance =
-            distanceKm < 1
-              ? `${Math.round(distanceKm * 1000)} m`
-              : `${distanceKm.toFixed(1)} km`;
+        // Calculate distance
+        const distanceKm = calculateDistance(
+          parseFloat(request.fromLatitude),
+          parseFloat(request.fromLongitude),
+          parseFloat(request.toLatitude),
+          parseFloat(request.toLongitude)
+        );
 
-          // Calculate estimated time
-          const estimatedTime = calculateEstimatedTime(distanceKm);
+        // Format distance
+        const distance =
+          distanceKm < 1
+            ? `${Math.round(distanceKm * 1000)} m`
+            : `${distanceKm.toFixed(1)} km`;
 
-          // Determine priority
-          const priority = determinePriority(distanceKm, request.bookingStatus);
+        // Calculate estimated time
+        const estimatedTime = calculateEstimatedTime(distanceKm);
 
-          // Format request time
-          const requestTime = formatRequestTime(request.requestedAt);
+        // Determine priority based on booking type
+        const priority = determinePriority(request.bookingType);
 
-          return {
-            id: `trip_${request.requestID}`,
-            patientName: `Patient #${request.patientUserID}`,
-            pickupAddress,
-            dropAddress,
-            distance,
-            estimatedTime,
-            priority,
-            requestTime,
-            requestID: request.requestID,
-            bookingID: request.bookingID,
-            patientUserID: request.patientUserID,
-            fromLatitude: request.fromLatitude,
-            fromLongitude: request.fromLongitude,
-            toLatitude: request.toLatitude,
-            toLongitude: request.toLongitude,
-            bookingStatus: request.bookingStatus,
-            requestStatus: request.requestStatus,
-          };
-        })
-      );
+        // Format request time
+        const requestTime = formatRequestTime(request.requestedAt);
+
+        return {
+          id: `trip_${request.requestID}`,
+          patientName: `Patient #${request.patientUserID}`,
+          pickupAddress,
+          dropAddress,
+          distance,
+          estimatedTime,
+          priority,
+          requestTime,
+          requestID: request.requestID,
+          bookingID: request.bookingID,
+          patientUserID: request.patientUserID,
+          fromLatitude: request.fromLatitude,
+          fromLongitude: request.fromLongitude,
+          toLatitude: request.toLatitude,
+          toLongitude: request.toLongitude,
+          bookingStatus: request.bookingStatus,
+          requestStatus: request.requestStatus,
+        };
+      });
 
       onRequestsReceived(formattedRequests);
     } catch (error) {

@@ -1,6 +1,6 @@
 // components/common/SvgIcons.tsx
 import React from 'react';
-import Svg, { Path, G, Rect, Circle, Line } from 'react-native-svg';
+import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 
 export const FileTextIcon = ({ size = 24, color = "#000000" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -348,6 +348,20 @@ export const CameraIcon = ({ size = 24, color = "#000000" }) => (
   </Svg>
 );
 
+export const AmbulanceIcon = ({ size = 24, color = "#000000" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    {/* Body */}
+    <Rect x="1" y="6" width="12" height="8" rx="1.5" stroke={color} strokeWidth={1.6} />
+    <Rect x="13" y="8" width="8" height="6" rx="1" stroke={color} strokeWidth={1.6} />
+    {/* Wheels */}
+    <Circle cx="5" cy="17.5" r="1.2" fill={color} />
+    <Circle cx="17" cy="17.5" r="1.2" fill={color} />
+    {/* Window / cross */}
+    <Path d="M6.7 9.5h3.6M6.7 11.5h3.6" stroke={color} strokeWidth={1.4} strokeLinecap="round" />
+    <Path d="M15 9v2M16 10h-2" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
 
 export const ReceiptIcon = ({ size = 24, color = "#000000" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -556,6 +570,22 @@ export const BuildingIcon = ({ size = 24, color = "#000000" }) => (
           strokeWidth={2} 
           strokeLinecap="round" 
           strokeLinejoin="round"/>
+  </Svg>
+);
+
+export const UserHomeIcon = ({
+  size = 24,
+  color = '#000000',
+}) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    {/* House outline */}
+    <Path
+      d="M3 10.5L12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V10.5z"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </Svg>
 );
 

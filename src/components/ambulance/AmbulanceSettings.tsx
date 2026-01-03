@@ -10,13 +10,18 @@ import {
   Alert,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
-import { showSuccess } from '../../store/toast.slice';
+import { showError, showSuccess } from '../../store/toast.slice';
 import AmbulanceFooter from './AmbulanceFooter';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+
+
 
 const { width } = Dimensions.get('window');
 const isSmallDevice = width < 768;
 
 const AmbulanceSettings: React.FC = () => {
+  const navigation = useNavigation();
   const dispatch = useDispatch();
   const [settings, setSettings] = useState({
     notificationsEnabled: true,
@@ -46,16 +51,35 @@ const AmbulanceSettings: React.FC = () => {
   const handleAbout = () => {
     Alert.alert(
       'About',
-      'Ambulance Management System\nVersion 1.0.0\n\n© 2025 Meta Health\nAll rights reserved.'
+      'Ambulance Management System\nVersion 1.0.0\n\n© 2026 Meta Health\nAll rights reserved.'
     );
   };
 
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', onPress: () => {} },
-      { text: 'Logout', onPress: () => dispatch(showSuccess('Logged out successfully')) },
-    ]);
+
+
+    const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Logout',
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem('token');
+              await AsyncStorage.removeItem('userID');
+              dispatch(showSuccess('Logged out successfully'));
+              navigation.navigate('Login' as never);
+            } catch {
+              dispatch(showError('Logout failed'));
+            }
+          },
+        },
+      ]
+    );
   };
+
 
   return (
     <View style={styles.container}>
@@ -117,7 +141,7 @@ const AmbulanceSettings: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Dispatch & Tracking</Text>
 
-          <View style={styles.settingItem}>
+          {/* <View style={styles.settingItem}>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>🤖 Auto Dispatch</Text>
               <Text style={styles.settingDescription}>Automatically assign requests</Text>
@@ -128,7 +152,7 @@ const AmbulanceSettings: React.FC = () => {
               trackColor={{ false: '#e5e7eb', true: '#a8e6d9' }}
               thumbColor={settings.autoDispatch ? '#14b8a6' : '#f0f0f0'}
             />
-          </View>
+          </View> */}
 
           <View style={styles.settingItem}>
             <View style={styles.settingContent}>
@@ -143,7 +167,7 @@ const AmbulanceSettings: React.FC = () => {
             />
           </View>
 
-          <View style={styles.settingItem}>
+          {/* <View style={styles.settingItem}>
             <View style={styles.settingContent}>
               <Text style={styles.settingLabel}>🔧 Maintenance Reminders</Text>
               <Text style={styles.settingDescription}>Get maintenance notifications</Text>
@@ -154,7 +178,7 @@ const AmbulanceSettings: React.FC = () => {
               trackColor={{ false: '#e5e7eb', true: '#a8e6d9' }}
               thumbColor={settings.maintenanceReminders ? '#14b8a6' : '#f0f0f0'}
             />
-          </View>
+          </View> */}
         </View>
 
         {/* Account Section */}
@@ -210,6 +234,7 @@ const styles = StyleSheet.create({
     fontSize: isSmallDevice ? 24 : 28,
     fontWeight: '700',
     color: '#ffffff',
+    marginTop: 10,
   },
   headerSubtitle: {
     fontSize: 14,
