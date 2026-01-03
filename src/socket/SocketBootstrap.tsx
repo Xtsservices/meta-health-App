@@ -1,5 +1,4 @@
 // src/socket/SocketBootstrap.tsx
-import React from 'react';
 import { useRegisterSocket } from './useRegisterSocket';
 
 const SocketBootstrap = () => {

@@ -244,7 +244,7 @@ const AmbulanceRequests: React.FC = () => {
         </View>
       </ScrollView>
 
-      <AmbulanceFooter active="requests" brandColor="#14b8a6" />
+  <AmbulanceFooter active="dashboard" brandColor="#14b8a6" />
     </View>
   );
 };

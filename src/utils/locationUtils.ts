@@ -402,6 +402,37 @@ export const ensureLocationPermission = async (): Promise<boolean> => {
 };
 
 /**
+ * Quick check to see if device location services (GPS/network) are enabled.
+ * We attempt a short getCurrentPosition call with low timeout and interpret
+ * POSITION_UNAVAILABLE / TIMEOUT as services disabled/unavailable.
+ */
+export const isLocationServiceEnabled = async (): Promise<boolean> => {
+  return new Promise<boolean>(resolve => {
+    // Try to get position with low accuracy and short timeout
+    Geolocation.getCurrentPosition(
+      () => {
+        resolve(true);
+      },
+      error => {
+        // If position unavailable or timed out, consider services disabled
+        // error.code: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+        if (error && (error.code === 2 || error.code === 3)) {
+          resolve(false);
+        } else if (error && error.code === 1) {
+          // Permission denied -> not a services issue; return true so caller will
+          // handle permission separately using ensureLocationPermission
+          resolve(true);
+        } else {
+          // Unknown error: assume services enabled (be permissive)
+          resolve(true);
+        }
+      },
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 },
+    );
+  });
+};
+
+/**
  * Watch user location for real-time tracking
  */
 export const watchLocation = (
