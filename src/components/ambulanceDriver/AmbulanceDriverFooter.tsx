@@ -8,6 +8,7 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
   LayoutDashboardIcon,
@@ -107,6 +108,7 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
   const trackingStartedRef = useRef(false);
+  const insets = useSafeAreaInsets();
   
   console.log("Current user:", user);
 
@@ -216,7 +218,7 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
   };
 
   return (
-    <View style={[styles.footer, { backgroundColor: brandColor }]}>
+    <View style={[styles.footer, { backgroundColor: brandColor, paddingBottom: Math.max(insets.bottom, 8) }]}>
       <Item k="dashboard" active={active} onPress={handleTabPress} />
       <Item k="activeTrip" active={active} onPress={handleTabPress} />
       <Item k="history" active={active} onPress={handleTabPress} />
@@ -233,11 +235,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 64,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingBottom: Platform.OS === 'ios' ? 10 : 8,
     paddingTop: 8,
     borderTopWidth: 0,
     width: W,
@@ -250,10 +250,9 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     paddingHorizontal: 6,
-    paddingTop: 2,
-    height: '100%',
+    paddingVertical: 8,
   },
   tabText: {
     color: '#ffffff',

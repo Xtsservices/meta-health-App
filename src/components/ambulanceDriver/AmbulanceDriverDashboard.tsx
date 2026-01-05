@@ -24,7 +24,7 @@ import {
 } from '../../services/tripRequestService';
 import { RootState } from '../../store/store';
 import { getSocket } from '../../socket/socket';
-import { initNotificationSound, releaseNotificationSound } from '../../utils/notificationSound';
+import { initNotificationSound, releaseNotificationSound, playNotificationSound } from '../../utils/notificationSound';
 
 // Helper function to get priority colors based on priority type
 const getPriorityColors = (priority: string) => {
@@ -89,13 +89,6 @@ const AmbulanceDriverDashboard: React.FC = () => {
         setIsOnline(false);
       };
 
-      //NEW_BOOKING_REQUEST
-      console.log('📩 New booking request received start:');
-      socket.on('NEW_BOOKING_REQUEST', (data) => {
-        console.log('📩 New booking request received:', data);
-        // Handle the new booking request (e.g., show a notification)
-      });
-
       socket.on('connect', handleConnect);
       socket.on('disconnect', handleDisconnect);
       socket.on('connect_error', handleConnectError);
@@ -105,7 +98,6 @@ const AmbulanceDriverDashboard: React.FC = () => {
         socket.off('connect', handleConnect);
         socket.off('disconnect', handleDisconnect);
         socket.off('connect_error', handleConnectError);
-        socket.off('NEW_BOOKING_REQUEST');
       };
     }, [])
   );
@@ -298,7 +290,11 @@ const AmbulanceDriverDashboard: React.FC = () => {
       </View>
 
       {/* Trip Request Queue */}
-      <ScrollView style={styles.requestContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.requestContainer} 
+        contentContainerStyle={styles.requestContentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {loading && tripRequests.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.brand} />
@@ -455,6 +451,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.md,
+    marginBottom: 80, // Space for footer
+  },
+  requestContentContainer: {
+    paddingBottom: 100, // Extra padding at bottom for last card to be fully visible above footer
   },
   requestsHeader: {
     fontSize: FONT_SIZE.lg,
