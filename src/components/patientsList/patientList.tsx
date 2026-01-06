@@ -40,13 +40,14 @@ import {
   UserPlus,
   Filter,
   X,
+  Calendar,
 } from "lucide-react-native";
 import { PatientType, wardType } from "../../utils/types";
 import Footer from "../dashboard/footer";
 import useOTConfig, { OTPatientStages } from "../../utils/otConfig";
 import { showError } from "../../store/toast.slice";
 import { formatAgeCompact, formatageFromDOB } from "../../utils/age";
-import { formatDate } from "../../utils/dateTime";
+import { formatDate, } from "../../utils/dateTime";
 import { COLORS } from "../../utils/colour";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -79,9 +80,6 @@ interface SurgeryData {
   rejectReason: string;
 }
 const FOOTER_H = 70;
-
-// --- Colors (static, used everywhere) ---
-
 
 // --- Small helper ---
 function getAgeLabel(dob?: string): string {
@@ -128,17 +126,31 @@ const { screenType, userType, setPatientStage } = useOTConfig();
   const [rejectDialogVisible, setRejectDialogVisible] = useState(false);
   const [selectedSurgeryData, setSelectedSurgeryData] = useState<SurgeryData[]>([]);
   const [selectedPatientName, setSelectedPatientName] = useState("");
+  const parseDate = (d?: string) => {
+  if (!d) return null;
+  const date = new Date(d);
+  return isNaN(date.getTime()) ? null : date;
+};
+
+  // Date range filter state for OT
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [dateFilterApplied, setDateFilterApplied] = useState(false);
 
   const bottomPad = FOOTER_H + insets.bottom + 24;
-const isOt = user?.roleName === "surgeon" || user?.roleName === "anesthesist"
+  const isOt = user?.roleName === "surgeon" || user?.roleName === "anesthetist";
+
   const fetchPatients = useCallback(async () => {
-    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    const token = await AsyncStorage.getItem("token");
     if (!user?.hospitalID || !token) return;
 
     try {
       setLoading(true);
       let url = "";
-if (user?.roleName !== "surgeon" && user?.roleName !== "anesthetist"){
+      let params: any = {};
+      
+      if (user?.roleName !== "surgeon" && user?.roleName !== "anesthetist") {
 if (user?.patientStatus === 1) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseopdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
@@ -166,10 +178,40 @@ if (user?.patientStatus === 1) {
           url = `patient/${user.hospitalID}/patients/opdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;
         }
       }
-}else{
-  url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`
+      } else {
+        // OT-specific API with date range parameters
+        url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`;
+        
+        // Add date range parameters if applied
+if (dateFilterApplied && startDate && endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+let base: PatientType[] = allPatients;
+
+   base = base.filter((p) => {
+    const patientDate = parseDate(p.addedOn);
+    if (!patientDate) return false;
+
+    return patientDate >= start && patientDate <= end;
+  });
 }
-      const response = await AuthFetch(url, token);
+
+      }
+
+      // Construct query string with parameters
+      const queryParams = new URLSearchParams();
+      if (params.startDate) queryParams.append('startDate', params.startDate);
+      if (params.endDate) queryParams.append('endDate', params.endDate);
+      
+      const queryString = queryParams.toString();
+      const fullUrl = queryString ? `${url}?${queryString}` : url;
+
+      const response = await AuthFetch(fullUrl, token);
+      console.log("listt ",response)
+      
       if (response?.status === "success" && "data" in response) {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response?.data?.patients
@@ -197,7 +239,7 @@ if (user?.patientStatus === 1) {
     } finally {
       setLoading(false);
     }
-  }, [user?.hospitalID, user?.token, user?.id, user?.role, user?.patientStatus, zone]);
+  }, [user?.hospitalID, user?.token, user?.id, user?.role, user?.patientStatus, zone, dateFilterApplied, startDate, endDate]);
 
   const [fetchTrigger, setFetchTrigger] = useState(0);
 
@@ -255,13 +297,13 @@ if (user?.patientStatus === 1) {
   const fetchSurgeryData = useCallback(async (patient: PatientType) => {
     if (!patient?.patientTimeLineID || !patient?.hospitalID) return;
 
-    const token11 = await AsyncStorage.getItem("token");
-    if (!token11) return;
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return;
 
     try {
       const response = await AuthFetch(
         `ot/${patient.hospitalID}/${patient.patientTimeLineID}/getOTData`,
-        token11
+        token
       );
 
       if (response?.status === "success" && "data" in response) {
@@ -323,7 +365,7 @@ if (patientId === null) return
   }, []);
 
     const fetchFollowupPatients = useCallback(async () => {
-    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    const token = await AsyncStorage.getItem("token");
     if (!user?.hospitalID || !token) return;
 
     try {
@@ -333,7 +375,7 @@ if (patientId === null) return
         token
       );
       if (response?.status === "success" && "data" in response) {
-      if (response?.status === "success" ) {
+      if (response?.status === "success") {
         setAllPatients(response.data?.followUps as PatientType[]);
       } else {
         setAllPatients([]);
@@ -345,7 +387,6 @@ if (patientId === null) return
       setLoading(false);
     }
   }, [user?.hospitalID]);
-
 
   useFocusEffect(
     useCallback(() => {
@@ -360,6 +401,37 @@ if (patientId === null) return
       fetchWards();
     }
   }, [fetchPatients, fetchWards, user?.patientStatus, fetchFollowupPatients, filterValue]))
+
+  // Date range filter functions
+  const handleApplyDateFilter = () => {
+    if (startDate && endDate) {
+      setDateFilterApplied(true);
+      triggerFetch();
+      setShowDateFilter(false);
+    } else {
+      dispatch(showError("Please select both start and end dates"));
+    }
+  };
+
+  const handleClearDateFilter = () => {
+    setStartDate("");
+    setEndDate("");
+    setDateFilterApplied(false);
+    triggerFetch();
+    setShowDateFilter(false);
+  };
+
+  const handleOpenDateFilter = () => {
+    setShowDateFilter(true);
+  };
+
+  const formatDateForInput = (date: Date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleOpenCalendar = () => {
+    setShowDateFilter(true);
+  };
 
   const filteredAndSearched = useMemo(() => {
     let base: PatientType[] = allPatients;
@@ -396,6 +468,26 @@ if (patientId === null) return
       }
     }
 
+    // Apply added date filter if enabled
+    if (dateFilterApplied && startDate && endDate) {
+      base = base.filter((p) => {
+        if (!p.addedOn) return false;
+        try {
+          const patientDate = new Date(p.addedOn);
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          
+          // Set time to beginning and end of day for proper range comparison
+          start.setHours(0, 0, 0, 0);
+          end.setHours(23, 59, 59, 999);
+          
+          return patientDate >= start && patientDate <= end;
+        } catch (e) {
+          return false;
+        }
+      });
+    }
+
     if (search.trim()) {
       const term = search.toLowerCase().trim();
       base = base.filter((p) => {
@@ -407,17 +499,23 @@ if (patientId === null) return
       });
     }
 
-    return base.sort((a, b) => new Date(b.startTime).valueOf() - new Date(a.startTime).valueOf());
-  }, [allPatients, filterValue, wardFilter, search, user?.patientStatus, zone]);
+return base.sort(
+  (a, b) =>
+    new Date(b.addedOn ?? 0).valueOf() -
+    new Date(a.addedOn ?? 0).valueOf()
+);
+
+  }, [allPatients, filterValue, wardFilter, search, user?.patientStatus, zone, dateFilterApplied, startDate, endDate]);
 
   const totalPages = Math.ceil(filteredAndSearched.length / PAGE_SIZE);
   const pagedData = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
     return filteredAndSearched.slice(start, start + PAGE_SIZE);
   }, [filteredAndSearched, currentPage]);
+  
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterValue, wardFilter, search]);
+  }, [filterValue, wardFilter, search, dateFilterApplied]);
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -452,12 +550,15 @@ if (patientId === null) return
     setFilterValue(0);
     setWardFilter(0);
     setSearch("");
+    if (isOt) {
+      handleClearDateFilter();
+    }
   };
 
   const handleSurgeryWarningClick = (patient: PatientType) => {
       const patientId = patient.id;
   if (patientId == null) return; // guard against null / undefined
-    const patientSurgeries = surgeryData[patientId ] || [];
+    const patientSurgeries = surgeryData[patientId] || [];
     const rejectedSurgeries = patientSurgeries.filter(item =>
       item.status?.toLowerCase() === "rejected"
     );
@@ -475,7 +576,7 @@ if (patientId === null) return
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   };
 
-  const hasActiveFilters = filterValue !== 0 || wardFilter !== 0 || search !== "";
+  const hasActiveFilters = filterValue !== 0 || wardFilter !== 0 || search !== "" || dateFilterApplied;
 
   const getFilterLabels = () => {
     if (user?.patientStatus === 1) {
@@ -511,6 +612,88 @@ if (patientId === null) return
     if (zone === zoneType.green) return "Stable Monitoring (Green Zone)";
     return "";
   };
+
+  // Date Range Filter Modal - Simplified version
+  const renderDateFilterModal = () => (
+    <Modal
+      visible={showDateFilter}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowDateFilter(false)}
+    >
+      <TouchableOpacity
+        style={styles.dateModalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowDateFilter(false)}
+      >
+        <TouchableOpacity
+          style={[styles.dateModalContent, { backgroundColor: COLORS.card }]}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={styles.dateModalHeader}>
+            <Text style={[styles.dateModalTitle, { color: COLORS.text }]}>
+              📅 Filter by Added Date
+            </Text>
+            <TouchableOpacity onPress={() => setShowDateFilter(false)}>
+              <X size={20} color={COLORS.sub} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.dateInputsContainer}>
+            <View style={styles.dateInputGroup}>
+              <Text style={[styles.dateLabel, { color: COLORS.text }]}>From Date</Text>
+              <View style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}>
+                <Calendar size={16} color={COLORS.sub} style={styles.dateIcon} />
+                <TextInput
+                  style={[styles.dateInput, { color: COLORS.text }]}
+                  value={startDate}
+                  onChangeText={setStartDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={COLORS.placeholder}
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
+            </View>
+
+            <View style={styles.dateInputGroup}>
+              <Text style={[styles.dateLabel, { color: COLORS.text }]}>To Date</Text>
+              <View style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}>
+                <Calendar size={16} color={COLORS.sub} style={styles.dateIcon} />
+                <TextInput
+                  style={[styles.dateInput, { color: COLORS.text }]}
+                  value={endDate}
+                  onChangeText={setEndDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={COLORS.placeholder}
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
+            </View>
+          </View>
+
+          <Text style={[styles.dateFormatHint, { color: COLORS.sub }]}>
+            Enter dates in YYYY-MM-DD format (e.g., 2024-01-15)
+          </Text>
+
+          <View style={styles.dateModalButtons}>
+            <TouchableOpacity
+              style={[styles.dateModalButton, styles.cancelButton, { borderColor: COLORS.border }]}
+              onPress={() => setShowDateFilter(false)}
+            >
+              <Text style={[styles.cancelButtonText, { color: COLORS.danger }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.dateModalButton, { backgroundColor: COLORS.brand }]}
+              onPress={handleApplyDateFilter}
+            >
+              <Text style={styles.applyButtonText}>Apply Filter</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   // ---- header with search + filter ----
   const renderHeader = () => (
@@ -579,6 +762,22 @@ if (patientId === null) return
           </View>
         )}
 
+        {/* Date Range Filter Button - for ALL users (not just OT) */}
+        <TouchableOpacity
+          style={[styles.dateFilterButton, { 
+            backgroundColor: dateFilterApplied ? COLORS.brand : COLORS.card,
+            borderColor: dateFilterApplied ? COLORS.brand : COLORS.border 
+          }]}
+          onPress={handleOpenDateFilter}
+        >
+          <Calendar size={16} color={dateFilterApplied ? "#fff" : COLORS.sub} />
+          <Text style={[styles.dateFilterButtonText, { 
+            color: dateFilterApplied ? "#fff" : COLORS.text 
+          }]}>
+            {dateFilterApplied ? 'Date Filter' : 'Date'}
+          </Text>
+        </TouchableOpacity>
+
         {/* Only show Add button for IPD (status 2) */}
         {user?.patientStatus === 2 && (
           <TouchableOpacity
@@ -608,7 +807,8 @@ if (patientId === null) return
         {(user?.patientStatus === 1 || user?.patientStatus === 2 || user?.patientStatus === 3) && (
           <View style={[styles.filterWrap, { borderColor: COLORS.border }]}>
             <Text style={[styles.filterLabel, { color: COLORS.text }]}>Patient Status</Text>
-            <View style={[styles.pickerWrap, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>              <Picker
+            <View style={[styles.pickerWrap, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+              <Picker
               selectedValue={filterValue}
               onValueChange={handleFilterChange}
               style={[styles.picker, { color: COLORS.text }]}
@@ -629,7 +829,7 @@ if (patientId === null) return
     <View style={styles.emptyWrap}>
       <Text style={[styles.emptyTitle, { color: COLORS.text }]}>No Patients Found</Text>
       <Text style={[styles.emptySub, { color: COLORS.sub }]}>
-        {search || filterValue !== 0 || wardFilter !== 0
+        {search || filterValue !== 0 || wardFilter !== 0 || dateFilterApplied
           ? "Try adjusting filters or search terms."
           : user?.patientStatus === 1
             ? "No patients available in the outpatient department."
@@ -647,12 +847,12 @@ if (patientId === null) return
     </View>
   );
 
-  const handleView = (patient :any) => {
+  const handleView = (patient: any) => {
 const patientStatusKey =
             patient?.status?.toUpperCase() as keyof typeof OTPatientStages;
           setPatientStage(OTPatientStages[patientStatusKey]);
- const isFromPreviousPatients = filterValue === 2;       
- navigation.navigate("PatientProfile", { id: patient.id,isFromPreviousPatients: isFromPreviousPatients });
+ const isFromPreviousPatients = filterValue === 2;
+ navigation.navigate("PatientProfile", { id: patient.id, isFromPreviousPatients: isFromPreviousPatients });
   }
 
   const renderItem = ({ item }: { item: PatientType }) => {
@@ -660,10 +860,14 @@ const patientStatusKey =
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
     const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—").toString();
-    const age = formatAgeCompact(item?.age, item?.dob);
+    const age = formatAgeCompact(
+      item?.age ?? undefined,
+      item?.dob ?? undefined
+    );
     const hasNotification = item.notificationCount && item.notificationCount > 0;
     const wardName = (user?.patientStatus === 2 || user?.patientStatus === 3) ? wardList.find(w => w.id === item.wardID)?.name || "—" : "—";
-const approvedDate = formatDate(item?.approvedTime)
+    const approvedDate = formatDate(item?.approvedTime)
+    const addedDate = formatDate(item?.addedOn);
     const patientSurgeries = surgeryData[item?.id] || [];
     const hasRejectedSurgery = patientSurgeries.some(surgery =>
       surgery.status?.toLowerCase() === "rejected"
@@ -744,14 +948,13 @@ const approvedDate = formatDate(item?.approvedTime)
                 )}
               </View>
             </View>
-{(user?.patientStatus === 2 || user?.patientStatus === 3) && (user?.roleName !== "triage") && 
-            <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
-              {isOt && 
-   `Approved Date: ${approvedDate}`
-}
-              • Ward: {wardName}
-              
-            </Text>}
+            {(user?.patientStatus === 2 || user?.patientStatus === 3) && (user?.roleName !== "triage") &&
+              <Text style={[styles.sub, { color: COLORS.sub }]} numberOfLines={1}>
+                {isOt &&
+                  `Approved Date: ${approvedDate}`
+                }
+                • Ward: {wardName}
+              </Text>}
 
             <View style={styles.infoRow}>
               <Text
@@ -784,15 +987,18 @@ const approvedDate = formatDate(item?.approvedTime)
             >
               Phone: {phone}
             </Text>
+            <Text
+            style={[styles.sub, { color: COLORS.sub }]}
+            numberOfLines={1}
+          >
+            Added On: {addedDate}
+          </Text>
           </View>
+          
 
           <TouchableOpacity
             style={[styles.viewBtn, { borderColor: COLORS.border }]}
-             onPress={() =>  handleView(item)}
-            // onPress={(e) => {
-            //   e.stopPropagation();
-            //   navigation.navigate("PatientProfile", { id: item.id });
-            // }}
+            onPress={() => handleView(item)}
           >
             <Eye size={16} color={COLORS.text} />
             <Text style={[styles.viewBtnText, { color: COLORS.text }]}>View</Text>
@@ -898,12 +1104,12 @@ const approvedDate = formatDate(item?.approvedTime)
       </View>
     </Modal>
   );
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: COLORS.bg, paddingBottom: Math.max(insets.bottom, 12) }]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         {renderHeader()}
         {showFilters && user?.patientStatus === 1 && renderFilters()}
-        \
 
         {loading ? (
           <View style={styles.loadingWrap}>
@@ -944,6 +1150,7 @@ const approvedDate = formatDate(item?.approvedTime)
         />
       )}
 
+      {renderDateFilterModal()}
       {renderRejectDialog()}
     </SafeAreaView>
   );
@@ -1013,6 +1220,21 @@ const styles = StyleSheet.create({
     marginRight: -16,
     marginTop: Platform.OS === "android" ? -4 : 0,
   },
+  // Date Filter Button Styles
+  dateFilterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    height: 48,
+  },
+  dateFilterButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
   filterButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1036,7 +1258,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     height: 48,
-    // flex: 1,
   },
   addButtonText: {
     color: "#fff",
@@ -1099,6 +1320,92 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     marginRight: -16,
     marginTop: Platform.OS === "android" ? -4 : 0,
+  },
+  // Date Filter Modal Styles
+  dateModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dateModalContent: {
+    width: '90%',
+    maxWidth: 500,
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  dateModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  dateModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  dateInputsContainer: {
+    gap: 16,
+    marginBottom: 12,
+  },
+  dateInputGroup: {
+    gap: 6,
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dateInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  dateIcon: {
+    marginRight: 10,
+  },
+  dateInput: {
+    flex: 1,
+    fontSize: 15,
+    includeFontPadding: false,
+  },
+  dateFormatHint: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginBottom: 20,
+  },
+  dateModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  dateModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    borderWidth: 1.5,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   listContent: {
     paddingHorizontal: 16,

@@ -50,8 +50,9 @@ const GeneralPhysicalExaminationMobile: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const isDark = scheme === "dark";
- const user = useSelector((s: RootState) => s.currentUser);
-const isReadOnly = user?.roleName === "surgeon";
+  const user = useSelector((s: RootState) => s.currentUser);
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
 
   const { generalphysicalExamination, setGeneralPhysicalExamination } =
     usePhysicalExaminationForm() as {
@@ -64,6 +65,7 @@ const isReadOnly = user?.roleName === "surgeon";
   
 
   const toggleField = (key: keyof GeneralPhysicalExaminationState) => {
+    if (isReadOnly) return; // Add check
     const current = Boolean(generalphysicalExamination?.[key]);
     setGeneralPhysicalExamination({ [key]: !current });
   };
@@ -115,7 +117,10 @@ const isReadOnly = user?.roleName === "surgeon";
                     onPress={() => toggleField(item.key)}
                     style={({ pressed }) => [
                       styles.checkboxRow,
-                      { backgroundColor: pressed ? COLORS.brandSoft : "transparent" },
+                      { 
+                        backgroundColor: pressed && !isReadOnly ? COLORS.brandSoft : "transparent",
+                        opacity: isReadOnly ? 0.6 : 1,
+                      },
                     ]}
                   >
                     <View
@@ -203,7 +208,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 110, // extra so buttons are not hidden behind footer
+    paddingBottom: 110,
   },
   card: {
     borderRadius: 16,
@@ -248,8 +253,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
-
-  // Prev / Next inside form
   formNavRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -275,8 +278,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#ffffff",
   },
-
-  // Bottom Footer
   footerWrap: {
     position: "absolute",
     left: 0,

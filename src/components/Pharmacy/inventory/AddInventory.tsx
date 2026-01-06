@@ -99,7 +99,7 @@ const AddInventory: React.FC = ({ navigation }: any) => {
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
   // Fetch inventory data
-  const fetchInventoryData = async () => {
+  const fetchInventoryData = useCallback(async () => {
     if (!user?.hospitalID) return;
 
     try {
@@ -121,8 +121,18 @@ const AddInventory: React.FC = ({ navigation }: any) => {
         data = response.data;
       }
 
-      setExpenseData(data);
-      setFilteredData(data);
+      const transformedData = data.map((item: any) => ({
+        ...item,
+        medicinesList: Array.isArray(item.medicinesList) 
+          ? item.medicinesList.map((medicine: any) => ({
+              ...medicine,
+              expiryDate: item.expiryDate // Add expiryDate from root to each medicine
+            }))
+          : []
+      }));
+
+      setExpenseData(transformedData);
+      setFilteredData(transformedData);
     } catch (error) {
       setExpenseData([]);
       setFilteredData([]);
@@ -130,12 +140,12 @@ const AddInventory: React.FC = ({ navigation }: any) => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user]);
 
   useFocusEffect(
     useCallback(() => {
       fetchInventoryData();
-    }, [user])
+    }, [fetchInventoryData])
   );
 
   const onRefresh = () => {
@@ -148,15 +158,19 @@ const AddInventory: React.FC = ({ navigation }: any) => {
   const calculateStats = (): DashboardStats => {
     const data = Array.isArray(expenseData) ? expenseData : [];
 
-    const today = new Date().toISOString().split("T")[0];
-    const itemsToday = data.filter((item) => {
-      if (!item?.addedOn) return false;
-      try {
-        return formatDate(item.addedOn) === today;
-      } catch {
-        return false;
+    const today = new Date();
+    const todayISO = today.toISOString().split('T')[0];
+  const todayFormatted = `${today.getDate()} ${today.toLocaleString('default', { month: 'short' })} ${today.getFullYear()}`;
+  let itemsToday = 0;
+  data.forEach((item, index) => {
+      if (item?.addedOn) {
+      const itemDateISO = item.addedOn.split('T')[0];
+      const itemDateFormatted = formatDate(item.addedOn);     
+      if (itemDateISO === todayISO || itemDateFormatted === todayFormatted) {
+        itemsToday += 1;
       }
-    }).length;
+    } 
+  });
 
     const categories = new Set<string>();
     data.forEach((item) => {
@@ -384,7 +398,10 @@ const AddInventory: React.FC = ({ navigation }: any) => {
           <View style={styles.searchContainer}>
             <View style={styles.searchInner}>
               <View style={styles.searchLeft}>
-                <SearchIcon size={20} color={COLORS.sub || '#6b7280'} style={styles.searchIcon} />
+                <View style={styles.searchIcon}>
+  <SearchIcon size={20} color={COLORS.sub || '#6b7280'} />
+</View>
+
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Search items, categories, suppliers..."
@@ -606,8 +623,8 @@ clickText: {
   addButtonGradient: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
     borderRadius: 12,
     gap: SPACING.xs,
   },

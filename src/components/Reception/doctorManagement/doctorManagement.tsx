@@ -12,12 +12,13 @@ import {
   SafeAreaView,
   Dimensions,
   Platform,
+  TextInput,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { PlusCircle, Eye } from "lucide-react-native";
+import { PlusCircle, Eye, Search as SearchIcon } from "lucide-react-native";
 import {
   FONT_SIZE,
   FOOTER_HEIGHT,
@@ -61,6 +62,7 @@ const DoctorManagementMobile: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   // creating slots using SlotModal
   const [slotCreating, setSlotCreating] = useState<boolean>(false);
@@ -149,18 +151,35 @@ const DoctorManagementMobile: React.FC = () => {
     fetchDoctors();
   }, [user?.hospitalID, departments, fetchDoctors]);
 
+  /* ------------------------------ Search Filter ----------------------------- */
+
+  const filteredDoctors = useMemo(() => {
+    if (!searchQuery.trim()) return doctors;
+
+    const query = searchQuery.toLowerCase().trim();
+    return doctors.filter(doctor => {
+      return (
+        doctor.name.toLowerCase().includes(query) ||
+        doctor.department.toLowerCase().includes(query)
+      );
+    });
+  }, [doctors, searchQuery]);
+
   /* ------------------------------ Pagination -------------------------------- */
 
   const totalPages = Math.max(
     1,
-    Math.ceil(doctors.length / Math.max(1, page.limit))
+    Math.ceil(filteredDoctors.length / Math.max(1, page.limit))
   );
 
   const pagedDoctors = useMemo(() => {
     const start = (page.page - 1) * page.limit;
     const end = start + page.limit;
-    return doctors.slice(start, end);
-  }, [doctors, page]);
+    return filteredDoctors.slice(start, end);
+  }, [filteredDoctors, page]);
+  useEffect(() => {
+    setPage(prev => ({ ...prev, page: 1 }));
+  }, [searchQuery]);
 
   /* -------------------------- Slots via SlotModal --------------------------- */
 
@@ -356,10 +375,12 @@ const DoctorManagementMobile: React.FC = () => {
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
       <Text style={[styles.emptyTitle, { color: COLORS.text }]}>
-        No doctors found
+        {searchQuery.trim() ? "No doctors found" : "No doctors found"}
       </Text>
       <Text style={[styles.emptySub, { color: COLORS.sub }]}>
-        Please add doctors or check your connection.
+        {searchQuery.trim() 
+          ? "Try a different search term." 
+          : "Please add doctors or check your connection."}
       </Text>
     </View>
   );
@@ -367,7 +388,7 @@ const DoctorManagementMobile: React.FC = () => {
   const renderPaginationBar = () => (
     <View style={[styles.pagination, { borderTopColor: COLORS.border }]}>
       <Text style={[styles.resultsText, { color: COLORS.sub }]}>
-        Results: {doctors.length}
+        Results: {filteredDoctors.length}
       </Text>
 
       <View style={styles.pageRight}>
@@ -442,6 +463,26 @@ const DoctorManagementMobile: React.FC = () => {
         <Text style={[styles.subtitle, { color: COLORS.sub }]}>
           Manage doctor schedules & appointment slots
         </Text>
+        
+        {/* Search Bar */}
+        <View
+          style={[
+            styles.searchWrap,
+            {
+              backgroundColor: COLORS.card,
+              borderColor: COLORS.border,
+            },
+          ]}
+        >
+          <SearchIcon size={18} color={COLORS.sub} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search by doctor name or department"
+            placeholderTextColor={COLORS.placeholder}
+            style={[styles.searchInput, { color: COLORS.text }]}
+          />
+        </View>
       </View>
 
       {/* List */}
@@ -467,7 +508,7 @@ const DoctorManagementMobile: React.FC = () => {
         />
       )}
 
-      {doctors.length > 0 && renderPaginationBar()}
+      {filteredDoctors.length > 0 && renderPaginationBar()}
 
       {/* Fixed footer */}
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
@@ -507,6 +548,21 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: 4,
     fontSize: FONT_SIZE.sm,
+  },
+  searchWrap: {
+    height: 48,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: SPACING.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    includeFontPadding: false,
   },
   listContent: {
     paddingHorizontal: SPACING.md,
@@ -607,7 +663,7 @@ const styles = StyleSheet.create({
   emptySub: {
     fontSize: 14,
     textAlign: "center",
-    paddingHorizontal: responsiveWidth(40),
+    paddingHorizontal: responsiveWidth(0),
   },
   loadingWrap: {
     flex: 1,

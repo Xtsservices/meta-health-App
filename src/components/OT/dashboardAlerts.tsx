@@ -58,7 +58,7 @@ const OTPatientTable: React.FC<Props> = (props) => {
   // ================= Fetch Alerts =================
   const fetchOTAlerts = async () => {
     try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
 
       if (!user?.hospitalID || !token || !user?.roleName) {
         setPatients([]);
@@ -117,19 +117,48 @@ const OTPatientTable: React.FC<Props> = (props) => {
   }, [patients, type, page]);
 
   // ================= View Patient =================
-  const handleView = (patient: OTAlert) => {
-    try {
-      if (patient?.status) {
-        const key = patient.status.toUpperCase() as keyof typeof OTPatientStages;
-        if (OTPatientStages[key]) {
-          setPatientStage(OTPatientStages[key]);
+// In OTPatientTable.tsx - update the handleView function to be more robust:
+const handleView = (patient: OTAlert) => {
+  try {
+    if (patient?.status) {
+      const key = patient.status.toUpperCase() as keyof typeof OTPatientStages;
+      if (OTPatientStages[key]) {
+        setPatientStage(OTPatientStages[key]);
+        
+        // Check patient type and navigate accordingly
+        const patientType = patient.patientType?.toLowerCase();
+        
+        if (patient.status === "approved") {
+          if (patientType === "elective") {
+            // Navigate to Elective-specific tab
+            navigation.navigate("PatientProfile", { 
+              id: patient.patientID,
+              patientType: "elective", // Add this param for PatientProfile
+              initialTab: "electiveTab"
+            });
+          } else if (patientType === "emergency") {
+            // Navigate to Emergency-specific tab
+            navigation.navigate("PatientProfile");
+          } else {
+            // Default to surgery tab
+            navigation.navigate("PatientProfile");
+          }
+        } else {
+          // For other statuses, use default navigation
+          navigation.navigate("PatientProfile", { 
+            id: patient.patientID,
+            patientType: patientType
+          });
         }
       }
+    } else {
+      // Fallback if no status
       navigation.navigate("PatientProfile", { id: patient.patientID });
-    } catch (err: any) {
-      dispatch(showError("Error navigating to patient"));
     }
-  };
+  } catch (err: any) {
+    dispatch(showError("Error navigating to patient"));
+  }
+};
 
   // ================= View All =================
   const handleViewAll = () => {

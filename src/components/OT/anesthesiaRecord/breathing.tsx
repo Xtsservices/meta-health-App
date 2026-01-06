@@ -1,6 +1,6 @@
 // src/screens/ot/anesthesia/BreathingFormMobile.tsx
 
-import React, { FC, useState } from "react";
+import React, { FC, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,15 +13,28 @@ import {
   Modal,
   FlatList,
   TouchableOpacity,
+  Dimensions,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import useAnesthesiaForm from "../../../utils/useAnesthesiaRecordForm";
 import { COLORS } from "../../../utils/colour";
+import { useNavigation } from "@react-navigation/native";
+import Footer from "../../dashboard/footer";
+
+// Get screen dimensions
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// Dynamic scaling functions
+const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
+const verticalScale = (size: number) => (SCREEN_HEIGHT / 812) * size;
+const moderateScale = (size: number, factor = 0.5) =>
+  size + (scale(size) - size) * factor;
 
 type Props = {
   onNext?: () => void;
+  brandColor?: string;
 };
-
-
 
 /** ---------- Generic Select Field (modal dropdown) ---------- */
 type SelectFieldProps = {
@@ -57,7 +70,7 @@ const SelectField: React.FC<SelectFieldProps> = ({
         <Text
           style={{
             color: value ? COLORS.text : COLORS.sub,
-            fontSize: 15,
+            fontSize: moderateScale(15),
             fontWeight: value ? "600" : "400",
           }}
         >
@@ -99,6 +112,7 @@ const SelectField: React.FC<SelectFieldProps> = ({
                       style={{
                         color: selected ? "#fff" : COLORS.text,
                         fontWeight: selected ? "800" : "500",
+                        fontSize: moderateScale(15),
                       }}
                     >
                       {item}
@@ -113,7 +127,13 @@ const SelectField: React.FC<SelectFieldProps> = ({
                 onPress={() => setOpen(false)}
                 style={[styles.modalBtn, { backgroundColor: COLORS.chip }]}
               >
-                <Text style={{ color: COLORS.text, fontWeight: "700" }}>
+                <Text
+                  style={{
+                    color: COLORS.text,
+                    fontWeight: "700",
+                    fontSize: moderateScale(14),
+                  }}
+                >
                   Cancel
                 </Text>
               </Pressable>
@@ -126,8 +146,11 @@ const SelectField: React.FC<SelectFieldProps> = ({
 };
 
 /** ---------- Main Breathing / Ventilation Screen ---------- */
-const BreathingFormMobile: FC<Props> = ({ onNext }) => {
+const BreathingFormMobile: FC<Props> = ({ onNext, brandColor }) => {
+  const insets = useSafeAreaInsets();
   const { breathingForm, setBreathingForm } = useAnesthesiaForm();
+  const brand = brandColor || COLORS.brand;
+  const navigation = useNavigation<any>();
 
   // 🔹 Options (same as web AnesthesiaRecordData)
   const breathingSystemOptions = ["Circle", "Other", "T-Pipe", "Bain"];
@@ -141,31 +164,69 @@ const BreathingFormMobile: FC<Props> = ({ onNext }) => {
     setBreathingForm({ [field]: value });
   };
 
-  const handleTextChange = (field: keyof typeof breathingForm, value: string) => {
+  const handleTextChange = (
+    field: keyof typeof breathingForm,
+    value: string
+  ) => {
     setBreathingForm({ [field]: value });
   };
 
   const handleNextPress = () => {
     if (onNext) {
       onNext();
+    } else {
+      navigation.navigate("Monitors" as never);
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-    >
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={styles.heading}>Breathing / Ventilation</Text>
+  const canNext = useMemo(
+    () =>
+      !!(
+        breathingForm.breathingSystem ||
+        breathingForm.filter ||
+        breathingForm.ventilation ||
+        breathingForm.vt ||
+        breathingForm.rr ||
+        breathingForm.vm ||
+        breathingForm.pressure
+      ),
+    [breathingForm]
+  );
 
-        {/* Card */}
-        <View style={styles.card}>
+  return (
+    <View style={[styles.safeArea, { backgroundColor: COLORS.bg }]}>
+      <View style={styles.root}>
+        <KeyboardAwareScrollView
+          enableOnAndroid
+          enableAutomaticScroll
+          keyboardOpeningTime={0}
+          extraScrollHeight={Platform.select({
+            ios: verticalScale(24),
+            android: verticalScale(80),
+          })}
+          extraHeight={Platform.select({
+            ios: 0,
+            android: verticalScale(100),
+          })}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[
+            styles.scrollInner,
+            { paddingBottom: verticalScale(120) },
+          ]}
+        >
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: COLORS.card, borderColor: COLORS.border },
+            ]}
+          >
+            <Text style={styles.header}>Breathing / Ventilation</Text>
+            <Text style={styles.subHeader}>
+              Configure breathing system, filters, ventilation mode and
+              parameters. Your choices are stored in the anesthesia record
+              store.
+            </Text>
+
           {/* Breathing System */}
           <SelectField
             label="Breathing System"
@@ -197,7 +258,7 @@ const BreathingFormMobile: FC<Props> = ({ onNext }) => {
               <TextInput
                 style={styles.input}
                 placeholder="Enter VT"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={COLORS.sub}
                 keyboardType="numeric"
                 value={breathingForm.vt}
                 onChangeText={(txt) => handleTextChange("vt", txt)}
@@ -208,7 +269,7 @@ const BreathingFormMobile: FC<Props> = ({ onNext }) => {
               <TextInput
                 style={styles.input}
                 placeholder="Enter RR"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={COLORS.sub}
                 keyboardType="numeric"
                 value={breathingForm.rr}
                 onChangeText={(txt) => handleTextChange("rr", txt)}
@@ -223,7 +284,7 @@ const BreathingFormMobile: FC<Props> = ({ onNext }) => {
               <TextInput
                 style={styles.input}
                 placeholder="Enter VM"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={COLORS.sub}
                 keyboardType="numeric"
                 value={breathingForm.vm}
                 onChangeText={(txt) => handleTextChange("vm", txt)}
@@ -234,29 +295,45 @@ const BreathingFormMobile: FC<Props> = ({ onNext }) => {
               <TextInput
                 style={styles.input}
                 placeholder="Enter pressure"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={COLORS.sub}
                 keyboardType="numeric"
                 value={breathingForm.pressure}
                 onChangeText={(txt) => handleTextChange("pressure", txt)}
               />
             </View>
           </View>
-        </View>
-      </ScrollView>
 
-      {/* Bottom Next button */}
-      <View style={styles.footer}>
+      {/* Next button inside form */}
+      <View style={styles.formNavRow}>
         <Pressable
           onPress={handleNextPress}
+                disabled={!canNext}
           style={({ pressed }) => [
-            styles.nextButton,
-            { opacity: pressed ? 0.85 : 1 },
+            styles.nextBtn,
+            {
+                    backgroundColor: canNext ? brand : "#cbd5e1",
+                    opacity: pressed && canNext ? 0.8 : 1,
+                  },
           ]}
         >
-          <Text style={styles.nextButtonText}>Next</Text>
+          <Text style={styles.nextText}>Next</Text>
         </Pressable>
+            </View>
+          </View>
+        </KeyboardAwareScrollView>
+
+        {/* Bottom app footer */}
+        <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+          <Footer active={"dashboard"} brandColor={brand} />
+        </View>
+        {insets.bottom > 0 && (
+          <View
+            pointerEvents="none"
+            style={[styles.navShield, { height: insets.bottom }]}
+          />
+        )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -264,136 +341,164 @@ export default BreathingFormMobile;
 
 /** ---------- Styles ---------- */
 const styles = StyleSheet.create({
-  flex: {
+  safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 32,
+  root: {
+    flex: 1,
   },
-  heading: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0f172a",
-    marginBottom: 12,
+  scrollInner: {
+    paddingHorizontal: scale(16),
+    paddingTop: verticalScale(16),
   },
   card: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: moderateScale(16),
     borderWidth: 1,
-    borderColor: COLORS.border,
+    padding: moderateScale(14),
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
-    shadowRadius: 6,
+    shadowRadius: 4,
     elevation: 2,
+    marginBottom:moderateScale(100),
+  },
+  header: {
+    fontSize: moderateScale(16),
+    fontWeight: "800",
+    color: COLORS.text,
+    marginBottom: verticalScale(4),
+  },
+  subHeader: {
+    fontSize: moderateScale(12),
+    color: COLORS.sub,
+    marginBottom: verticalScale(10),
+    lineHeight: moderateScale(18),
   },
 
   // shared with SelectField
   block: {
-    marginTop: 10,
+    marginTop: verticalScale(10),
   },
   label: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: "800",
     color: COLORS.text,
-    marginBottom: 6,
+    marginBottom: verticalScale(6),
   },
   selectInput: {
     borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(10),
     justifyContent: "center",
+    minHeight: verticalScale(44),
   },
 
   row: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 12,
+    gap: scale(12),
+    marginTop: verticalScale(12),
   },
   col: {
     flex: 1,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: "#111827",
-    backgroundColor: "#f9fafb",
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: moderateScale(10),
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(8),
+    fontSize: moderateScale(14),
+    color: COLORS.text,
+    backgroundColor: COLORS.field,
+    minHeight: verticalScale(44),
   },
 
-  footer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    backgroundColor: "#ffffff",
-  },
-  nextButton: {
-    height: 46,
-    borderRadius: 999,
-    backgroundColor: COLORS.brand,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  nextButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-
-  // modal styles (same vibe as AnesthesiaRecordFormScreen)
+  // modal styles
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
+    padding: scale(16),
   },
   modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 16,
-    padding: 14,
+    width: SCREEN_WIDTH * 0.9,
+    maxWidth: scale(420),
+    borderRadius: moderateScale(16),
+    padding: moderateScale(14),
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   modalTitle: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: "800",
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   modalList: {
-    maxHeight: 260,
+    maxHeight: verticalScale(260),
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 12,
+    borderRadius: moderateScale(12),
   },
   optionRow: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(12),
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
+    minHeight: verticalScale(44),
+    justifyContent: "center",
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 10,
-    gap: 10,
+    marginTop: verticalScale(10),
+    gap: scale(10),
   },
   modalBtn: {
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: moderateScale(12),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(10),
     alignItems: "center",
     justifyContent: "center",
+    minHeight: verticalScale(40),
+  },
+
+  // Next inside form
+  formNavRow: {
+    marginTop: verticalScale(24),
+  },
+  nextBtn: {
+    borderRadius: moderateScale(999),
+    paddingVertical: verticalScale(14),
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: verticalScale(48),
+  },
+  nextText: {
+    color: "#fff",
+    fontSize: moderateScale(15),
+    fontWeight: "800",
+  },
+
+  // Bottom Footer
+  footerWrap: {
+    left: 0,
+    right: 0,
+    backgroundColor: "#ffffff",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#e2e8f0",
+    zIndex: 10,
+    elevation: 6,
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#ffffff",
+    zIndex: 9,
   },
 });

@@ -21,6 +21,7 @@ import { FileTextIcon, PlusIcon, Trash2Icon, UserIcon } from "../../../utils/Svg
 import { formatDateTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import usePreOpForm from "../../../utils/usePreOpForm";
+import usePostOPStore from "../../../utils/usePostopForm"; // ADD THIS IMPORT
 import { COLORS } from "../../../utils/colour";
 import { showSuccess } from "../../../store/toast.slice";
 
@@ -83,17 +84,22 @@ export default function TestsScreen() {
   const currentpatient = useSelector(selectCurrentPatient);
   const timeline = currentpatient?.patientTimeLineID;
   const [list, setList] = useState<TestRow[]>([]);
-  const {
-    tests
-  } = usePreOpForm();
+  
+  // GET TESTS FROM BOTH STORES
+  const { tests: preOpTests } = usePreOpForm();
+  const { tests: postOpTests } = usePostOPStore(); // GET POST-OP TESTS
+  
   const activetab = route.params?.currentTab;
   const shouldShowPreOpTests = activetab === "PreOpRecord";
+  const shouldShowPostOpTests = activetab === "PostOpRecord";
   
   let readOnly = false;
-  if ((shouldShowPreOpTests && user?.roleName === "surgeon") || activetab === "PatientFile") {
+  if (
+    (shouldShowPreOpTests && user?.roleName === "surgeon") || 
+    currentpatient?.status === "approved" ||
+    activetab === "PatientFile"
+  ) {
     readOnly = true;
-  } else if (shouldShowPreOpTests && user?.roleName !== "surgeon") {
-    readOnly = false;
   }
   
   const [loading, setLoading] = useState(false);
@@ -104,30 +110,140 @@ export default function TestsScreen() {
   const [viewRole, setViewRole] = useState<string>("");
   const [viewGender, setViewGender] = useState<string>("");
   const [loadingUserData, setLoadingUserData] = useState(false);
-  const dispatch = useDispatch(); 
+  const dispatch = useDispatch();
+
 const load = useCallback(async () => {
   if (!currentpatient?.id) return;
   setLoading(true);
   
+  console.log("Loading tests for tab:", activetab);
+  
+  // PRE-OP TESTS
   if (shouldShowPreOpTests) {
-    // Convert pre-op tests to TestRow format
-    const preOpTestRows: TestRow[] = (tests || []).map((test: any, index: number) => ({
-      id: index + 1, // Temporary ID
+    console.log("Loading pre-op tests from API...");
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const res = await AuthFetch(`ot/${user?.hospitalID}/${timeline}/preopRecord`, token) as any;
+      
+      console.log("Pre-op API response:", res);
+      
+      if (res?.status === "success" && res?.data?.length > 0) {
+        const preopData = res.data[0]?.preopRecord;
+        const preOpTestsFromAPI = preopData?.tests || [];
+        
+        console.log("Found pre-op tests from API:", preOpTestsFromAPI);
+        
+        const preOpTestRows: TestRow[] = preOpTestsFromAPI.map((test: any, index: number) => ({
+      id: index + 1,
       ICD_Code: test.ICD_Code || "",
       test: test.test || "",
-      loinc_num_: test.ICD_Code || "", // Use ICD_Code as loinc_num_ for pre-op tests
-      category: "", // Not applicable for pre-op
-      status: "", // Not applicable for pre-op
+      loinc_num_: test.ICD_Code || "",
+      category: "Pre-Op Tests",
+      status: "pending",
       notes: test.testNotes || null,
+          addedOn: null,
+          userID: null,
+          alertStatus: null,
     }));
     setList(preOpTestRows);
+      } else {
+        const preOpTestRows: TestRow[] = (preOpTests || []).map((test: any, index: number) => ({
+          id: index + 1,
+          ICD_Code: test.ICD_Code || "",
+          test: test.test || "",
+          loinc_num_: test.ICD_Code || "",
+          category: "Pre-Op Tests",
+          status: "pending",
+          notes: test.testNotes || null,
+          addedOn: null,
+          userID: null,
+          alertStatus: null,
+        }));
+        setList(preOpTestRows);
+      }
+    } catch (error) {
+      const preOpTestRows: TestRow[] = (preOpTests || []).map((test: any, index: number) => ({
+        id: index + 1,
+        ICD_Code: test.ICD_Code || "",
+        test: test.test || "",
+        loinc_num_: test.ICD_Code || "",
+        category: "Pre-Op Tests",
+        status: "pending",
+        notes: test.testNotes || null,
+        addedOn: null,
+        userID: null,
+        alertStatus: null,
+      }));
+      setList(preOpTestRows);
+    }
+    setLoading(false);
+    return;
+  }
+  
+  // POST-OP TESTS
+  if (shouldShowPostOpTests) {
+  try {
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+    const res = await AuthFetch(`ot/${user?.hospitalID}/${timeline}/postopRecord`, token) as any;
+      
+      console.log("Post-op API response:", res);
+      
+      if (res?.status === "success" && res?.data?.length > 0) {
+        const postopData = res.data[0]?.postopRecord;
+        const postOpTestsFromAPI = postopData?.tests || [];
+        
+        console.log("Found post-op tests from API:", postOpTestsFromAPI);
+        
+        const postOpTestRows: TestRow[] = postOpTestsFromAPI.map((test: any, index: number) => ({
+          id: index + 1,
+          ICD_Code: test.ICD_Code || "",
+          test: test.test || "",
+          loinc_num_: test.ICD_Code || "",
+          category: "Post-Op Tests",
+          status: "pending",
+          notes: test.testNotes || null,
+          addedOn: null,
+          userID: null,
+          alertStatus: null,
+        }));
+        setList(postOpTestRows);
+      } else {
+        const postOpTestRows: TestRow[] = (postOpTests || []).map((test: any, index: number) => ({
+          id: index + 1,
+          ICD_Code: test.ICD_Code || "",
+          test: test.test || "",
+          loinc_num_: test.ICD_Code || "",
+          category: "Post-Op Tests",
+          status: "pending",
+          notes: test.testNotes || null,
+          addedOn: null,
+          userID: null,
+          alertStatus: null,
+        }));
+        setList(postOpTestRows);
+      }
+    } catch (error) {
+      const postOpTestRows: TestRow[] = (postOpTests || []).map((test: any, index: number) => ({
+        id: index + 1,
+        ICD_Code: test.ICD_Code || "",
+        test: test.test || "",
+        loinc_num_: test.ICD_Code || "",
+        category: "Post-Op Tests",
+        status: "pending",
+        notes: test.testNotes || null,
+        addedOn: null,
+        userID: null,
+        alertStatus: null,
+      }));
+      setList(postOpTestRows);
+    }
     setLoading(false);
     return;
   }
   
   try {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
-    const res = await AuthFetch(`test/${currentpatient.id}`, token) as any; // Add 'as any'
+    const res = await AuthFetch(`test/${currentpatient.id}`, token) as any;
     
     if (res?.data?.message === "success") {
       const rows: TestRow[] = (res?.data?.tests || []).map((t: any) => ({
@@ -152,7 +268,7 @@ const load = useCallback(async () => {
   } finally {
     setLoading(false);
   }
-}, [currentpatient?.id, user?.token, shouldShowPreOpTests, tests]);
+}, [currentpatient?.id, user?.token, timeline, shouldShowPreOpTests, shouldShowPostOpTests, preOpTests, postOpTests, activetab]);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,7 +283,6 @@ const fetchUserData = async (userId: number) => {
   try {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     
-    // Add 'as any' to fix TypeScript error
     const res = await AuthFetch(`user/${userId}`, token) as any;
     
     if (res?.data?.message === "success") {
@@ -175,7 +290,6 @@ const fetchUserData = async (userId: number) => {
       
       // Fetch department name
       if (userData.departmentID) {
-        // Add 'as any' here too
         const deptRes = await AuthFetch(`department/singledpt/${userData.departmentID}`, token) as any;
         if (deptRes?.data?.message === "success") {
           setViewDepartment(deptRes.data.department[0]?.name || "");
@@ -241,14 +355,21 @@ const fetchUserData = async (userId: number) => {
     navigation.navigate("Reports");
   };
 
-  const renderItem = ({ item, index }: { item: TestRow; index: number }) => (
+const renderItem = ({ item, index }: { item: TestRow; index: number }) => {
+  // Determine the correct category label
+  const categoryLabel = shouldShowPreOpTests ? "Pre-Op" : 
+                       shouldShowPostOpTests ? "Post-Op" : 
+                       item.category;
+  
+  return (
     <View style={[styles.row, { borderColor: COLORS.border }]}>
       <View style={styles.rowLeft}>
         <View style={styles.headerRow}>
           <Text style={[styles.title, { color: COLORS.text }]}>
             {index + 1}. {cap(item?.test || "")}
           </Text>
-          {item?.status === "completed" ? (
+          {/* Only show view report for regular tests, not pre/post-op */}
+          {item?.status === "completed" && activetab === "PatientFile" ? (
             <Pressable onPress={navigateToReports} style={styles.viewReportBtn}>
               <FileTextIcon size={moderateScale(16)} color={COLORS.brand} />
               <Text style={[styles.viewReportText, { color: COLORS.brand }]}>View Report</Text>
@@ -263,11 +384,19 @@ const fetchUserData = async (userId: number) => {
             <Text style={[styles.detailLabel, { color: COLORS.sub }]}>LOINC:</Text>
             <Text style={[styles.detailValue, { color: COLORS.text }]}>{item?.loinc_num_ || item?.ICD_Code}</Text>
           </View>
-          {!shouldShowPreOpTests && 
+          
+          {/* Show Type label for Pre-Op/Post-Op, Department for regular tests */}
+          {activetab !== "PatientFile" ? (
+            <View style={styles.detailItem}>
+              <Text style={[styles.detailLabel, { color: COLORS.sub }]}>Type:</Text>
+              <Text style={[styles.detailValue, { color: COLORS.text }]}>{categoryLabel}</Text>
+            </View>
+          ) : (
           <View style={styles.detailItem}>
             <Text style={[styles.detailLabel, { color: COLORS.sub }]}>Department:</Text>
             <Text style={[styles.detailValue, { color: COLORS.text }]}>{cap(item?.category || "")}</Text>
-          </View>}
+          </View>
+          )}
         </View>
 
         {item?.notes && item?.notes?.trim() !== "" && (
@@ -277,7 +406,8 @@ const fetchUserData = async (userId: number) => {
           </View>
         )}
         
-        {!shouldShowPreOpTests &&
+        {/* Only show metadata for regular tests, not pre/post-op */}
+        {activetab === "PatientFile" && (
         <View style={styles.metaContainer}>
           <Text style={[styles.metaText, { color: COLORS.sub }]}>
             Added: {formatDateTime(item?.addedOn)}
@@ -289,24 +419,24 @@ const fetchUserData = async (userId: number) => {
               >
                 <UserIcon size={moderateScale(12)} color={COLORS.brand} />
                 <Text style={[styles.userText, { color: COLORS.brand }]}>
-                  Added By: {user.firstName} {user.lastName}
+                  Added By: {user?.firstName} {user?.lastName}
                 </Text>
               </Pressable>
             )}
           </View>
-        }
+        )}
       </View>
       
-      {(!item?.alertStatus || item?.alertStatus?.toLowerCase() === "pending") && (
+      {!readOnly && (shouldShowPreOpTests || shouldShowPostOpTests) && (
         <Pressable onPress={() => onDelete(item)} style={styles.deleteBtn} hitSlop={8}>
           <Trash2Icon size={moderateScale(18)} color={COLORS.danger} />
         </Pressable>
       )}
     </View>
   );
+};
 
   const empty = !loading && list?.length === 0;
-
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
       {loading ? (
@@ -315,15 +445,23 @@ const fetchUserData = async (userId: number) => {
         </View>
       ) : empty ? (
         <View style={styles.center}>
-          <Text style={[styles.emptyText, { color: COLORS.sub }]}>No tests prescribed yet</Text>
-          {!readOnly && user?.roleName !== "reception" && currentpatient.ptype != 21 && 
+          <Text style={[styles.emptyText, { color: COLORS.sub }]}>
+            {shouldShowPreOpTests ? "No pre-op tests prescribed yet" :
+             shouldShowPostOpTests ? "No post-op tests prescribed yet" :
+             "No tests prescribed yet"}
+          </Text>
+          {!readOnly && user?.roleName !== "reception" && currentpatient?.ptype != 21 && 
           <Pressable
             style={[styles.cta, { backgroundColor: COLORS.button }]}
             onPress={() => navigation.navigate("AddTests" as never, {currentTab: activetab})}
           >
             <PlusIcon size={moderateScale(18)} color={COLORS.buttonText} />
-            <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>Add Test</Text>
-          </Pressable>
+            <Text style={[styles.ctaText, { color: COLORS.buttonText }]}>
+                {shouldShowPreOpTests ? "Add Pre-Op Test" :
+                 shouldShowPostOpTests ? "Add Post-Op Test" :
+                 "Add Test"}
+              </Text>
+            </Pressable>
           }
         </View>
       ) : (
@@ -339,7 +477,7 @@ const fetchUserData = async (userId: number) => {
             ItemSeparatorComponent={() => <View style={{ height: moderateScale(12) }} />}
             showsVerticalScrollIndicator={false}
           />
-          {!readOnly && user?.roleName !== "reception" && currentpatient.ptype != 21 &&
+          {!readOnly && user?.roleName !== "reception" && currentpatient?.ptype != 21 &&
           <Pressable
             style={[styles.fab, { 
               backgroundColor: COLORS.button,
@@ -664,7 +802,7 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14) 
   },
   footerWrap: {
-    // position: 'absolute',
+    position: 'absolute',
     left: 0,
     right: 0,
     justifyContent: "center",

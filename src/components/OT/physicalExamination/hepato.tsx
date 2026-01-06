@@ -28,7 +28,7 @@ interface HepatoState {
   galbladderDS: boolean;
   jaundice: boolean;
   cirrhosis: boolean;
-  
+ 
 }
 
 const CHECKBOX_ITEMS: { key: keyof HepatoState; label: string }[] = [
@@ -45,10 +45,9 @@ const Hepato: React.FC = () => {
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const isDark = scheme === "dark";
-
-   const user = useSelector((s: RootState) => s.currentUser);
-const isReadOnly = user?.roleName === "surgeon";
+  const user = useSelector((s: RootState) => s.currentUser);
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
 
   const { hepato, setHepato } =
     usePhysicalExaminationForm() 
@@ -56,6 +55,7 @@ const isReadOnly = user?.roleName === "surgeon";
   
 
   const toggleField = (key: keyof HepatoState) => {
+    if (isReadOnly) return; // Add check
     const current = Boolean(hepato?.[key]);
     setHepato({ [key]: !current });
   };
@@ -90,6 +90,9 @@ const isReadOnly = user?.roleName === "surgeon";
               { backgroundColor: COLORS.card, borderColor: COLORS.border },
             ]}
           >
+            <Text style={[styles.title, { color: COLORS.text }]}>
+              Hepato
+            </Text>
             <Text style={[styles.subtitle, { color: COLORS.sub }]}>
               Select all applicable findings
             </Text>
@@ -104,7 +107,10 @@ const isReadOnly = user?.roleName === "surgeon";
                     onPress={() => toggleField(item.key)}
                     style={({ pressed }) => [
                       styles.checkboxRow,
-                      { backgroundColor: pressed ? COLORS.brandSoft : "transparent" },
+                      { 
+                        backgroundColor: pressed && !isReadOnly ? COLORS.brandSoft : "transparent",
+                        opacity: isReadOnly ? 0.6 : 1,
+                      },
                     ]}
                   >
                     <View

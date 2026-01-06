@@ -36,7 +36,7 @@ export default function PostOpNotesScreen() {
   }, [localNotes]);
 
   const handleNext = () => {
-    navigation.navigate("PostOpTestsScreen" as never, {
+    navigation.navigate("Tests" as never, {
       currentTab: "PostOpRecord",
     });
   };

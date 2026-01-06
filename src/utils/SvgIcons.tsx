@@ -1,6 +1,6 @@
 // components/common/SvgIcons.tsx
 import React from 'react';
-import Svg, { Path, G, Rect, Circle, Line } from 'react-native-svg';
+import Svg, { Path, G, Rect, Circle, Line, Polyline } from 'react-native-svg';
 
 export const FileTextIcon = ({ size = 24, color = "#000000" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -820,5 +820,63 @@ export const PanelRightOpenIcon = ({ size = 24, color = "#000000" }) => (
     <Rect x="3" y="3" width="18" height="18" rx="2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
     <Line x1="15" y1="3" x2="15" y2="21" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
     <Path d="M10 15l-3-3 3-3" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+  </Svg>
+);
+export const ShareIcon = ({ size = 24, color = "#000000" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path 
+      d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" 
+      stroke={color} 
+      strokeWidth={2} 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+    <Polyline 
+      points="16 6 12 2 8 6" 
+      stroke={color} 
+      strokeWidth={2} 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+    <Line 
+      x1="12" 
+      y1="2" 
+      x2="12" 
+      y2="15" 
+      stroke={color} 
+      strokeWidth={2} 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+export const PrintIcon = ({ size = 24, color = "#000000" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path 
+      d="M6 9V2h12v7" 
+      stroke={color} 
+      strokeWidth={2} 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+    <Path 
+      d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" 
+      stroke={color} 
+      strokeWidth={2} 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
+    <Rect 
+      x="6" 
+      y="14" 
+      width="12" 
+      height="8" 
+      rx="1" 
+      stroke={color} 
+      strokeWidth={2} 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    />
   </Svg>
 );

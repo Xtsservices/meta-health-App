@@ -85,12 +85,23 @@ const ScheduleScreen: React.FC<Props> = ({ type = "standalone" }) => {
   const dispatch = useDispatch();
 
   const user = useSelector((s: RootState) => s.currentUser);
+    const currentPatient = useSelector((s: RootState) => s.currentPatient);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+const isCurrentPatientInSchedule = useMemo(() => {
+  if (!currentPatient?.pID) return false;
+
+  return events.some(
+    (ev) =>
+      String(ev.extendedProps?.patientId) === String(currentPatient.pID)
+  );
+}, [events, currentPatient?.pID]);
+
 
   // Determine if we should show FAB and footer
-  const showFabAndFooter = type === "standalone";
+  const showFabAndFooter =
+ type === "standalone" && !isCurrentPatientInSchedule;
   const isDashboard = type === "dashboard";
 
   const fetchEvents = useCallback(async (isPull = false) => {
@@ -288,11 +299,11 @@ const ScheduleScreen: React.FC<Props> = ({ type = "standalone" }) => {
       )}
 
       {/* FAB button above footer - only show for standalone */}
-      {showFabAndFooter && (
+      {showFabAndFooter && !isCurrentPatientInSchedule && (
         <Pressable
           style={[
             styles.fab,
-            { bottom: insets.bottom + 72 }, // adjust relative to footer height
+            { bottom: insets.bottom + 72 },
           ]}
           onPress={handleAddPress}
         >

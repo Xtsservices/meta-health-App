@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,10 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  Image,
+  Animated,
+  Easing,
+  Pressable,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,12 +33,14 @@ import {
   PanelRightOpen,
   AlertTriangle,
   Stethoscope,
+  X,
+  Bell,
+  DollarSign,
 } from "lucide-react-native";
 
 import { RootState } from "../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../auth/auth";
-import Sidebar, { SidebarItem } from "../Sidebar/sidebarOpd";
 import Footer from "../dashboard/footer";
 import { showError } from "../../store/toast.slice";
 import PatientsList from "../dashboard/patientsList";
@@ -61,8 +67,48 @@ type SurgeonCounts = {
   todayAddedSurgeries: number;
 };
 
-const { width: W } = Dimensions.get("window");
-const isTablet = W >= 768;
+export type SidebarItem = {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  onPress: () => void;
+  variant?: "default" | "danger" | "muted";
+  isAlert?: boolean;
+  alertCount?: number;
+};
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const isTablet = SCREEN_WIDTH >= 768;
+const isSmallDevice = SCREEN_WIDTH < 375;
+const isExtraSmallDevice = SCREEN_WIDTH < 350;
+
+// Responsive utilities
+const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+};
+
+const FONT_SIZE = {
+  xs: 10,
+  sm: 12,
+  md: 14,
+  lg: 16,
+  xl: 18,
+  xxl: 24,
+};
+
+const ICON_SIZE = {
+  xs: 16,
+  sm: 20,
+  md: 24,
+  lg: 30,
+  xl: 36,
+};
+
+const FOOTER_HEIGHT = 70;
 
 // OT User Types
 enum OTUserTypes {
@@ -74,6 +120,224 @@ enum OTUserTypes {
 const NOW = new Date();
 const CURRENT_MONTH = NOW.getMonth() + 1;
 const CURRENT_YEAR = NOW.getFullYear();
+
+/* -------------------------- Sidebar Component -------------------------- */
+const SidebarButton: React.FC<{
+  item: SidebarItem;
+  isActive?: boolean;
+  onPress: () => void;
+}> = ({ item, isActive = false, onPress }) => {
+  const Icon = item.icon;
+  const color = item.variant === "danger" ? "#b91c1c" : 
+                item.variant === "muted" ? "#475569" : 
+                isActive ? "#14b8a6" : "#0b1220";
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.sidebarButton,
+        isActive && styles.sidebarButtonActive,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={styles.buttonContent}>
+        <Icon size={20} color={color} />
+        <Text style={[styles.buttonText, { color }]}>{item.label}</Text>
+        {item.isAlert && (item.alertCount ?? 0) > 0 && (
+          <View style={styles.alertBadge}>
+            <Text style={styles.alertText}>{item.alertCount}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+/* -------------------------- Avatar Component -------------------------- */
+const Avatar: React.FC<{ name?: string; uri?: string; size?: number }> = ({
+  name = "",
+  uri,
+  size = 46,
+}) => {
+  const initial = (name || "").trim().charAt(0).toUpperCase() || "U";
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={styles.avatarText}>{initial}</Text>
+    </View>
+  );
+};
+
+/* -------------------------- Main Sidebar Component -------------------------- */
+const Sidebar: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  userName?: string;
+  userImage?: string;
+  onProfile: () => void;
+  items: SidebarItem[];
+  bottomItems: SidebarItem[];
+  width?: number;
+  onAlertPress?: () => void;
+}> = ({
+  open,
+  onClose,
+  userName,
+  userImage,
+  onProfile,
+  items,
+  bottomItems,
+  width = Math.min(320, SCREEN_WIDTH * 0.82),
+  onAlertPress,
+}) => {
+  const user = useSelector((state: RootState) => state.currentUser);
+  const slide = useRef(new Animated.Value(-width)).current;
+  const [alertCount, setAlertCount] = React.useState(0);
+
+
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: open ? 0 : -width,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [open, slide, width]);
+
+  // Group items by section for better organization
+  const overviewItems = items?.filter(item => 
+    item.key === "dash"
+  ) ?? [];
+  
+  const operationsItems = items?.filter(item => 
+    ["slist", "emer", "ele", "mgmt"].includes(item.key)
+  ) ?? [];
+  
+  const supportItems = items?.filter(item => 
+    item.key === "help"
+  ) ?? [];
+  return (
+    <Modal transparent visible={open} animationType="none" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <Animated.View style={[styles.sidebarContainer, { width, transform: [{ translateX: slide }] }]}>
+        
+        {/* Header */}
+        <View style={styles.sidebarHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <X size={24} color="#0b1220" />
+          </TouchableOpacity>
+
+          {/* User Profile Section */}
+          <TouchableOpacity style={styles.userProfileSection} onPress={onProfile}>
+            <Avatar name={userName} uri={userImage} size={50} />
+            <View style={styles.userInfo}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {userName || "User"}
+              </Text>
+              <Text style={styles.userMetaId}>
+                Meta Health ID: {user?.id || "N/A"}
+              </Text>
+              <Text style={styles.userDepartment}>Operation Theatre</Text>
+              
+              <Text style={styles.viewProfileText}>
+                View Profile
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Navigation Sections */}
+        <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
+          
+          {/* Overview Section */}
+          {overviewItems?.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Overview</Text>
+              {overviewItems?.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Operations Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Operations</Text>
+
+            {operationsItems?.map((item) => (
+              <SidebarButton
+                key={item.key}
+                item={item}
+                onPress={() => {
+                  onClose();
+                  item.onPress();
+                }}
+              />
+            ))}
+          </View>
+
+          {/* Support Section */}
+          {supportItems?.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Support</Text>
+              {supportItems?.map((item) => (
+                <SidebarButton
+                  key={item.key}
+                  item={item}
+                  onPress={() => {
+                    onClose();
+                    item.onPress();
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Bottom Actions */}
+        <View style={styles.bottomActions}>
+          {bottomItems?.map((item) => (
+            <TouchableOpacity 
+              key={item.key}
+              style={[
+                styles.bottomButton,
+                item.variant === "danger" ? styles.logoutButton : styles.modulesButton
+              ]}
+              onPress={() => {
+                onClose();
+                item.onPress();
+              }}
+            >
+              <item.icon size={20} color={item.variant === "danger" ? "#b91c1c" : "#14b8a6"} />
+              <Text style={[
+                styles.bottomButtonText,
+                { color: item.variant === "danger" ? "#b91c1c" : "#14b8a6" }
+              ]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+};
+
 /* -------------------------- Confirm Dialog -------------------------- */
 const ConfirmDialog: React.FC<{
   visible: boolean;
@@ -107,10 +371,19 @@ const ConfirmDialog: React.FC<{
 const HeaderBar: React.FC<{ title: string; onMenu: () => void }> = ({ title, onMenu }) => {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu">
-        <MenuIcon size={30} color="#ffffffff" />
+      <View style={styles.headerContent}>
+      <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>{title}</Text>
+      <TouchableOpacity onPress={onMenu} style={styles.menuBtn} accessibilityLabel="Open menu"
+          hitSlop={{ 
+            top: SPACING.xs, 
+            bottom: SPACING.xs, 
+            left: SPACING.xs, 
+            right: SPACING.xs 
+          }}
+        >
+        <MenuIcon size={ICON_SIZE.lg} color="#ffffffff" />
       </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -198,7 +471,6 @@ const { setScreenType } = useOTConfig();
   const [loading, setLoading] = useState(false);
 
   const alertsReqSeqRef = useRef(0);
-  const FOOTER_HEIGHT = 70;
 
   const isAnesthetist = userType === OTUserTypes.ANESTHETIST;
   const isSurgeon = userType === OTUserTypes.SURGEON;
@@ -451,7 +723,7 @@ const { setScreenType } = useOTConfig();
 
   const sidebarItems: SidebarItem[] = [
     { key: "dash", label: "Dashboard", icon: LayoutDashboard, onPress: () => go("OtDashboard") },
-    { key: "slist", label: "Surgeries List", icon: ListIcon, onPress: () => go("DashboardAlerts", { type: "surgeries" }) },
+    { key: "slist", label: "Surgery Alerts", icon: ListIcon, onPress: () => go("DashboardAlerts", { type: "surgeries" }) },
     { key: "emer", label: "Emergency", icon: UserPlus2,onPress: () => {
       setScreenType(OTScreenType.EMERGENCY); 
       go("PatientList");
@@ -485,7 +757,7 @@ const { setScreenType } = useOTConfig();
         style={styles.container}
         contentContainerStyle={[
           styles.containerContent,
-          { paddingBottom: FOOTER_HEIGHT + insets.bottom + 16 },
+          { paddingBottom: FOOTER_HEIGHT + (insets.bottom > 0 ? insets.bottom + SPACING.md : SPACING.md),minHeight: SCREEN_HEIGHT - (isSmallDevice ? 120 : 160) }
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -511,7 +783,7 @@ const { setScreenType } = useOTConfig();
   <View style={styles.filterBox}>
     <Picker
       selectedValue={filterYearSummary}
-      mode="dropdown"
+      mode="dialog"
       style={styles.filterPicker}
       dropdownIconColor="#0f172a"
       onValueChange={(val) => setFilterYearSummary(String(val))}
@@ -525,7 +797,7 @@ const { setScreenType } = useOTConfig();
   <View style={styles.filterBox}>
     <Picker
       selectedValue={filterMonthSummary}
-      mode="dropdown"
+      mode="dialogue"
       style={styles.filterPicker}
       dropdownIconColor="#0f172a"
       onValueChange={(val) => setFilterMonthSummary(String(val))}
@@ -583,7 +855,7 @@ const { setScreenType } = useOTConfig();
                   <View style={styles.filterBox}>
                     <Picker
                       selectedValue={filterYearType}
-                      mode="dropdown"
+                      mode="dialog"
                       style={styles.filterPicker}
                       dropdownIconColor="#0f172a"
                       onValueChange={(val) => setFilterYearType(String(val))}
@@ -597,7 +869,7 @@ const { setScreenType } = useOTConfig();
                   <View style={styles.filterBox}>
                     <Picker
                       selectedValue={filterMonthType}
-                      mode="dropdown"
+                      mode="dialog"
                       style={styles.filterPicker}
                       dropdownIconColor="#0f172a"
                       onValueChange={(val) => setFilterMonthType(String(val))}
@@ -617,18 +889,14 @@ const { setScreenType } = useOTConfig();
                         styles.barEmergency,
                         { width: `${emergencyPercentage}%` },
                       ]}
-                    >
-                    
-                    </View>
+                    />
                     <View
                       style={[
                         styles.barSegment,
                         styles.barElective,
                         { width: `${electivePercentage}%` },
                       ]}
-                    >
-                     
-                    </View>
+                    />
                     {totalPatients === 0 && (
                       <Text style={styles.emptyBarLabel}>No data available</Text>
                     )}
@@ -708,26 +976,41 @@ const styles = StyleSheet.create({
 
   /* Header */
   header: {
-    height: 100,
-    paddingHorizontal: 16,
+    height: Platform.OS === 'ios' 
+      ? (isExtraSmallDevice ? 90 : isSmallDevice ? 100 : 110)
+      : (isExtraSmallDevice ? 70 : isSmallDevice ? 80 : 90),
+    paddingHorizontal: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#e2e8f0",
+    backgroundColor: "#14b8a6",
+    paddingTop: Platform.OS === 'ios' 
+      ? (isExtraSmallDevice ? 30 : 40) 
+      : (isExtraSmallDevice ? 15 : 20),
+    justifyContent: 'center',
+  },
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#14b8a6",
+    width: '100%',
   },
-  headerTitle: { fontSize: 24, fontWeight: "700", color: "#fdfdfdff" },
+  headerTitle: { fontSize: FONT_SIZE.xl, fontWeight: "700", color: "#fdfdfdff",
+    flex: 1,
+    textAlign: 'center',
+    marginRight: SPACING.md,
+ },
   menuBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: ICON_SIZE.lg + SPACING.xs,
+    height: ICON_SIZE.lg + SPACING.xs,
+    borderRadius: SPACING.xs,
     alignItems: "center",
     justifyContent: "center",
+    position: 'absolute',
+    right: 0,
   },
 
   container: { flex: 1, backgroundColor: "#ffffff" },
-  containerContent: { padding: 16, paddingBottom: 32, gap: 16 },
+  containerContent: { padding: SPACING.sm, gap: SPACING.sm  },
 
   loadingContainer: {
     flex: 1,
@@ -737,14 +1020,14 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 16,
-    color: "#6B7280",
+    fontSize: FONT_SIZE.md,
+    color: "#14b8a6",
     fontWeight: "600",
   },
 
   /* Stats Grid */
   statsGrid: {
-    flex:1,
+    flex: 1,
     flexDirection: "column",
     flexWrap: "wrap",
   },
@@ -752,14 +1035,15 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "stretch",
     justifyContent: "flex-start",
-    padding: 14,
-    borderRadius: 16,
+    padding: SPACING.sm,
+    borderRadius: SPACING.md,
     shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-    width:"100%",
-    marginBottom:15
+    width: "100%",
+    marginBottom: SPACING.sm,
   },
   cardHeaderRow: {
     flexDirection: "row",
@@ -767,7 +1051,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.md,
     fontWeight: "700",
     color: "#0f172a",
   },
@@ -776,34 +1060,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    columnGap: 8,
-    marginTop: 8,
+    columnGap: SPACING.xs,
+    marginTop: SPACING.xs,
   },
 filterBox: {
   flex: 1,
   minWidth: 80,
-  height: 40, // Increased from 40
-  borderRadius: 12, // Changed from 8
-  borderWidth: 1.5, // Changed from 1
+  height: 40,
+  borderRadius: 12,
+  borderWidth: 1.5,
   borderColor: "#CBD5E1",
   flexDirection: "row",
   alignItems: "center",
   overflow: "hidden",
   backgroundColor: "#ffffff",
   justifyContent: "center",
-  paddingHorizontal: 8, // Increased from 4
+  paddingHorizontal: 8,
 },
-
 filterPicker: {
-  flex: 1, // Changed from width: "100%"
-  height: 98, // Match parent height
-  fontSize: 14,
+  flex: 1,
+  height: 98,
+  fontSize: FONT_SIZE.sm,
   color: "#0f172a",
-  marginLeft: 4, // Added slight margin
+  marginLeft: 4,
   ...Platform.select({
     android: {
-      marginTop: 0, // Changed from -8
-      marginVertical: -8, // Added to center text on Android
+      marginTop: 0,
+      marginVertical: -8,
     },
     ios: {
       marginTop: 0,
@@ -815,25 +1098,25 @@ filterPicker: {
   kpiGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 8,
-    marginTop: 10,
+    gap: SPACING.xs,
+    marginTop: SPACING.sm,
   },
   kpiItem: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 6,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
     backgroundColor: "rgba(255,255,255,0.85)",
     borderRadius: 12,
   },
   kpiValue: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.xl,
     fontWeight: "800",
     color: "#0f172a",
     marginTop: 4,
   },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     color: "#64748b",
     marginTop: 4,
     textAlign: "center",
@@ -841,7 +1124,7 @@ filterPicker: {
 
   /* Volume Bar */
   volumeContainer: {
-    marginTop: 12,
+    marginTop: SPACING.sm,
   },
   volumeBar: {
     height: 32,
@@ -864,7 +1147,7 @@ filterPicker: {
   },
   barLabel: {
     color: "#ffffff",
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "700",
   },
   emptyBarLabel: {
@@ -872,17 +1155,17 @@ filterPicker: {
     width: "100%",
     textAlign: "center",
     color: "#64748b",
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     fontWeight: "600",
   },
   barFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
+    marginTop: SPACING.xs,
     paddingHorizontal: 4,
   },
   barFooterText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
     color: "#64748b",
   },
   barFooterValue: {
@@ -890,35 +1173,159 @@ filterPicker: {
     color: "#0f172a",
   },
 
-  /* Split Row */
-  splitRow: {
-    flexDirection: isTablet ? "row" : "column",
-    gap: 16,
-  },
-  splitItem: {
+  /* Sidebar Styles */
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: "#f8fafc",
-    borderRadius: 16,
-    padding: 16,
-    minHeight: 300,
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
-
-  /* Section Headers */
-  sectionHeader: {
+  sidebarContainer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 16,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 2, height: 0 },
+  },
+  sidebarHeader: {
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    marginBottom: 16,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    position: "relative",
   },
-  sectionTitle: {
-    fontSize: 18,
+  closeButton: {
+    position: "absolute",
+    right: 0,
+    top: -10,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f1f5f9",
+    zIndex: 10,
+  },
+  userProfileSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 50,
+    flex: 1,
+  },
+  userInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  userName: {
+    fontSize: FONT_SIZE.lg,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#0b1220",
+    marginBottom: 2,
   },
-  viewAllText: {
+  userMetaId: {
+    fontSize: FONT_SIZE.xs,
+    color: "#64748b",
+    marginBottom: 2,
+  },
+  userDepartment: {
+    fontSize: FONT_SIZE.xs,
     color: "#14b8a6",
     fontWeight: "600",
+  },
+  viewProfileText: {
+    fontSize: FONT_SIZE.xs,
+    color: "#007AFF",
+    fontStyle: "italic",
+    textDecorationLine: "underline",
+    marginTop: 4,
+  },
+  sidebarContent: {
+    flex: 1,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: "600",
+    color: "#64748b",
+    marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  sidebarButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  sidebarButtonActive: {
+    backgroundColor: "#f0fdfa",
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  buttonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    flex: 1,
+  },
+  alertBadge: {
+    backgroundColor: "#ef4444",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  alertText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  bottomActions: {
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    gap: 8,
+  },
+  bottomButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  modulesButton: {
+    backgroundColor: "#f0fdfa",
+  },
+  logoutButton: {
+    backgroundColor: "#fef2f2",
+  },
+  bottomButtonText: {
     fontSize: 14,
+    fontWeight: "600",
+  },
+  avatar: {
+    backgroundColor: "#e2e8f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontWeight: "800",
+    color: "#0b1220",
+    fontSize: 16,
   },
 
   /* Alert Cards */
@@ -990,54 +1397,6 @@ filterPicker: {
     fontWeight: "600",
   },
 
-  /* Pie Chart Placeholder */
-  pieChartPlaceholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 20,
-  },
-  pieChartText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0f172a",
-  },
-  pieChartSubtext: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#64748b",
-    textAlign: "center",
-  },
-
-  /* Calendar Section */
-  calendarSection: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 16,
-    padding: 16,
-  },
-  calendarPlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 40,
-    marginTop: 12,
-  },
-  calendarText: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0f172a",
-  },
-  calendarSubtext: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#64748b",
-  },
-
   /* Modal */
   modalBackdrop: {
     flex: 1,
@@ -1053,8 +1412,16 @@ filterPicker: {
     borderRadius: 14,
     padding: 16,
   },
-  modalTitle: { fontSize: 17, fontWeight: "800", color: "#0b1220" },
-  modalMsg: { fontSize: 14, color: "#334155", marginTop: 8 },
+  modalTitle: { 
+    fontSize: 17, 
+    fontWeight: "800", 
+    color: "#0b1220" 
+  },
+  modalMsg: { 
+    fontSize: 14, 
+    color: "#334155", 
+    marginTop: 8 
+  },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",

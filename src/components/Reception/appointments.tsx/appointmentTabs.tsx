@@ -11,6 +11,8 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChevronRight } from "lucide-react-native";
+
 import AppointmentForm from "./appointmentForm";
 import Footer from "../../dashboard/footer";
 import { COLORS } from "../../../utils/colour";
@@ -70,6 +72,10 @@ const AppointmentTabsMobile: React.FC = () => {
 
   const renderTabButton = (tab: TabKey, label: string) => {
     const isActive = activeTab === tab;
+    const iconColor = isActive
+      ? "#ffffff"
+      : "#9ca3af";
+
     return (
       <TouchableOpacity
         key={tab}
@@ -78,16 +84,32 @@ const AppointmentTabsMobile: React.FC = () => {
           isActive && styles.tabButtonActive,
         ]}
         onPress={() => setActiveTab(tab)}
-        activeOpacity={0.85}
+        activeOpacity={0.7}
       >
+        <View
+          style={[
+            styles.tabInner,
+            isActive && styles.tabInnerActive,
+          ]}
+        >
+          <View style={styles.tabContent}>
         <Text
           style={[
             styles.tabButtonText,
             isActive && styles.tabButtonTextActive,
           ]}
+            numberOfLines={1}
         >
           {label}
         </Text>
+
+            <ChevronRight
+              size={16}
+              color={iconColor}
+              strokeWidth={2.5}
+            />
+          </View>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -99,11 +121,17 @@ const AppointmentTabsMobile: React.FC = () => {
         style={{ flex: 1 }}
       >
         {/* Tabs row */}
+        <View style={styles.tabsWrapper}>
         <View style={styles.tabsContainer}>
+            <View style={styles.tabsRow}>
           {renderTabButton("BookAppointment", "Appointment")}
           {renderTabButton("ScheduledAppointment", "Scheduled")}
+            </View>
+            <View style={styles.tabsRow}>
           {renderTabButton("CompletedAppointment", "Completed")}
           {renderTabButton("CanceledAppointment", "Cancelled")}
+            </View>
+          </View>
         </View>
 
         {/* Content */}
@@ -120,10 +148,14 @@ const AppointmentTabsMobile: React.FC = () => {
         </ScrollView>
 
         {/* Footer */}
-       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
-  <Footer active={"appointments"} brandColor={COLORS.brand} />
-</View>
-
+       <View style={[styles.footerWrap, { bottom: insets.bottom },
+          ]}
+        >
+          <Footer
+            active="appointments"
+            brandColor={COLORS.brand}
+          />
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -136,41 +168,88 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg ?? "#f3f4f6",
   },
-  tabsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap", // 2 per row
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 4,
+
+  tabsWrapper: {
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
+
+  tabsContainer: {
+    paddingTop: 16,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
+  },
+
+  tabsRow: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+
   tabButton: {
-    width: "50%", // 2 per row
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    justifyContent: "center",
-    alignItems: "center",
+    flex: 1,
+    marginHorizontal: 4,
   },
+
   tabButtonActive: {
-    borderBottomWidth: 3,
-    borderBottomColor: COLORS.brand ?? "#14b8a6",
-    backgroundColor: "#ecfeff",
+    zIndex: 10,
   },
+
+  tabInner: {
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+
+  tabInnerActive: {
+    backgroundColor: COLORS.brand ?? "#14b8a6",
+    borderColor: COLORS.brand ?? "#14b8a6",
+    shadowColor: COLORS.brand ?? "#14b8a6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    transform: [{ scale: 1.02 }],
+  },
+
+  tabContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
   tabButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: "#6b7280",
+    letterSpacing: 0.2,
   },
+
   tabButtonTextActive: {
-    color: COLORS.brand ?? "#14b8a6",
+    color: "#ffffff",
+    fontWeight: "700",
   },
+
   scroll: { flex: 1 },
+
   scrollContent: {
-    paddingHorizontal: 0,
-    paddingTop: 4,
+    paddingTop: 8,
   },
+
  footerWrap: {
   position: "absolute",
   left: 0,
@@ -182,5 +261,4 @@ const styles = StyleSheet.create({
   zIndex: 10,
   elevation: 6,
 },
-
 });

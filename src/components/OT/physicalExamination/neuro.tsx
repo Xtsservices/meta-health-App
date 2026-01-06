@@ -1,6 +1,6 @@
 // src/screens/ot/GeneralPhysicalExaminationMobile.tsx
 
-import React, { useMemo } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -59,16 +59,17 @@ const Hepato: React.FC = () => {
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const isDark = scheme === "dark";
  const user = useSelector((s: RootState) => s.currentUser);
-const isReadOnly = user?.roleName === "surgeon";
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
 
   const { neuroMuscular, setNeuroMuscular } =
-    usePhysicalExaminationForm() 
+    usePhysicalExaminationForm()
 
 
 
   const toggleField = (key: keyof NeuroState) => {
+    if (isReadOnly) return; 
     const current = Boolean(neuroMuscular?.[key]);
     setNeuroMuscular({ [key]: !current });
   };
@@ -103,6 +104,9 @@ const isReadOnly = user?.roleName === "surgeon";
               { backgroundColor: COLORS.card, borderColor: COLORS.border },
             ]}
           >
+            <Text style={[styles.title, { color: COLORS.text }]}>
+              Neuromuscular
+            </Text>
             <Text style={[styles.subtitle, { color: COLORS.sub }]}>
               Select all applicable findings
             </Text>
@@ -117,7 +121,7 @@ const isReadOnly = user?.roleName === "surgeon";
                     onPress={() => toggleField(item.key)}
                     style={({ pressed }) => [
                       styles.checkboxRow,
-                      { backgroundColor: pressed ? COLORS.brandSoft : "transparent" },
+                      { backgroundColor: pressed && !isReadOnly ? COLORS.brandSoft : "transparent",opacity: isReadOnly ? 0.6 : 1 },
                     ]}
                   >
                     <View

@@ -27,7 +27,8 @@ const PreopControllersMobile: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
-const isReadOnly = user?.roleName === "surgeon";
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
   const {
     notes,
     arrangeBlood,
