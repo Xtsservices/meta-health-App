@@ -5,10 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useDispatch } from 'react-redux';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
+import { showSuccess } from '../../store/toast.slice';
 
 const COLORS = {
   primary: '#14b8a6',
@@ -18,34 +19,27 @@ const COLORS = {
 
 const AmbulanceDriverSettings: React.FC = () => {
   const navigation = useNavigation<any>();
+  const dispatch = useDispatch();
 
   const handleEditProfile = () => {
-    Alert.alert('Edit Profile', 'Profile editing feature coming soon');
+    dispatch(showSuccess('Profile editing feature coming soon'));
   };
 
   const handleChangePassword = () => {
-    Alert.alert('Change Password', 'Password change feature coming soon');
+    dispatch(showSuccess('Password change feature coming soon'));
   };
 
   const handleNotifications = () => {
-    Alert.alert('Notifications', 'Notification settings feature coming soon');
+    dispatch(showSuccess('Notification settings feature coming soon'));
   };
 
   const handleHelp = () => {
-    Alert.alert('Help & Support', 'Help center feature coming soon');
+    dispatch(showSuccess('Help center feature coming soon'));
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: () => {
-          navigation.navigate('Login');
-        },
-      },
-    ]);
+    // Navigate directly to Login without Alert confirmation
+    navigation.navigate('Login');
   };
 
   return (
