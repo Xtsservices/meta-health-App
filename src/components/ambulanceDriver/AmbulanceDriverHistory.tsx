@@ -5,12 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
 import { AuthFetch } from '../../auth/auth';
-import { reverseGeocode } from '../../utils/locationUtils'; 
+import { reverseGeocode } from '../../utils/locationUtils';
+import { showError } from '../../store/toast.slice'; 
 
 const COLORS = {
   primary: '#14b8a6',
@@ -30,6 +31,7 @@ interface TripHistory {
 }
 
 const AmbulanceDriverHistory: React.FC = () => {
+  const dispatch = useDispatch();
   const [history, setHistory] = useState<TripHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalTrips, setTotalTrips] = useState(0);
@@ -39,7 +41,7 @@ const AmbulanceDriverHistory: React.FC = () => {
       setLoading(true);
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        Alert.alert('Error', 'Authentication required');
+        dispatch(showError('Authentication required'));
         return;
       }
 
@@ -116,7 +118,7 @@ const AmbulanceDriverHistory: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error fetching history:', error);
-      Alert.alert('Error', 'Failed to load trip history');
+      dispatch(showError('Failed to load trip history'));
     } finally {
       setLoading(false);
     }

@@ -6,7 +6,6 @@ import {
   StyleSheet,
   Platform,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -23,7 +22,8 @@ import {
   stopLocationTracking,
 } from '../../utils/locationUtils';
 import { RootState } from '../../store/store';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { showError } from '../../store/toast.slice';
 
 const { width: W } = Dimensions.get('window');
 
@@ -107,6 +107,7 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
 }) => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
+  const dispatch = useDispatch();
   const trackingStartedRef = useRef(false);
   const insets = useSafeAreaInsets();
   
@@ -135,11 +136,7 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
           const granted = await ensureLocationPermission();
           if (!granted) {
             console.log('❌ Location permission not granted');
-            Alert.alert(
-              'Location Required',
-              'Location permission is required to track ambulance location.',
-              [{ text: 'OK' }]
-            );
+            dispatch(showError('Location permission is required to track ambulance location.'));
             return;
           }
 
