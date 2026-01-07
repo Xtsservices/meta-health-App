@@ -161,16 +161,7 @@ const AnesthesiaRecordFormScreen: React.FC<Props> = ({
   const { anesthesiaRecordForm, setAnesthesiaRecordForm } =
     useAnesthesiaRecordForm();
 
-  const canNext = useMemo(
-    () =>
-      !!(
-        anesthesiaRecordForm.airwayManagement ||
-        anesthesiaRecordForm.airwaySize ||
-        anesthesiaRecordForm.vascularAccess ||
-        anesthesiaRecordForm.laryngoscopy
-      ),
-    [anesthesiaRecordForm]
-  );
+  const canNext = true
 
   return (
     <View style={[styles.safeArea, { backgroundColor: COLORS.bg }]}>
@@ -253,12 +244,11 @@ const AnesthesiaRecordFormScreen: React.FC<Props> = ({
                     navigation.navigate("Breathing" as never);
                   }
                 }}
-                disabled={!canNext}
                 style={({ pressed }) => [
                   styles.nextBtn,
                   {
-                    backgroundColor: canNext ? brand : "#cbd5e1",
-                    opacity: pressed && canNext ? 0.8 : 1,
+                    backgroundColor: brand,
+                    opacity: pressed ? 0.8 : 1,
                   },
                 ]}
               >

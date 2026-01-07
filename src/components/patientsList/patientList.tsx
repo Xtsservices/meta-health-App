@@ -23,6 +23,7 @@ import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 import { RootState } from "../../store/store";
 import { AuthFetch } from "../../auth/auth";
@@ -111,7 +112,7 @@ const OpdPreviousPatients: React.FC = () => {
   const scheme = useColorScheme();
   const isDark = scheme === "dark";
   const user = useSelector((s: RootState) => s.currentUser);
-const { screenType, userType, setPatientStage } = useOTConfig();
+  const { screenType, userType, setPatientStage } = useOTConfig();
   const zone = (route.params as any)?.zone;
   const [allPatients, setAllPatients] = useState<PatientType[]>([]);
   const [wardList, setWardList] = useState<wardType[]>([]);
@@ -126,16 +127,13 @@ const { screenType, userType, setPatientStage } = useOTConfig();
   const [rejectDialogVisible, setRejectDialogVisible] = useState(false);
   const [selectedSurgeryData, setSelectedSurgeryData] = useState<SurgeryData[]>([]);
   const [selectedPatientName, setSelectedPatientName] = useState("");
-  const parseDate = (d?: string) => {
-  if (!d) return null;
-  const date = new Date(d);
-  return isNaN(date.getTime()) ? null : date;
-};
-
-  // Date range filter state for OT
+  
+  // Date range filter state
   const [showDateFilter, setShowDateFilter] = useState(false);
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [dateFilterApplied, setDateFilterApplied] = useState(false);
 
   const bottomPad = FOOTER_H + insets.bottom + 24;
@@ -148,7 +146,6 @@ const { screenType, userType, setPatientStage } = useOTConfig();
     try {
       setLoading(true);
       let url = "";
-      let params: any = {};
       
       if (user?.roleName !== "surgeon" && user?.roleName !== "anesthetist") {
 if (user?.patientStatus === 1) {
@@ -181,36 +178,9 @@ if (user?.patientStatus === 1) {
       } else {
         // OT-specific API with date range parameters
         url = `ot/${user?.hospitalID}/${user?.id}/getPatient/${user?.roleName.toLowerCase()}/${screenType.toLowerCase()}`;
-        
-        // Add date range parameters if applied
-if (dateFilterApplied && startDate && endDate) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
-let base: PatientType[] = allPatients;
-
-   base = base.filter((p) => {
-    const patientDate = parseDate(p.addedOn);
-    if (!patientDate) return false;
-
-    return patientDate >= start && patientDate <= end;
-  });
-}
-
       }
 
-      // Construct query string with parameters
-      const queryParams = new URLSearchParams();
-      if (params.startDate) queryParams.append('startDate', params.startDate);
-      if (params.endDate) queryParams.append('endDate', params.endDate);
-      
-      const queryString = queryParams.toString();
-      const fullUrl = queryString ? `${url}?${queryString}` : url;
-
-      const response = await AuthFetch(fullUrl, token);
-      console.log("listt ",response)
+      const response = await AuthFetch(url, token);
       
       if (response?.status === "success" && "data" in response) {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
@@ -239,7 +209,7 @@ let base: PatientType[] = allPatients;
     } finally {
       setLoading(false);
     }
-  }, [user?.hospitalID, user?.token, user?.id, user?.role, user?.patientStatus, zone, dateFilterApplied, startDate, endDate]);
+  }, [user?.hospitalID, user?.token, user?.id, user?.role, user?.patientStatus, zone, screenType]);
 
   const [fetchTrigger, setFetchTrigger] = useState(0);
 
@@ -400,11 +370,16 @@ if (patientId === null) return
     if (user?.patientStatus === 2 || user?.patientStatus === 3) {
       fetchWards();
     }
-  }, [fetchPatients, fetchWards, user?.patientStatus, fetchFollowupPatients, filterValue]))
+  }, [fetchPatients, fetchWards, user?.patientStatus, fetchFollowupPatients, filterValue])
+);
 
   // Date range filter functions
   const handleApplyDateFilter = () => {
     if (startDate && endDate) {
+      if (startDate > endDate) {
+        dispatch(showError("Start date cannot be after end date"));
+        return;
+      }
       setDateFilterApplied(true);
       triggerFetch();
       setShowDateFilter(false);
@@ -414,23 +389,30 @@ if (patientId === null) return
   };
 
   const handleClearDateFilter = () => {
-    setStartDate("");
-    setEndDate("");
+    setStartDate(null);
+    setEndDate(null);
     setDateFilterApplied(false);
     triggerFetch();
     setShowDateFilter(false);
   };
 
-  const handleOpenDateFilter = () => {
-    setShowDateFilter(true);
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      setStartDate(selectedDate);
+    }
   };
 
-  const formatDateForInput = (date: Date) => {
-    return date.toISOString().split('T')[0];
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setEndDate(selectedDate);
+    }
   };
 
-  const handleOpenCalendar = () => {
-    setShowDateFilter(true);
+  const formatDisplayDate = (date: Date | null) => {
+    if (!date) return "";
+    return date.toLocaleDateString("en-GB"); // DD/MM/YYYY format
   };
 
   const filteredAndSearched = useMemo(() => {
@@ -550,9 +532,7 @@ return base.sort(
     setFilterValue(0);
     setWardFilter(0);
     setSearch("");
-    if (isOt) {
       handleClearDateFilter();
-    }
   };
 
   const handleSurgeryWarningClick = (patient: PatientType) => {
@@ -614,7 +594,8 @@ return base.sort(
   };
 
   // Date Range Filter Modal - Simplified version
-  const renderDateFilterModal = () => (
+  const renderDateFilterModal = () => {
+    return (
     <Modal
       visible={showDateFilter}
       transparent={true}
@@ -641,39 +622,73 @@ return base.sort(
           </View>
 
           <View style={styles.dateInputsContainer}>
+              {/* Start Date Input */}
             <View style={styles.dateInputGroup}>
               <Text style={[styles.dateLabel, { color: COLORS.text }]}>From Date</Text>
-              <View style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}>
+              <TouchableOpacity
+                style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}
+                  onPress={() => setShowStartDatePicker(true)}
+                >
                 <Calendar size={16} color={COLORS.sub} style={styles.dateIcon} />
-                <TextInput
-                  style={[styles.dateInput, { color: COLORS.text }]}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={COLORS.placeholder}
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
+                <Text style={[styles.dateInputText, { color: startDate ? COLORS.text : COLORS.placeholder }]}>
+                    {startDate ? formatDisplayDate(startDate) : "Select start date"}
+                  </Text>
+                  {startDate && (
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setStartDate(null);
+                      }}
+                      style={styles.clearDateButton}
+                    >
+                      <X size={14} color={COLORS.sub} />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
             </View>
 
+              {/* End Date Input */}
             <View style={styles.dateInputGroup}>
               <Text style={[styles.dateLabel, { color: COLORS.text }]}>To Date</Text>
-              <View style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}>
+              <TouchableOpacity
+                  style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}
+                  onPress={() => setShowEndDatePicker(true)}
+                >
                 <Calendar size={16} color={COLORS.sub} style={styles.dateIcon} />
-                <TextInput
-                  style={[styles.dateInput, { color: COLORS.text }]}
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={COLORS.placeholder}
-                  keyboardType="numbers-and-punctuation"
-                />
+                <Text style={[styles.dateInputText, { color: endDate ? COLORS.text : COLORS.placeholder }]}>
+                    {endDate ? formatDisplayDate(endDate) : "Select end date"}
+                  </Text>
+                  {endDate && (
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setEndDate(null);
+                      }}
+                      style={styles.clearDateButton}
+                    >
+                      <X size={14} color={COLORS.sub} />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
               </View>
             </View>
-          </View>
+
+            {/* Date Range Summary */}
+            {(startDate || endDate) && (
+              <View style={[styles.dateRangeSummary, { backgroundColor: COLORS.bg }]}>
+                <Text style={[styles.dateRangeText, { color: COLORS.text }]}>
+                  📌 Selected Range: {startDate ? formatDisplayDate(startDate) : "Start"} 
+                  {" → "} 
+                  {endDate ? formatDisplayDate(endDate) : "End"}
+                </Text>
+                <TouchableOpacity onPress={handleClearDateFilter} style={styles.clearRangeButton}>
+                  <Text style={[styles.clearRangeText, { color: COLORS.danger }]}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
           <Text style={[styles.dateFormatHint, { color: COLORS.sub }]}>
-            Enter dates in YYYY-MM-DD format (e.g., 2024-01-15)
+              Select dates to filter patients by their added date
           </Text>
 
           <View style={styles.dateModalButtons}>
@@ -684,8 +699,12 @@ return base.sort(
               <Text style={[styles.cancelButtonText, { color: COLORS.danger }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.dateModalButton, { backgroundColor: COLORS.brand }]}
+              style={[styles.dateModalButton, { 
+                  backgroundColor: (startDate && endDate) ? COLORS.brand : COLORS.sub,
+                  opacity: (startDate && endDate) ? 1 : 0.5 
+                }]}
               onPress={handleApplyDateFilter}
+                disabled={!startDate || !endDate}
             >
               <Text style={styles.applyButtonText}>Apply Filter</Text>
             </TouchableOpacity>
@@ -694,6 +713,7 @@ return base.sort(
       </TouchableOpacity>
     </Modal>
   );
+};
 
   // ---- header with search + filter ----
   const renderHeader = () => (
@@ -768,7 +788,7 @@ return base.sort(
             backgroundColor: dateFilterApplied ? COLORS.brand : COLORS.card,
             borderColor: dateFilterApplied ? COLORS.brand : COLORS.border 
           }]}
-          onPress={handleOpenDateFilter}
+          onPress={() => setShowDateFilter(true)}
         >
           <Calendar size={16} color={dateFilterApplied ? "#fff" : COLORS.sub} />
           <Text style={[styles.dateFilterButtonText, { 
@@ -848,12 +868,11 @@ return base.sort(
   );
 
   const handleView = (patient: any) => {
-const patientStatusKey =
-            patient?.status?.toUpperCase() as keyof typeof OTPatientStages;
+const patientStatusKey = patient?.status?.toUpperCase() as keyof typeof OTPatientStages;
           setPatientStage(OTPatientStages[patientStatusKey]);
  const isFromPreviousPatients = filterValue === 2;
  navigation.navigate("PatientProfile", { id: patient.id, isFromPreviousPatients: isFromPreviousPatients });
-  }
+  };
 
   const renderItem = ({ item }: { item: PatientType }) => {
     const paddedId = String(item?.id ?? "").padStart(4, "0");
@@ -866,7 +885,7 @@ const patientStatusKey =
     );
     const hasNotification = item.notificationCount && item.notificationCount > 0;
     const wardName = (user?.patientStatus === 2 || user?.patientStatus === 3) ? wardList.find(w => w.id === item.wardID)?.name || "—" : "—";
-    const approvedDate = formatDate(item?.approvedTime)
+    const approvedDate = formatDate(item?.approvedTime);
     const addedDate = formatDate(item?.addedOn);
     const patientSurgeries = surgeryData[item?.id] || [];
     const hasRejectedSurgery = patientSurgeries.some(surgery =>
@@ -994,7 +1013,6 @@ const patientStatusKey =
             Added On: {addedDate}
           </Text>
           </View>
-          
 
           <TouchableOpacity
             style={[styles.viewBtn, { borderColor: COLORS.border }]}
@@ -1151,6 +1169,27 @@ const patientStatusKey =
       )}
 
       {renderDateFilterModal()}
+      
+      {/* Date Pickers */}
+      {showStartDatePicker && (
+        <DateTimePicker
+          value={startDate || new Date()}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={handleStartDateChange}
+        />
+      )}
+      
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={endDate || new Date()}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={handleEndDateChange}
+          minimumDate={startDate || undefined}
+        />
+      )}
+      
       {renderRejectDialog()}
     </SafeAreaView>
   );
@@ -1375,10 +1414,38 @@ const styles = StyleSheet.create({
   dateIcon: {
     marginRight: 10,
   },
-  dateInput: {
+  dateInputText: {
     flex: 1,
     fontSize: 15,
     includeFontPadding: false,
+  },
+  clearDateButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  dateRangeSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dateRangeText: {
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+  },
+  clearRangeButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  clearRangeText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   dateFormatHint: {
     fontSize: 12,

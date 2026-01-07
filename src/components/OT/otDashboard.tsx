@@ -797,7 +797,7 @@ const { setScreenType } = useOTConfig();
   <View style={styles.filterBox}>
     <Picker
       selectedValue={filterMonthSummary}
-      mode="dialogue"
+      mode="dialog"
       style={styles.filterPicker}
       dropdownIconColor="#0f172a"
       onValueChange={(val) => setFilterMonthSummary(String(val))}

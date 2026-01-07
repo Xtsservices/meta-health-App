@@ -484,6 +484,9 @@ const postopSubmit = useCallback(
   const keyExtractor = (it: GridItem) => it.key;
 
   const renderFooter = () => {
+  if (activeTab === "PatientFile") {
+    return null;
+  }
     // ---- Pre-Op tab: show Approve + Reject ----
     if (activeTab === "PreOpRecord" && user?.roleName !== "surgeon" && currentPatient?.status !== "approved") {
       return (
@@ -526,11 +529,14 @@ const postopSubmit = useCallback(
       );
     }
 
-    // ---- Other tabs: show Save ----
-return (
-  <>
-    {user?.roleName !== "surgeon" &&
-      currentPatient?.status !== "approved" && (
+    // ---- Other  tabs: show Save ----
+if (
+  activeTab === "AnesthesiaRecord" ||
+  activeTab === "PhysicalExamination" ||
+  activeTab === "PostOpRecord"
+) {
+  if (currentPatient?.status !== "approved") {
+    return (
         <View style={styles.saveContainer}>
           <Pressable
             onPress={debouncedSubmit}
@@ -545,11 +551,13 @@ return (
             <Text style={styles.formNavButtonTextPrimary}>Save</Text>
           </Pressable>
         </View>
-      )}
-  </>
-);
+    );
+  }
+}
 
-  };
+
+  return null;
+};
 
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>

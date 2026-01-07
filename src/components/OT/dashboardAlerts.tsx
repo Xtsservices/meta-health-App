@@ -1,5 +1,5 @@
 // OTPatientTable.tsx
-import React, { useRef, useState, useMemo, useCallback } from "react";
+import React, { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute, useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { RootState } from "../../store/store";
@@ -42,18 +42,28 @@ const PER_PAGE = 10;
 
 const OTPatientTable: React.FC<Props> = (props) => {
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
+  const isFocused = useIsFocused();
   const type = props.type ?? route.params?.type ?? "dashboard";
 
   const [patients, setPatients] = useState<OTAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [currentScreen, setCurrentScreen] = useState<string>("");
   const fetchOnce = useRef(true);
 
-  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.currentUser);
   const { setPatientStage } = useOTConfig();
+  useEffect(() => {
+    if (isFocused) {
+      // Get the current screen name from navigation state
+      const state = navigation.getState();
+      const currentRoute = state.routes[state.index];
+      setCurrentScreen(currentRoute.name);
+    }
+  }, [isFocused, navigation]);
 
   // ================= Fetch Alerts =================
   const fetchOTAlerts = async () => {
@@ -285,7 +295,7 @@ const handleView = (patient: OTAlert) => {
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={{
             padding: 16,
-            paddingBottom: type === "surgeries" ? 120 : 30,
+            paddingBottom: type === "surgeries" ? 120 : 150,
           }}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No OT patients found</Text>
@@ -295,8 +305,8 @@ const handleView = (patient: OTAlert) => {
         />
       </View>
 
-      {/* ---------- FOOTER (for surgeries) ---------- */}
-      {type === "surgeries" && (
+      {/* ---------- FOOTER (only for DashboardAlerts screen) ---------- */}
+      {currentScreen === "DashboardAlerts" && (
         <>
           <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
             <Footer active={"dashboard"} brandColor="#14b8a6" />

@@ -179,19 +179,7 @@ const BreathingFormMobile: FC<Props> = ({ onNext, brandColor }) => {
     }
   };
 
-  const canNext = useMemo(
-    () =>
-      !!(
-        breathingForm.breathingSystem ||
-        breathingForm.filter ||
-        breathingForm.ventilation ||
-        breathingForm.vt ||
-        breathingForm.rr ||
-        breathingForm.vm ||
-        breathingForm.pressure
-      ),
-    [breathingForm]
-  );
+  const canNext = true;
 
   return (
     <View style={[styles.safeArea, { backgroundColor: COLORS.bg }]}>
@@ -307,12 +295,11 @@ const BreathingFormMobile: FC<Props> = ({ onNext, brandColor }) => {
       <View style={styles.formNavRow}>
         <Pressable
           onPress={handleNextPress}
-                disabled={!canNext}
           style={({ pressed }) => [
             styles.nextBtn,
             {
-                    backgroundColor: canNext ? brand : "#cbd5e1",
-                    opacity: pressed && canNext ? 0.8 : 1,
+                    backgroundColor: brand,
+                    opacity: pressed ? 0.8 : 1,
                   },
           ]}
         >

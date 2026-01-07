@@ -806,7 +806,7 @@ const getMenuItems = () => {
                     • Department: {currentPatient?.department || "—"}
                   </Text>
                   {/* Updated Ward display */}
-                  {startStatus !== 1 && (
+                  {startStatus !== 1 && !isSurgeonOrAnesthetist && (
                   <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
                     • Ward: {
       isReceptionView && wardNameFromRoute 

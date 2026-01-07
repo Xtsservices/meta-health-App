@@ -357,17 +357,16 @@ const styles = StyleSheet.create({
 },
   filterPicker: {
   flex: 1,
-  height: 44,
+  height: 50,        
   fontSize: 14,
   color: "#0f172a",
-  marginLeft: 4,
   ...Platform.select({
     android: {
-        marginVertical: 0,
-        marginTop: 0,
+      paddingVertical: 0, 
+      marginTop: -2,     
     },
     ios: {
-      marginTop: 0,
+      height: 50,
     },
   }),
 },
