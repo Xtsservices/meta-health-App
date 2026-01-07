@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSelector, useDispatch } from 'react-redux';
@@ -13,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
 import NoTripRequests from './NoTripRequests';
 import { COLORS } from '../../utils/colour';
-import { SPACING, FONT_SIZE } from '../../utils/responsive';
+import { SPACING, FONT_SIZE, isTablet, responsiveWidth, FOOTER_HEIGHT } from '../../utils/responsive';
 import { 
   acceptTripRequest,
   TripRequest,
@@ -44,11 +46,19 @@ const AmbulanceDriverDashboard: React.FC = () => {
   const navigation = useNavigation();
   const user = useSelector((state: RootState) => state.currentUser);
   const dispatch = useDispatch();
+  const { width: windowWidth } = useWindowDimensions();
 
   const [tripRequests, setTripRequests] = useState<TripRequest[]>([]);
   const [isOnline, setIsOnline] = useState(false);
   const [loading, setLoading] = useState(false);
   const previousTripIdsRef = useRef<Set<string>>(new Set());
+
+  // Calculate number of columns based on screen width
+  const numColumns = isTablet ? 2 : 1;
+  // Calculate card width with proper margins for tablet (2 columns) and mobile (1 column)
+  const cardWidth = isTablet 
+    ? (windowWidth - (SPACING.md * 3)) / 2 - SPACING.xs
+    : windowWidth - (SPACING.lg * 2);
 
   // Initialize notification sound on mount
   useEffect(() => {
@@ -222,11 +232,75 @@ const AmbulanceDriverDashboard: React.FC = () => {
 
 
 
+  // Render individual trip card
+  const renderTripCard = ({ item: trip }: { item: TripRequest }) => (
+    <View style={[styles.requestCard, { width: cardWidth }]}>
+      <View style={styles.requestHeader}>
+        <View style={[styles.priorityBadge, { backgroundColor: getPriorityColors(trip.priority).backgroundColor }]}>
+          <Text style={[styles.priorityText, { color: getPriorityColors(trip.priority).textColor }]}>
+            {trip.priority}
+          </Text>
+        </View>
+        <Text style={styles.requestTime}>{trip.requestTime}</Text>
+      </View>
+
+      <View style={styles.requestBody}>
+        <Text style={styles.patientName} numberOfLines={1}>{trip.patientName}</Text>
+
+        <View style={styles.addressContainer}>
+          <View style={styles.addressRow}>
+            <View style={styles.iconCircle}>
+              <Text style={styles.iconText}>P</Text>
+            </View>
+            <View style={styles.addressTextContainer}>
+              <Text style={styles.addressLabel}>Pickup</Text>
+              <Text style={styles.addressText} numberOfLines={2}>{trip.pickupAddress}</Text>
+            </View>
+          </View>
+
+          <View style={styles.dashedLine} />
+
+          <View style={styles.addressRow}>
+            <View style={[styles.iconCircle, styles.iconCircleDrop]}>
+              <Text style={styles.iconText}>D</Text>
+            </View>
+            <View style={styles.addressTextContainer}>
+              <Text style={styles.addressLabel}>Drop</Text>
+              <Text style={styles.addressText} numberOfLines={2}>{trip.dropAddress}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.tripInfoRow}>
+          <View style={styles.tripInfoItem}>
+            <Text style={styles.tripInfoLabel}>Distance</Text>
+            <Text style={styles.tripInfoValue}>{trip.distance}</Text>
+          </View>
+          <View style={styles.tripInfoDivider} />
+          <View style={styles.tripInfoItem}>
+            <Text style={styles.tripInfoLabel}>Est. Time</Text>
+            <Text style={styles.tripInfoValue}>{trip.estimatedTime}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.actionButtons}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.acceptButton]}
+          onPress={() => handleAcceptTrip(trip)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.acceptButtonText}>Accept Trip</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Driver Dashboard</Text>
           <Text style={styles.headerSubtitle}>Ambulance Driver</Text>
         </View>
@@ -244,85 +318,39 @@ const AmbulanceDriverDashboard: React.FC = () => {
       </View>
 
       {/* Trip Request Queue */}
-      <ScrollView 
-        style={styles.requestContainer} 
-        contentContainerStyle={styles.requestContentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {loading && tripRequests.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.brand} />
-            <Text style={styles.loadingText}>Loading trip requests...</Text>
-          </View>
-        ) : tripRequests.length > 0 ? (
-          <>
+      {loading && tripRequests.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.brand} />
+          <Text style={styles.loadingText}>Loading trip requests...</Text>
+        </View>
+      ) : tripRequests.length > 0 ? (
+        <View style={styles.listContainer}>
+          <View style={styles.requestsHeaderContainer}>
             <Text style={styles.requestsHeader}>
               {tripRequests.length} Trip Request{tripRequests.length > 1 ? 's' : ''} Available
             </Text>
-            {tripRequests.map((trip) => (
-              <View key={trip.id} style={styles.requestCard}>
-                <View style={styles.requestHeader}>
-                  <View style={[styles.priorityBadge, { backgroundColor: getPriorityColors(trip.priority).backgroundColor }]}>
-                    <Text style={[styles.priorityText, { color: getPriorityColors(trip.priority).textColor }]}>{trip.priority}</Text>
-                  </View>
-                  <Text style={styles.requestTime}>{trip.requestTime}</Text>
-                </View>
-
-                <View style={styles.requestBody}>
-                  <Text style={styles.patientName}>{trip.patientName}</Text>
-
-                  <View style={styles.addressContainer}>
-                    <View style={styles.addressRow}>
-                      <View style={styles.iconCircle}>
-                        <Text style={styles.iconText}>P</Text>
-                      </View>
-                      <View style={styles.addressTextContainer}>
-                        <Text style={styles.addressLabel}>Pickup</Text>
-                        <Text style={styles.addressText}>{trip.pickupAddress}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.dashedLine} />
-
-                    <View style={styles.addressRow}>
-                      <View style={[styles.iconCircle, styles.iconCircleDrop]}>
-                        <Text style={styles.iconText}>D</Text>
-                      </View>
-                      <View style={styles.addressTextContainer}>
-                        <Text style={styles.addressLabel}>Drop</Text>
-                        <Text style={styles.addressText}>{trip.dropAddress}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.tripInfoRow}>
-                    <View style={styles.tripInfoItem}>
-                      <Text style={styles.tripInfoLabel}>Distance</Text>
-                      <Text style={styles.tripInfoValue}>{trip.distance}</Text>
-                    </View>
-                    <View style={styles.tripInfoDivider} />
-                    <View style={styles.tripInfoItem}>
-                      <Text style={styles.tripInfoLabel}>Est. Time</Text>
-                      <Text style={styles.tripInfoValue}>{trip.estimatedTime}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.acceptButton]}
-                    onPress={() => handleAcceptTrip(trip)}
-                  >
-                    <Text style={styles.acceptButtonText}>Accept Trip</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </>
-        ) : (
+          </View>
+          <FlatList
+            data={tripRequests}
+            renderItem={renderTripCard}
+            keyExtractor={(item) => item.id}
+            numColumns={numColumns}
+            key={numColumns} // Force re-render when columns change
+            columnWrapperStyle={isTablet ? styles.row : undefined}
+            contentContainerStyle={styles.requestContentContainer}
+            showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          />
+        </View>
+      ) : (
+        <ScrollView 
+          style={styles.requestContainer}
+          contentContainerStyle={styles.emptyContainer}
+          showsVerticalScrollIndicator={false}
+        >
           <NoTripRequests isOnline={isOnline} />
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       {/* Footer Navigation */}
       <AmbulanceDriverFooter active="dashboard" />
@@ -348,17 +376,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
-
+    minHeight: isTablet ? 90 : 80,
+  },
+  headerTextContainer: {
+    flex: 1,
+    marginRight: SPACING.sm,
   },
   headerTitle: {
-    fontSize: FONT_SIZE.xxl,
+    fontSize: isTablet ? FONT_SIZE.xl : FONT_SIZE.xxl,
     fontWeight: '700',
     color: COLORS.primaryText,
-    marginTop: 10,
-
+    marginTop: SPACING.xs,
   },
   headerSubtitle: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.sm,
     color: COLORS.primaryText,
     marginTop: 2,
     opacity: 0.9,
@@ -366,21 +397,23 @@ const styles = StyleSheet.create({
   onlineButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: isTablet ? SPACING.lg : SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    minWidth: isTablet ? 140 : 120,
+    justifyContent: 'center',
   },
   onlineButtonActive: {
     backgroundColor: COLORS.card,
     borderColor: COLORS.card,
   },
   statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: isTablet ? 12 : 10,
+    height: isTablet ? 12 : 10,
+    borderRadius: isTablet ? 6 : 5,
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
     marginRight: 8,
   },
@@ -388,170 +421,207 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.success,
   },
   onlineText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.sm,
     fontWeight: '600',
     color: COLORS.primaryText,
   },
   onlineTextActive: {
     color: COLORS.brand,
   },
+  listContainer: {
+    flex: 1,
+    paddingBottom: FOOTER_HEIGHT,
+  },
+  requestsHeaderContainer: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    backgroundColor: COLORS.bg,
+  },
+  requestsHeader: {
+    fontSize: isTablet ? FONT_SIZE.lg : FONT_SIZE.lg,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  row: {
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+  },
   requestContainer: {
+    flex: 1,
+  },
+  emptyContainer: {
     flex: 1,
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.md,
-    marginBottom: 80, // Space for footer
   },
   requestContentContainer: {
-    paddingBottom: 100, // Extra padding at bottom for last card to be fully visible above footer
+    paddingHorizontal: isTablet ? SPACING.md : SPACING.lg,
+    paddingBottom: SPACING.xxl,
   },
-  requestsHeader: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: SPACING.md,
-    paddingHorizontal: SPACING.xs,
+  separator: {
+    height: isTablet ? SPACING.md : SPACING.sm,
   },
   requestCard: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
     padding: SPACING.md,
-    marginBottom: SPACING.md,
     elevation: 3,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    marginVertical: SPACING.xs,
+    overflow: 'hidden',
   },
   requestHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING.md,
+    flexWrap: 'wrap',
+    gap: SPACING.xs,
   },
   priorityBadge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: isTablet ? SPACING.md : SPACING.sm,
+    paddingVertical: isTablet ? 8 : 6,
+    borderRadius: isTablet ? 8 : 6,
   },
   priorityText: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     fontWeight: '600',
   },
   requestTime: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     color: COLORS.sub,
   },
   requestBody: {
     marginBottom: SPACING.lg,
   },
   patientName: {
-    fontSize: FONT_SIZE.xl,
+    fontSize: isTablet ? FONT_SIZE.lg : FONT_SIZE.xl,
     fontWeight: '700',
     color: COLORS.text,
     marginBottom: SPACING.md,
   },
   addressContainer: {
     marginBottom: SPACING.md,
+    width: '100%',
   },
   addressRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: SPACING.sm,
+    width: '100%',
   },
   iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: isTablet ? 36 : 32,
+    height: isTablet ? 36 : 32,
+    borderRadius: isTablet ? 18 : 16,
     backgroundColor: COLORS.brandLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING.sm,
+    flexShrink: 0,
   },
   iconCircleDrop: {
     backgroundColor: '#FFF3E0',
   },
   iconText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.sm,
     fontWeight: '700',
     color: COLORS.brand,
   },
   addressTextContainer: {
     flex: 1,
+    flexShrink: 1,
+    paddingRight: SPACING.sm,
+    minWidth: 0,
   },
   addressLabel: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     color: COLORS.sub,
     marginBottom: 2,
+    fontWeight: '500',
   },
   addressText: {
-    fontSize: FONT_SIZE.sm,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.sm,
     color: COLORS.text,
-    lineHeight: 18,
+    lineHeight: isTablet ? 20 : 18,
   },
   dashedLine: {
     height: 20,
     borderLeftWidth: 2,
     borderLeftColor: COLORS.border,
     borderStyle: 'dashed',
-    marginLeft: 15,
+    marginLeft: isTablet ? 17 : 15,
     marginVertical: -6,
   },
   tripInfoRow: {
     flexDirection: 'row',
     backgroundColor: COLORS.bg,
-    borderRadius: 8,
-    padding: SPACING.sm,
+    borderRadius: isTablet ? 10 : 8,
+    padding: isTablet ? SPACING.md : SPACING.sm,
   },
   tripInfoItem: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: SPACING.xs,
   },
   tripInfoDivider: {
     width: 1,
     backgroundColor: COLORS.border,
-    marginHorizontal: 10,
+    marginHorizontal: isTablet ? SPACING.md : 10,
   },
   tripInfoLabel: {
-    fontSize: FONT_SIZE.xs,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     color: COLORS.sub,
     marginBottom: 4,
+    fontWeight: '500',
   },
   tripInfoValue: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.lg,
     fontWeight: '700',
     color: COLORS.text,
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 10,
+    gap: SPACING.sm,
   },
   actionButton: {
     flex: 1,
-    paddingVertical: SPACING.sm + 2,
-    borderRadius: 8,
+    paddingVertical: isTablet ? SPACING.md : SPACING.sm + 2,
+    borderRadius: isTablet ? 10 : 8,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 2,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   acceptButton: {
     backgroundColor: COLORS.success,
   },
   acceptButtonText: {
-    fontSize: FONT_SIZE.lg,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.lg,
     fontWeight: '600',
     color: COLORS.buttonText,
   },
   queueText: {
     textAlign: 'center',
-    fontSize: FONT_SIZE.xs,
+    fontSize: isTablet ? FONT_SIZE.sm : FONT_SIZE.xs,
     color: COLORS.sub,
     marginTop: SPACING.sm,
   },
   loadingContainer: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: SPACING.xl * 3,
+    justifyContent: 'center',
+    paddingVertical: SPACING.xl * 2,
   },
   loadingText: {
-    fontSize: FONT_SIZE.md,
+    fontSize: isTablet ? FONT_SIZE.md : FONT_SIZE.md,
     color: COLORS.sub,
     marginTop: SPACING.md,
     fontWeight: '500',
