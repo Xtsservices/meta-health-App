@@ -1,37 +1,62 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
 import NoTripRequests from './NoTripRequests';
 import { COLORS } from '../../utils/colour';
 import { SPACING, FONT_SIZE } from '../../utils/responsive';
 import { 
-  acceptTripRequest, 
-  rejectTripRequest,
+  acceptTripRequest,
   TripRequest,
   setupTripRequestsListener,
   requestDriverBookingRequests
 } from '../../services/tripRequestService';
 import { RootState } from '../../store/store';
 import { getSocket } from '../../socket/socket';
+import { initNotificationSound, releaseNotificationSound, stopNotificationSound } from '../../utils/notificationSound';
+import { showError, showSuccess } from '../../store/toast.slice';
+
+// Helper function to get priority colors based on priority type
+const getPriorityColors = (priority: string) => {
+  if (priority === 'Emergency') {
+    return {
+      backgroundColor: '#FFEBEE',
+      textColor: COLORS.danger,
+    };
+  }
+  // Normal priority - yellow
+  return {
+    backgroundColor: '#FFF8E1',
+    textColor: '#F9A825',
+  };
+};
 
 const AmbulanceDriverDashboard: React.FC = () => {
   const navigation = useNavigation();
   const user = useSelector((state: RootState) => state.currentUser);
+  const dispatch = useDispatch();
 
   const [tripRequests, setTripRequests] = useState<TripRequest[]>([]);
   const [isOnline, setIsOnline] = useState(false);
   const [loading, setLoading] = useState(false);
+  const previousTripIdsRef = useRef<Set<string>>(new Set());
+
+  // Initialize notification sound on mount
+  useEffect(() => {
+    initNotificationSound();
+    return () => {
+      releaseNotificationSound();
+    };
+  }, []);
 
   // Monitor socket connection status and update isOnline automatically
   useFocusEffect(
@@ -65,13 +90,6 @@ const AmbulanceDriverDashboard: React.FC = () => {
         setIsOnline(false);
       };
 
-      //NEW_BOOKING_REQUEST
-      console.log('📩 New booking request received start:');
-      socket.on('NEW_BOOKING_REQUEST', (data) => {
-        console.log('📩 New booking request received:', data);
-        // Handle the new booking request (e.g., show a notification)
-      });
-
       socket.on('connect', handleConnect);
       socket.on('disconnect', handleDisconnect);
       socket.on('connect_error', handleConnectError);
@@ -81,7 +99,6 @@ const AmbulanceDriverDashboard: React.FC = () => {
         socket.off('connect', handleConnect);
         socket.off('disconnect', handleDisconnect);
         socket.off('connect_error', handleConnectError);
-        socket.off('NEW_BOOKING_REQUEST');
       };
     }, [])
   );
@@ -91,9 +108,20 @@ const AmbulanceDriverDashboard: React.FC = () => {
   // Handle trip requests received from socket
   const handleTripRequestsReceived = useCallback((requests: TripRequest[]) => {
     console.log('📨 Trip requests received:', requests.length);
+    
+    // Check for new trips by comparing with previous trip IDs
+    const currentTripIds = new Set(requests.map(trip => trip.id));
+    const hasNewTrips = requests.some(trip => !previousTripIdsRef.current.has(trip.id));
+    
+    if (hasNewTrips && requests.length > 0) {
+      console.log('🔔 New trips detected, sound will be played by socket listener');
+    }
+    
+    // Update previous trip IDs (ref doesn't trigger re-render)
+    previousTripIdsRef.current = currentTripIds;
     setTripRequests(requests);
     setLoading(false);
-  }, []);
+  }, []); // Empty dependency array - stable callback
 
   // Setup Socket.IO real-time listener when online (NO POLLING)
   useEffect(() => {
@@ -129,128 +157,70 @@ const AmbulanceDriverDashboard: React.FC = () => {
   const handleToggleOnline = () => {
     // Status is now automatic based on socket connection
     // This button is just informational
-    Alert.alert(
-      'Connection Status',
-      isOnline 
-        ? 'You are connected to the server and receiving trip requests automatically.' 
-        : 'You are disconnected. Please check your internet connection.',
-      [{ text: 'OK' }]
-    );
+    if (isOnline) {
+      dispatch(showSuccess('You are connected to the server and receiving trip requests automatically.'));
+    } else {
+      dispatch(showError('You are disconnected. Please check your internet connection.'));
+    }
   };
 
   const handleAcceptTrip = async (trip: TripRequest) => {
-    Alert.alert(
-      'Accept Trip',
-      `Accept trip for ${trip.patientName}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Accept',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const token = await AsyncStorage.getItem('token');
-              
-              if (!token) {
-                Alert.alert('Error', 'Authentication required');
-                return;
-              }
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      
+      if (!token) {
+        dispatch(showError('Authentication required'));
+        return;
+      }
 
-              // Accept trip via API
-              console.log('Accepting trip request:', trip);
-              await acceptTripRequest(trip.bookingID, token);
-              
-              console.log('Trip accepted:', trip.id);
-              
-              // Pass trip data to Active Trip screen
-              const tripData = {
-                id: trip.bookingID,
-                patientName: trip.patientName,
-                pickupAddress: trip.pickupAddress,
-                dropAddress: trip.dropAddress,
-                distance: trip.distance,
-                estimatedTime: trip.estimatedTime,
-                priority: trip.priority,
-                requestTime: trip.requestTime,
-                status: 'accepted',
-                requestID: trip.requestID,
-                bookingID: trip.bookingID,
-                fromLatitude: trip.fromLatitude,
-                fromLongitude: trip.fromLongitude,
-                toLatitude: trip.toLatitude,
-                toLongitude: trip.toLongitude,
-              };
-              
-              Alert.alert('Success', 'Trip accepted! Navigating to Active Trip...');
-              
-              // Navigate to Active Trip screen with data
-              (navigation as any).navigate('AmbulanceDriverActiveTrip', { tripData });
-              
-              // Request fresh trip data via socket
-              if (user?.id) {
-                const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
-                requestDriverBookingRequests(userId);
-              }
-            } catch (error: any) {
-              console.error('Error accepting trip:', error);
-              Alert.alert('Error', error?.message || 'Failed to accept trip. Please try again.');
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
+      // Stop notification sound when trip is accepted
+      stopNotificationSound();
+      
+      // Accept trip via API
+      console.log('Accepting trip request:', trip);
+      await acceptTripRequest(trip.bookingID, token);
+      
+      console.log('Trip accepted:', trip.id);
+      
+      // Pass trip data to Active Trip screen
+      const tripData = {
+        id: trip.bookingID,
+        patientName: trip.patientName,
+        pickupAddress: trip.pickupAddress,
+        dropAddress: trip.dropAddress,
+        distance: trip.distance,
+        estimatedTime: trip.estimatedTime,
+        priority: trip.priority,
+        requestTime: trip.requestTime,
+        status: 'accepted',
+        requestID: trip.requestID,
+        bookingID: trip.bookingID,
+        fromLatitude: trip.fromLatitude,
+        fromLongitude: trip.fromLongitude,
+        toLatitude: trip.toLatitude,
+        toLongitude: trip.toLongitude,
+      };
+      
+      dispatch(showSuccess('Trip accepted! Navigating to Active Trip...'));
+      
+      // Navigate to Active Trip screen with data
+      (navigation as any).navigate('AmbulanceDriverActiveTrip', { tripData });
+      
+      // Request fresh trip data via socket
+      if (user?.id) {
+        const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
+        requestDriverBookingRequests(userId);
+      }
+    } catch (error: any) {
+      console.error('Error accepting trip:', error);
+      dispatch(showError(error?.message || 'Failed to accept trip. Please try again.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleRejectTrip = async (trip: TripRequest) => {
-    Alert.alert(
-      'Reject Trip',
-      `Reject trip for ${trip.patientName}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const token = await AsyncStorage.getItem('token');
-              
-              if (!token) {
-                Alert.alert('Error', 'Authentication required');
-                return;
-              }
 
-              // Reject trip via API
-              await rejectTripRequest(trip.requestID, token);
-              
-              console.log('Trip rejected:', trip.id);
-              
-              // Request fresh trip data via socket
-              if (user?.id) {
-                const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
-                requestDriverBookingRequests(userId);
-              }
-              
-              Alert.alert('Success', 'Trip rejected');
-            } catch (error: any) {
-              console.error('Error rejecting trip:', error);
-              Alert.alert('Error', error?.message || 'Failed to reject trip. Please try again.');
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <View style={styles.container}>
@@ -274,7 +244,11 @@ const AmbulanceDriverDashboard: React.FC = () => {
       </View>
 
       {/* Trip Request Queue */}
-      <ScrollView style={styles.requestContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.requestContainer} 
+        contentContainerStyle={styles.requestContentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {loading && tripRequests.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.brand} />
@@ -288,8 +262,8 @@ const AmbulanceDriverDashboard: React.FC = () => {
             {tripRequests.map((trip) => (
               <View key={trip.id} style={styles.requestCard}>
                 <View style={styles.requestHeader}>
-                  <View style={styles.priorityBadge}>
-                    <Text style={styles.priorityText}>{trip.priority} Priority</Text>
+                  <View style={[styles.priorityBadge, { backgroundColor: getPriorityColors(trip.priority).backgroundColor }]}>
+                    <Text style={[styles.priorityText, { color: getPriorityColors(trip.priority).textColor }]}>{trip.priority}</Text>
                   </View>
                   <Text style={styles.requestTime}>{trip.requestTime}</Text>
                 </View>
@@ -335,12 +309,6 @@ const AmbulanceDriverDashboard: React.FC = () => {
                 </View>
 
                 <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.rejectButton]}
-                    onPress={() => handleRejectTrip(trip)}
-                  >
-                    <Text style={styles.rejectButtonText}>Reject</Text>
-                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.actionButton, styles.acceptButton]}
                     onPress={() => handleAcceptTrip(trip)}
@@ -431,6 +399,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.md,
+    marginBottom: 80, // Space for footer
+  },
+  requestContentContainer: {
+    paddingBottom: 100, // Extra padding at bottom for last card to be fully visible above footer
   },
   requestsHeader: {
     fontSize: FONT_SIZE.lg,
@@ -459,13 +431,11 @@ const styles = StyleSheet.create({
   priorityBadge: {
     paddingHorizontal: SPACING.sm,
     paddingVertical: 6,
-    backgroundColor: '#FFEBEE',
     borderRadius: 6,
   },
   priorityText: {
     fontSize: FONT_SIZE.xs,
     fontWeight: '600',
-    color: COLORS.danger,
   },
   requestTime: {
     fontSize: FONT_SIZE.xs,
@@ -561,14 +531,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  rejectButton: {
-    backgroundColor: '#FFEBEE',
-  },
-  rejectButtonText: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: '600',
-    color: COLORS.danger,
   },
   acceptButton: {
     backgroundColor: COLORS.success,

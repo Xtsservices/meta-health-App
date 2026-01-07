@@ -142,7 +142,7 @@ DischargeSummaryDownload: undefined;
   RegisterAmbulance:undefined;
   AmbulanceAdminDashboard:undefined;
   AmbulanceList:undefined;
-  AmbulanceRequests:undefined;
+  AmbulanceLocation:undefined;
   AmbulanceSettings:undefined;
   Drivers:undefined;
   AddDriver:undefined;

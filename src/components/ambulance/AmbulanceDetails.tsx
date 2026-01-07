@@ -25,10 +25,13 @@ const AmbulanceDetails: React.FC = () => {
 
 
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showStaffAssignModal, setShowStaffAssignModal] = useState(false);
   const [assignLoading, setAssignLoading] = useState(false);
+  const [staffAssignLoading, setStaffAssignLoading] = useState(false);
   
-  // Assignment form state
+  // Driver Assignment form state
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -37,11 +40,23 @@ const AmbulanceDetails: React.FC = () => {
   const [shiftType, setShiftType] = useState('day');
   const [remarks, setRemarks] = useState('');
   const [forceReassign, setForceReassign] = useState(false);
+
+  // Staff Assignment form state
+  const [selectedStaff, setSelectedStaff] = useState<number | null>(null);
+  const [staffFromDate, setStaffFromDate] = useState('');
+  const [staffToDate, setStaffToDate] = useState('');
+  const [staffFromTime, setStaffFromTime] = useState('');
+  const [staffToTime, setStaffToTime] = useState('');
+  const [staffShiftType, setStaffShiftType] = useState('day');
+  const [staffRemarks, setStaffRemarks] = useState('');
+  const [staffForceReassign, setStaffForceReassign] = useState(false);
   
-  const [showDatePicker, setShowDatePicker] = useState<'from' | 'to' | null>(null);
-  const [showTimePicker, setShowTimePicker] = useState<'from' | 'to' | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState<'from' | 'to' | 'staffFrom' | 'staffTo' | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState<'from' | 'to' | 'staffFrom' | 'staffTo' | null>(null);
   const [showDriverDropdown, setShowDriverDropdown] = useState(false);
+  const [showStaffDropdown, setShowStaffDropdown] = useState(false);
   const [showShiftDropdown, setShowShiftDropdown] = useState(false);
+  const [showStaffShiftDropdown, setShowStaffShiftDropdown] = useState(false);
 
   const fetchDrivers = useCallback(async () => {
     try {
@@ -59,10 +74,28 @@ const AmbulanceDetails: React.FC = () => {
     }
   }, []);
 
+  const fetchStaff = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const res: any = await AuthFetch('ambulance/getStaff', token);
+      console.log('fetchStaff response', res);
+      if (res?.data?.staff) {
+        setStaff(res.data.staff);
+      } else if (res?.staff) {
+        setStaff(res.staff);
+      }
+    } catch (err) {
+      console.error('fetchStaff error', err);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchDrivers();
-    }, [fetchDrivers])
+      fetchStaff();
+    }, [fetchDrivers, fetchStaff])
   );
 
   const resetAssignmentForm = () => {
@@ -76,6 +109,17 @@ const AmbulanceDetails: React.FC = () => {
     setForceReassign(false);
   };
 
+  const resetStaffAssignmentForm = () => {
+    setSelectedStaff(null);
+    setStaffFromDate('');
+    setStaffToDate('');
+    setStaffFromTime('');
+    setStaffToTime('');
+    setStaffShiftType('day');
+    setStaffRemarks('');
+    setStaffForceReassign(false);
+  };
+
   const handleOpenAssignModal = () => {
     resetAssignmentForm();
     setShowAssignModal(true);
@@ -84,6 +128,16 @@ const AmbulanceDetails: React.FC = () => {
   const handleCloseAssignModal = () => {
     setShowAssignModal(false);
     resetAssignmentForm();
+  };
+
+  const handleOpenStaffAssignModal = () => {
+    resetStaffAssignmentForm();
+    setShowStaffAssignModal(true);
+  };
+
+  const handleCloseStaffAssignModal = () => {
+    setShowStaffAssignModal(false);
+    resetStaffAssignmentForm();
   };
 
   const handleAssignDriver = async () => {
@@ -100,14 +154,8 @@ const AmbulanceDetails: React.FC = () => {
       dispatch(showError('Please select to date'));
       return;
     }
-    if (!fromTime) {
-      dispatch(showError('Please select from time'));
-      return;
-    }
-    if (!toTime) {
-      dispatch(showError('Please select to time'));
-      return;
-    }
+
+
 
     try {
       setAssignLoading(true);
@@ -116,18 +164,23 @@ const AmbulanceDetails: React.FC = () => {
         dispatch(showError('Authentication required'));
         return;
       }
+      let newFromTime = fromTime || '00:01';
+      let newToTime = toTime || '23:59';
 
+    
       const payload = {
         ambulanceID: ambulance?.id,
         driverID: selectedDriver,
         fromDate,
         toDate,
-        fromTime,
-        toTime,
+        fromTime: newFromTime,
+        toTime: newToTime,
         shiftType,
         remarks: remarks || undefined,
         forceReassign,
       };
+
+      console.log("assignDriverpayload",payload)
       const response: any = await AuthPost('ambulance/assignDriver', payload, token);
 
       if (response?.status === 'success') {
@@ -150,19 +203,82 @@ const AmbulanceDetails: React.FC = () => {
     }
   };
 
-  const handleDateChange = (type: 'from' | 'to', event: any, selectedDate?: Date) => {
+  const handleAssignStaff = async () => {
+    // Validation
+    if (!selectedStaff) {
+      dispatch(showError('Please select a staff member'));
+      return;
+    }
+    if (!staffFromDate) {
+      dispatch(showError('Please select from date'));
+      return;
+    }
+    if (!staffToDate) {
+      dispatch(showError('Please select to date'));
+      return;
+    }
+
+    try {
+      setStaffAssignLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        dispatch(showError('Authentication required'));
+        return;
+      }
+      let newFromTime = staffFromTime || '00:01';
+      let newToTime = staffToTime || '23:59';
+
+      const payload = {
+        ambulanceID: ambulance?.id,
+        staffID: selectedStaff,
+        fromDate: staffFromDate,
+        toDate: staffToDate,
+        fromTime: newFromTime,
+        toTime: newToTime,
+        shiftType: staffShiftType,
+        remarks: staffRemarks || undefined,
+        forceReassign: staffForceReassign,
+      };
+
+      console.log('assignStaffPayload', payload);
+      const response: any = await AuthPost('ambulance/assignStaff', payload, token);
+      console.log("assignStaffPayload response", response);
+      if (response?.status === 'success') {
+        dispatch(showSuccess('Staff assigned successfully'));
+        handleCloseStaffAssignModal();
+        // Navigate back to dashboard after successful assignment
+        navigation.navigate('AmbulanceAdminDashboard');
+      } else {
+        const errorMessage = response?.message || 'Failed to assign staff';
+        dispatch(showError(errorMessage));
+        Alert.alert('Assignment Failed', errorMessage);
+      }
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.message || err?.message || 'Failed to assign staff';
+      dispatch(showError(errorMessage));
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setStaffAssignLoading(false);
+    }
+  };
+
+  const handleDateChange = (type: 'from' | 'to' | 'staffFrom' | 'staffTo', event: any, selectedDate?: Date) => {
     setShowDatePicker(null);
     if (selectedDate) {
       const formattedDate = selectedDate.toISOString().split('T')[0];
       if (type === 'from') {
         setFromDate(formattedDate);
-      } else {
+      } else if (type === 'to') {
         setToDate(formattedDate);
+      } else if (type === 'staffFrom') {
+        setStaffFromDate(formattedDate);
+      } else if (type === 'staffTo') {
+        setStaffToDate(formattedDate);
       }
     }
   };
 
-  const handleTimeChange = (type: 'from' | 'to', event: any, selectedTime?: Date) => {
+  const handleTimeChange = (type: 'from' | 'to' | 'staffFrom' | 'staffTo', event: any, selectedTime?: Date) => {
     setShowTimePicker(null);
     if (selectedTime) {
       const hours = selectedTime.getHours().toString().padStart(2, '0');
@@ -170,8 +286,12 @@ const AmbulanceDetails: React.FC = () => {
       const formattedTime = `${hours}:${minutes}`;
       if (type === 'from') {
         setFromTime(formattedTime);
-      } else {
+      } else if (type === 'to') {
         setToTime(formattedTime);
+      } else if (type === 'staffFrom') {
+        setStaffFromTime(formattedTime);
+      } else if (type === 'staffTo') {
+        setStaffToTime(formattedTime);
       }
     }
   };
@@ -187,21 +307,6 @@ const AmbulanceDetails: React.FC = () => {
     return value === 1 || value === true ? 'Yes' : 'No';
   };
 
-  // Helper function to display status with color
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-      case 'approved':
-        return '#10b981';
-      case 'pending':
-        return '#f59e0b';
-      case 'inactive':
-      case 'rejected':
-        return '#ef4444';
-      default:
-        return '#6b7280';
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -228,6 +333,33 @@ const AmbulanceDetails: React.FC = () => {
               <Text style={styles.driverLabel}>Driver Mobile:</Text>
               <Text style={styles.driverValue}>
                 {ambulance?.activeDriverMobile || 'N/A'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Active Staff Card */}
+        <View style={styles.staffCard}>
+          <View style={styles.driverCardHeader}>
+            <Text style={styles.staffCardTitle}>Active Staff</Text>
+            <TouchableOpacity 
+              style={styles.assignButtonInCard}
+              onPress={handleOpenStaffAssignModal}
+            >
+              <Text style={styles.assignButtonText}>Assign Staff</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.driverInfo}>
+            <View style={styles.driverDetailRow}>
+              <Text style={styles.driverLabel}>Staff Name:</Text>
+              <Text style={styles.driverValue}>
+                {ambulance?.activeStaffName || 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.driverDetailRow}>
+              <Text style={styles.driverLabel}>Staff Mobile:</Text>
+              <Text style={styles.driverValue}>
+                {ambulance?.activeStaffMobile || 'N/A'}
               </Text>
             </View>
           </View>
@@ -487,8 +619,8 @@ const AmbulanceDetails: React.FC = () => {
                 numberOfLines={3}
               />
 
-              {/* Force Reassign - Only show if driver is already assigned */}
-              {ambulance?.currentAssignedId && (
+              {/* Force Reassign  */}
+             
                 <TouchableOpacity
                   style={styles.checkboxRow}
                   onPress={() => setForceReassign(!forceReassign)}
@@ -498,7 +630,7 @@ const AmbulanceDetails: React.FC = () => {
                   </View>
                   <Text style={styles.checkboxLabel}>Force Reassign</Text>
                 </TouchableOpacity>
-              )}
+            
 
               {/* Buttons */}
               <View style={styles.modalButtons}>
@@ -515,6 +647,169 @@ const AmbulanceDetails: React.FC = () => {
                   disabled={assignLoading}
                 >
                   {assignLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.submitButtonText}>Assign</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Staff Assignment Modal */}
+      <Modal
+        visible={showStaffAssignModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCloseStaffAssignModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalTitle}>Assign Staff to {ambulance?.ambulanceName}</Text>
+
+              {/* Staff Dropdown */}
+              <Text style={styles.label}>Staff *</Text>
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => setShowStaffDropdown(!showStaffDropdown)}
+              >
+                <Text style={[styles.dropdownText, !selectedStaff && styles.placeholderText]}>
+                  {selectedStaff
+                    ? `${staff.find((s) => s.staffID === selectedStaff)?.firstName || ''} ${staff.find((s) => s.staffID === selectedStaff)?.lastName || ''}`.trim() || 'Select Staff'
+                    : 'Select Staff'}
+                </Text>
+                <Text style={styles.dropdownArrow}>{showStaffDropdown ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+              {showStaffDropdown && (
+                <View style={styles.dropdownList}>
+                  {staff
+                    .filter((staffMember) => {
+                      // Filter out the currently active staff by checking name and mobile match
+                      const staffFullName = `${staffMember.firstName} ${staffMember.lastName}`.trim();
+                      const staffMobile = staffMember.phoneNo;
+                      const activeStaffName = ambulance?.activeStaffName;
+                      const activeStaffMobile = ambulance?.activeStaffMobile;
+                      
+                      // If no active staff, show all staff
+                      if (!activeStaffName || !activeStaffMobile) return true;
+                      
+                      // Exclude staff if both name and mobile match the active staff
+                      return !(staffFullName === activeStaffName && staffMobile === activeStaffMobile);
+                    })
+                    .map((staffMember) => (
+                      <TouchableOpacity
+                        key={staffMember.staffID}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setSelectedStaff(staffMember.staffID);
+                          setShowStaffDropdown(false);
+                        }}
+                      >
+                        <Text style={styles.dropdownItemText}>
+                          {staffMember.firstName} {staffMember.lastName} - {staffMember.phoneNo}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                </View>
+              )}
+
+              {/* Date Inputs */}
+              <Text style={styles.label}>From Date *</Text>
+              <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker('staffFrom')}>
+                <Text style={[styles.inputText, !staffFromDate && styles.placeholderText]}>
+                  {staffFromDate || 'YYYY-MM-DD'}
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={styles.label}>To Date *</Text>
+              <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker('staffTo')}>
+                <Text style={[styles.inputText, !staffToDate && styles.placeholderText]}>
+                  {staffToDate || 'YYYY-MM-DD'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Time Inputs */}
+              <Text style={styles.label}>From Time *</Text>
+              <TouchableOpacity style={styles.input} onPress={() => setShowTimePicker('staffFrom')}>
+                <Text style={[styles.inputText, !staffFromTime && styles.placeholderText]}>
+                  {staffFromTime || 'HH:MM'}
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={styles.label}>To Time *</Text>
+              <TouchableOpacity style={styles.input} onPress={() => setShowTimePicker('staffTo')}>
+                <Text style={[styles.inputText, !staffToTime && styles.placeholderText]}>
+                  {staffToTime || 'HH:MM'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Shift Type Dropdown */}
+              <Text style={styles.label}>Shift Type *</Text>
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => setShowStaffShiftDropdown(!showStaffShiftDropdown)}
+              >
+                <Text style={styles.dropdownText}>{staffShiftType}</Text>
+                <Text style={styles.dropdownArrow}>{showStaffShiftDropdown ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+              {showStaffShiftDropdown && (
+                <View style={styles.dropdownList}>
+                  {['day', 'night', 'general'].map((shift) => (
+                    <TouchableOpacity
+                      key={shift}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setStaffShiftType(shift);
+                        setShowStaffShiftDropdown(false);
+                      }}
+                    >
+                      <Text style={styles.dropdownItemText}>{shift}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Remarks */}
+              <Text style={styles.label}>Remarks</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Optional remarks"
+                placeholderTextColor="#9ca3af"
+                value={staffRemarks}
+                onChangeText={setStaffRemarks}
+                multiline
+                numberOfLines={3}
+              />
+
+              {/* Force Reassign */}
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setStaffForceReassign(!staffForceReassign)}
+              >
+                <View style={[styles.checkbox, staffForceReassign && styles.checkboxChecked]}>
+                  {staffForceReassign && <Text style={styles.checkboxTick}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>Force Reassign</Text>
+              </TouchableOpacity>
+
+              {/* Buttons */}
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={handleCloseStaffAssignModal}
+                  disabled={staffAssignLoading}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.submitButton, staffAssignLoading && styles.submitButtonDisabled]}
+                  onPress={handleAssignStaff}
+                  disabled={staffAssignLoading}
+                >
+                  {staffAssignLoading ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <Text style={styles.submitButtonText}>Assign</Text>
@@ -573,6 +868,19 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#14b8a6',
   },
+  staffCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+  },
   driverCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -586,6 +894,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#14b8a6',
+  },
+  staffCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#f59e0b',
   },
   assignButtonInCard: {
     backgroundColor: '#14b8a6',

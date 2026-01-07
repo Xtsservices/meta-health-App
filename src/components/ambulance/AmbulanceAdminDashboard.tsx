@@ -78,10 +78,11 @@ const AnimatedAmbulanceCard: React.FC<{
   onCompletePress: () => void;
 }> = ({ item, onPress, onCompletePress }) => {
   const hasActiveDriver = !!(item as any).activeDriverName;
+  const hasActiveStaff = !!(item as any).activeStaffName;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (hasActiveDriver) {
+    if (hasActiveDriver || hasActiveStaff) {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -99,14 +100,14 @@ const AnimatedAmbulanceCard: React.FC<{
       pulse.start();
       return () => pulse.stop();
     }
-  }, [hasActiveDriver, pulseAnim]);
+  }, [hasActiveDriver, hasActiveStaff, pulseAnim]);
 
   return (
     <Animated.View 
       style={[
         styles.ambulanceCard,
-        hasActiveDriver && styles.ambulanceCardWithDriver,
-        hasActiveDriver && { transform: [{ scale: pulseAnim }] }
+        (hasActiveDriver || hasActiveStaff) && styles.ambulanceCardWithDriver,
+        (hasActiveDriver || hasActiveStaff) && { transform: [{ scale: pulseAnim }] }
       ]}
     >
       <TouchableOpacity
@@ -134,11 +135,18 @@ const AnimatedAmbulanceCard: React.FC<{
             >
               <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
             </View>
-            {hasActiveDriver && (
-              <View style={styles.driverIconContainer}>
-                <Text style={styles.driverIcon}>👤</Text>
-              </View>
-            )}
+            <View style={styles.iconRow}>
+              {hasActiveDriver && (
+                <View style={styles.driverIconContainer}>
+                  <Text style={styles.driverIcon}>👤</Text>
+                </View>
+              )}
+              {hasActiveStaff && (
+                <View style={styles.staffIconContainer}>
+                  <Text style={styles.staffIcon}>🧑‍⚕️</Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
 
@@ -165,6 +173,18 @@ const AnimatedAmbulanceCard: React.FC<{
             <Text style={styles.label}>Driver Mobile:</Text>
             <Text style={[styles.value, hasActiveDriver && styles.activeDriverText]}>
               {(item as any).activeDriverMobile || 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Staff Name:</Text>
+            <Text style={[styles.value, hasActiveStaff && styles.activeStaffText]}>
+              {(item as any).activeStaffName || 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Staff Mobile:</Text>
+            <Text style={[styles.value, hasActiveStaff && styles.activeStaffText]}>
+              {(item as any).activeStaffMobile || 'N/A'}
             </Text>
           </View>
         </View>
@@ -209,7 +229,7 @@ const AmbulanceAdminDashboard: React.FC = () => {
       }
 
       const response: any = await AuthFetch('ambulance/getAllAmbulances', token);
-      // console.log('Ambulance fetch response:', response);
+      console.log('Ambulance fetch response:', response);
 
       if (response?.data?.ambulances && Array.isArray(response.data.ambulances)) {
         const fetchedAmbulances = response.data.ambulances;
@@ -258,28 +278,7 @@ const AmbulanceAdminDashboard: React.FC = () => {
     }, [loadDashboardData])
   );
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
-        {
-          text: 'Logout',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem('token');
-              await AsyncStorage.removeItem('userID');
-              dispatch(showSuccess('Logged out successfully'));
-              navigation.navigate('Login' as never);
-            } catch {
-              dispatch(showError('Logout failed'));
-            }
-          },
-        },
-      ]
-    );
-  };
+
 
   const handleCompleteDetails = (ambulance: AmbulanceData) => {
     const ambulanceData = {
@@ -366,14 +365,6 @@ const AmbulanceAdminDashboard: React.FC = () => {
             <View>
               <Text style={styles.headerTitle}>Ambulance Admin</Text>
               <Text style={styles.headerSubtitle}>Dashboard</Text>
-            </View>
-            <View style={styles.headerButtons}>
-              <TouchableOpacity
-                style={styles.logoutButton}
-                onPress={handleLogout}
-              >
-                <Text style={styles.logoutButtonText}>Logout</Text>
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -467,6 +458,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
+    marginTop: 10,
   },
   headerButtons: {
     flexDirection: 'row',
@@ -712,7 +704,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   driverIconContainer: {
-    marginTop: 6,
     backgroundColor: '#10b981',
     borderRadius: 12,
     width: 24,
@@ -721,7 +712,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   driverIcon: {
-    fontSize: 14,
+    fontSize: 12,
+  },
+  iconRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  staffIconContainer: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  staffIcon: {
+    fontSize: 12,
   },
   cardBody: {
     paddingHorizontal: 16,
@@ -748,6 +757,10 @@ const styles = StyleSheet.create({
   },
   activeDriverText: {
     color: '#10b981',
+    fontWeight: '600',
+  },
+  activeStaffText: {
+    color: '#f59e0b',
     fontWeight: '600',
   },
   emptyState: {

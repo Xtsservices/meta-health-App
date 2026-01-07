@@ -6,8 +6,8 @@ import {
   StyleSheet,
   Platform,
   Dimensions,
-  Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
   LayoutDashboardIcon,
@@ -22,7 +22,8 @@ import {
   stopLocationTracking,
 } from '../../utils/locationUtils';
 import { RootState } from '../../store/store';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { showError } from '../../store/toast.slice';
 
 const { width: W } = Dimensions.get('window');
 
@@ -106,7 +107,9 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
 }) => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
+  const dispatch = useDispatch();
   const trackingStartedRef = useRef(false);
+  const insets = useSafeAreaInsets();
   
   console.log("Current user:", user);
 
@@ -133,11 +136,7 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
           const granted = await ensureLocationPermission();
           if (!granted) {
             console.log('❌ Location permission not granted');
-            Alert.alert(
-              'Location Required',
-              'Location permission is required to track ambulance location.',
-              [{ text: 'OK' }]
-            );
+            dispatch(showError('Location permission is required to track ambulance location.'));
             return;
           }
 
@@ -216,7 +215,7 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
   };
 
   return (
-    <View style={[styles.footer, { backgroundColor: brandColor }]}>
+    <View style={[styles.footer, { backgroundColor: brandColor, paddingBottom: Math.max(insets.bottom, 8) }]}>
       <Item k="dashboard" active={active} onPress={handleTabPress} />
       <Item k="activeTrip" active={active} onPress={handleTabPress} />
       <Item k="history" active={active} onPress={handleTabPress} />
@@ -233,11 +232,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 64,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingBottom: Platform.OS === 'ios' ? 10 : 8,
     paddingTop: 8,
     borderTopWidth: 0,
     width: W,
@@ -250,10 +247,9 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     paddingHorizontal: 6,
-    paddingTop: 2,
-    height: '100%',
+    paddingVertical: 8,
   },
   tabText: {
     color: '#ffffff',

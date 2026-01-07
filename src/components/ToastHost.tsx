@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootState } from '../store/store';        
 import { clearToast } from '../store/toast.slice';
 
+
 const toastConfig: ToastConfig = {
   success: (props) => (
     <BaseToast

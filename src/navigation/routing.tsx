@@ -129,7 +129,7 @@ import doctorProfile from '../components/dashboard/doctorProfile';
 import RegisterAmbulance from '../components/ambulance/registerAmbulance';
 import AmbulanceAdminDashboard from '../components/ambulance/AmbulanceAdminDashboard';
 import AmbulanceList from '../components/ambulance/AmbulanceList';
-import AmbulanceRequests from '../components/ambulance/AmbulanceRequests';
+import AmbulanceLocation from '../components/ambulance/AmbulanceLocation';
 import AmbulanceSettings from '../components/ambulance/AmbulanceSettings';
 import AmbulanceForm from '../components/ambulance/AmbulanceForm';
 import AmbulanceDetails from '../components/ambulance/AmbulanceDetails';
@@ -1190,7 +1190,7 @@ const Routing = () => {
           options={{
             title: 'Ambulance Dashboard',
             headerTitleAlign: 'center',
-            headerShown: true,
+            headerShown: false,
           }}
         />
         <Stack.Screen
@@ -1203,12 +1203,12 @@ const Routing = () => {
           }}
         />
         <Stack.Screen
-          name="AmbulanceRequests"
-          component={AmbulanceRequests}
+          name="AmbulanceLocation"
+          component={AmbulanceLocation}
           options={{
-            title: 'Service Requests',
+            title: 'Ambulance Location',
             headerTitleAlign: 'center',
-            headerShown: true,
+            headerShown: false,
           }}
         />
         <Stack.Screen
@@ -1217,23 +1217,23 @@ const Routing = () => {
           options={{
             title: 'Settings',
             headerTitleAlign: 'center',
-            headerShown: true,
+            headerShown: false,
           }}
         />
         <Stack.Screen
           name="Drivers"
           component={Drivers}
           options={{
-            title: 'Drivers',
+            title: 'Drivers Management',
             headerTitleAlign: 'center',
-            headerShown: true,
+            headerShown: false,
           }}
         />
         <Stack.Screen
           name="AddDriver"
           component={AddDriver}
           options={{
-            title: 'Add Driver',
+            title: 'Add Staff',
             headerTitleAlign: 'center',
             headerShown: true,
           }}

@@ -759,19 +759,19 @@ const AmbulanceForm: React.FC = () => {
             onUpload={handleDocumentUpload}
           />
           <DocumentUploadField 
-            label="Front Image *" 
+            label="Ambulance Front Image *" 
             documentType="frontImage"
             currentFile={_documents.frontImage}
             onUpload={handleDocumentUpload}
           />
           <DocumentUploadField 
-            label="Back Image *" 
+            label="Ambulance Back Image *" 
             documentType="backImage"
             currentFile={_documents.backImage}
             onUpload={handleDocumentUpload}
           />
           <DocumentUploadField 
-            label="Inside Image *" 
+            label="Ambulance Inside Image *" 
             documentType="insideImage"
             currentFile={_documents.insideImage}
             onUpload={handleDocumentUpload}

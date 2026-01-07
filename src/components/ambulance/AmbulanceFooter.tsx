@@ -12,15 +12,15 @@ import { useNavigation } from "@react-navigation/native";
 import {
   LayoutDashboardIcon,
   SettingsIcon,
-  ShoppingCartIcon,
   UserIcon,
+  MapPinIcon,
 } from "../../utils/SvgIcons";
 
 const { width: W } = Dimensions.get("window");
 
 export type AmbulanceTabKey =
   | "dashboard"
-  | "requests"
+  | "location"
   | "drivers"
   | "settings";
 
@@ -39,7 +39,7 @@ type ItemProps = {
 const getTabLabel = (k: AmbulanceTabKey): string => {
   const labels = {
     dashboard: "Dashboard",
-    requests: "Requests",
+  location: "Location",
     drivers: "Drivers",
     settings: "Settings",
   };
@@ -49,7 +49,7 @@ const getTabLabel = (k: AmbulanceTabKey): string => {
 const getTabIcon = (k: AmbulanceTabKey): React.ElementType => {
   const icons = {
     dashboard: LayoutDashboardIcon,
-    requests: ShoppingCartIcon,
+  location: MapPinIcon,
     drivers: UserIcon,
     settings: SettingsIcon,
   };
@@ -108,9 +108,8 @@ const AmbulanceFooter: React.FC<Props> = ({
       case "dashboard":
         navigation.navigate("AmbulanceAdminDashboard");
         break;
-      case "requests":
-        // Navigate to ambulance requests/bookings screen
-        navigation.navigate("AmbulanceRequests");
+      case "location":
+        navigation.navigate("AmbulanceLocation");
         break;
       case "drivers":
         // Navigate to drivers screen
@@ -127,9 +126,9 @@ const AmbulanceFooter: React.FC<Props> = ({
 
   return (
     <View style={[styles.footer, { backgroundColor: brandColor }]}>
-      <Item k="dashboard" active={active} onPress={handleTabPress} />
-      <Item k="requests" active={active} onPress={handleTabPress} />
-      <Item k="drivers" active={active} onPress={handleTabPress} />
+  <Item k="dashboard" active={active} onPress={handleTabPress} />
+  <Item k="location" active={active} onPress={handleTabPress} />
+  <Item k="drivers" active={active} onPress={handleTabPress} />
       <Item k="settings" active={active} onPress={handleTabPress} />
     </View>
   );

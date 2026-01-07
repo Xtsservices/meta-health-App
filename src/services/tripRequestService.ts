@@ -1,5 +1,6 @@
 import { AuthFetch, AuthPost } from '../auth/auth';
 import { getSocket } from '../socket/socket';
+import { playNotificationSound } from '../utils/notificationSound';
 
 // Interface for API response
 export interface TripRequestResponse {
@@ -16,9 +17,26 @@ export interface TripRequestAPI {
   fromLongitude: string;
   toLatitude: string;
   toLongitude: string;
-  bookingStatus: string;
+  fromAddress: string;
+  toAddress: string;
+  bookingType: string;
+  bookingStatus: 'NORMAL' | 'SOS';
   requestStatus: string;
   requestedAt: string;
+  distance?: string;
+  estimatedTime?: string;
+  driverToPickupETA?: {
+    distanceMeters: number;
+    distanceText: string;
+    durationSeconds: number;
+    durationText: string;
+  } | null;
+  pickupToDestinationETA?: {
+    distanceMeters: number;
+    distanceText: string;
+    durationSeconds: number;
+    durationText: string;
+  } | null;
 }
 
 // Interface for formatted trip request with location names
@@ -42,105 +60,18 @@ export interface TripRequest {
   requestStatus: string;
 }
 
-/**
- * Reverse geocode coordinates to get human-readable address
- * Using Nominatim (OpenStreetMap) API - free and no API key required
- */
-async function reverseGeocode(
-  latitude: string,
-  longitude: string
-): Promise<string> {
-  try {
-    // return latitude + ',' + longitude; // --- TEMPORARY BYPASS ---
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
-      {
-        headers: {
-          'User-Agent': 'MetaHealthApp/1.0', // Required by Nominatim
-        },
-      }
-    );
 
-    if (!response.ok) {
-      throw new Error('Geocoding failed');
-    }
-
-    const data = await response.json();
-    
-    // Build a readable address from the response
-    if (data.display_name) {
-      return data.display_name;
-    }
-    
-    // Fallback: construct address from components
-    const address = data.address || {};
-    const parts = [
-      address.road || address.street,
-      address.suburb || address.neighbourhood,
-      address.city || address.town || address.village,
-      address.state,
-    ].filter(Boolean);
-    
-    return parts.length > 0 ? parts.join(', ') : `${latitude}, ${longitude}`;
-  } catch (error) {
-    console.error('Reverse geocoding error:', error);
-    // Return coordinates as fallback
-    return `${latitude}, ${longitude}`;
-  }
-}
 
 /**
- * Calculate distance between two coordinates using Haversine formula
- * Returns distance in kilometers
+ * Determine priority based on booking status or booking type
+ * SOS = Emergency, NORMAL = Normal
  */
-function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = R * c;
-  return distance;
-}
-
-/**
- * Calculate estimated time based on distance
- * Assumes average speed of 30 km/h in city traffic
- */
-function calculateEstimatedTime(distanceKm: number): string {
-  const averageSpeed = 30; // km/h
-  const timeInHours = distanceKm / averageSpeed;
-  const timeInMinutes = Math.round(timeInHours * 60);
+function determinePriority(bookingStatus: string, bookingType?: string): string {
+  // Check both fields, case-insensitive
+  const isSOSStatus = bookingStatus && bookingStatus.toUpperCase() === 'SOS';
+  const isSOSType = bookingType && bookingType.toUpperCase() === 'SOS';
   
-  if (timeInMinutes < 60) {
-    return `${timeInMinutes} mins`;
-  } else {
-    const hours = Math.floor(timeInMinutes / 60);
-    const minutes = timeInMinutes % 60;
-    return `${hours}h ${minutes}m`;
-  }
-}
-
-/**
- * Determine priority based on distance and booking status
- */
-function determinePriority(distance: number, bookingStatus: string): string {
-  if (bookingStatus === 'emergency' || distance > 15) {
-    return 'High';
-  } else if (distance > 5) {
-    return 'Medium';
-  }
-  return 'Low';
+  return (isSOSStatus || isSOSType) ? 'Emergency' : 'Normal';
 }
 
 /**
@@ -178,59 +109,47 @@ export async function fetchTripRequests(
 
     const requests: TripRequestAPI[] = response.data.requests;
 
-    // Process each request and get location names
-    const formattedRequests = await Promise.all(
-      requests.map(async (request) => {
-        // Get location names using reverse geocoding
-        const [pickupAddress, dropAddress] = await Promise.all([
-          reverseGeocode(request.fromLatitude, request.fromLongitude),
-          reverseGeocode(request.toLatitude, request.toLongitude),
-        ]);
+    // Process each request - use addresses directly from backend
+    const formattedRequests = requests.map((request) => {
+      // Use addresses directly from backend
+      const pickupAddress = request.fromAddress || `${request.fromLatitude}, ${request.fromLongitude}`;
+      
+      // For SOS bookings, drop location is pending
+      const dropAddress = request.bookingStatus === 'SOS' 
+        ? 'Pending' 
+        : (request.toAddress || `${request.toLatitude}, ${request.toLongitude}`);
 
-        // Calculate distance
-        const distanceKm = calculateDistance(
-          parseFloat(request.fromLatitude),
-          parseFloat(request.fromLongitude),
-          parseFloat(request.toLatitude),
-          parseFloat(request.toLongitude)
-        );
+      // Use driverToPickupETA for distance and time
+      const distance = request.driverToPickupETA?.distanceText || request.distance || 'N/A';
+      const estimatedTime = request.driverToPickupETA?.durationText || request.estimatedTime || 'N/A';
 
-        // Format distance
-        const distance =
-          distanceKm < 1
-            ? `${Math.round(distanceKm * 1000)} m`
-            : `${distanceKm.toFixed(1)} km`;
+      // Determine priority based on booking status
+      const priority = determinePriority(request.bookingStatus, request.bookingType);
+      console.log(`Request ${request.requestID}: bookingStatus=${request.bookingStatus}, bookingType=${request.bookingType}, priority=${priority}`);
 
-        // Calculate estimated time
-        const estimatedTime = calculateEstimatedTime(distanceKm);
+      // Format request time
+      const requestTime = formatRequestTime(request.requestedAt);
 
-        // Determine priority
-        const priority = determinePriority(distanceKm, request.bookingStatus);
-
-        // Format request time
-        const requestTime = formatRequestTime(request.requestedAt);
-
-        return {
-          id: `trip_${request.requestID}`,
-          patientName: `Patient #${request.patientUserID}`, // You might want to fetch actual patient name from another API
-          pickupAddress,
-          dropAddress,
-          distance,
-          estimatedTime,
-          priority,
-          requestTime,
-          requestID: request.requestID,
-          bookingID: request.bookingID,
-          patientUserID: request.patientUserID,
-          fromLatitude: request.fromLatitude,
-          fromLongitude: request.fromLongitude,
-          toLatitude: request.toLatitude,
-          toLongitude: request.toLongitude,
-          bookingStatus: request.bookingStatus,
-          requestStatus: request.requestStatus,
-        };
-      })
-    );
+      return {
+        id: `trip_${request.requestID}`,
+        patientName: `Patient #${request.patientUserID}`,
+        pickupAddress,
+        dropAddress,
+        distance,
+        estimatedTime,
+        priority,
+        requestTime,
+        requestID: request.requestID,
+        bookingID: request.bookingID,
+        patientUserID: request.patientUserID,
+        fromLatitude: request.fromLatitude,
+        fromLongitude: request.fromLongitude,
+        toLatitude: request.toLatitude,
+        toLongitude: request.toLongitude,
+        bookingStatus: request.bookingStatus,
+        requestStatus: request.requestStatus,
+      };
+    });
 
     return formattedRequests;
   } catch (error) {
@@ -291,6 +210,9 @@ export async function rejectTripRequest(
   }
 }
 
+// Track previous trip IDs to detect new trips
+let previousTripIds = new Set<number>();
+
 /**
  * Setup Socket.IO listener for driver booking requests
  * This will listen for real-time trip requests from the backend
@@ -309,68 +231,88 @@ export function setupTripRequestsSocketListener(
   console.log('🔌 Setting up trip requests socket listener for user:', userId);
 
   // Listen for driver booking requests from backend
-  const handleDriverBookingRequests = async (data: { requests: TripRequestAPI[] }) => {
+  const handleDriverBookingRequests = (data: { requests: TripRequestAPI[] }) => {
     console.log('📨 Received driver booking requests:', data);
     
     try {
       if (!data.requests || data.requests.length === 0) {
+        previousTripIds.clear();
         onRequestsReceived([]);
         return;
       }
 
-      // Process each request and get location names
-      const formattedRequests = await Promise.all(
-        data.requests.map(async (request) => {
-          // Get location names using reverse geocoding
-          const [pickupAddress, dropAddress] = await Promise.all([
-            reverseGeocode(request.fromLatitude, request.fromLongitude),
-            reverseGeocode(request.toLatitude, request.toLongitude),
-          ]);
+      // Check for NEW trips by comparing with previous trip IDs
+      const currentTripIds = new Set(data.requests.map(req => req.requestID));
+      const newTrips = data.requests.filter(req => !previousTripIds.has(req.requestID));
+      const hasNewTrips = newTrips.length > 0;
+      
+      console.log('Previous trip IDs:', Array.from(previousTripIds));
+      console.log('Current trip IDs:', Array.from(currentTripIds));
+      console.log('New trips count:', newTrips.length);
 
-          // Calculate distance
-          const distanceKm = calculateDistance(
-            parseFloat(request.fromLatitude),
-            parseFloat(request.fromLongitude),
-            parseFloat(request.toLatitude),
-            parseFloat(request.toLongitude)
-          );
+      // Only play sound if there are NEW trips
+      if (hasNewTrips) {
+        // Check if there's any SOS booking in the NEW requests
+        console.log('Checking for SOS bookings in NEW requests:', newTrips);
+        
+        // Check both bookingStatus and bookingType fields, case-insensitive
+        const hasSOSBooking = newTrips.some(req => {
+          const isSOSStatus = req.bookingStatus && req.bookingStatus.toUpperCase() === 'SOS';
+          const isSOSType = req.bookingType && req.bookingType.toUpperCase() === 'SOS';
+          console.log(`New Request ${req.requestID}: bookingStatus=${req.bookingStatus}, bookingType=${req.bookingType}, isSOSStatus=${isSOSStatus}, isSOSType=${isSOSType}`);
+          return isSOSStatus || isSOSType;
+        });
+        
+        console.log('Has SOS booking in NEW trips:', hasSOSBooking);
+        console.log('Playing sound:', hasSOSBooking ? 'SOS (Emergency)' : 'NORMAL');
+        playNotificationSound(hasSOSBooking ? 'SOS' : 'NORMAL');
+      } else {
+        console.log('No new trips, sound not played');
+      }
+      
+      // Update previous trip IDs
+      previousTripIds = currentTripIds;
 
-          // Format distance
-          const distance =
-            distanceKm < 1
-              ? `${Math.round(distanceKm * 1000)} m`
-              : `${distanceKm.toFixed(1)} km`;
+      // Process each request - use addresses directly from backend
+      const formattedRequests = data.requests.map((request) => {
+        // Use addresses directly from backend
+        const pickupAddress = request.fromAddress || `${request.fromLatitude}, ${request.fromLongitude}`;
+        
+        // For SOS bookings, drop location is pending
+        const dropAddress = request.bookingStatus === 'SOS' 
+          ? 'Pending' 
+          : (request.toAddress || `${request.toLatitude}, ${request.toLongitude}`);
 
-          // Calculate estimated time
-          const estimatedTime = calculateEstimatedTime(distanceKm);
+        // Use driverToPickupETA for distance and time
+        const distance = request.driverToPickupETA?.distanceText || request.distance || 'N/A';
+        const estimatedTime = request.driverToPickupETA?.durationText || request.estimatedTime || 'N/A';
 
-          // Determine priority
-          const priority = determinePriority(distanceKm, request.bookingStatus);
+        // Determine priority based on booking status
+        const priority = determinePriority(request.bookingStatus, request.bookingType);
 
-          // Format request time
-          const requestTime = formatRequestTime(request.requestedAt);
+        // Format request time
+        const requestTime = formatRequestTime(request.requestedAt);
 
-          return {
-            id: `trip_${request.requestID}`,
-            patientName: `Patient #${request.patientUserID}`,
-            pickupAddress,
-            dropAddress,
-            distance,
-            estimatedTime,
-            priority,
-            requestTime,
-            requestID: request.requestID,
-            bookingID: request.bookingID,
-            patientUserID: request.patientUserID,
-            fromLatitude: request.fromLatitude,
-            fromLongitude: request.fromLongitude,
-            toLatitude: request.toLatitude,
-            toLongitude: request.toLongitude,
-            bookingStatus: request.bookingStatus,
-            requestStatus: request.requestStatus,
-          };
-        })
-      );
+        return {
+          id: `trip_${request.requestID}`,
+          patientName: `Patient #${request.patientUserID}`,
+          pickupAddress,
+          dropAddress,
+          distance,
+          estimatedTime,
+          priority,
+          requestTime,
+          requestID: request.requestID,
+          bookingID: request.bookingID,
+          patientUserID: request.patientUserID,
+          fromLatitude: request.fromLatitude,
+          fromLongitude: request.fromLongitude,
+          toLatitude: request.toLatitude,
+          toLongitude: request.toLongitude,
+          bookingStatus: request.bookingStatus,
+          requestStatus: request.requestStatus,
+        };
+      });
 
       onRequestsReceived(formattedRequests);
     } catch (error) {
