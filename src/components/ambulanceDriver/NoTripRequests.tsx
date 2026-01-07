@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,47 +6,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import Geolocation from '@react-native-community/geolocation';
 import { SPACING } from '../../utils/responsive';
-
-type GpsSignalStrength = 'Strong' | 'Good' | 'Weak' | 'No Signal';
-
-interface GpsStatus {
-  strength: GpsSignalStrength;
-  accuracy: number | null;
-}
-
-const getGpsSignalStrength = (accuracy: number | null): GpsStatus => {
-  console.log('GPS Accuracy:', accuracy);
-  if (accuracy === null) {
-    return { strength: 'No Signal', accuracy: null };
-  }
-  // accuracy is in meters - lower is better
-  if (accuracy <= 10) {
-    return { strength: 'Strong', accuracy };
-  } else if (accuracy <= 30) {
-    return { strength: 'Good', accuracy };
-  } else if (accuracy <= 100) {
-    return { strength: 'Weak', accuracy };
-  } else {
-    return { strength: 'No Signal', accuracy };
-  }
-};
-
-const getSignalColor = (strength: GpsSignalStrength): string => {
-  switch (strength) {
-    case 'Strong':
-      return '#4CAF50'; // Green
-    case 'Good':
-      return '#8BC34A'; // Light Green
-    case 'Weak':
-      return '#FF9800'; // Orange
-    case 'No Signal':
-      return '#F44336'; // Red
-    default:
-      return '#999999';
-  }
-};
 
 interface NoTripRequestsProps {
   isOnline: boolean;
@@ -55,39 +15,6 @@ interface NoTripRequestsProps {
 const NoTripRequests: React.FC<NoTripRequestsProps> = ({ isOnline }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const [gpsStatus, setGpsStatus] = useState<GpsStatus>({ strength: 'No Signal', accuracy: null });
-
-  // GPS Signal monitoring
-  useEffect(() => {
-    let watchId: number | null = null;
-console.log("isOnline",isOnline)
-    if (isOnline) {
-      // Start watching GPS position
-      watchId = Geolocation.watchPosition(
-        (position) => {
-          const accuracy = position.coords.accuracy;
-          console.log('GPS Position Accuracy:', accuracy);
-          setGpsStatus(getGpsSignalStrength(accuracy));
-        },
-        (error) => {
-          console.log('GPS Error:', error.message);
-          setGpsStatus({ strength: 'No Signal', accuracy: null });
-        },
-        {
-          enableHighAccuracy: true,
-          distanceFilter: 0,
-          interval: 5000,
-          fastestInterval: 2000,
-        }
-      );
-    }
-
-    return () => {
-      if (watchId !== null) {
-        Geolocation.clearWatch(watchId);
-      }
-    };
-  }, [isOnline]);
 
   useEffect(() => {
     // Simple fade in
@@ -149,12 +76,7 @@ console.log("isOnline",isOnline)
           <View style={styles.card}>
             <Text style={styles.cardIcon}>🛰️</Text>
             <Text style={styles.cardLabel}>GPS Signal</Text>
-            <Text style={[styles.cardValue, { color: getSignalColor(gpsStatus.strength) }]}>
-              {gpsStatus.strength}
-            </Text>
-            {gpsStatus.accuracy !== null && (
-              <Text style={styles.accuracyText}>±{Math.round(gpsStatus.accuracy)}m</Text>
-            )}
+            <Text style={styles.cardValue}>Strong</Text>
           </View>
 
          
@@ -280,13 +202,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#1A1A1A',
-    textAlign: 'center',
-  },
-  accuracyText: {
-    fontSize: 10,
-    fontWeight: '400',
-    color: '#999999',
-    marginTop: 2,
     textAlign: 'center',
   },
   infoBox: {
