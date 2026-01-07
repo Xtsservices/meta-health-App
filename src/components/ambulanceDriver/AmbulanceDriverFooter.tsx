@@ -113,6 +113,19 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
   
   console.log("Current user:", user);
 
+  // 🔹 CLEANUP: Stop tracking when component unmounts (app closes or user logs out)
+  React.useEffect(() => {
+    return () => {
+      if (trackingStartedRef.current) {
+        console.log('🛑 Component unmounting - stopping background tracking');
+        stopLocationTracking().catch(err => {
+          console.error('Error stopping tracking on unmount:', err);
+        });
+        trackingStartedRef.current = false;
+      }
+    };
+  }, []);
+
   // 🔹 START CONTINUOUS BACKGROUND LOCATION TRACKING
   useFocusEffect(
     React.useCallback(() => {
@@ -174,16 +187,12 @@ const AmbulanceDriverFooter: React.FC<Props> = ({
         initBackgroundTracking();
       }, THROTTLE_TIME);
 
-      // Cleanup: Stop tracking when screen loses focus
+      // Cleanup: DON'T stop tracking on screen blur - let it run in background!
+      // Only stop when user explicitly goes offline
       return () => {
         clearTimeout(timer);
-        if (trackingStartedRef.current && user?.id) {
-          console.log('🛑 Stopping background tracking on screen blur...');
-          stopLocationTracking().catch(err => {
-            console.error('Error stopping tracking:', err);
-          });
-          trackingStartedRef.current = false;
-        }
+        // Removed: Don't stop tracking when screen loses focus
+        console.log('📱 Screen lost focus but keeping background tracking active');
       };
     }, [user?.id, user?.ambulance?.ambulanceID])
   );

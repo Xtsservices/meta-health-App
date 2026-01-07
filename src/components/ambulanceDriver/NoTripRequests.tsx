@@ -60,17 +60,39 @@ const NoTripRequests: React.FC<NoTripRequestsProps> = ({ isOnline }) => {
   // GPS Signal monitoring
   useEffect(() => {
     let watchId: number | null = null;
-console.log("isOnline",isOnline)
+    console.log("isOnline",isOnline)
     if (isOnline) {
+      // Get initial position immediately
+      Geolocation.getCurrentPosition(
+        (position) => {
+          const accuracy = position.coords.accuracy;
+          console.log('📍 Initial GPS Position Accuracy:', accuracy);
+          const status = getGpsSignalStrength(accuracy);
+          console.log('📡 Initial GPS Status:', status);
+          setGpsStatus(status);
+        },
+        (error) => {
+          console.log('⚠️ Initial GPS Error:', error.message, error.code);
+          // Don't set No Signal here, let watchPosition handle it
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 5000,
+        }
+      );
+
       // Start watching GPS position
       watchId = Geolocation.watchPosition(
         (position) => {
           const accuracy = position.coords.accuracy;
-          console.log('GPS Position Accuracy:', accuracy);
-          setGpsStatus(getGpsSignalStrength(accuracy));
+          console.log('📍 GPS Position Accuracy:', accuracy);
+          const status = getGpsSignalStrength(accuracy);
+          console.log('📡 GPS Status:', status);
+          setGpsStatus(status);
         },
         (error) => {
-          console.log('GPS Error:', error.message);
+          console.log('❌ GPS Error:', error.message, error.code);
           setGpsStatus({ strength: 'No Signal', accuracy: null });
         },
         {
@@ -78,8 +100,13 @@ console.log("isOnline",isOnline)
           distanceFilter: 0,
           interval: 5000,
           fastestInterval: 2000,
+          timeout: 15000,
+          maximumAge: 10000,
         }
       );
+      console.log('✅ GPS watchPosition started with ID:', watchId);
+    } else {
+      console.log('⚠️ Not online, GPS watch not started');
     }
 
     return () => {

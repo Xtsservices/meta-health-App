@@ -22,7 +22,7 @@ const sleep = (time: number) =>
 
 let backgroundWatchId: number | null = null;
 let lastEmitTime = 0; // Track last emission time for throttling
-
+let locationPollerInterval: any = null; // Track polling interval
 
 
 const backgroundTask = async (taskData?: { driverId: string , ambulanceID: string }) => {
@@ -50,28 +50,62 @@ const backgroundTask = async (taskData?: { driverId: string , ambulanceID: strin
       }
     }, 30000);
     
-    // Start watching position with NETWORK provider first (faster, works indoors)
-    console.log("📡 Starting location watch with network + GPS...");
+    // Try to get initial location immediately (helps with first position)
+    console.log("📡 Getting initial location...");
+    Geolocation.getCurrentPosition(
+      position => {
+        console.log("✅ Got initial position!");
+        locationReceived = true;
+        clearTimeout(warningTimeout);
+        
+        // Emit initial position
+        const socket = getSocket();
+        if (socket && socket.connected) {
+          const locationData = {
+            driverId,
+            ambulanceID,
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: position.timestamp,
+          };
+          console.log('📍 Emitting initial location:', locationData);
+          socket.emit('location-update', locationData);
+          lastEmitTime = Date.now();
+        }
+      },
+      error => {
+        console.warn('⚠️ Could not get initial position:', error.message);
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 30000, // Accept cached location up to 30 seconds old
+      }
+    );
+
+    // Start watching position with NETWORK provider (works better indoors)
+    console.log("📡 Starting location watch with network provider...");
     backgroundWatchId = Geolocation.watchPosition(
       position => {
         if (!locationReceived) {
-          console.log("✅ FIRST LOCATION RECEIVED!");
+          console.log("✅ FIRST LOCATION RECEIVED from watch!");
           clearTimeout(warningTimeout);
         }
         locationReceived = true;
         try {
           // ⏱️ THROTTLE: Only emit every 5 seconds
-          console.log('📍 Background position received:', position);
-          console.log('📍 Position details:', {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            timestamp: new Date(position.timestamp).toISOString()
+          console.log('📍 Position update:', {
+            lat: position.coords.latitude.toFixed(6),
+            lng: position.coords.longitude.toFixed(6),
+            accuracy: Math.round(position.coords.accuracy || 0) + 'm',
+            provider: position.coords.accuracy > 50 ? 'Network' : 'GPS'
           });
+          
           const now = Date.now();
           if (now - lastEmitTime < THROTTLE_TIME) {
-            console.log('⏭️ Skipping update (throttled), next in:', Math.ceil((THROTTLE_TIME - (now - lastEmitTime)) / 1000), 'seconds');
-            return; // Skip if less than 5 seconds since last emit
+            console.log('⏭️ Throttled (next in ' + Math.ceil((THROTTLE_TIME - (now - lastEmitTime)) / 1000) + 's)');
+            return;
           }
           lastEmitTime = now;
 
@@ -91,55 +125,120 @@ const backgroundTask = async (taskData?: { driverId: string , ambulanceID: strin
               speed: position.coords.speed,
             };
 
-            console.log('📍 Emitting location update:', locationData);
-            // Emit continuous live location update
             socket.emit('location-update', locationData);
-            console.log('📍 Location update emitted:', {
-              driverId,
-              lat: position.coords.latitude.toFixed(6),
-              lng: position.coords.longitude.toFixed(6),
-              accuracy: position.coords.accuracy?.toFixed(2),
-              speed: position.coords.speed?.toFixed(2),
-            });
+            console.log('✅ Location emitted to server');
           } else {
-            console.warn('⚠️ Socket not connected, skipping location update');
+            console.warn('⚠️ Socket not connected, reconnecting...');
           }
         } catch (err) {
-          console.error('❌ Error emitting location update:', err);
+          console.error('❌ Error emitting location:', err);
         }
       },
       error => {
-        console.error('❌ Background location error:', {
+        console.error('❌ Location watch error:', {
           code: error.code,
           message: error.message,
-          PERMISSION_DENIED: error.code === 1,
-          POSITION_UNAVAILABLE: error.code === 2,
-          TIMEOUT: error.code === 3
+          type: error.code === 1 ? 'PERMISSION_DENIED' : 
+                error.code === 2 ? 'POSITION_UNAVAILABLE' : 
+                error.code === 3 ? 'TIMEOUT' : 'UNKNOWN'
         });
+        
+        // Don't stop on timeout, just log it
+        if (error.code === 3) {
+          console.log('⏱️ Timeout - will retry automatically');
+        }
       },
       {
-        enableHighAccuracy: false, // ⚡ Use NETWORK location (faster, works indoors!)
-        distanceFilter: 0, // Update even when stationary (0 = no filter)
+        enableHighAccuracy: false, // ⚡ NETWORK mode for indoor tracking
+        distanceFilter: 0, // Update even when stationary
         interval: 5000, // Update every 5 seconds (Android)
-        fastestInterval: 3000, // Minimum 3 seconds between updates
-        timeout: 60000, // 60 seconds timeout - very forgiving
-        maximumAge: 10000, // Allow cached location up to 10 seconds old
-        useSignificantChanges: false, // Disable significant changes only mode
+        fastestInterval: 5000, // Minimum 5 seconds between updates
+        timeout: 30000, // 30 second timeout per update
+        maximumAge: 10000, // Accept cached location up to 10 seconds
+        useSignificantChanges: false,
       },
     );
     
     console.log("✅ watchPosition configured with ID:", backgroundWatchId);
-    console.log("ℹ️ Using NETWORK location provider for faster indoor positioning");
+    console.log("ℹ️ Using NETWORK location (works indoors!)");
+    console.log("ℹ️ Service will run continuously in background");
 
-    // Keep the background task alive
+    // 🔥 FALLBACK: If watchPosition doesn't fire, use polling as backup
+    let pollCount = 0;
+    locationPollerInterval = setInterval(() => {
+      pollCount++;
+      console.log(`🔄 Location poll #${pollCount} - Ensuring updates every 5s...`);
+      
+      Geolocation.getCurrentPosition(
+        position => {
+          // Only emit if throttle time has passed
+          const now = Date.now();
+          if (now - lastEmitTime >= THROTTLE_TIME) {
+            console.log('📍 Poll position:', {
+              lat: position.coords.latitude.toFixed(6),
+              lng: position.coords.longitude.toFixed(6),
+              accuracy: Math.round(position.coords.accuracy || 0) + 'm',
+            });
+
+            const socket = getSocket();
+            if (socket && socket.connected) {
+              const locationData = {
+                driverId,
+                ambulanceID,
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                timestamp: position.timestamp,
+                altitude: position.coords.altitude,
+                altitudeAccuracy: position.coords.altitudeAccuracy,
+                heading: position.coords.heading,
+                speed: position.coords.speed,
+              };
+
+              socket.emit('location-update', locationData);
+              lastEmitTime = now;
+              console.log('✅ Location emitted via polling');
+            }
+          }
+        },
+        error => {
+          console.warn('⚠️ Poll error:', error.message);
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 8000,
+          maximumAge: 5000,
+        }
+      );
+    }, THROTTLE_TIME) as any; // Poll every 5 seconds
+
+    // Keep the background task alive with heartbeat
+    let heartbeatCount = 0;
     while (BackgroundService.isRunning()) {
       await sleep(THROTTLE_TIME); // Check every 5 seconds
-      console.log('🔄 Background service still running...');
+      heartbeatCount++;
+      console.log('� Background service heartbeat #' + heartbeatCount + ' - Still tracking...');
+      
+      // Update notification every 30 seconds to show we're active
+      if (heartbeatCount % 6 === 0) {
+        const minutes = Math.floor(heartbeatCount * THROTTLE_TIME / 60000);
+        await BackgroundService.updateNotification({
+          taskTitle: 'Ambulance Tracking',
+          taskDesc: `Background task active ${minutes} min${minutes !== 1 ? 's' : ''} • Location updates every 5s`,
+        });
+        console.log(`📢 Notification updated: ${minutes} minutes active`);
+      }
     }
   } catch (error) {
     console.error('❌ Fatal error in background task:', error);
   } finally {
     // Clean up when service stops
+    if (locationPollerInterval !== null) {
+      clearInterval(locationPollerInterval);
+      locationPollerInterval = null;
+      console.log('🛑 Location poller stopped');
+    }
+    
     if (backgroundWatchId !== null) {
       Geolocation.clearWatch(backgroundWatchId);
       backgroundWatchId = null;
@@ -165,9 +264,9 @@ export const startLocationTracking = async (driverId: string, ambulanceID: strin
     }
 
     await BackgroundService.start(backgroundTask, {
-      taskName: 'Ambulance Tracking',
-      taskTitle: 'Ambulance tracking active',
-      taskDesc: 'Sharing live location',
+      taskName: 'Ambulance Location Tracking',
+      taskTitle: 'Ambulance Tracking',
+      taskDesc: 'Background location tracking active • Updating every 5s',
       taskIcon: {
         name: 'ic_launcher',
         type: 'mipmap',
@@ -179,6 +278,7 @@ export const startLocationTracking = async (driverId: string, ambulanceID: strin
         value: 0,
         indeterminate: true,
       },
+      color: '#FF0000', // Red color for ambulance
     });
     console.log('✅ Background service started successfully');
   } catch (error: any) {
@@ -191,6 +291,13 @@ export const stopLocationTracking = async () => {
   console.log('🛑 Stopping location tracking...');
   
   try {
+    // Clear the poller first
+    if (locationPollerInterval !== null) {
+      clearInterval(locationPollerInterval);
+      locationPollerInterval = null;
+      console.log('✅ Location poller cleared');
+    }
+    
     // Clear the watch before stopping the service
     if (backgroundWatchId !== null) {
       Geolocation.clearWatch(backgroundWatchId);
