@@ -23,6 +23,7 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import {
   SPACING,
   FONT_SIZE,
+  FOOTER_HEIGHT,
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
 
@@ -37,13 +38,15 @@ import {
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Footer from "../../dashboard/footer";
 import { showSuccess, showError } from "../../../store/toast.slice";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-interface AddInventoryItemRouteProps {
+type AddInventoryItemRouteProps = {
   AddInventoryItem: {
     editData?: any;
     editId?: number;
   };
-}
+};
+
 
 interface MedicineData {
   name: string;
@@ -99,7 +102,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
   const { editData, editId } = route.params || {};
   const user = useSelector((state: RootState) => state.currentUser);
   const nav = useNavigation();
-
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -356,13 +359,14 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       !medicineData.category ||
       !medicineData.costPrice ||
       !medicineData.expiryDate ||
-      !medicineData.hsn ||
       medicineData.gst === null ||
       !medicineData.quantity ||
       !medicineData.sellingPrice ||
       !medicineData.lowStockValue ||
       !medicineData.agencyName ||
-      !medicineData.manufacturer
+      !medicineData.manufacturer ||
+      !medicineData.agentCode ||
+      !medicineData.contactNo
     ) {
       dispatch(showError("Please fill all required fields"));
       return;
@@ -735,17 +739,6 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
               </View>
             </View>
 
-            {renderField(
-              "HSN Code",
-              medicineData.hsn,
-              (value) => setMedicineData((p) => ({ ...p, hsn: value })),
-              "Enter HSN code",
-              "text",
-              true,
-              'hsn',
-              300
-            )}
-
             <View style={styles.row}>
               <View style={styles.col}>
                 {renderField(
@@ -849,7 +842,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                   (value) => setMedicineData((p) => ({ ...p, agentCode: Number(value) || null })),
                   "Enter agent code",
                   "number",
-                  false,
+                  true,
                   undefined,
                   900
                 )}
@@ -859,25 +852,14 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                   "Contact No",
                   medicineData.contactNo,
                   (value) => setMedicineData((p) => ({ ...p, contactNo: value })),
-                  "Enter contact number",
+                  "Enter contact",
                   "text",
-                  false,
+                  true,
                   undefined,
                   900
                 )}
               </View>
             </View>
-
-            {renderField(
-              "Email",
-              medicineData.email,
-              (value) => setMedicineData((p) => ({ ...p, email: value })),
-              "Enter email address",
-              "text",
-              false,
-              undefined,
-              1000
-            )}
           </View>
 
           {/* Add Medicine Button */}
@@ -924,10 +906,6 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                     <View style={styles.medicineRow}>
                       <Text style={styles.medicineLabel}>Category:</Text>
                       <Text style={styles.medicineValue}>{medicine.category}</Text>
-                    </View>
-                    <View style={styles.medicineRow}>
-                      <Text style={styles.medicineLabel}>HSN Code:</Text>
-                      <Text style={styles.medicineValue}>{medicine.hsn}</Text>
                     </View>
                     <View style={styles.medicineRow}>
                       <Text style={styles.medicineLabel}>Expiry:</Text>
@@ -994,7 +972,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
         </ScrollView>
 
         {/* Footer */}
-        <View style={styles.footerWrap}>
+        <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
           <Footer active={"billing"} brandColor={COLORS.brand} />
         </View>
       </KeyboardAvoidingView>
@@ -1092,7 +1070,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   required: { 
-    color: COLORS.danger,
+    color: '#000000',
     fontWeight: "700",
   },
   input: {
@@ -1298,10 +1276,12 @@ const styles = StyleSheet.create({
 
   // Footer
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
-    bottom: 0,
+    height: FOOTER_HEIGHT,
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
 });
 

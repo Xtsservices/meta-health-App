@@ -21,6 +21,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { showError } from "../../../store/toast.slice";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AuthFetch } from "../../../auth/auth";
+import { UserIcon, ChevronDown } from "lucide-react-native";
 
 interface TestItem {
   id: string;
@@ -46,7 +47,7 @@ interface MedicineItem {
   qty?: number;
   updatedQuantity?: number;
   addedOn?: string;
-
+  category?:string;
 
   Frequency?: number;
   daysCount?: number;
@@ -122,11 +123,12 @@ const InnerTable: React.FC<InnerTableProps> = ({
 
   const [nurses, setNurses] = useState<NurseType[]>([]);
   const [nurseModalVisible, setNurseModalVisible] = useState(false);
-  const [activeMedId, setActiveMedId] = useState<string | number | null>(null);
-  const [selectedNurseByMedId, setSelectedNurseByMedId] = useState<
-    Record<string, NurseType>
-  >({});
     const isIpdOrEmergency = pType === 2 || pType === 3;
+const orderNurse = selectedNurse || null;
+
+const nurseLabel = orderNurse
+  ? `${orderNurse.firstName} ${orderNurse.lastName}`
+  : "Tap to select nurse";
 
   useEffect(() => {
     const fetchNurses = async () => {
@@ -348,17 +350,6 @@ const InnerTable: React.FC<InnerTableProps> = ({
   const gst = med.gst ?? 0;
   const lineTotal = calculateMedicineTotal(med);
 
-        const medKey = String(med.id);
-  const selectedNurseLocal =
-    selectedNurseByMedId[medKey] || selectedNurse || undefined;
-
-  const nurseLabel = selectedNurseLocal
-    ? `${selectedNurseLocal.firstName} ${selectedNurseLocal.lastName}`
-    : med.nurseName
-    ? med.nurseName
-    : med.nurseID
-    ? `Nurse #${med.nurseID}`
-    : "Tap to select nurse";
 
 
     return (
@@ -379,7 +370,7 @@ const InnerTable: React.FC<InnerTableProps> = ({
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Type:</Text>
               <Text style={styles.detailValue}>
-                {med.medicineType || "N/A"}
+                {med.category || "N/A"}
               </Text>
             </View>
 
@@ -397,31 +388,7 @@ const InnerTable: React.FC<InnerTableProps> = ({
               <Text style={styles.detailValue}>{qty}</Text>
             </View>
 
-                        <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Nurse:</Text>
-              <TouchableOpacity
-                style={styles.nurseSelectPill}
-                onPress={() => {
-                  if (!nurses.length) return;
-                  setActiveMedId(med.id);
-                  setNurseModalVisible(true);
-                }}
-                disabled={!nurses.length}
-              >
-                <Text
-                  style={[
-                    styles.nurseSelectText,
-                    !selectedNurseLocal &&
-                      !med.nurseID &&
-                      !med.nurseName &&
-                      styles.nurseSelectPlaceholder,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {nurseLabel}
-                </Text>
-              </TouchableOpacity>
-            </View>
+
 
 
             {labBilling && (
@@ -515,6 +482,40 @@ const InnerTable: React.FC<InnerTableProps> = ({
             )}
           </View>
         )}
+{hasMeds && isIpdOrEmergency && (
+  <View style={{ paddingHorizontal: SPACING.lg }}>
+    <Text style={styles.sectionHeader}>Select Nurse : </Text>
+
+    <TouchableOpacity
+onPress={() => {
+  if (!nurses.length) return;
+  setNurseModalVisible(true);
+}}
+
+      disabled={!nurses.length}
+      style={styles.nurseSelector}
+    >
+      <View
+        style={[
+          styles.nurseSelectorContent,
+          !orderNurse && styles.nurseSelectorHighlighted,
+        ]}
+      >
+        <UserIcon size={16} color={COLORS.brand} />
+        <Text
+          style={[
+            styles.nurseValue,
+            !orderNurse && styles.nursePlaceholder,
+          ]}
+        >
+          {nurseLabel}
+        </Text>
+        <ChevronDown size={16} color={COLORS.brand} />
+      </View>
+    </TouchableOpacity>
+  </View>
+)}
+
 
         {/* Empty State */}
         {!hasTests && !hasMeds && (
@@ -538,7 +539,6 @@ const InnerTable: React.FC<InnerTableProps> = ({
           animationType="fade"
           onRequestClose={() => {
             setNurseModalVisible(false);
-            setActiveMedId(null);
           }}
         >
           <View style={styles.nurseModalOverlay}>
@@ -553,21 +553,11 @@ const InnerTable: React.FC<InnerTableProps> = ({
                       key={nurse.id}
                       style={styles.nurseItem}
                       onPress={() => {
-                        if (activeMedId == null) return;
-
-                        const key = String(activeMedId);
-                        setSelectedNurseByMedId((prev) => ({
-                          ...prev,
-                          [key]: nurse,
-                        }));
-
-                        // 🔹 Inform parent (OuterTable) which nurse was chosen
                         if (onNurseSelect && orderId !== undefined && orderId !== null) {
                           onNurseSelect(orderId, nurse);
                         }
 
                         setNurseModalVisible(false);
-                        setActiveMedId(null);
                       }}
                     >
 
@@ -590,7 +580,6 @@ const InnerTable: React.FC<InnerTableProps> = ({
                 style={styles.nurseModalCancelButton}
                 onPress={() => {
                   setNurseModalVisible(false);
-                  setActiveMedId(null);
                 }}
               >
                 <Text style={styles.nurseModalCancelText}>Close</Text>
@@ -837,24 +826,35 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     backgroundColor: COLORS.card,
   },
-    nurseSelectPill: {
+    nurseSelector: {
     flex: 1,
     marginLeft: SPACING.sm,
+  },
+  nurseSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: 999,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.field,
+    gap: 8,
   },
-  nurseSelectText: {
+  nurseSelectorHighlighted: {
+    borderColor: COLORS.brand,
+    borderWidth: 2,
+    backgroundColor: COLORS.brandLight,
+  },
+  nurseValue: {
     fontSize: FONT_SIZE.sm,
     color: COLORS.text,
-    fontWeight: "600",
+    fontWeight: "500",
+    flex: 1,
   },
-  nurseSelectPlaceholder: {
-    color: COLORS.placeholder,
-    fontWeight: "400",
+  nursePlaceholder: {
+    color: COLORS.brand,
+    fontWeight: "600",
   },
   nurseModalOverlay: {
     flex: 1,

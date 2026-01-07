@@ -141,6 +141,8 @@ import AmbulanceDriverDashboard from '../components/ambulanceDriver/AmbulanceDri
 import AmbulanceDriverActiveTrip from '../components/ambulanceDriver/AmbulanceDriverActiveTrip';
 import AmbulanceDriverSettings from '../components/ambulanceDriver/AmbulanceDriverSettings';
 import AmbulanceDriverHistory from '../components/ambulanceDriver/AmbulanceDriverHistory';
+import OrderDetailScreen from '../components/Pharmacy/orderPlacement/OrderDetailScreen';
+import ReceptionOrderDetailsScreen from '../components/Reception/ReceptionOrderDetailsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -504,18 +506,11 @@ const Routing = () => {
         <Stack.Screen
           name="OtInnerTabs"
           component={otInnerTabs}
-          options={({ navigation, route }) => ({
+           options={{
+            title: 'Surgery Details',
+            headerTitleAlign: 'center',
             headerShown: true,
-            headerLeft: () => (
-              <HeaderBackButton
-                onPress={() => {
-                  navigation.navigate('PatientProfile', {
-                    patientID: route.params?.patientID, // pass whatever you need
-                  });
-                }}
-              />
-            ),
-          })}
+          }}
         />
         <Stack.Screen
           name="InitialDetails"
@@ -593,7 +588,7 @@ const Routing = () => {
           name="ExaminationFindingNotes"
           component={examinationFindingNotes}
           options={{
-            title: 'Examination FindinfNotes',
+            title: 'Examination Finding Notes',
             headerTitleAlign: 'center',
             headerShown: true,
           }}
@@ -620,7 +615,7 @@ const Routing = () => {
           name="SurgerySchedule"
           component={surgerySchedule}
           options={{
-            title: 'Surgery Schedules',
+            title: 'Surgery Schedule',
             headerTitleAlign: 'center',
             headerShown: true,
           }}
@@ -629,7 +624,7 @@ const Routing = () => {
           name="Schedule"
           component={schedule}
           options={{
-            title: 'Schedules',
+            title: 'Schedule',
             headerTitleAlign: 'center',
             headerShown: true,
           }}
@@ -717,15 +712,23 @@ const Routing = () => {
             headerShown: true,
           }}
         />
-        <Stack.Screen
-          name="TreatmentPlan"
-          component={TreatmentPlanScreen}
-          options={{
-            title: 'Treatment Plan',
-            headerTitleAlign: 'center',
-            headerShown: true,
-          }}
-        />
+<Stack.Screen
+  name="TreatmentPlan"
+  component={TreatmentPlanScreen}
+  options={({ route }: any) => ({
+    title: route.params?.currentTab === 'PreOpRecord' 
+      ? 'Pre-Op Medications' 
+      : route.params?.currentTab === 'PostOpRecord'
+      ? 'Post-Op Medications'
+      : route.params?.currentTab === 'PatientFile'
+      ? 'Medications' // For Patient File tab
+      : route.params?.currentTab === 'AnesthesiaRecord'
+      ? 'Anesthesia Medications' // If needed
+      : 'Treatment Plan', // Default fallback
+    headerTitleAlign: 'center',
+    headerShown: true,
+  })}
+/>
         <Stack.Screen
           name="PreviousPrescriptions"
           component={PreviousPrescriptions}
@@ -1288,6 +1291,20 @@ const Routing = () => {
             headerTitleAlign: 'center',
             headerShown: false,
           }}
+        />
+        <Stack.Screen 
+          name="OrderDetailScreen" 
+          component={OrderDetailScreen}
+          options={{
+            title: 'Order Details',
+            headerTitleAlign: 'center',
+            headerShown: true,
+          }}
+        />
+        <Stack.Screen 
+          name="ReceptionOrderDetails" 
+          component={ReceptionOrderDetailsScreen} 
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

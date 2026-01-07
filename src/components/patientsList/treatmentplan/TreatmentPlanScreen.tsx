@@ -337,6 +337,7 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
 
   const readOnly =
     (shouldShowPreOpTests && user?.roleName?.toLowerCase() === "surgeon") ||
+    currentPatient?.status === "approved" ||
     activetab === "PatientFile";
 
   const [medicineList, setMedicineList] = useState<MedicineType[]>([]);
@@ -424,15 +425,33 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
 
   useFocusEffect(
     useCallback(() => {
-      if (currentPatient?.patientTimeLineID || shouldShowPreOpTests || shouldShowPostOpTests) {
+      if (shouldShowPreOpTests) {
+      const mapped = convertPreOpMedicationsToArray(preOpMedications);
+      setMedicineList(mapped || []);
+      setLoading(false);
+      return;
+    }
+
+    if (shouldShowPostOpTests) {
+      const mapped = convertPreOpMedicationsToArray(postOpMedications);
+      setMedicineList(mapped || []);
+      setLoading(false);
+      return;
+    }
+
+    if (currentPatient?.patientTimeLineID) {
         setLoading(true);
         getAllMedicine();
-      } else if (!currentPatient?.patientTimeLineID) {
-        setLoading(false);
-        setError('No patient selected');
-      }
-    }, [currentPatient, shouldShowPreOpTests, shouldShowPostOpTests])
-  );
+    }
+  }, [
+    currentPatient?.patientTimeLineID,
+    shouldShowPreOpTests,
+    shouldShowPostOpTests,
+    preOpMedications,   
+    postOpMedications      
+  ])
+);
+
   
   // Also update when pre-op / post-op medications change
   useEffect(() => {
@@ -583,11 +602,11 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
               </TouchableOpacity>
               {!readOnly && user?.roleName !== "reception" && currentPatient?.ptype != 21 &&
                 <TouchableOpacity 
-                  style={styles.primaryButtonSmall}
+                  style={styles.primaryButton}
                   onPress={handleAddMedicine}
                 >
-                  <PlusIcon size={18} color="#fff" />
-                  <Text style={styles.primaryButtonTextSmall}>Add Medicine</Text>
+                  <PlusIcon size={20} color="#fff" />
+                  <Text style={styles.primaryButtonText}>Add Medication</Text>
                 </TouchableOpacity>
               }
             </View>
@@ -901,9 +920,11 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between', 
+    gap: 5             ,
   },
+
   content: {
     flex: 1,
      marginBottom: 80,
@@ -1104,8 +1125,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#14b8a6',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: 12,
     gap: 8,
     shadowColor: '#14b8a6',

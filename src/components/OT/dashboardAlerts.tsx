@@ -1,5 +1,5 @@
 // OTPatientTable.tsx
-import React, { useRef, useState, useMemo, useCallback } from "react";
+import React, { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute, useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { RootState } from "../../store/store";
@@ -42,23 +42,33 @@ const PER_PAGE = 10;
 
 const OTPatientTable: React.FC<Props> = (props) => {
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
+  const isFocused = useIsFocused();
   const type = props.type ?? route.params?.type ?? "dashboard";
 
   const [patients, setPatients] = useState<OTAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [currentScreen, setCurrentScreen] = useState<string>("");
   const fetchOnce = useRef(true);
 
-  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.currentUser);
   const { setPatientStage } = useOTConfig();
+  useEffect(() => {
+    if (isFocused) {
+      // Get the current screen name from navigation state
+      const state = navigation.getState();
+      const currentRoute = state.routes[state.index];
+      setCurrentScreen(currentRoute.name);
+    }
+  }, [isFocused, navigation]);
 
   // ================= Fetch Alerts =================
   const fetchOTAlerts = async () => {
     try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const token = await AsyncStorage.getItem("token");
 
       if (!user?.hospitalID || !token || !user?.roleName) {
         setPatients([]);
@@ -117,19 +127,48 @@ const OTPatientTable: React.FC<Props> = (props) => {
   }, [patients, type, page]);
 
   // ================= View Patient =================
-  const handleView = (patient: OTAlert) => {
-    try {
-      if (patient?.status) {
-        const key = patient.status.toUpperCase() as keyof typeof OTPatientStages;
-        if (OTPatientStages[key]) {
-          setPatientStage(OTPatientStages[key]);
+// In OTPatientTable.tsx - update the handleView function to be more robust:
+const handleView = (patient: OTAlert) => {
+  try {
+    if (patient?.status) {
+      const key = patient.status.toUpperCase() as keyof typeof OTPatientStages;
+      if (OTPatientStages[key]) {
+        setPatientStage(OTPatientStages[key]);
+        
+        // Check patient type and navigate accordingly
+        const patientType = patient.patientType?.toLowerCase();
+        
+        if (patient.status === "approved") {
+          if (patientType === "elective") {
+            // Navigate to Elective-specific tab
+            navigation.navigate("PatientProfile", { 
+              id: patient.patientID,
+              patientType: "elective", // Add this param for PatientProfile
+              initialTab: "electiveTab"
+            });
+          } else if (patientType === "emergency") {
+            // Navigate to Emergency-specific tab
+            navigation.navigate("PatientProfile");
+          } else {
+            // Default to surgery tab
+            navigation.navigate("PatientProfile");
+          }
+        } else {
+          // For other statuses, use default navigation
+          navigation.navigate("PatientProfile", { 
+            id: patient.patientID,
+            patientType: patientType
+          });
         }
       }
+    } else {
+      // Fallback if no status
       navigation.navigate("PatientProfile", { id: patient.patientID });
-    } catch (err: any) {
-      dispatch(showError("Error navigating to patient"));
     }
-  };
+  } catch (err: any) {
+    dispatch(showError("Error navigating to patient"));
+  }
+};
 
   // ================= View All =================
   const handleViewAll = () => {
@@ -256,7 +295,7 @@ const OTPatientTable: React.FC<Props> = (props) => {
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={{
             padding: 16,
-            paddingBottom: type === "surgeries" ? 120 : 30,
+            paddingBottom: type === "surgeries" ? 120 : 150,
           }}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No OT patients found</Text>
@@ -266,8 +305,8 @@ const OTPatientTable: React.FC<Props> = (props) => {
         />
       </View>
 
-      {/* ---------- FOOTER (for surgeries) ---------- */}
-      {type === "surgeries" && (
+      {/* ---------- FOOTER (only for DashboardAlerts screen) ---------- */}
+      {currentScreen === "DashboardAlerts" && (
         <>
           <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
             <Footer active={"dashboard"} brandColor="#14b8a6" />

@@ -1,5 +1,5 @@
 // Footer.tsx
-import React from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
@@ -9,17 +9,19 @@ import {
   Dimensions,
 } from "react-native";
 import {
-  UserPlus2,
+  AlertTriangle,
+  Stethoscope,
 } from "lucide-react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { RootState } from "../../store/store";
 import { zoneType } from "../../utils/role";
+import useOTConfig, { OTScreenType } from "../../utils/otConfig";
 import {UserPlusIcon, LayoutDashboardIcon, ListIcon,  Package2Icon, SettingsIcon, ShoppingCartIcon } from "../../utils/SvgIcons";
 
 const { width: W } = Dimensions.get("window");
 
-export type TabKey = "dashboard" | "addPatient" | "patients" | "management" | "alerts" | "billing" | "PatientList";
+export type TabKey = "dashboard" | "addPatient" | "patients" | "management";
 
 type Props = {
   active?: TabKey;                     // default 'dashboard'
@@ -31,10 +33,39 @@ const Footer: React.FC<Props> = ({
   brandColor = "#14b8a6",
 }) => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const user = useSelector((state: RootState) => state.currentUser);
+  const { screenType, setScreenType } = useOTConfig();
+
+  const isOTUser = user?.roleName === "surgeon" || user?.roleName === "anesthetist";
+  const resolvedActive: TabKey = useMemo(() => {
+    if (!isOTUser) return active;
+
+    if (route.name === "PatientList") {
+      return screenType === OTScreenType.EMERGENCY
+        ? "patients"
+        : "management";
+    }
+
+    if (route.name === "DashboardAlerts") return "addPatient";
+    if (route.name === "OtDashboard") return "dashboard";
+
+    return active;
+  }, [active, isOTUser, route.name, screenType]);
+
+  /**
+   * ✅ FORCE REFRESH ON MODE SWITCH for surgeon/anesthetist
+   */
+  const goPatientListWithType = (type: OTScreenType) => {
+    setScreenType(type);
+    navigation.replace("PatientList", {
+      __otType: type, // force rerender
+    });
+  };
+
   const handleTabPress = (k: TabKey) => {
     if (k === "dashboard") {
-      if (user?.roleName === "surgeon" || user?.roleName === "anesthetist") {
+      if (isOTUser) {
         navigation.navigate("OtDashboard");
       } else if (user?.roleName === "pathology" || user?.roleName === "radiology") {
         navigation.navigate("DashboardLab");
@@ -52,10 +83,14 @@ const Footer: React.FC<Props> = ({
         navigation.navigate("EmergencyDashboard");
       }
     } else if (k === "addPatient") {
+      // For surgeon and anesthetist, navigate to OT Alerts
+      if (isOTUser) {
+        navigation.navigate("DashboardAlerts", { type: "surgeries" });
+      }
       // For pharmacy role, navigate to SaleComp (Walk-in/Sales)
-      if (user?.roleName === "pharmacy") {
+      else if (user?.roleName === "pharmacy") {
         navigation.navigate("SaleComp");
-      } 
+      }
       // For pathology and radiology roles, navigate to SaleComp (Walk-in)
       else if (user?.roleName === "pathology" || user?.roleName === "radiology") {
         navigation.navigate("SaleComp");
@@ -66,7 +101,10 @@ const Footer: React.FC<Props> = ({
         navigation.navigate("AddPatient");
       }
     } else if (k === "patients") {
-      if (user?.roleName === "pharmacy") {
+      if (isOTUser) {
+        goPatientListWithType(OTScreenType.EMERGENCY);
+      }
+      else if (user?.roleName === "pharmacy") {
         navigation.navigate("AddInventory");
       }
       // For pathology and radiology roles, navigate to PatientListLab
@@ -81,11 +119,23 @@ const Footer: React.FC<Props> = ({
         navigation.navigate("PatientList");
       }
     } else if (k === "management") {
+      // For surgeon and anesthetist, navigate to Elective list
+      if (isOTUser) {
+        goPatientListWithType(OTScreenType.ELECTIVE);
+      } else {
       navigation.navigate("Management");
+      }
     }
   };
 
   const getTabLabel = (k: TabKey): string => {
+    // Surgeon/Anesthetist specific labels
+    if (isOTUser) {
+      if (k === "addPatient") return "Alerts";
+      if (k === "patients") return "Emergency List";
+      if (k === "management") return "Elective List";
+    }
+
     // Pharmacy specific labels
     if (user?.roleName === "pharmacy") {
       if (k === "addPatient") {
@@ -114,6 +164,13 @@ const Footer: React.FC<Props> = ({
   };
 
   const getTabIcon = (k: TabKey): React.ElementType => {
+    // Surgeon/Anesthetist specific icons
+    if (isOTUser) {
+      if (k === "addPatient") return AlertTriangle; // Alerts icon
+      if (k === "patients") return Stethoscope; // Emergency icon
+      if (k === "management") return Stethoscope; // Elective icon
+    }
+
     // Pharmacy specific icons
     if (user?.roleName === "pharmacy") {
       if (k === "addPatient") {
@@ -144,7 +201,7 @@ const Footer: React.FC<Props> = ({
   const Item: React.FC<{
     k: TabKey;
   }> = ({ k }) => {
-    const isActive = active === k;
+    const isActive = resolvedActive === k;
     const label = getTabLabel(k);
     const IconComponent = getTabIcon(k);
     

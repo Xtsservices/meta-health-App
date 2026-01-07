@@ -617,7 +617,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Agent Code</Text>
+              <Text style={styles.label}>Agent Code *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter agent code"

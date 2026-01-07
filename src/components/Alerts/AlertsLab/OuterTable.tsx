@@ -28,7 +28,7 @@ import {
   SCREEN_WIDTH,
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
-import { formatDateTime } from "../../../utils/dateTime";
+import { formatDate } from "../../../utils/dateTime";
 import { UserIcon } from "lucide-react-native";
 import { FilterIcon } from "../../../utils/SvgIcons";
 import { showSuccess, showError } from "../../../store/toast.slice";
@@ -64,6 +64,7 @@ interface PatientOuterTableProps {
   sale?: string;
   isRejectReason?: string;
   onRefresh?: () => void;
+  onRejectionSuccess?: () => void;
 }
 
 const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
@@ -96,7 +97,7 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   );
 
     const [orderNurseMap, setOrderNurseMap] = useState<{
-    [orderId: string]: SelectedNurse;
+    [timelineId: string]: SelectedNurse;
   }>({});
 
   const [selectedRejectId, setSelectedRejectId] = useState<string | null>(null);
@@ -108,6 +109,7 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   const user = useSelector((state: any) => state.currentUser);
 
   const isPharmacy = alertFrom === "pharmacy";
+  const isReceptionUser = alertFrom === "reception" || user?.roleName?.toLowerCase?.() === "reception";
 
   const isExternalPagination =
     typeof externalCurrentPage === "number" &&
@@ -122,11 +124,6 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   const effectiveTotalPages = isExternalPagination
     ? externalTotalPages
     : internalTotalPages;
-
-  // 👇 Reception context (role or alertFrom)
-  const isReceptionUser =
-    user?.roleName?.toLowerCase?.() === "reception" ||
-    alertFrom?.toLowerCase?.() === "reception";
 
   const getPatientId = (order: any) =>
     order?.patientID || order?.patientId || order?.pID || order?.id;
@@ -145,7 +142,12 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         currentPageOneBased * PAGE_SIZE
       ) ?? [];
 
-  const filterOptions = [
+  const filterOptions = isReceptionUser
+    ? [
+        { label: "OPD", value: "OPD" },
+        { label: "IPD & Emergency", value: "IPD_EMERGENCY" },
+      ]
+    : [
     { label: "All Departments", value: "All" },
     { label: "Outpatient Care", value: "OPD" },
     { label: "Inpatient Services", value: "IPD" },
@@ -154,10 +156,88 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
 
   // Check if this is a pharmacy order
   const isPharmacyOrder = (order: any) => {
-    return order?.medicinesList !== undefined || 
+    return  order?.medicinesList !== undefined || 
            order?.location !== undefined || 
            order?.departmemtType !== undefined ||
            user?.roleName === 'pharmacy';
+  };
+const getDoctorDisplayName = (order: any) => {
+  if (isRejectedTab) {
+    return order?.testsList?.[0]?.doctorName ||
+           order?.medicinesList?.[0]?.doctorName ||
+           "Not Assigned";
+  }
+  
+  return order?.doctor_firstName && order?.doctor_lastName
+    ? `${order.doctor_firstName} ${order.doctor_lastName}`
+    : order?.firstName && order?.lastName
+    ? `${order.firstName} ${order.lastName}`
+    : order?.doctorName ||
+      order?.testsList?.[0]?.doctorName ||
+      order?.medicinesList?.[0]?.doctorName ||
+      "Not Assigned";
+};
+// Helper function to get order date
+const getOrderDate = (order: any) => {
+  if (isRejectedTab) {
+    return getLatestOrderDate(order);
+  }
+  return order?.addedOn ? formatDate(order.addedOn) : "-";
+};
+
+// Update getLatestOrderDate to be accessible
+const getLatestOrderDate = (patient: any) => {
+  const dates: string[] = [];
+
+  // From tests
+  if (Array.isArray(patient?.testsList)) {
+    patient.testsList.forEach((t: any) => {
+      if (t?.addedOn) dates.push(t.addedOn);
+      if (t?.rejectedOn) dates.push(t.rejectedOn);
+    });
+  }
+
+  // From medicines
+  if (Array.isArray(patient?.medicinesList)) {
+    patient.medicinesList.forEach((m: any) => {
+      if (m?.createdAt) dates.push(m.createdAt);
+      if (m?.rejectedOn) dates.push(m.rejectedOn);
+    });
+  }
+
+  if (!dates.length) return "-";
+
+  const latestDate = dates.sort(
+    (a, b) => new Date(b).getTime() - new Date(a).getTime()
+  )[0];
+
+  return formatDate(latestDate);
+};
+  // Navigate to Order Details page for Pharmacy or Reception
+  const navigateToOrderDetails = (order: any) => {
+    const doctorDisplayName = getDoctorDisplayName(order); 
+    const departmentName = order?.location || getDepartmentName(order);
+    const orderDate = getOrderDate(order);
+    if (isPharmacy) {
+    navigation.navigate("PharmacyOrderDetails", {
+      orderData: order,
+      patientID: getPatientId(order),
+      patientTimeLineID: getTimelineId(order),
+        isRejectedTab: isRejectedTab, 
+        doctorName: doctorDisplayName,
+        orderDate: orderDate, 
+      });
+    } else if (isReceptionUser) {
+      navigation.navigate("ReceptionOrderDetails", {
+        orderData: order,
+        patientID: getPatientId(order),
+        patientTimeLineID: getTimelineId(order),
+        departmentName: departmentName,
+        isRejectedTab: isRejectedTab, 
+        doctorName: doctorDisplayName,
+        orderDate: orderDate, 
+      });
+    }
   };
 
   // Get the appropriate data for InnerTable
@@ -169,14 +249,6 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
     }
   };
 
-  const navigateToPharmacyOrderDetails = (order: any) => {
-    navigation.navigate("PharmacyOrderDetails", {
-      orderData: order,
-      patientID: getPatientId(order),
-      patientTimeLineID: getTimelineId(order),
-    });
-  };
-
   useEffect(() => {
     let mounted = true;
     const fetchDepartmentNames = async () => {
@@ -185,8 +257,17 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
       if (!token) return;
 
       const deptIds = Array.from(
-        new Set(data.map((p: any) => p?.departmentID).filter(Boolean))
+        new Set(
+          data
+            .flatMap((p: any) => [
+              p?.departmentID,
+              ...(p?.testsList || []).map((t: any) => t?.departmentID),
+              ...(p?.medicinesList || []).map((m: any) => m?.departmentID),
+            ])
+            .filter(Boolean)
+        )
       );
+
       const newDeptNames: { [key: string]: string } = {};
 
       await Promise.all(
@@ -231,26 +312,33 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
   }, [data]);
 
   const getDepartmentName = (patient: any) => {
-    if (!patient) return "Unknown Department";
-    const departmentID = patient?.departmentID;
-    if (departmentID && departmentNames[departmentID])
-      return departmentNames[departmentID];
-    const key = patient?.id || patient?.patientID;
-    if (key && departmentNames[key]) return departmentNames[key];
-    return (
-      patient?.dept ||
-      patient?.departmentName ||
-      patient?.department_name ||
-      "Unknown Department"
-    );
+    // 1️⃣ Direct patient-level department
+    if (patient?.departmentID && departmentNames[patient.departmentID]) {
+      return departmentNames[patient.departmentID];
+    }
+
+    // 2️⃣ Rejected → tests department
+    const testDeptId = patient?.testsList?.[0]?.departmentID;
+    if (testDeptId && departmentNames[testDeptId]) {
+      return departmentNames[testDeptId];
+    }
+
+    // 3️⃣ Rejected → medicines department
+    const medLocation = patient?.medicinesList?.[0]?.location;
+    if (medLocation) {
+  return medLocation;
+}
+
+
+    return "Unknown Department";
   };
 
   const handleRowClick = (id: string) => {
     // For pharmacy, navigate instead of expanding
-    if (isPharmacy) {
+    if (isPharmacy || isReceptionUser) {
       const order = data.find((d: any) => d?.id === id || d?.patientID === id);
       if (order) {
-        navigateToPharmacyOrderDetails(order);
+        navigateToOrderDetails(order);
         return;
       }
     }
@@ -347,11 +435,11 @@ const PatientOuterTable: React.FC<PatientOuterTableProps> = ({
         dispatch(showError("Order not found"));
         return;
       }
-const selectedNurseForOrder = orderNurseMap[String(orderId)];
+      const patientTimeLineID = getTimelineId(order);
+const selectedNurseForOrder = orderNurseMap[String(patientTimeLineID)];
       const nurseIdForPayload =
         selectedNurseForOrder?.id ?? order?.nurseID ?? null;
       const patientID = getPatientId(order);
-      const patientTimeLineID = getTimelineId(order);
       let res;
 
            if (isReceptionUser) {
@@ -362,14 +450,20 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
           Array.isArray(order?.medicinesList) &&
           order.medicinesList.length > 0;
 
+        const isIpdOrEmergency =
+          order?.ptype === 2 ||
+          order?.ptype === 3 ||
+          order?.departmemtType === 2 ||
+          order?.departmemtType === 3;
 
         // 🔹 For IPD/Emergency medicine orders, nurse is mandatory
-        if ( hasMedicines && !nurseIdForPayload) {
+        if (isIpdOrEmergency && hasMedicines && !nurseIdForPayload) {
           dispatch(
             showError(
               "Please select a nurse for this medicine order before approving"
             )
           );
+          navigateToOrderDetails(order);
           return;
         }
 
@@ -423,7 +517,7 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
             )
           );
           // Optional: open details so nurse can be picked
-          navigateToPharmacyOrderDetails(order);
+          navigateToOrderDetails(order);
           return;
         }
 
@@ -557,6 +651,17 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
   };
 
   const shouldShowRejectButton = (patient: any) => patient?.ptype === 21;
+
+  const handleNurseSelectedForOrder = (
+    patientTimeLineID: string | number,
+    nurse: SelectedNurse
+  ) => {
+    setOrderNurseMap((prev) => ({
+      ...prev,
+      [String(patientTimeLineID)]: nurse,
+    }));
+  };
+
   const renderPagination = () => {
     if (effectiveTotalPages <= 1) return null;
 
@@ -633,15 +738,74 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
     const currentAction = actionValues[patient?.id] || "Pending";
     const statusStyle = getStatusColor(currentAction);
     const departmentName = patient?.location || getDepartmentName(patient);
-  const handleNurseSelectedForOrder = (
-    orderId: string | number,
-    nurse: SelectedNurse
-  ) => {
-    setOrderNurseMap((prev) => ({
-      ...prev,
-      [String(orderId)]: nurse,
-    }));
-  };
+    const timelineId =
+      patient?.patientTimeLineID ||
+      patient?.timeLineID ||
+      patient?.timelineID ||
+      patient?.id;
+    const rejectionReason =
+      patient?.rejectedReason ||
+      patient?.testsList?.[0]?.rejectedReason ||
+      patient?.medicinesList?.[0]?.rejectReason ||
+      "—";
+    const rejectedDoctorName =
+      patient?.testsList?.[0]?.doctorName ||
+      patient?.medicinesList?.[0]?.doctorName ||
+      "Not Assigned";
+
+    const normalDoctorName =
+      patient?.doctor_firstName && patient?.doctor_lastName
+        ? `${patient.doctor_firstName} ${patient.doctor_lastName}`
+        : patient?.firstName && patient?.lastName
+        ? `${patient.firstName} ${patient.lastName}`
+        : "Not Assigned";
+
+    const doctorDisplayName = isRejectedTab
+      ? rejectedDoctorName
+      : normalDoctorName;
+
+    const doctorName =
+      patient?.doctorName ||
+      patient?.testsList?.[0]?.doctorName ||
+      (patient?.testsList?.[0]?.doctor_firstName &&
+      patient?.testsList?.[0]?.doctor_lastName
+        ? `${patient.testsList[0].doctor_firstName} ${patient.testsList[0].doctor_lastName}`
+        : null) ||
+      patient?.medicinesList?.[0]?.doctorName ||
+      "Not Assigned";
+
+    const getLatestOrderDate = (patient: any) => {
+      const dates: string[] = [];
+
+      // From tests
+      if (Array.isArray(patient?.testsList)) {
+        patient.testsList.forEach((t: any) => {
+          if (t?.addedOn) dates.push(t.addedOn);
+        });
+      }
+
+      // From medicines
+      if (Array.isArray(patient?.medicinesList)) {
+        patient.medicinesList.forEach((m: any) => {
+          if (m?.createdAt) dates.push(m.createdAt);
+          else if (m?.rejectedOn) dates.push(m.rejectedOn);
+        });
+      }
+
+      if (!dates.length) return "-";
+
+      const latestDate = dates.sort(
+        (a, b) => new Date(b).getTime() - new Date(a).getTime()
+      )[0];
+
+      return formatDate(latestDate);
+    };
+
+    const orderDateDisplay = isRejectedTab
+      ? getLatestOrderDate(patient)
+      : patient?.addedOn
+      ? formatDate(patient.addedOn)
+      : "-";
 
     return (
       <View
@@ -680,7 +844,7 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
                   </Text>
                 </View>
               </View>
-              {isPharmacy ? (
+              {(isPharmacy || isReceptionUser) ? (
                 <View style={styles.viewDetailsContainer}>
                   <Text style={styles.viewDetailsText}>View Details</Text>
                 </View>
@@ -702,22 +866,13 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
               </View>
               <View style={styles.detailColumn}>
                 <Text style={styles.detailLabel}>Doctor</Text>
-                <Text
-                  style={styles.detailValue}
-                  numberOfLines={1}
-                >
-                  {patient?.doctor_firstName && patient?.doctor_lastName
-                    ? `${patient?.doctor_firstName} ${patient?.doctor_lastName}`
-                    : patient?.firstName && patient?.lastName
-                    ? `${patient?.firstName} ${patient?.lastName}`
-                    : "Not Assigned"}
+                <Text style={styles.detailValue} numberOfLines={1}>
+                  {doctorDisplayName}
                 </Text>
               </View>
               <View style={styles.detailColumn}>
                 <Text style={styles.detailLabel}>Order Date</Text>
-                <Text style={styles.detailValue}>
-                  {formatDateTime(patient?.addedOn)}
-                </Text>
+                <Text style={styles.detailValue}>{orderDateDisplay}</Text>
               </View>
             </View>
 
@@ -773,7 +928,7 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
           </View>
         </TouchableOpacity>
 
-        {isExpanded && !isPharmacy && (
+        {isExpanded && !isPharmacy && !isReceptionUser && (
           <View style={styles.expandedContent}>
             {/* 🔹 Summary row visible in expanded view as well */}
             {(testsAmount > 0 || medicinesAmount > 0) && (
@@ -783,11 +938,11 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
                     Tests Total: ₹{testsAmount.toFixed(2)}
                   </Text>
                 )}
-                {/* {medicinesAmount > 0 && (
+                {medicinesAmount > 0 && (
                   <Text style={styles.summaryExpandedText}>
                     Medicines Total: ₹{medicinesAmount.toFixed(2)}
                   </Text>
-                )} */}
+                )}
               </View>
             )}
 
@@ -842,17 +997,16 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
               gstAmount={"0"}
               totalAmount={(testsAmount + medicinesAmount).toString()}
               isRejected={isRejectedTab}
-              rejectedReason={patient?.rejectedReason}
+              rejectedReason={rejectionReason}
               isPharmacyOrder={isPharmacy}
-              alertFrom={isPharmacy ? "Pharmacy" : undefined}
+              alertFrom={isPharmacy ? "Pharmacy" : isReceptionUser ? "Reception" : undefined}
               patientData={patient}
               nurseID={patient?.nurseID}
               // 🔹 NEW: wire nurse selection state
-              orderId={patient?.id}
-              selectedNurse={orderNurseMap[String(patient?.id)]}
+              orderId={timelineId}
+              selectedNurse={orderNurseMap[String(timelineId)]}
               onNurseSelect={handleNurseSelectedForOrder}
             />
-
           </View>
         )}
       </View>
@@ -927,6 +1081,7 @@ const selectedNurseForOrder = orderNurseMap[String(orderId)];
           selectedRejectId,
           internalPageOneBased,
           externalCurrentPage,
+          orderNurseMap,
         ]}
         windowSize={21}
       />

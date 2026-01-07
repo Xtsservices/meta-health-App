@@ -877,10 +877,9 @@ const DashboardPharma: React.FC = () => {
       <View style={styles.patientInfo}>
         <Text style={styles.patientId}>{item?.patientID || item?.pID || "--"}</Text>
         <Text style={styles.patientName}>{item?.pName || item?.patientName || "--"}</Text>
-        <Text style={styles.patientType}>{getPatientType(item)}</Text>
       </View>
       <View style={styles.patientDetails}>
-        <Text style={styles.doctor}>{item?.doctorName || "--"}</Text>
+        <Text style={styles.patientType}>{getPatientType(item)}</Text>
         <Text style={styles.date}>
           {formatDateTime(
             item?.addedOn || item?.createdAt || item?.timestamp || ""
@@ -952,7 +951,7 @@ const DashboardPharma: React.FC = () => {
               />
               <KpiCard
                 title="Pending Orders"
-                value={dashboardCounts.prescriptionsToday - dashboardCounts.acceptedPrescriptions}
+                value={dashboardCounts.acceptedPrescriptions}
                 icon={<ClockIcon size={25} color={brandColor} />}
                 bg={COLORS.card}
               />

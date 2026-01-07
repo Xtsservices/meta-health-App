@@ -56,7 +56,8 @@ const ExaminationFindingNotesMobile: React.FC = () => {
   const navigation = useNavigation<any>();
   const isDark = scheme === "dark";
  const user = useSelector((s: RootState) => s.currentUser);
-const isReadOnly = user?.roleName === "surgeon";
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
   const { examinationFindingNotes, setExaminationFindingNotes } =
     usePhysicalExaminationForm() as {
       examinationFindingNotes: ExaminationFindingNotesShape;
@@ -73,6 +74,7 @@ const isReadOnly = user?.roleName === "surgeon";
   >({});
 
   const handleChange = (key: FieldKey, value: string) => {
+    if (isReadOnly) return; // Add check
     setExaminationFindingNotes({ [key]: value });
   };
 
@@ -148,6 +150,7 @@ const isReadOnly = user?.roleName === "surgeon";
                         height: dynamicHeight,
                         borderColor: COLORS.border,
                         color: COLORS.text,
+                        backgroundColor: isReadOnly ? COLORS.bg : "#ffffff",
                       },
                     ]}
                     textAlignVertical="top"

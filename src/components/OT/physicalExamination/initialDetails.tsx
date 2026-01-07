@@ -16,9 +16,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { useSelector } from "react-redux";
 
 import Footer from "../../dashboard/footer";
 import usePhysicalExaminationForm from "../../../utils/usePhysicalExaminationForm";
+import { RootState } from "../../../store/store";
 
 // 🔹 Infer inner type from the store
 type MainFormFieldsInner = ReturnType<
@@ -43,6 +45,9 @@ type BooleanFieldKey =
 const MainFormFieldsMobile: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const user = useSelector((s: RootState) => s.currentUser);
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
 
   // 🔹 Get slice from Zustand store
   const { mainFormFields, setMainFormFields } = usePhysicalExaminationForm();
@@ -74,6 +79,7 @@ const MainFormFieldsMobile: React.FC = () => {
 
   // Checkbox change → update store + show saved
   const handleCheckboxChange = (field: BooleanFieldKey, value: boolean) => {
+    if (isReadOnly) return;
     const newFormFields: MainFormFieldsInner = {
       ...mainFormFields,
       [field]: value,
@@ -87,6 +93,7 @@ const MainFormFieldsMobile: React.FC = () => {
     field: "mouthOpening" | "neckRotation",
     value: string
   ) => {
+    if (isReadOnly) return;
     const newFormFields: MainFormFieldsInner = {
       ...mainFormFields,
       [field]: value,
@@ -97,6 +104,7 @@ const MainFormFieldsMobile: React.FC = () => {
 
   // TM distance input
   const handleTextFieldInput = (field: "tmDistance", value: string) => {
+    if (isReadOnly) return;
     const newFormFields: MainFormFieldsInner = {
       ...mainFormFields,
       [field]: value,
@@ -154,28 +162,28 @@ const MainFormFieldsMobile: React.FC = () => {
                   label="MP 1"
                   checked={!!mainFormFields.mp1}
                   onPress={() =>
-                    handleCheckboxChange("mp1", !mainFormFields.mp1)
+                    !isReadOnly && handleCheckboxChange("mp1", !mainFormFields.mp1)
                   }
                 />
                 <Checkbox
                   label="MP 2"
                   checked={!!mainFormFields.mp2}
                   onPress={() =>
-                    handleCheckboxChange("mp2", !mainFormFields.mp2)
+                    !isReadOnly && handleCheckboxChange("mp2", !mainFormFields.mp2)
                   }
                 />
                 <Checkbox
                   label="MP 3"
                   checked={!!mainFormFields.mp3}
                   onPress={() =>
-                    handleCheckboxChange("mp3", !mainFormFields.mp3)
+                    !isReadOnly && handleCheckboxChange("mp3", !mainFormFields.mp3)
                   }
                 />
                 <Checkbox
                   label="MP 4"
                   checked={!!mainFormFields.mp4}
                   onPress={() =>
-                    handleCheckboxChange("mp4", !mainFormFields.mp4)
+                    !isReadOnly && handleCheckboxChange("mp4", !mainFormFields.mp4)
                   }
                 />
               </View>
@@ -187,10 +195,11 @@ const MainFormFieldsMobile: React.FC = () => {
                   style={styles.textInput}
                   value={mainFormFields.tmDistance ?? ""}
                   onChangeText={(text) =>
-                    handleTextFieldInput("tmDistance", text)
+                    !isReadOnly && handleTextFieldInput("tmDistance", text)
                   }
                   placeholder="Enter distance"
                   keyboardType="numeric"
+                  editable={!isReadOnly}
                 />
               </View>
 
@@ -205,7 +214,7 @@ const MainFormFieldsMobile: React.FC = () => {
                         styles.groupButtonActive,
                     ]}
                     onPress={() =>
-                      handleButtonGroupChange("mouthOpening", "yes")
+                      !isReadOnly && handleButtonGroupChange("mouthOpening", "yes")
                     }
                   >
                     <Text
@@ -226,7 +235,7 @@ const MainFormFieldsMobile: React.FC = () => {
                         styles.groupButtonActive,
                     ]}
                     onPress={() =>
-                      handleButtonGroupChange("mouthOpening", "no")
+                      !isReadOnly && handleButtonGroupChange("mouthOpening", "no")
                     }
                   >
                     <Text
@@ -253,7 +262,7 @@ const MainFormFieldsMobile: React.FC = () => {
                         styles.groupButtonActive,
                     ]}
                     onPress={() =>
-                      handleButtonGroupChange("neckRotation", "full")
+                      !isReadOnly && handleButtonGroupChange("neckRotation", "full")
                     }
                   >
                     <Text
@@ -274,7 +283,7 @@ const MainFormFieldsMobile: React.FC = () => {
                         styles.groupButtonActive,
                     ]}
                     onPress={() =>
-                      handleButtonGroupChange("neckRotation", "limited")
+                      !isReadOnly && handleButtonGroupChange("neckRotation", "limited")
                     }
                   >
                     <Text
@@ -295,7 +304,7 @@ const MainFormFieldsMobile: React.FC = () => {
                         styles.groupButtonActive,
                     ]}
                     onPress={() =>
-                      handleButtonGroupChange("neckRotation", "no")
+                      !isReadOnly && handleButtonGroupChange("neckRotation", "no")
                     }
                   >
                     <Text
@@ -320,7 +329,7 @@ const MainFormFieldsMobile: React.FC = () => {
                     label="Morbid Obesity"
                     checked={!!mainFormFields.morbidObesity}
                     onPress={() =>
-                      handleCheckboxChange(
+                      !isReadOnly && handleCheckboxChange(
                         "morbidObesity",
                         !mainFormFields.morbidObesity
                       )
@@ -330,7 +339,7 @@ const MainFormFieldsMobile: React.FC = () => {
                     label="H/O Difficult Airway"
                     checked={!!mainFormFields.difficultAirway}
                     onPress={() =>
-                      handleCheckboxChange(
+                      !isReadOnly && handleCheckboxChange(
                         "difficultAirway",
                         !mainFormFields.difficultAirway
                       )
@@ -340,7 +349,7 @@ const MainFormFieldsMobile: React.FC = () => {
                     label="Teeth Poor Repair/Loose"
                     checked={!!mainFormFields.teethPoorRepair}
                     onPress={() =>
-                      handleCheckboxChange(
+                      !isReadOnly && handleCheckboxChange(
                         "teethPoorRepair",
                         !mainFormFields.teethPoorRepair
                       )
@@ -350,7 +359,7 @@ const MainFormFieldsMobile: React.FC = () => {
                     label="Micrognathia"
                     checked={!!mainFormFields.micrognathia}
                     onPress={() =>
-                      handleCheckboxChange(
+                      !isReadOnly && handleCheckboxChange(
                         "micrognathia",
                         !mainFormFields.micrognathia
                       )
@@ -363,7 +372,7 @@ const MainFormFieldsMobile: React.FC = () => {
                     label="Edentulous"
                     checked={!!mainFormFields.edentulous}
                     onPress={() =>
-                      handleCheckboxChange(
+                      !isReadOnly && handleCheckboxChange(
                         "edentulous",
                         !mainFormFields.edentulous
                       )
@@ -373,14 +382,14 @@ const MainFormFieldsMobile: React.FC = () => {
                     label="Beard"
                     checked={!!mainFormFields.beard}
                     onPress={() =>
-                      handleCheckboxChange("beard", !mainFormFields.beard)
+                      !isReadOnly && handleCheckboxChange("beard", !mainFormFields.beard)
                     }
                   />
                   <Checkbox
                     label="Short Muscular Neck"
                     checked={!!mainFormFields.shortMuscularNeck}
                     onPress={() =>
-                      handleCheckboxChange(
+                      !isReadOnly && handleCheckboxChange(
                         "shortMuscularNeck",
                         !mainFormFields.shortMuscularNeck
                       )
@@ -390,7 +399,7 @@ const MainFormFieldsMobile: React.FC = () => {
                     label="Prominent Incisors"
                     checked={!!mainFormFields.prominentIncisors}
                     onPress={() =>
-                      handleCheckboxChange(
+                      !isReadOnly && handleCheckboxChange(
                         "prominentIncisors",
                         !mainFormFields.prominentIncisors
                       )
@@ -412,11 +421,6 @@ const MainFormFieldsMobile: React.FC = () => {
               style={[styles.keyboardSpacer, { height: insets.bottom + 100 }]}
             />
           </ScrollView>
-
-          {/* Save Indicator */}
-          <Animated.View style={[styles.saveIndicator, { opacity: fadeAnim }]}>
-            <Text style={styles.saveIndicatorText}>✓ Data Saved</Text>
-          </Animated.View>
 
           {/* Fixed Footer */}
           <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
@@ -575,21 +579,6 @@ const styles = StyleSheet.create({
   },
   keyboardSpacer: {
     height: 100,
-  },
-  saveIndicator: {
-    position: "absolute",
-    top: 50,
-    alignSelf: "center",
-    backgroundColor: "#10b981",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    zIndex: 1000,
-  },
-  saveIndicatorText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
   },
   footerWrap: {
     position: "absolute",

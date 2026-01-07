@@ -113,7 +113,7 @@ DischargeSummaryDownload: undefined;
   PatientDetailsLab:undefined;
   UploadTest:undefined;
   TestCard:undefined;
-  AlertsLab:undefined;
+  AlertsLab: { refresh?: boolean };
   SaleComp:undefined;
   PaymentMethodDialog:undefined;
   PaymentScreen:undefined;
@@ -126,6 +126,7 @@ DischargeSummaryDownload: undefined;
   TaxInvoiceInPatient: undefined;
   TaxInvoiceWalkIn: undefined;
   ReportsLab:undefined;
+  ReceptionOrderDetails:undefined;
 
   // pharmacy
   PharmacyExpenses:undefined;
@@ -137,6 +138,7 @@ DischargeSummaryDownload: undefined;
   InvoiceDetailsLab:undefined;
   PharmacyOrderDetails:undefined;
   DoctorProfile:undefined;
+  OrderDetailScreen:undefined;
   RegisterAmbulance:undefined;
   AmbulanceAdminDashboard:undefined;
   AmbulanceList:undefined;

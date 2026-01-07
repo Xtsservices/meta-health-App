@@ -67,6 +67,7 @@ type RouteParams = {
   reception?: boolean;
   fromDischargeList?: boolean;
    isFromPreviousPatients?: boolean; 
+   wardName?: string;
 };
 
 const followUpStatus = { active: 1 };
@@ -179,6 +180,7 @@ const FOOTER_HEIGHT = 64; // visual height of Footer area
 
 const PatientProfileOPD: React.FC = () => {
   const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+  const { wardName: wardNameFromRoute } = route.params || {};
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
@@ -541,15 +543,15 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
     return "—";
   })();
 
-  // Get menu items based on patient status
-  const getMenuItems = () => {
+const getMenuItems = () => {
   // Hide Request Surgery and Transfer Patient for surgeon and anesthetist
   
   // For surgeon and anesthetist, only show reports regardless of patient status
   if (isSurgeonOrAnesthetist) {
-    return [
+    const menuItems = [];
      
-     {
+    if (user?.roleName === "surgeon") {
+     menuItems.push({
         label: "Handshake Patient",
         onPress: () => {
           setMenuOpen(false);
@@ -559,10 +561,13 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
           });
         },
         disabled: false,
-      },
+      });
+    }
+    menuItems.push(
        { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
-      { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
-    ];
+      { label: "Test Reports", onPress: () => openReportFromMenu("tests") }
+    );
+    return menuItems;
   }
 
   if (shouldShowPatientRevisit) {
@@ -801,9 +806,13 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
                     • Department: {currentPatient?.department || "—"}
                   </Text>
                   {/* Updated Ward display */}
-                  {startStatus !== 1 && (
+                  {startStatus !== 1 && !isSurgeonOrAnesthetist && (
                   <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
-                    • Ward: {capitalizeFirstLetter(getWardName(currentPatient?.wardID))}
+                    • Ward: {
+      isReceptionView && wardNameFromRoute 
+        ? capitalizeFirstLetter(wardNameFromRoute)
+        : capitalizeFirstLetter(getWardName(currentPatient?.wardID))
+    }
                   </Text>
                   )}
               </View>

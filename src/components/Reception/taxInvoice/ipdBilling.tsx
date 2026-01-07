@@ -143,8 +143,50 @@ const sortedData = useMemo(() => {
     const sourceParam = mode === "billing" ? "billing" : "allTax";
     const itemsLabel = mode === "billing" ? "Items" : "Invoices";
     const ctaText = mode === "billing" ? "View Billing Details" : "View Invoice Details";
+const getCompletedDate = () => {
+  if (!isPharmacy || !item.dept?.toLowerCase().includes('ipd')) {
+    return null;
+  }
+  
+  const completedDates = item.medicinesList
+    ?.map(med => med.completedOn)
+    .filter(date => date) || [];
+  
+  if (completedDates.length === 0) {
+    return null;
+  }
+  
+  const sortedDates = completedDates.sort((a, b) => 
+    Date.parse(b || "") - Date.parse(a || "")
+  );
+  
+  return sortedDates[0];
+};
+const getReceptionAddedOn = (item: any) => {
+  // 1️⃣ Payment timestamp (same as web)
+  if (item?.pharmacy?.paymentDetails?.length > 0) {
+    return item.pharmacy.paymentDetails[0]?.timestamp;
+  }
 
+  // 2️⃣ Fallbacks
+  return item.addedOn || item.admissionDate || null;
+};
+
+const testLabel = totalTests <= 1 ? "test" : "tests";
+const medLabel  = totalMeds <= 1  ? "med"  : "meds";
+const completedDate = getCompletedDate();
 const calculateAmounts = () => {
+  // Check if this is pharmacy IPD case
+  const isPharmacyIPD = isPharmacy && item.dept?.toLowerCase().includes('ipd');
+  
+  // For PHARMACY IPD cases in BILLING mode, show due and paid amounts
+  if (isPharmacyIPD && mode === "billing") {
+    const dueAmount = Number(item.dueAmount) || 0;
+    const paidAmount = Number(item.paidAmount) || 0;
+    const totalAmount = Number(item.totalAmount) || dueAmount + paidAmount;
+    return { total: totalAmount, dueAmount, paidAmount };
+  }
+  
   // For PHARMACY users in BILLING mode, always show total amount only
   if (isPharmacy && mode === "billing") {
     const total = item.medicinesList?.reduce((sum, medicine) => sum + medicine.amount, 0) || 0;
@@ -177,7 +219,7 @@ const calculateAmounts = () => {
   const { total, dueAmount, paidAmount } = calculateAmounts();
 
   // Show due amount only in BILLING mode for non-reception users
-const showDueAmount = mode === "billing" && !isReception && !isPharmacy;
+const showDueAmount = (mode === "billing" && !isReception && !isPharmacy) ||  (isPharmacy && mode === "billing" && item.pType?.toLowerCase().includes('inpatient'));
 const displayAmount = showDueAmount ? dueAmount : total;
 const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
 
@@ -262,7 +304,7 @@ const isPharmacyWalkin =
 )}
 
 
-         {/* {(item.firstName || item.lastName) && (
+ {/* {(item.firstName || item.lastName) && (
   <View style={styles.metaRow}>
     <Text style={styles.metaLabel}>Doctor</Text>
     <Text style={styles.metaValue}>
@@ -271,34 +313,49 @@ const isPharmacyWalkin =
   </View>
 )} */}
         
-{item.category && (
+{/* {item.category && (
   <View style={styles.metaRow}>
     <Text style={styles.metaLabel}>Category</Text>
     <Text style={styles.metaValue}>
       {item.category}
     </Text>
   </View>
-)}
+)} */}
 
 
 <View style={styles.metaRow}>
   <Text style={styles.metaLabel}>
-    {isPharmacyWalkin ? "Admission Date" : "Added On"}
+    {isReception ? "Added on" : isPharmacy ? "Order Date" : "Admission Date"
+    }
   </Text>
   <Text style={styles.metaValue}>
-    {item.addedOn ? formatDateTime(item.addedOn) : "—"}
+    {item.admissionDate 
+      ? formatDateTime(item.admissionDate) 
+      : item.addedOn 
+        ? formatDateTime(item.addedOn) 
+        : "—"
+    }
   </Text>
 </View>
 
+{/* Show completed date only for pharmacy IPD */}
+{isPharmacy && item.dept?.toLowerCase().includes('ipd') && completedDate && (
+  <View style={styles.metaRow}>
+    <Text style={[styles.metaLabel, { color: COLORS.success }]}>Completed On</Text>
+    <Text style={[styles.metaValue, { color: COLORS.success, fontWeight: '600' }]}>
+      {formatDateTime(completedDate)}
+    </Text>
+  </View>
+)}
 
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>{itemsLabel}</Text>
           <Text style={styles.metaValue}>
             {isPharmacy 
-              ? `${totalMeds} medicines` 
+              ? `${totalMeds} ${medLabel}`
               : isReception 
-                ? `${totalTests} tests ${totalMeds} meds` 
-                : `${totalTests} tests`
+                ? `${totalTests} ${testLabel} ${totalMeds} ${medLabel}`
+                : `${totalTests} ${testLabel}`
             }
           </Text>
         </View>

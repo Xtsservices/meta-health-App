@@ -77,4 +77,9 @@ export const COLORS = {
   secondary: '#10B981', // Green for secondary
   primaryText: '#FFFFFF', // White text on primary
   secondaryText: '#FFFFFF', // White text on secondary
+  dangerLight: "#fee2e2",   // light red bg
+  dangerDark: "#b91c1c",    // dark red text
+
+  warningLight: "#fef3c7",  // light yellow bg
+  warningDark: "#92400e", 
 };

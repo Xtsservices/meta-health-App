@@ -127,13 +127,18 @@ const BookAppointment: React.FC = () => {
           `user/${user?.hospitalID}/list/${Role_NAME.doctor}`,
           token
         );
-        if (doctorResponse?.status === "success" && "users" in doctorResponse && "data" in doctorResponse ) {
-          const docs = doctorResponse?.users || doctorResponse.data?.users || [];
+        if (doctorResponse?.status === "success" && "data" in doctorResponse && doctorResponse.data?.users) {
+          const docs = doctorResponse?.data?.users;
           setDoctorList(docs);
           setFilteredDoctors(docs);
+        } else {
+          setDoctorList([]);
+          setFilteredDoctors([]);
         }
       } catch (err) {
         dispatch(showError("Failed to load doctors"));
+        setDoctorList([]);
+        setFilteredDoctors([]);
       }
     };
 
@@ -463,8 +468,7 @@ const debouncedSubmit = useMemo(
        
 
         {/* Mobile / Age */}
-        <View style={styles.row}>
-          <View style={styles.col}>
+          <View style={styles.block}>
             <Text style={styles.label}>Mobile Number *</Text>
             <TextInput
               style={styles.input}
@@ -476,17 +480,16 @@ const debouncedSubmit = useMemo(
               onChangeText={(text) => handleTextChange("mobileNumber", text)}
             />
           </View>
-           <View style={styles.col}>
+           <View style={styles.block}>
             <Text style={styles.label}>Age *</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter age"
+              placeholder="Enter age ex: 3D or 3M or 3Y"
               placeholderTextColor={COLORS.placeholder}
               value={String(appointmentFormData.age.value || "")}
               
               onChangeText={(text) => handleTextChange("age", text)}
             />
-          </View>
         </View>
           {/* Email ID */}
         <View style={styles.block}>
@@ -534,11 +537,15 @@ const debouncedSubmit = useMemo(
         {/* Services */}
         <View style={styles.block}>
           <Text style={styles.label}>Service *</Text>
-          <View style={styles.pickerContainer}>
+      <View style={styles.Select}>
+        <Text style={styles.SelectText}>
+          {appointmentFormData.services.value || "Select Service"}
+        </Text>
+
             <Picker
               selectedValue={appointmentFormData.services.value || ""}
               onValueChange={handleServiceChange}
-              style={styles.picker}
+              style={styles.hiddenPicker}
             >
               <Picker.Item label="Select Service" value="" />
               <Picker.Item label="Consultation" value="Consultation" />
@@ -553,21 +560,24 @@ const debouncedSubmit = useMemo(
         
           <View style={styles.block}>
             <Text style={styles.label}>Department *</Text>
-            <View style={styles.pickerContainer}>
+            <View style={styles.Select}>
+              <Text style={styles.SelectText}>
+                {departments.find(d => d.id === appointmentFormData.department.value)?.name ||
+                  "Select Department"}
+              </Text>
+
               <Picker
                 selectedValue={
                   appointmentFormData.department.value === -1
                     ? 0
                     : appointmentFormData.department.value
                 }
-                onValueChange={(val) => {
-                  if (!val) return;
-                  handleDepartmentChange(Number(val));
-                }}
-                style={styles.picker}
+                onValueChange={val => 
+                  val && handleDepartmentChange(Number(val))}
+                style={styles.hiddenPicker}
               >
                 <Picker.Item label="Select Department" value={0} />
-                {departments.map((dept) => (
+                {departments.map(dept => (
                   <Picker.Item key={dept.id} label={dept.name} value={dept.id} />
                 ))}
               </Picker>
@@ -576,36 +586,35 @@ const debouncedSubmit = useMemo(
 
           <View style={styles.block}>
             <Text style={styles.label}>Doctor *</Text>
-            <View style={styles.pickerContainer}>
+<View style={styles.Select}>
+  <Text style={styles.SelectText}>
+    {filteredDoctors.find(d => d.id === appointmentFormData.doctorName.value)
+      ? `${filteredDoctors.find(d => d.id === appointmentFormData.doctorName.value)?.firstName}
+         ${filteredDoctors.find(d => d.id === appointmentFormData.doctorName.value)?.lastName || ""}`
+      : "Select Doctor"}
+  </Text>
+
               <Picker
                 selectedValue={
                   appointmentFormData.doctorName.value === -1
                     ? 0
                     : appointmentFormData.doctorName.value
                 }
-                onValueChange={(val) => {
-                  if (!val) return;
-                  handleDoctorChange(Number(val));
-                }}
-                style={styles.picker}
+                onValueChange={
+                  val => val && handleDoctorChange(Number(val))}
+                style={styles.hiddenPicker}
               >
                 <Picker.Item label="Select Doctor" value={0} />
-                {filteredDoctors.length > 0 ? (
-                  filteredDoctors.map((doctor) => (
+                {filteredDoctors?.map(doctor => (
                     <Picker.Item
                       key={doctor.id}
                       label={`${doctor.firstName} ${doctor.lastName || ""}`}
                       value={doctor.id}
                     />
-                  ))
-                ) : (
-                  <Picker.Item
-                    label="No doctors available"
-                    value={0}
-                  />
-                )}
+    ))}
               </Picker>
             </View>
+
           </View>
         
 
@@ -630,7 +639,7 @@ const debouncedSubmit = useMemo(
                  mode="date"
                  display={Platform.OS === "android" ? "spinner" : "default"}
                   
-                 minimumDate={new Date(1900, 0, 1)}
+                 minimumDate={new Date()}
                   onChange={handleDateChange}
               />
             )}
@@ -846,6 +855,28 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
     backgroundColor: "#e5e7eb",
   },
+  Select: {
+  height: responsiveHeight(6),     // ✅ same height as inputs
+  borderWidth: 1.5,
+  borderColor: COLORS.border,
+  borderRadius: SPACING.sm,
+  backgroundColor: "#f9fafb",
+
+  justifyContent: "center",
+  paddingHorizontal: SPACING.sm,   // ✅ left & right padding
+},
+
+SelectText: {
+  fontSize: FONT_SIZE.md,          // ✅ SMALL TEXT (this is what you want)
+  color: COLORS.text,
+  fontWeight: "500",
+},
+
+hiddenPicker: {
+  ...StyleSheet.absoluteFillObject,
+  opacity: 0,                      // 👈 Picker is invisible but clickable
+},
+
   chipActive: {
     backgroundColor: COLORS.brand,
     borderColor: COLORS.brand,

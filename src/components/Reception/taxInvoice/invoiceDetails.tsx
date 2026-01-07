@@ -77,7 +77,28 @@ const rawPaid = (invoice as any)?.paidAmount ||
                 0;
 const rawDue = (invoice as any)?.dueAmount || 0;
 const rawTotal = (invoice as any)?.totalAmount || grandTotal;
+const getCompletedDate = () => {
+  if (!isPharmacyUser) {
+    return null;
+  }
+  
+  const completedDates = invoice.medicinesList
+    ?.map(med => med?.completedOn)
+    .filter(date => date) || [];
+  
+  if (completedDates.length === 0) {
+    return null;
+  }
+  
+  // Find the most recent completed date
+  const sortedDates = completedDates.sort((a, b) => 
+    Date.parse(b || "") - Date.parse(a || "")
+  );
+  
+  return sortedDates[0];
+};
 
+const completedDate = getCompletedDate();
 // For pharmacy users in billing mode, always show total amount only
 if (isBillingSource && isPharmacyUser) {
   payableAmount = rawDue;
@@ -171,7 +192,7 @@ if (isBillingSource && isPharmacyUser) {
 
           <View style={styles.row}>
             <Text style={styles.label}>Patient ID</Text>
-            <Text style={styles.value}>{invoice.patientID}</Text>
+            <Text style={styles.value}>{invoice.patientID || invoice.pIdNew}</Text>
           </View>
 
           {/* <View style={styles.row}>
@@ -179,10 +200,10 @@ if (isBillingSource && isPharmacyUser) {
             <Text style={styles.value}>{invoice.dept}</Text>
           </View> */}
 
-          <View style={styles.row}>
+          {/* <View style={styles.row}>
             <Text style={styles.label}>Type</Text>
             <Text style={styles.value}>{invoice.pType || "-"}</Text>
-          </View>
+          </View> */}
 
             <View style={styles.row}>
               <Text style={styles.label}>Doctor</Text>
@@ -191,12 +212,12 @@ if (isBillingSource && isPharmacyUser) {
               </Text>
             </View>
 
-          {invoice.category && (
+          {/* {invoice.category && (
             <View style={styles.row}>
               <Text style={styles.label}>Category</Text>
               <Text style={styles.value}>{invoice.category}</Text>
             </View>
-          )}
+          )} */}
 
           <View style={styles.row}>
             <Text style={styles.label}>Added On</Text>
@@ -219,14 +240,16 @@ if (isBillingSource && isPharmacyUser) {
           </View>
         )}
 
-          {invoice?.admissionDate ? (
+          {isPharmacyUser && completedDate && (
             <View style={styles.row}>
-              <Text style={styles.label}>Admission Date</Text>
-              <Text style={styles.value}>
-                {formatDateTime(invoice.admissionDate)}
+              <Text style={[styles.label, { color: COLORS.success, fontWeight: '600' }]}>
+                Completed On
+              </Text>
+              <Text style={[styles.value, { color: COLORS.success, fontWeight: '600' }]}>
+                {formatDateTime(completedDate)}
               </Text>
             </View>
-          ) : null}
+          )}
         </View>
 
         {/* Medicines section */}
@@ -338,7 +361,7 @@ if (isBillingSource && isPharmacyUser) {
 
       {/* Due Amount (outstanding) */}
       <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Due Amount:</Text>
+        <Text style={styles.totalLabel}>Total Due Amount:</Text>
         <Text
           style={[
             styles.totalValue,
@@ -363,8 +386,7 @@ if (isBillingSource && isPharmacyUser) {
         {/* Pay button for Billing source */}
        {isBillingSource &&
   numericDue > 0 &&
-  !hasPrescription &&
-  !(isPharmacyUser ) && (
+  !hasPrescription && (
   <View style={styles.payButtonContainer}>
     <TouchableOpacity
       style={[styles.payButton, { backgroundColor: COLORS.brand }]}
