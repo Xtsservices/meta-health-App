@@ -4,13 +4,14 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   TextInput,
   Modal,
   Animated,
   PanResponder,
   Dimensions,
+  ScrollView,
+  Alert,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
 import {
@@ -18,7 +19,7 @@ import {
   useNavigation,
   useFocusEffect,
 } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootState } from '../../store/store';
 import { AuthFetch, AuthPost } from '../../auth/auth';
@@ -29,12 +30,15 @@ import {
   calculateEstimatedTime,
   formatDistance,
   getCurrentLocation,
+  getDistanceAndTime,
 } from '../../utils/locationUtils';
 import {
   getDirections,
   DirectionsResult,
   RouteCoordinates,
 } from '../../utils/directionsUtils';
+import { useSocket } from '../../socket/useSocket';
+import { showError, showSuccess } from '../../store/toast.slice';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.7; // 70% of screen width
@@ -66,6 +70,17 @@ interface TripData {
   pickupLongitude?: number;
   dropLatitude?: number;
   dropLongitude?: number;
+  bookingType?: string; // 'SOS' or 'NORMAL'
+  destinationType?: string;
+}
+
+interface Hospital {
+  placeID: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  distance?: string;
 }
 
 interface MapRegion {
@@ -139,15 +154,21 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const user = useSelector((state: RootState) => state.currentUser);
+  const dispatch = useDispatch();
   const mapRef = useRef<MapView>(null);
 
   const [loading, setLoading] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [activeTrip, setActiveTrip] = useState<TripData | null>(null);
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [otp, setOtp] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [arrivedLoading, setArrivedLoading] = useState(false);
   const [distanceToPickup, setDistanceToPickup] = useState<number | null>(null);
+  const [distanceToPickupText, setDistanceToPickupText] = useState<string>('N/A');
+  const [timeToPickupText, setTimeToPickupText] = useState<string>('N/A');
+  const [distanceToDestinationText, setDistanceToDestinationText] = useState<string>('N/A');
+  const [timeToDestinationText, setTimeToDestinationText] = useState<string>('N/A');
   const [currentLocation, setCurrentLocation] = useState<{
     latitude: number;
     longitude: number;
@@ -165,6 +186,10 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
     longitude: number;
   } | null>(null);
   const [userInteractingWithMap, setUserInteractingWithMap] = useState(false);
+  const [hospitalModalVisible, setHospitalModalVisible] = useState(false);
+  const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
+  const [nearbyHospitals, setNearbyHospitals] = useState<Hospital[]>([]);
+  const [loadingHospitals, setLoadingHospitals] = useState(false);
 
   // Check if trip data was passed from navigation (when accepting a trip)
   useEffect(() => {
@@ -204,28 +229,100 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   // Check distance to pickup location and enable swipe button
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval>;
-
+console.log('useEffect activeTrip', activeTrip);
     const checkDistanceToPickup = async () => {
       if (!activeTrip || activeTrip.status !== 'accepted') return;
       if (!activeTrip.pickupLatitude || !activeTrip.pickupLongitude) return;
 
       try {
         const location = await getCurrentLocation();
-        const distance = calculateDistance(
-          { latitude: location.latitude, longitude: location.longitude },
-          {
-            latitude: activeTrip.pickupLatitude,
-            longitude: activeTrip.pickupLongitude,
-          },
-        );
-        setDistanceToPickup(distance);
+        console.log('Current location for distance check:', location);
+        
+        // Use Google Distance Matrix API for accurate distance and time
+        const distanceData = await getDistanceAndTime({
+          fromLat: location.latitude,
+          fromLng: location.longitude,
+          toLat: activeTrip.pickupLatitude,
+          toLng: activeTrip.pickupLongitude,
+        });
+        
+        console.log('Distance data from API:', distanceData);
+        
+        // Store formatted values from API
+        setDistanceToPickupText(distanceData.distanceText);
+        setTimeToPickupText(distanceData.durationText);
+        
+        // Convert meters to kilometers for comparison
+        const distanceKm = distanceData.distanceMeters / 1000;
+        setDistanceToPickup(distanceKm);
+        console.log('Distance to pickup:', distanceKm, 'km');
 
         // Show swipe button when within 200 meters of pickup
-        setShowSwipeButton(distance <= 0.2);
+        setShowSwipeButton(distanceKm <= 0.2);
 
-        console.log(`Distance to pickup: ${distance.toFixed(2)} km`);
+        console.log(`Distance: ${distanceData.distanceText}, Time: ${distanceData.durationText}`);
       } catch (error) {
         console.error('Error checking distance to pickup:', error);
+        // Fallback to simple calculation if API fails
+        try {
+          const location = await getCurrentLocation();
+          const distance = calculateDistance(
+            { latitude: location.latitude, longitude: location.longitude },
+            {
+              latitude: activeTrip.pickupLatitude,
+              longitude: activeTrip.pickupLongitude,
+            },
+          );
+          setDistanceToPickup(distance);
+          setDistanceToPickupText(formatDistance(distance));
+          setTimeToPickupText(calculateEstimatedTime(distance));
+          setShowSwipeButton(distance <= 0.2);
+        } catch (fallbackError) {
+          console.error('Fallback distance calculation also failed:', fallbackError);
+        }
+      }
+    };
+
+    const checkDistanceToDestination = async () => {
+      if (!activeTrip || activeTrip.status !== 'in_progress') return;
+      if (!activeTrip.dropLatitude || !activeTrip.dropLongitude) return;
+
+      try {
+        const location = await getCurrentLocation();
+        console.log('Current location for destination distance check:', location);
+        
+        // Use Google Distance Matrix API for accurate distance and time to destination
+        const distanceData = await getDistanceAndTime({
+          fromLat: location.latitude,
+          fromLng: location.longitude,
+          toLat: activeTrip.dropLatitude,
+          toLng: activeTrip.dropLongitude,
+        });
+        
+        console.log('Distance data to destination from API:', distanceData);
+        
+        // Store formatted values from API
+        setDistanceToDestinationText(distanceData.distanceText);
+        setTimeToDestinationText(distanceData.durationText);
+
+        console.log(`Distance to destination: ${distanceData.distanceText}, Time: ${distanceData.durationText}`);
+      } catch (error) {
+        console.error('Error checking distance to destination:', error);
+        // Fallback to simple calculation if API fails
+        try {
+          const location = await getCurrentLocation();
+          const distance = calculateDistance(
+            { latitude: location.latitude, longitude: location.longitude },
+            {
+              latitude: activeTrip.dropLatitude,
+              longitude: activeTrip.dropLongitude,
+            },
+          );
+          setDistanceToDestinationText(formatDistance(distance));
+          setTimeToDestinationText(calculateEstimatedTime(distance));
+        } catch (fallbackError) {
+          console.error('Fallback destination distance calculation also failed:', fallbackError);
+        }
       }
     };
 
@@ -233,6 +330,10 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       checkDistanceToPickup();
       // Check every 10 seconds
       intervalId = setInterval(checkDistanceToPickup, 10000);
+    } else if (activeTrip?.status === 'in_progress') {
+      checkDistanceToDestination();
+      // Check every 10 seconds
+      intervalId = setInterval(checkDistanceToDestination, 10000);
     } else {
       setShowSwipeButton(false);
     }
@@ -265,23 +366,32 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       if (bookingData) {
         const booking = bookingData;
 
-        // Parse pickup and drop coordinates from API
+        // Parse pickup coordinates from API
         const pickupLat = parseFloat(booking.fromLatitude);
         const pickupLon = parseFloat(booking.fromLongitude);
-        const dropLat = parseFloat(booking.toLatitude);
-        const dropLon = parseFloat(booking.toLongitude);
 
-        // Calculate straight-line distance for priority
-        const distanceKm = calculateDistance(
-          { latitude: pickupLat, longitude: pickupLon },
-          { latitude: dropLat, longitude: dropLon },
-        );
+        // Use addresses directly from API (no reverse geocoding needed)
+        const pickupAddress = booking.fromAddress || 'Pickup location';
+        const dropAddress = booking.toAddress || 'Hospital (To be selected)';
 
-        // Get addresses using reverse geocoding
-        const [pickupAddress, dropAddress] = await Promise.all([
-          reverseGeocode(booking.fromLatitude, booking.fromLongitude),
-          reverseGeocode(booking.toLatitude, booking.toLongitude),
-        ]);
+        // Check if destination is missing (no toAddress or coordinates)
+        const isSOS = !booking.toAddress || !booking.toLatitude || !booking.toLongitude;
+
+        let dropLat = null;
+        let dropLon = null;
+        let distanceKm = 0;
+
+        if (!isSOS && booking.toLatitude && booking.toLongitude) {
+          // Normal booking with destination
+          dropLat = parseFloat(booking.toLatitude);
+          dropLon = parseFloat(booking.toLongitude);
+
+          // Calculate straight-line distance for priority
+          distanceKm = calculateDistance(
+            { latitude: pickupLat, longitude: pickupLon },
+            { latitude: dropLat, longitude: dropLon },
+          );
+        }
 
         // Format trip data
         const tripData: TripData = {
@@ -290,21 +400,24 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
           patientPhone: undefined,
           pickupAddress,
           dropAddress,
-          distance: formatDistance(distanceKm),
-          estimatedTime: calculateEstimatedTime(distanceKm),
+          distance: distanceKm > 0 ? formatDistance(distanceKm) : 'N/A',
+          estimatedTime: distanceKm > 0 ? calculateEstimatedTime(distanceKm) : 'N/A',
           priority:
             distanceKm > 15 ? 'High' : distanceKm > 5 ? 'Medium' : 'Low',
           status: booking.status,
           requestTime: booking.requestedAt,
           pickupLatitude: pickupLat,
           pickupLongitude: pickupLon,
-          dropLatitude: dropLat,
-          dropLongitude: dropLon,
+          dropLatitude: dropLat ?? undefined,
+          dropLongitude: dropLon ?? undefined,
+          bookingType: booking.bookingType,
+          destinationType: booking.destinationType,
         };
 
         setActiveTrip(tripData);
       } else {
         // No active trip
+        console.log('✅ No active booking found');
         setActiveTrip(null);
         setRouteCoordinates([]);
       }
@@ -312,11 +425,13 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       console.error('Error fetching active trip:', error);
       // Check if error means no active booking
       if (error?.message?.includes('No active booking')) {
+        console.log('✅ Confirmed: No active booking');
         setActiveTrip(null);
         setRouteCoordinates([]);
       }
     } finally {
       setLoading(false);
+      setInitialLoadComplete(true);
     }
   }, [user?.id]);
 
@@ -326,6 +441,50 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       fetchActiveTrip();
     }, [fetchActiveTrip]),
   );
+
+  // Socket listener for SOS destination updates
+  const { socket } = useSocket();
+  
+  useEffect(() => {
+    if (!socket) {
+      console.warn('⚠️ Socket not available for SOS_DESTINATION_UPDATE listener');
+      return;
+    }
+
+    console.log('🔌 Setting up SOS_DESTINATION_UPDATE listener');
+    console.log('Socket connected:', socket.connected);
+    console.log('Socket ID:', socket.id);
+    console.log('Active trip ID:', activeTrip?.id);
+
+    const handleDestinationUpdate = (data: any) => {
+      console.log('🔔 SOS_DESTINATION_UPDATE received:', data);
+      console.log('Current booking ID:', activeTrip?.id);
+      console.log('Updated booking ID:', data?.bookingId || data?.booking?.id);
+      
+      // Refresh the active trip to get updated destination information
+      fetchActiveTrip();
+    };
+
+    // Listen for SOS destination updates
+    socket.on('SOS_DESTINATION_UPDATE', handleDestinationUpdate);
+
+    console.log('✅ Socket listener registered for SOS_DESTINATION_UPDATE');
+
+    // Log all events for debugging (remove in production)
+    const logAllEvents = (eventName: string, ...args: any[]) => {
+      console.log(`📨 Socket event received: ${eventName}`, args);
+    };
+    
+    // Temporary: Listen to all events to see what's coming through
+    socket.onAny(logAllEvents);
+
+    // Cleanup listener on unmount
+    return () => {
+      socket.off('SOS_DESTINATION_UPDATE', handleDestinationUpdate);
+      socket.offAny(logAllEvents);
+      console.log('🧹 Socket listener removed for SOS_DESTINATION_UPDATE');
+    };
+  }, [socket, fetchActiveTrip, activeTrip?.id]);
 
   // Fetch route from Google Directions API when trip changes or location updates
   useEffect(() => {
@@ -428,6 +587,45 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
     currentLocation,
   ]);
 
+  // Fetch nearby hospitals when modal opens
+  const fetchNearbyHospitals = async () => {
+    if (loadingHospitals || nearbyHospitals.length > 0) {
+      // Don't fetch if already loading or already have hospitals
+      return;
+    }
+
+    if (!activeTrip?.id) {
+      console.warn('⚠️ No booking ID available to fetch hospitals');
+      return;
+    }
+
+    try {
+      setLoadingHospitals(true);
+      console.log('🏥 Fetching nearby hospitals for booking:', activeTrip.id);
+      const token = await AsyncStorage.getItem('token');
+
+      const response: any = await AuthFetch(
+        `ambulance/sosNearbyHospitals/${activeTrip.id}`,
+        token,
+      );
+
+      console.log('🏥 Nearby hospitals response:', response);
+
+      if (response && response?.data?.hospitals && Array.isArray(response?.data?.hospitals)) {
+        setNearbyHospitals(response.data.hospitals);
+        console.log(`✅ Loaded ${response.data.hospitals.length} nearby hospitals`);
+      } else {
+        console.warn('⚠️ No hospitals found in response');
+        setNearbyHospitals([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching nearby hospitals:', error);
+      setNearbyHospitals([]);
+    } finally {
+      setLoadingHospitals(false);
+    }
+  };
+
   // Single unified map control - handles initial centering and live tracking
   useEffect(() => {
     if (!mapRef.current || !activeTrip || !currentLocation) return;
@@ -515,58 +713,56 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   const handleSwipeConfirm = async () => {
     if (!activeTrip) return;
 
-    Alert.alert('Confirm Arrival', 'Have you reached the pickup location?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: "Yes, I've Arrived",
-        onPress: async () => {
-          try {
-            setArrivedLoading(true);
-            const token = await AsyncStorage.getItem('token');
-            console.log('activeTrip', activeTrip);
-            const response: any = await AuthPost(
-              `ambulance/driver/bookings/${activeTrip.id}/arrived`,
-              {},
-              token,
-            );
+    try {
+      setArrivedLoading(true);
+      const token = await AsyncStorage.getItem('token');
+      console.log('activeTrip', activeTrip);
+      const response: any = await AuthPost(
+        `ambulance/driver/bookings/${activeTrip.id}/arrived`,
+        {},
+        token,
+      );
 
-            console.log('Arrived response:', response);
+      console.log('Arrived response:', response);
 
-            if (
-              response?.status === 'success' ||
-              (response as any)?.message?.includes('arrived')
-            ) {
-              Alert.alert(
-                'Success',
-                'Arrival confirmed! Please collect the OTP from the patient.',
-              );
-              // Update local state
-              setActiveTrip({ ...activeTrip, status: 'arrived' });
-              // Show OTP modal
-              setOtpModalVisible(true);
-            } else {
-              throw new Error(
-                (response as any)?.message || 'Failed to mark arrival',
-              );
-            }
-          } catch (error: any) {
-            console.log('Arrival error:', error);
-            Alert.alert(
-              'Error',
-              error?.message || 'Failed to mark arrival. Please try again.',
-            );
-          } finally {
-            setArrivedLoading(false);
-          }
-        },
-      },
-    ]);
+      if (
+        response?.status === 'success' ||
+        (response as any)?.message?.includes('arrived')
+      ) {
+        dispatch(showSuccess('Arrival confirmed! Please collect the OTP from the patient.'));
+        // Update local state
+        setActiveTrip({ ...activeTrip, status: 'arrived' });
+        // Show OTP modal
+        setOtpModalVisible(true);
+      } else {
+        throw new Error(
+          (response as any)?.message || 'Failed to mark arrival',
+        );
+      }
+    } catch (error: any) {
+      console.log('Arrival error:', error);
+      dispatch(showError(error?.message || 'Failed to mark arrival. Please try again.'));
+    } finally {
+      setArrivedLoading(false);
+    }
   };
 
   // Verify OTP to start journey
   const handleVerifyOtp = async () => {
     if (!otp || otp.length < 4) {
-      Alert.alert('Invalid OTP', 'Please enter a valid OTP.');
+      dispatch(showError('Please enter a valid OTP.'));
+      return;
+    }
+
+    // Check if destination is set before starting journey
+    if (!activeTrip?.dropLatitude || !activeTrip?.dropLongitude) {
+      // Close modal first so error is visible
+      setOtpModalVisible(false);
+      setOtp('');
+      // Show error after modal closes
+      setTimeout(() => {
+        dispatch(showError('Please select a destination hospital before starting the journey.'));
+      }, 300);
       return;
     }
 
@@ -588,7 +784,7 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       ) {
         setOtpModalVisible(false);
         setOtp('');
-        Alert.alert('Success', 'OTP verified! Journey started.');
+        dispatch(showSuccess('OTP verified! Journey started.'));
         // Update local state to in_progress
         if (activeTrip) {
           setActiveTrip({ ...activeTrip, status: 'in_progress' });
@@ -611,61 +807,167 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
       }
     } catch (error: any) {
       console.error('OTP verification error:', error);
-      Alert.alert(
-        'Error',
-        error?.message || 'Failed to verify OTP. Please try again.',
-      );
+      dispatch(showError(error?.message || 'Failed to verify OTP. Please try again.'));
     } finally {
       setOtpLoading(false);
     }
   };
 
-  const handleCompleteTrip = () => {
+  const handleCompleteTrip = async () => {
     if (!activeTrip) return;
 
-    Alert.alert('Complete Trip', 'Mark this trip as completed?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Complete',
-        onPress: async () => {
-          try {
-            setLoading(true);
-            const token = await AsyncStorage.getItem('token');
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('token');
 
-            // TODO: Replace with actual complete trip endpoint
-            const response = await AuthPost(
-              `ambulance/driver/bookings/${activeTrip.id}/complete`,
-              {},
-              token,
-            );
+      const response = await AuthPost(
+        `ambulance/driver/bookings/${activeTrip.id}/complete`,
+        {},
+        token,
+      );
 
-            console.log('Complete trip response:', response);
+      console.log('Complete trip response:', response);
 
-            Alert.alert('Success', 'Trip completed successfully!');
-            setActiveTrip(null);
-            navigation.navigate('AmbulanceDriverDashboard');
-          } catch (error: any) {
-            console.error('Complete trip error:', error);
-            Alert.alert(
-              'Error',
-              error?.message || 'Failed to complete trip. Please try again.',
-            );
-          } finally {
-            setLoading(false);
+      dispatch(showSuccess('Trip completed successfully!'));
+      setActiveTrip(null);
+      navigation.navigate('AmbulanceDriverDashboard');
+    } catch (error: any) {
+      console.error('Complete trip error:', error);
+      dispatch(showError(error?.message || 'Failed to complete trip. Please try again.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle hospital selection for SOS bookings
+  const handleSelectHospital = async (hospital: Hospital) => {
+    if (!activeTrip) return;
+
+    // Show confirmation dialog
+    Alert.alert(
+      'Confirm Hospital Selection',
+      `Set destination to:\n\n${hospital.name}\n${hospital.address}\n\nThis will notify the patient and cannot be easily changed.`,
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+          onPress: () => {
+            console.log('Hospital selection cancelled');
           }
         },
-      },
-    ]);
+        {
+          text: 'Yes',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const token = await AsyncStorage.getItem('token');
+
+              console.log('📍 Sending destination to backend...');
+              console.log('Hospital:', hospital.name);
+              console.log('Booking ID:', activeTrip.id);
+
+              const payload = {
+                latitude: hospital.latitude,
+                longitude: hospital.longitude,
+                address: hospital.address,
+              };
+
+              console.log('📍 Payload:', payload);
+
+              // Call API to update booking destination
+              const response: any = await AuthPost(
+                `ambulance/sosBooking/${activeTrip.id}/selectDestination`,
+                payload,
+                token,
+              );
+
+              console.log('✅ Destination confirmed response:', response);
+
+              // Update local state with selected hospital
+              setActiveTrip({
+                ...activeTrip,
+                dropLatitude: hospital.latitude,
+                dropLongitude: hospital.longitude,
+                dropAddress: hospital.address,
+              });
+
+              setSelectedHospital(hospital);
+              setHospitalModalVisible(false);
+
+              dispatch(showSuccess(`Hospital destination has been set to ${hospital.name}!`));
+            } catch (error: any) {
+              console.error('❌ Error confirming destination:', error);
+              dispatch(showError(error?.message || 'Failed to set destination. Please try again.'));
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   // Determine if driver is close enough to pickup location (within 200 meters)
   const isNearPickup = distanceToPickup !== null && distanceToPickup <= 0.2; // 200 meters
 
-  if (loading) {
+  // Show hospital selection only if destination address is missing and journey hasn't started
+  const canSelectHospital = (!activeTrip?.dropAddress || activeTrip?.dropAddress === 'Hospital (To be selected)') && activeTrip?.status !== 'in_progress';
+  const hasSelectedHospital = activeTrip?.dropLatitude && activeTrip?.dropLongitude;
+
+  // Show loading only during initial fetch or when actively loading
+  if (loading && !initialLoadComplete) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading trip details...</Text>
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingAmbulanceWrapper}>
+            <Text style={styles.loadingAmbulance}>🚑</Text>
+            <View style={styles.loadingPulse} />
+          </View>
+          <Text style={styles.loadingTitle}>Loading Trip</Text>
+          <Text style={styles.loadingSubtitle}>Fetching trip details...</Text>
+          <ActivityIndicator size="large" color={COLORS.primary} style={styles.loadingSpinner} />
+        </View>
+      </View>
+    );
+  }
+
+  // Show "No Active Trip" screen if initial load is complete but no trip found
+  if (initialLoadComplete && !activeTrip) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.noActiveTripContainer}>
+          <Text style={styles.noActiveTripEmoji}>🚑</Text>
+          <Text style={styles.noActiveTripTitle}>No Active Trip</Text>
+          <Text style={styles.noActiveTripSubtitle}>
+            You don't have any active trips at the moment.
+          </Text>
+          <TouchableOpacity
+            style={styles.noActiveTripButton}
+            onPress={() => navigation.navigate('AmbulanceDriverDashboard')}
+          >
+            <Text style={styles.noActiveTripButtonText}>Go to Dashboard</Text>
+          </TouchableOpacity>
+        </View>
+        <AmbulanceDriverFooter active="activeTrip" brandColor={COLORS.primary} />
+      </View>
+    );
+  }
+
+  // Show loading if we have a trip but still waiting for location/map data
+  if (activeTrip && (!mapRegion || !currentLocation)) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <View style={styles.loadingContainer}>
+          <View style={styles.loadingAmbulanceWrapper}>
+            <Text style={styles.loadingAmbulance}>🚑</Text>
+            <View style={styles.loadingPulse} />
+          </View>
+          <Text style={styles.loadingTitle}>Preparing Map</Text>
+          <Text style={styles.loadingSubtitle}>
+            {!currentLocation ? 'Getting your location...' : 'Loading map...'}
+          </Text>
+          <ActivityIndicator size="large" color={COLORS.primary} style={styles.loadingSpinner} />
+        </View>
       </View>
     );
   }
@@ -855,6 +1157,17 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
               topCardCollapsed && styles.floatingInfoCardCollapsed,
             ]}
           >
+            {/* Collapse/Expand Toggle Button - Top Right */}
+            <TouchableOpacity
+              style={styles.collapseButton}
+              onPress={() => setTopCardCollapsed(!topCardCollapsed)}
+            >
+              <Text style={styles.collapseButtonText}>
+                {topCardCollapsed ? '▼' : '▲'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Status Header */}
             <View style={styles.floatingHeader}>
               <View style={styles.statusBadge}>
                 <View
@@ -883,182 +1196,211 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
                 <View style={styles.liveDot} />
                 <Text style={styles.liveText}>LIVE</Text>
               </View>
-
-              {/* Collapse/Expand Toggle Button */}
-              <TouchableOpacity
-                style={styles.collapseButton}
-                onPress={() => setTopCardCollapsed(!topCardCollapsed)}
-              >
-                <Text style={styles.collapseButtonText}>
-                  {topCardCollapsed ? '▼' : '▲'}
-                </Text>
-              </TouchableOpacity>
             </View>
 
             {!topCardCollapsed && (
               <>
-               
-                {/* Cancel Trip Button (visible for accepted or arrived status) */}
-               {(activeTrip.status === 'accepted' ||
-  activeTrip.status === 'arrived') && (
-  <TouchableOpacity
-    onPress={() => setCancelModalVisible(true)}
-    style={{
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      borderRadius: 8,
-      borderWidth: 1.5,
-      borderColor: '#E53935', // red outline
-      backgroundColor: 'transparent',
-      alignSelf: 'center',
-      marginTop: 12,
-    }}
-    activeOpacity={0.7}
-  >
-    <Text
-      style={{
-        color: '#E53935',
-        fontSize: 16,
-        fontWeight: '600',
-      }}
-    >
-      Cancel Trip
-    </Text>
-  </TouchableOpacity>
-)}
-
-
-                {/* Cancel Trip Modal (moved to root level for visibility) */}
-                <Modal
-                  visible={cancelModalVisible}
-                  transparent={true}
-                  animationType="slide"
-                  onRequestClose={() => setCancelModalVisible(false)}
-                >
-                  <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                      <Text style={styles.modalTitle}>Cancel Trip</Text>
-                      <Text style={styles.modalSubtitle}>
-                        Please provide a reason for cancelling this trip
-                      </Text>
-                      <TextInput
-                        style={styles.cancelReasonInput}
-                        value={cancelReason}
-                        onChangeText={setCancelReason}
-                        placeholder="Enter reason..."
-                        placeholderTextColor={COLORS.gray}
-                        multiline
-                        numberOfLines={3}
-                        maxLength={200}
-                        editable={!cancelLoading}
-                      />
-                      <View style={styles.modalButtons}>
-                        <TouchableOpacity
-                          style={[styles.modalButton, styles.modalButtonCancel]}
-                          onPress={() => {
-                            setCancelModalVisible(false);
-                            setCancelReason('');
-                          }}
-                          disabled={cancelLoading}
-                        >
-                          <Text style={styles.modalButtonText}>Back</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.modalButton,
-                            styles.modalButtonVerify,
-                            !cancelReason.trim() && { opacity: 0.5 },
-                          ]}
-                          onPress={async () => {
-                            if (!cancelReason.trim()) return;
-                            try {
-                              setCancelLoading(true);
-                              const token = await AsyncStorage.getItem('token');
-                              const response = await AuthPost(
-                                `ambulance/driver/bookings/${activeTrip?.id}/cancel`,
-                                { reason: cancelReason.trim() },
-                                token,
-                              );
-                              if (
-                                response?.status === 'success' ||
-                                (response as any)?.message?.includes(
-                                  'cancelled',
-                                )
-                              ) {
-                                Alert.alert(
-                                  'Trip Cancelled',
-                                  'The trip has been cancelled.',
-                                );
-                                setActiveTrip(null);
-                                setCancelModalVisible(false);
-                                setCancelReason('');
-                                navigation.navigate('AmbulanceDriverDashboard');
-                              } else {
-                                throw new Error(
-                                  (response as any)?.message ||
-                                    'Failed to cancel trip',
-                                );
-                              }
-                            } catch (error: any) {
-                              Alert.alert(
-                                'Error',
-                                error?.message ||
-                                  'Failed to cancel trip. Please try again.',
-                              );
-                            } finally {
-                              setCancelLoading(false);
-                            }
-                          }}
-                          disabled={cancelLoading || !cancelReason.trim()}
-                        >
-                          {cancelLoading ? (
-                            <ActivityIndicator color="#fff" />
-                          ) : (
-                            <Text style={styles.modalButtonTextVerify}>
-                              Cancel Trip
-                            </Text>
-                          )}
-                        </TouchableOpacity>
+                {/* SOS Booking - Hospital Selection */}
+                {canSelectHospital && (
+                  <View style={styles.sosAlertMain}>
+                    <View style={styles.sosMainHeader}>
+                      <View style={styles.sosIconCircle}>
+                        <Text style={styles.sosMainEmoji}>🚨</Text>
+                      </View>
+                      <View style={styles.sosMainContent}>
+                        <Text style={styles.sosMainTitle}>Emergency SOS</Text>
+                        <Text style={styles.sosMainText}>
+                          {hasSelectedHospital ? 'Destination selected' : 'Select destination hospital'}
+                        </Text>
                       </View>
                     </View>
+                    
+                    {/* Show selected hospital if available */}
+                    {hasSelectedHospital && selectedHospital && (
+                      <View style={styles.selectedHospitalInfo}>
+                        <View style={styles.selectedHospitalIcon}>
+                          <Text style={styles.selectedHospitalEmoji}>🏥</Text>
+                        </View>
+                        <View style={styles.selectedHospitalDetails}>
+                          <Text style={styles.selectedHospitalName}>
+                            {selectedHospital.name}
+                          </Text>
+                          <Text style={styles.selectedHospitalAddress} numberOfLines={1}>
+                            {selectedHospital.address}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    
+                    <TouchableOpacity
+                      style={styles.selectHospitalButtonMain}
+                      onPress={() => {
+                        setHospitalModalVisible(true);
+                        fetchNearbyHospitals();
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.selectHospitalTextMain}>
+                        {hasSelectedHospital ? '🔄 Change Hospital' : '🏥 Choose Hospital'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
-                </Modal>
-
-                <View style={styles.patientInfo}>
-                  <Text style={styles.patientName}>
-                    👤 {activeTrip.patientName}
-                  </Text>
-                  {activeTrip.distance && activeTrip.estimatedTime && (
-                    <View style={styles.tripMetricsHorizontal}>
-                      <Text style={styles.metricSmall}>
-                        📍 {activeTrip.distance}
-                      </Text>
-                      <Text style={styles.metricSmall}>
-                        ⏱️ {activeTrip.estimatedTime}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                )}
 
                 {/* Show distance to pickup when heading to pickup */}
                 {activeTrip.status === 'accepted' &&
                   distanceToPickup !== null && (
-                    <View style={styles.distanceAlert}>
-                      <Text style={styles.distanceAlertText}>
-                        {formatDistance(distanceToPickup)} from pickup location
-                      </Text>
-                      {!isNearPickup && (
-                        <Text style={styles.distanceAlertSubtext}>
-                          Get within 200m to confirm arrival
+                    <View style={styles.distanceAlertMain}>
+                      <Text style={styles.distanceIcon}>📍</Text>
+                      <View style={styles.distanceContent}>
+                        <Text style={styles.distanceValue}>
+                          {distanceToPickupText}
                         </Text>
-                      )}
+                        <Text style={styles.distanceLabel}>to pickup • ETA: {timeToPickupText}</Text>
+                      </View>
                     </View>
                   )}
+
+                {/* Pickup and Drop Addresses */}
+                <View style={styles.addressesContainer}>
+                  <View style={styles.addressItem}>
+                    <Text style={styles.addressLabel}>📍 Pickup</Text>
+                    <Text style={styles.addressText} numberOfLines={2}>
+                      {activeTrip.pickupAddress || 'N/A'}
+                    </Text>
+                  </View>
+                  <View style={styles.addressItem}>
+                    <Text style={styles.addressLabel}>🏁 Drop</Text>
+                    <Text style={styles.addressText} numberOfLines={2}>
+                      {activeTrip.dropAddress || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Show Distance and ETA during journey */}
+                {activeTrip.status === 'in_progress' && (
+                  <View style={styles.destinationDistanceContainer}>
+                    <View style={styles.destinationDistanceItem}>
+                      <Text style={styles.destinationDistanceLabel}>Distance</Text>
+                      <Text style={styles.destinationDistanceValue}>
+                        {distanceToDestinationText === 'N/A' ? 'Calculating...' : distanceToDestinationText}
+                      </Text>
+                    </View>
+                    <View style={styles.destinationDistanceDivider} />
+                    <View style={styles.destinationDistanceItem}>
+                      <Text style={styles.destinationDistanceLabel}>ETA</Text>
+                      <Text style={styles.destinationDistanceValue}>
+                        {timeToDestinationText === 'N/A' ? 'Calculating...' : timeToDestinationText}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Cancel Trip Button */}
+                {(activeTrip.status === 'accepted' || activeTrip.status === 'arrived') && (
+                  <TouchableOpacity
+                    onPress={() => setCancelModalVisible(true)}
+                    style={styles.cancelTripButtonMain}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cancelTripTextMain}>✕ Cancel Trip</Text>
+                  </TouchableOpacity>
+                )}
+
               </>
             )}
           </View>
         </View>
       )}
+
+      {/* Cancel Trip Modal */}
+      <Modal
+        visible={cancelModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setCancelModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Cancel Trip</Text>
+            <Text style={styles.modalSubtitle}>
+              Please provide a reason for cancelling this trip
+            </Text>
+            <TextInput
+              style={styles.cancelReasonInput}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              placeholder="Enter reason..."
+              placeholderTextColor={COLORS.gray}
+              multiline
+              numberOfLines={3}
+              maxLength={200}
+              editable={!cancelLoading}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => {
+                  setCancelModalVisible(false);
+                  setCancelReason('');
+                }}
+                disabled={cancelLoading}
+              >
+                <Text style={styles.modalButtonText}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalButtonVerify,
+                  !cancelReason.trim() && { opacity: 0.5 },
+                ]}
+                onPress={async () => {
+                  if (!cancelReason.trim()) return;
+                  try {
+                    setCancelLoading(true);
+                    const token = await AsyncStorage.getItem('token');
+                    const response = await AuthPost(
+                      `ambulance/driver/bookings/${activeTrip?.id}/cancel`,
+                      { reason: cancelReason.trim() },
+                      token,
+                    );
+                    if (
+                      response?.status === 'success' ||
+                      (response as any)?.message?.includes(
+                        'cancelled',
+                      )
+                    ) {
+                      dispatch(showSuccess('The trip has been cancelled.'));
+                      setActiveTrip(null);
+                      setCancelModalVisible(false);
+                      setCancelReason('');
+                      navigation.navigate('AmbulanceDriverDashboard');
+                    } else {
+                      throw new Error(
+                        (response as any)?.message ||
+                          'Failed to cancel trip',
+                      );
+                    }
+                  } catch (error: any) {
+                    dispatch(showError(error?.message || 'Failed to cancel trip. Please try again.'));
+                  } finally {
+                    setCancelLoading(false);
+                  }
+                }}
+                disabled={cancelLoading || !cancelReason.trim()}
+              >
+                {cancelLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonTextVerify}>
+                    Cancel Trip
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Bottom Action Panel with Collapse */}
       <View
@@ -1167,6 +1509,73 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
         )}
       </View>
 
+      {/* Hospital Selection Modal for SOS Bookings */}
+      <Modal
+        visible={hospitalModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setHospitalModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.hospitalModalContent}>
+            {/* Modal Header */}
+            <View style={styles.hospitalModalHeader}>
+              <View style={styles.hospitalModalIcon}>
+                <Text style={styles.hospitalModalEmoji}>🏥</Text>
+              </View>
+              <Text style={styles.hospitalModalTitle}>Select Hospital</Text>
+              <Text style={styles.hospitalModalSubtitle}>
+                Choose nearest emergency facility
+              </Text>
+            </View>
+
+            {/* Hospital List */}
+            <ScrollView 
+              style={styles.hospitalListContainer}
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={styles.hospitalListContent}
+            >
+              {loadingHospitals ? (
+                <View style={styles.hospitalLoadingContainer}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={styles.hospitalLoadingText}>Loading nearby hospitals...</Text>
+                </View>
+              ) : nearbyHospitals.length === 0 ? (
+                <View style={styles.hospitalEmptyContainer}>
+                  <Text style={styles.hospitalEmptyText}>No hospitals found nearby</Text>
+                </View>
+              ) : (
+                nearbyHospitals.map((hospital, index) => (
+                  <TouchableOpacity
+                    key={hospital.placeID}
+                    style={[
+                      styles.hospitalCard,
+                      selectedHospital?.placeID === hospital.placeID && styles.hospitalCardSelected,
+                    ]}
+                    onPress={() => handleSelectHospital(hospital)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.hospitalName}>{hospital.name}</Text>
+                    <Text style={styles.hospitalAddress} numberOfLines={3}>
+                      {hospital.address}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+
+            {/* Cancel Button */}
+            <TouchableOpacity
+              style={styles.hospitalModalCancelButton}
+              onPress={() => setHospitalModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.hospitalModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* OTP Verification Modal */}
       <Modal
         visible={otpModalVisible}
@@ -1189,6 +1598,7 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
               keyboardType="number-pad"
               maxLength={6}
               autoFocus={true}
+              placeholderTextColor={"gray"}
             />
 
             <View style={styles.modalButtons}>
@@ -1225,59 +1635,282 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  cancelTripButton: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.error,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    elevation: 2,
+  // Simplified Main Card Styles
+  sosAlertMain: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: COLORS.error + '08',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.error + '25',
   },
-  cancelTripButtonText: {
+  sosMainHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  sosIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: COLORS.error + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  sosMainEmoji: {
+    fontSize: 24,
+  },
+  sosMainContent: {
+    flex: 1,
+  },
+  sosMainTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.error,
+    marginBottom: 2,
+  },
+  sosMainText: {
+    fontSize: 13,
+    color: COLORS.gray,
+  },
+  selectHospitalButtonMain: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  selectHospitalTextMain: {
     color: COLORS.white,
     fontWeight: '700',
     fontSize: 15,
   },
+  selectedHospitalInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '10',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+  },
+  selectedHospitalIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  selectedHospitalEmoji: {
+    fontSize: 20,
+  },
+  selectedHospitalDetails: {
+    flex: 1,
+  },
+  selectedHospitalName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  selectedHospitalAddress: {
+    fontSize: 11,
+    color: COLORS.gray,
+  },
+
+  // Distance Alert Simplified
+  distanceAlertMain: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: COLORS.primary + '10',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+  },
+  distanceIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  distanceContent: {
+    flex: 1,
+  },
+  distanceValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  distanceLabel: {
+    fontSize: 12,
+    color: COLORS.gray,
+    fontWeight: '500',
+  },
+
+  // Addresses Container
+  addressesContainer: {
+    marginTop: 16,
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 12,
+    padding: 14,
+    gap: 12,
+  },
+  addressItem: {
+    gap: 6,
+  },
+  addressLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.black,
+  },
+  addressText: {
+    fontSize: 13,
+    color: COLORS.gray,
+    lineHeight: 18,
+  },
+
+  // Cancel Trip Button Simplified
+  cancelTripButtonMain: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: COLORS.error,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+  },
+  cancelTripTextMain: {
+    color: COLORS.error,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  
   cancelReasonInput: {
     borderWidth: 2,
     borderColor: COLORS.error,
     borderRadius: 12,
     padding: 14,
     fontSize: 16,
-    minHeight: 60,
+    minHeight: 80,
     maxHeight: 120,
     marginBottom: 20,
     color: COLORS.black,
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: COLORS.white,
     textAlignVertical: 'top',
   },
-  // cancelReasonInput: {
-  //   borderWidth: 2,
-  //   borderColor: COLORS.error,
-  //   borderRadius: 12,
-  //   padding: 14,
-  //   fontSize: 16,
-  //   minHeight: 60,
-  //   maxHeight: 120,
-  //   marginBottom: 20,
-  //   color: COLORS.black,
-  //   backgroundColor: COLORS.lightGray,
-  //   textAlignVertical: 'top',
-  // },
-  //  cancelReasonInput: {
-  //   borderWidth: 2,
-  //   borderColor: COLORS.error,
-  //   borderRadius: 12,
-  //   padding: 14,
-  //   fontSize: 16,
-  //   minHeight: 60,
-  //   maxHeight: 120,
-  //   marginBottom: 20,
-  //   color: COLORS.black,
-  //   backgroundColor: COLORS.lightGray,
-  //   textAlignVertical: 'top',
-  // },
+
+  // Hospital Modal Redesign
+  hospitalModalContent: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '85%',
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+  },
+  hospitalModalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  hospitalModalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  hospitalModalEmoji: {
+    fontSize: 32,
+  },
+  hospitalModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.black,
+    marginBottom: 4,
+  },
+  hospitalModalSubtitle: {
+    fontSize: 14,
+    color: COLORS.gray,
+  },
+  hospitalListContainer: {
+    maxHeight: 420,
+    marginBottom: 12,
+  },
+  hospitalListContent: {
+    paddingBottom: 8,
+  },
+  hospitalCard: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 10,
+  },
+  hospitalCardSelected: {
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  hospitalName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.black,
+    marginBottom: 6,
+  },
+  hospitalAddress: {
+    fontSize: 13,
+    color: COLORS.gray,
+    lineHeight: 18,
+  },
+  hospitalModalCancelButton: {
+    marginTop: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.lightGray,
+    alignItems: 'center',
+  },
+  hospitalModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.gray,
+  },
+  hospitalLoadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hospitalLoadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: COLORS.gray,
+    fontWeight: '500',
+  },
+  hospitalEmptyContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hospitalEmptyText: {
+    fontSize: 14,
+    color: COLORS.gray,
+    fontWeight: '500',
+  },
 
   container: {
     flex: 1,
@@ -1286,6 +1919,42 @@ const styles = StyleSheet.create({
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingAmbulanceWrapper: {
+    position: 'relative',
+    marginBottom: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingAmbulance: {
+    fontSize: 80,
+    zIndex: 2,
+  },
+  loadingPulse: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.primary + '30',
+    zIndex: 1,
+  },
+  loadingTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.black,
+    marginBottom: 8,
+  },
+  loadingSubtitle: {
+    fontSize: 16,
+    color: COLORS.gray,
+    marginBottom: 24,
+  },
+  loadingSpinner: {
+    marginTop: 8,
   },
   loadingText: {
     marginTop: 12,
@@ -1338,55 +2007,66 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    elevation: 8,
+    borderRadius: 18,
+    padding: 18,
+    elevation: 12,
     shadowColor: COLORS.black,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
   },
   floatingInfoCardCollapsed: {
-    paddingBottom: 12,
+    paddingBottom: 18,
   },
   floatingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 0,
+    marginBottom: 8,
   },
   collapseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.lightGray,
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.white,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.lightGray,
+    elevation: 4,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    zIndex: 10,
   },
   collapseButtonText: {
     fontSize: 14,
-    color: COLORS.gray,
+    color: COLORS.primary,
     fontWeight: 'bold',
   },
   liveIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.error + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
+    backgroundColor: COLORS.error + '15',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.error + '30',
   },
   liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
     backgroundColor: COLORS.error,
-    marginRight: 4,
+    marginRight: 5,
   },
   liveText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.error,
     letterSpacing: 0.5,
@@ -1394,88 +2074,24 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.lightGray,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: COLORS.primary + '15',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
+    flex: 1,
+    marginRight: 8,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    marginRight: 8,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.gray,
-  },
-  priorityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: COLORS.lightGray,
-  },
-  priorityBadgeInline: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: COLORS.lightGray,
-    alignSelf: 'flex-start',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  priorityHigh: {
-    backgroundColor: COLORS.error,
-  },
-  priorityMedium: {
-    backgroundColor: COLORS.warning,
-  },
-  priorityText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.white,
-  },
-  patientInfo: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
-    paddingTop: 12,
-    marginTop: 8,
-  },
-  patientName: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.black,
-    marginBottom: 8,
   },
-  tripMetricsHorizontal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  metricSmall: {
-    fontSize: 13,
-    color: COLORS.gray,
-    fontWeight: '500',
-  },
-  distanceAlert: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: COLORS.warning + '20',
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.warning,
-  },
-  distanceAlertText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.warning,
-  },
-  distanceAlertSubtext: {
-    fontSize: 12,
-    color: COLORS.gray,
-    marginTop: 4,
-  },
-
   // Bottom Panel Styles
   bottomPanel: {
     backgroundColor: COLORS.white,
@@ -1489,10 +2105,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     position: 'relative',
+    marginBottom: 30,
   },
   bottomPanelCollapsed: {
     paddingTop: 8,
     paddingBottom: 92,
+    marginBottom: 40,
   },
   bottomCollapseButton: {
     position: 'absolute',
@@ -1635,7 +2253,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.gray,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  destinationDistanceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginTop: 16,
     marginBottom: 20,
+    gap: 20,
+  },
+  destinationDistanceItem: {
+    alignItems: 'center',
+  },
+  destinationDistanceLabel: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+  },
+  destinationDistanceValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  destinationDistanceDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: COLORS.gray + '40',
   },
   completeButton: {
     backgroundColor: COLORS.primary,
@@ -1739,6 +2389,49 @@ const styles = StyleSheet.create({
   },
   activityIndicator: {
     marginTop: 10,
+  },
+  
+  // No Active Trip Screen Styles
+  noActiveTripContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    backgroundColor: COLORS.white,
+  },
+  noActiveTripEmoji: {
+    fontSize: 80,
+    marginBottom: 20,
+  },
+  noActiveTripTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.black,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  noActiveTripSubtitle: {
+    fontSize: 16,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 24,
+  },
+  noActiveTripButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: COLORS.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  noActiveTripButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 
   // Ambulance Marker Styles

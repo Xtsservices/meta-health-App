@@ -19,10 +19,24 @@ export interface TripRequestAPI {
   toLongitude: string;
   fromAddress: string;
   toAddress: string;
-  bookingType: 'NORMAL' | 'SOS';
-  bookingStatus: string;
+  bookingType: string;
+  bookingStatus: 'NORMAL' | 'SOS';
   requestStatus: string;
   requestedAt: string;
+  distance?: string;
+  estimatedTime?: string;
+  driverToPickupETA?: {
+    distanceMeters: number;
+    distanceText: string;
+    durationSeconds: number;
+    durationText: string;
+  } | null;
+  pickupToDestinationETA?: {
+    distanceMeters: number;
+    distanceText: string;
+    durationSeconds: number;
+    durationText: string;
+  } | null;
 }
 
 // Interface for formatted trip request with location names
@@ -46,54 +60,18 @@ export interface TripRequest {
   requestStatus: string;
 }
 
-/**
- * Calculate distance between two coordinates using Haversine formula
- * Returns distance in kilometers
- */
-function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = R * c;
-  return distance;
-}
+
 
 /**
- * Calculate estimated time based on distance
- * Assumes average speed of 30 km/h in city traffic
- */
-function calculateEstimatedTime(distanceKm: number): string {
-  const averageSpeed = 30; // km/h
-  const timeInHours = distanceKm / averageSpeed;
-  const timeInMinutes = Math.round(timeInHours * 60);
-  
-  if (timeInMinutes < 60) {
-    return `${timeInMinutes} mins`;
-  } else {
-    const hours = Math.floor(timeInMinutes / 60);
-    const minutes = timeInMinutes % 60;
-    return `${hours}h ${minutes}m`;
-  }
-}
-
-/**
- * Determine priority based on booking type
+ * Determine priority based on booking status or booking type
  * SOS = Emergency, NORMAL = Normal
  */
-function determinePriority(bookingType: 'NORMAL' | 'SOS'): string {
-  return bookingType === 'SOS' ? 'Emergency' : 'Normal';
+function determinePriority(bookingStatus: string, bookingType?: string): string {
+  // Check both fields, case-insensitive
+  const isSOSStatus = bookingStatus && bookingStatus.toUpperCase() === 'SOS';
+  const isSOSType = bookingType && bookingType.toUpperCase() === 'SOS';
+  
+  return (isSOSStatus || isSOSType) ? 'Emergency' : 'Normal';
 }
 
 /**
@@ -135,27 +113,19 @@ export async function fetchTripRequests(
     const formattedRequests = requests.map((request) => {
       // Use addresses directly from backend
       const pickupAddress = request.fromAddress || `${request.fromLatitude}, ${request.fromLongitude}`;
-      const dropAddress = request.toAddress || `${request.toLatitude}, ${request.toLongitude}`;
+      
+      // For SOS bookings, drop location is pending
+      const dropAddress = request.bookingStatus === 'SOS' 
+        ? 'Pending' 
+        : (request.toAddress || `${request.toLatitude}, ${request.toLongitude}`);
 
-      // Calculate distance
-      const distanceKm = calculateDistance(
-        parseFloat(request.fromLatitude),
-        parseFloat(request.fromLongitude),
-        parseFloat(request.toLatitude),
-        parseFloat(request.toLongitude)
-      );
+      // Use driverToPickupETA for distance and time
+      const distance = request.driverToPickupETA?.distanceText || request.distance || 'N/A';
+      const estimatedTime = request.driverToPickupETA?.durationText || request.estimatedTime || 'N/A';
 
-      // Format distance
-      const distance =
-        distanceKm < 1
-          ? `${Math.round(distanceKm * 1000)} m`
-          : `${distanceKm.toFixed(1)} km`;
-
-      // Calculate estimated time
-      const estimatedTime = calculateEstimatedTime(distanceKm);
-
-      // Determine priority based on booking type
-      const priority = determinePriority(request.bookingType);
+      // Determine priority based on booking status
+      const priority = determinePriority(request.bookingStatus, request.bookingType);
+      console.log(`Request ${request.requestID}: bookingStatus=${request.bookingStatus}, bookingType=${request.bookingType}, priority=${priority}`);
 
       // Format request time
       const requestTime = formatRequestTime(request.requestedAt);
@@ -240,6 +210,9 @@ export async function rejectTripRequest(
   }
 }
 
+// Track previous trip IDs to detect new trips
+let previousTripIds = new Set<number>();
+
 /**
  * Setup Socket.IO listener for driver booking requests
  * This will listen for real-time trip requests from the backend
@@ -263,38 +236,59 @@ export function setupTripRequestsSocketListener(
     
     try {
       if (!data.requests || data.requests.length === 0) {
+        previousTripIds.clear();
         onRequestsReceived([]);
         return;
       }
 
-      // Play notification sound when new requests arrive
-      playNotificationSound();
+      // Check for NEW trips by comparing with previous trip IDs
+      const currentTripIds = new Set(data.requests.map(req => req.requestID));
+      const newTrips = data.requests.filter(req => !previousTripIds.has(req.requestID));
+      const hasNewTrips = newTrips.length > 0;
+      
+      console.log('Previous trip IDs:', Array.from(previousTripIds));
+      console.log('Current trip IDs:', Array.from(currentTripIds));
+      console.log('New trips count:', newTrips.length);
+
+      // Only play sound if there are NEW trips
+      if (hasNewTrips) {
+        // Check if there's any SOS booking in the NEW requests
+        console.log('Checking for SOS bookings in NEW requests:', newTrips);
+        
+        // Check both bookingStatus and bookingType fields, case-insensitive
+        const hasSOSBooking = newTrips.some(req => {
+          const isSOSStatus = req.bookingStatus && req.bookingStatus.toUpperCase() === 'SOS';
+          const isSOSType = req.bookingType && req.bookingType.toUpperCase() === 'SOS';
+          console.log(`New Request ${req.requestID}: bookingStatus=${req.bookingStatus}, bookingType=${req.bookingType}, isSOSStatus=${isSOSStatus}, isSOSType=${isSOSType}`);
+          return isSOSStatus || isSOSType;
+        });
+        
+        console.log('Has SOS booking in NEW trips:', hasSOSBooking);
+        console.log('Playing sound:', hasSOSBooking ? 'SOS (Emergency)' : 'NORMAL');
+        playNotificationSound(hasSOSBooking ? 'SOS' : 'NORMAL');
+      } else {
+        console.log('No new trips, sound not played');
+      }
+      
+      // Update previous trip IDs
+      previousTripIds = currentTripIds;
 
       // Process each request - use addresses directly from backend
       const formattedRequests = data.requests.map((request) => {
         // Use addresses directly from backend
         const pickupAddress = request.fromAddress || `${request.fromLatitude}, ${request.fromLongitude}`;
-        const dropAddress = request.toAddress || `${request.toLatitude}, ${request.toLongitude}`;
+        
+        // For SOS bookings, drop location is pending
+        const dropAddress = request.bookingStatus === 'SOS' 
+          ? 'Pending' 
+          : (request.toAddress || `${request.toLatitude}, ${request.toLongitude}`);
 
-        // Calculate distance
-        const distanceKm = calculateDistance(
-          parseFloat(request.fromLatitude),
-          parseFloat(request.fromLongitude),
-          parseFloat(request.toLatitude),
-          parseFloat(request.toLongitude)
-        );
+        // Use driverToPickupETA for distance and time
+        const distance = request.driverToPickupETA?.distanceText || request.distance || 'N/A';
+        const estimatedTime = request.driverToPickupETA?.durationText || request.estimatedTime || 'N/A';
 
-        // Format distance
-        const distance =
-          distanceKm < 1
-            ? `${Math.round(distanceKm * 1000)} m`
-            : `${distanceKm.toFixed(1)} km`;
-
-        // Calculate estimated time
-        const estimatedTime = calculateEstimatedTime(distanceKm);
-
-        // Determine priority based on booking type
-        const priority = determinePriority(request.bookingType);
+        // Determine priority based on booking status
+        const priority = determinePriority(request.bookingStatus, request.bookingType);
 
         // Format request time
         const requestTime = formatRequestTime(request.requestedAt);
