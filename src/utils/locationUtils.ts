@@ -2,6 +2,8 @@ import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import { getSocket } from '../socket/socket';
 import BackgroundService from 'react-native-background-actions';
+import axios from 'axios';
+import { GOOGLE_MAPS_API_KEY } from '@env';
 
 export interface Location {
   latitude: number;
@@ -612,7 +614,8 @@ const reverseGeocodeWithOpenCage = async (
 ): Promise<string | null> => {
   // Optional: Add your OpenCage API key here for better reliability
   // Free tier: 2,500 requests/day
-  const apiKey = 'AIzaSyCrmF3351j82RVuTZbVBJ-X3ufndylJsvo';
+  // Note: This is NOT a Google Maps API key - OpenCage is a different service
+  const apiKey = ''; // Add OpenCage API key if you have one
 
   if (!apiKey) {
     return null; // Skip if not configured
@@ -665,11 +668,72 @@ export const calculateEstimatedTime = (distanceKm: number): string => {
 /**
  * Format distance in a human-readable way
  * @param distanceKm - Distance in kilometers
- * @returns Formatted distance string (e.g., "1.5 km" or "500 m")
+ * @returns Formatted distance string (e.g., "1.5 km" or "500 meters")
  */
 export const formatDistance = (distanceKm: number): string => {
   if (distanceKm < 1) {
-    return `${Math.round(distanceKm * 1000)} m`;
+    return `${Math.round(distanceKm * 1000)} meters`;
   }
   return `${distanceKm.toFixed(1)} km`;
+};
+
+/**
+ * Get distance and time between two locations using Google Distance Matrix API
+ * @param fromLat - Origin latitude
+ * @param fromLng - Origin longitude
+ * @param toLat - Destination latitude
+ * @param toLng - Destination longitude
+ * @returns Object containing distance and duration information
+ */
+export const getDistanceAndTime = async ({
+  fromLat,
+  fromLng,
+  toLat,
+  toLng
+}: {
+  fromLat: number;
+  fromLng: number;
+  toLat: number;
+  toLng: number;
+}): Promise<{
+  distanceMeters: number;
+  distanceText: string;
+  durationSeconds: number;
+  durationText: string;
+}> => {
+  console.log('Calculating distance/time from', fromLat, fromLng, 'to', toLat, toLng);
+  
+  try {
+    const response = await axios.get(
+      'https://maps.googleapis.com/maps/api/distancematrix/json',
+      {
+        params: {
+          origins: `${fromLat},${fromLng}`,
+          destinations: `${toLat},${toLng}`,
+          mode: 'driving',
+          traffic_model: 'best_guess',
+          departure_time: 'now',
+          key: GOOGLE_MAPS_API_KEY
+        }
+      }
+    );
+
+    const element = response.data.rows?.[0]?.elements?.[0];
+
+    if (!element || element.status !== 'OK') {
+      throw new Error('Unable to calculate distance/time');
+    }
+    
+    console.log('Distance/Time data:', element);
+    
+    return {
+      distanceMeters: element.distance.value,     // eg: 4200
+      distanceText: element.distance.text,        // eg: "4.2 km"
+      durationSeconds: element.duration.value,    // eg: 480
+      durationText: element.duration.text         // eg: "8 mins"
+    };
+  } catch (error) {
+    console.error('Error calculating distance/time:', error);
+    throw error;
+  }
 };
