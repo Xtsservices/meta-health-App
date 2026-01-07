@@ -30,6 +30,7 @@ import {
   calculateEstimatedTime,
   formatDistance,
   getCurrentLocation,
+  getDistanceAndTime,
 } from '../../utils/locationUtils';
 import {
   getDirections,
@@ -164,6 +165,10 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   const [otpLoading, setOtpLoading] = useState(false);
   const [arrivedLoading, setArrivedLoading] = useState(false);
   const [distanceToPickup, setDistanceToPickup] = useState<number | null>(null);
+  const [distanceToPickupText, setDistanceToPickupText] = useState<string>('N/A');
+  const [timeToPickupText, setTimeToPickupText] = useState<string>('N/A');
+  const [distanceToDestinationText, setDistanceToDestinationText] = useState<string>('N/A');
+  const [timeToDestinationText, setTimeToDestinationText] = useState<string>('N/A');
   const [currentLocation, setCurrentLocation] = useState<{
     latitude: number;
     longitude: number;
@@ -232,22 +237,92 @@ console.log('useEffect activeTrip', activeTrip);
       try {
         const location = await getCurrentLocation();
         console.log('Current location for distance check:', location);
-        const distance = calculateDistance(
-          { latitude: location.latitude, longitude: location.longitude },
-          {
-            latitude: activeTrip.pickupLatitude,
-            longitude: activeTrip.pickupLongitude,
-          },
-        );
-        setDistanceToPickup(distance);
-        console.log('Distanace to pickup calculated:', distance);
+        
+        // Use Google Distance Matrix API for accurate distance and time
+        const distanceData = await getDistanceAndTime({
+          fromLat: location.latitude,
+          fromLng: location.longitude,
+          toLat: activeTrip.pickupLatitude,
+          toLng: activeTrip.pickupLongitude,
+        });
+        
+        console.log('Distance data from API:', distanceData);
+        
+        // Store formatted values from API
+        setDistanceToPickupText(distanceData.distanceText);
+        setTimeToPickupText(distanceData.durationText);
+        
+        // Convert meters to kilometers for comparison
+        const distanceKm = distanceData.distanceMeters / 1000;
+        setDistanceToPickup(distanceKm);
+        console.log('Distance to pickup:', distanceKm, 'km');
 
         // Show swipe button when within 200 meters of pickup
-        setShowSwipeButton(distance <= 0.2);
+        setShowSwipeButton(distanceKm <= 0.2);
 
-        console.log(`Distance to pickup: ${distance.toFixed(2)} km`);
+        console.log(`Distance: ${distanceData.distanceText}, Time: ${distanceData.durationText}`);
       } catch (error) {
         console.error('Error checking distance to pickup:', error);
+        // Fallback to simple calculation if API fails
+        try {
+          const location = await getCurrentLocation();
+          const distance = calculateDistance(
+            { latitude: location.latitude, longitude: location.longitude },
+            {
+              latitude: activeTrip.pickupLatitude,
+              longitude: activeTrip.pickupLongitude,
+            },
+          );
+          setDistanceToPickup(distance);
+          setDistanceToPickupText(formatDistance(distance));
+          setTimeToPickupText(calculateEstimatedTime(distance));
+          setShowSwipeButton(distance <= 0.2);
+        } catch (fallbackError) {
+          console.error('Fallback distance calculation also failed:', fallbackError);
+        }
+      }
+    };
+
+    const checkDistanceToDestination = async () => {
+      if (!activeTrip || activeTrip.status !== 'in_progress') return;
+      if (!activeTrip.dropLatitude || !activeTrip.dropLongitude) return;
+
+      try {
+        const location = await getCurrentLocation();
+        console.log('Current location for destination distance check:', location);
+        
+        // Use Google Distance Matrix API for accurate distance and time to destination
+        const distanceData = await getDistanceAndTime({
+          fromLat: location.latitude,
+          fromLng: location.longitude,
+          toLat: activeTrip.dropLatitude,
+          toLng: activeTrip.dropLongitude,
+        });
+        
+        console.log('Distance data to destination from API:', distanceData);
+        
+        // Store formatted values from API
+        setDistanceToDestinationText(distanceData.distanceText);
+        setTimeToDestinationText(distanceData.durationText);
+
+        console.log(`Distance to destination: ${distanceData.distanceText}, Time: ${distanceData.durationText}`);
+      } catch (error) {
+        console.error('Error checking distance to destination:', error);
+        // Fallback to simple calculation if API fails
+        try {
+          const location = await getCurrentLocation();
+          const distance = calculateDistance(
+            { latitude: location.latitude, longitude: location.longitude },
+            {
+              latitude: activeTrip.dropLatitude,
+              longitude: activeTrip.dropLongitude,
+            },
+          );
+          setDistanceToDestinationText(formatDistance(distance));
+          setTimeToDestinationText(calculateEstimatedTime(distance));
+        } catch (fallbackError) {
+          console.error('Fallback destination distance calculation also failed:', fallbackError);
+        }
       }
     };
 
@@ -255,6 +330,10 @@ console.log('useEffect activeTrip', activeTrip);
       checkDistanceToPickup();
       // Check every 10 seconds
       intervalId = setInterval(checkDistanceToPickup, 10000);
+    } else if (activeTrip?.status === 'in_progress') {
+      checkDistanceToDestination();
+      // Check every 10 seconds
+      intervalId = setInterval(checkDistanceToDestination, 10000);
     } else {
       setShowSwipeButton(false);
     }
@@ -672,6 +751,18 @@ console.log('useEffect activeTrip', activeTrip);
   const handleVerifyOtp = async () => {
     if (!otp || otp.length < 4) {
       dispatch(showError('Please enter a valid OTP.'));
+      return;
+    }
+
+    // Check if destination is set before starting journey
+    if (!activeTrip?.dropLatitude || !activeTrip?.dropLongitude) {
+      // Close modal first so error is visible
+      setOtpModalVisible(false);
+      setOtp('');
+      // Show error after modal closes
+      setTimeout(() => {
+        dispatch(showError('Please select a destination hospital before starting the journey.'));
+      }, 300);
       return;
     }
 
@@ -1163,9 +1254,9 @@ console.log('useEffect activeTrip', activeTrip);
                       <Text style={styles.distanceIcon}>📍</Text>
                       <View style={styles.distanceContent}>
                         <Text style={styles.distanceValue}>
-                          {formatDistance(distanceToPickup)}
+                          {distanceToPickupText}
                         </Text>
-                        <Text style={styles.distanceLabel}>to pickup location</Text>
+                        <Text style={styles.distanceLabel}>to pickup • ETA: {timeToPickupText}</Text>
                       </View>
                     </View>
                   )}
@@ -1185,6 +1276,25 @@ console.log('useEffect activeTrip', activeTrip);
                     </Text>
                   </View>
                 </View>
+
+                {/* Show Distance and ETA during journey */}
+                {activeTrip.status === 'in_progress' && (
+                  <View style={styles.destinationDistanceContainer}>
+                    <View style={styles.destinationDistanceItem}>
+                      <Text style={styles.destinationDistanceLabel}>Distance</Text>
+                      <Text style={styles.destinationDistanceValue}>
+                        {distanceToDestinationText === 'N/A' ? 'Calculating...' : distanceToDestinationText}
+                      </Text>
+                    </View>
+                    <View style={styles.destinationDistanceDivider} />
+                    <View style={styles.destinationDistanceItem}>
+                      <Text style={styles.destinationDistanceLabel}>ETA</Text>
+                      <Text style={styles.destinationDistanceValue}>
+                        {timeToDestinationText === 'N/A' ? 'Calculating...' : timeToDestinationText}
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
                 {/* Cancel Trip Button */}
                 {(activeTrip.status === 'accepted' || activeTrip.status === 'arrived') && (
@@ -1995,10 +2105,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     position: 'relative',
+    marginBottom: 30,
   },
   bottomPanelCollapsed: {
     paddingTop: 8,
     paddingBottom: 92,
+    marginBottom: 40,
   },
   bottomCollapseButton: {
     position: 'absolute',
@@ -2141,7 +2253,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.gray,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  destinationDistanceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginTop: 16,
     marginBottom: 20,
+    gap: 20,
+  },
+  destinationDistanceItem: {
+    alignItems: 'center',
+  },
+  destinationDistanceLabel: {
+    fontSize: 12,
+    color: COLORS.gray,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+  },
+  destinationDistanceValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  destinationDistanceDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: COLORS.gray + '40',
   },
   completeButton: {
     backgroundColor: COLORS.primary,

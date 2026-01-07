@@ -5,12 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
 import { AuthFetch } from '../../auth/auth';
-import { reverseGeocode } from '../../utils/locationUtils';
 import { showError } from '../../store/toast.slice'; 
 
 const COLORS = {
@@ -27,7 +27,7 @@ interface TripHistory {
   drop: string;
   distance: string;
   duration: string;
-  status: 'completed' | 'cancelled';
+  status: 'searching' | 'accepted' | 'on_the_way' | 'in_progress' | 'completed' | 'cancelled_by_patient' | 'cancelled_by_driver' | 'expired';
 }
 
 const AmbulanceDriverHistory: React.FC = () => {
@@ -35,6 +35,7 @@ const AmbulanceDriverHistory: React.FC = () => {
   const [history, setHistory] = useState<TripHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalTrips, setTotalTrips] = useState(0);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'completed' | 'cancelled' | 'in_progress' | 'expired'>('all');
 
   const fetchHistory = async () => {
     try {
@@ -61,42 +62,18 @@ const AmbulanceDriverHistory: React.FC = () => {
         const processedHistory: TripHistory[] = [];
 
         for (const booking of bookings) {
-          const isCompleted = booking.status === 'completed';
-          const isCancelled =
-            booking.status.includes('cancelled') || booking.status === 'expired';
-
           const date = new Date(booking.requestedAt).toISOString().split('T')[0];
 
-          let pickup = 'Fetching pickup address...';
-          let drop = 'Fetching drop address...';
-
-          // Only try to reverse geocode if coordinates exist
-          if (booking.fromLatitude && booking.fromLongitude) {
-            try {
-              pickup = await reverseGeocode(booking.fromLatitude, booking.fromLongitude);
-            } catch (err) {
-              console.warn('Failed to reverse geocode pickup:', err);
-              pickup = `Pickup: ${parseFloat(booking.fromLatitude).toFixed(4)}, ${parseFloat(booking.fromLongitude).toFixed(4)}`;
-            }
-          }
-
-          if (booking.toLatitude && booking.toLongitude) {
-            try {
-              drop = await reverseGeocode(booking.toLatitude, booking.toLongitude);
-            } catch (err) {
-              console.warn('Failed to reverse geocode drop:', err);
-              drop = `Drop: ${parseFloat(booking.toLatitude).toFixed(4)}, ${parseFloat(booking.toLongitude).toFixed(4)}`;
-            }
-          } else if (!booking.toLatitude) {
-            drop = 'Drop location not specified';
-          }
+          // Use addresses directly from API response
+          const pickup = booking.fromAddress || 'Pickup address not available';
+          const drop = booking.toAddress || 'Drop location not specified';
 
           // Placeholder for patient name (if available in future)
           const patientName = 'Patient'; // Update if backend provides patient name
 
           // Placeholder distance & duration (can be improved later with real calculation)
-          const distance = isCompleted ? '—' : '-';
-          const duration = isCompleted ? '—' : '-';
+          const distance = booking.status === 'completed' ? '—' : '-';
+          const duration = booking.status === 'completed' ? '—' : '-';
 
           processedHistory.push({
             id: booking.id,
@@ -106,14 +83,23 @@ const AmbulanceDriverHistory: React.FC = () => {
             drop,
             distance,
             duration,
-            status: isCompleted ? 'completed' : 'cancelled',
+            status: booking.status as TripHistory['status'],
           });
         }
 
         setHistory(processedHistory);
 
-        // Count completed trips
+        // Count trips by status
         const completedCount = processedHistory.filter(t => t.status === 'completed').length;
+        const cancelledCount = processedHistory.filter(t => 
+          t.status === 'cancelled_by_patient' || t.status === 'cancelled_by_driver'
+        ).length;
+        const activeCount = processedHistory.filter(t => 
+          t.status === 'searching' || t.status === 'accepted' || 
+          t.status === 'on_the_way' || t.status === 'in_progress'
+        ).length;
+        const expiredCount = processedHistory.filter(t => t.status === 'expired').length;
+        
         setTotalTrips(completedCount);
       }
     } catch (error: any) {
@@ -127,6 +113,18 @@ const AmbulanceDriverHistory: React.FC = () => {
   useEffect(() => {
     fetchHistory();
   }, []);
+
+  // Calculate counts for filter badges
+  const allCount = history.length;
+  const completedCount = history.filter(t => t.status === 'completed').length;
+  const cancelledCount = history.filter(t => 
+    t.status === 'cancelled_by_patient' || t.status === 'cancelled_by_driver'
+  ).length;
+  const activeCount = history.filter(t => 
+    t.status === 'searching' || t.status === 'accepted' || 
+    t.status === 'on_the_way' || t.status === 'in_progress'
+  ).length;
+  const expiredCount = history.filter(t => t.status === 'expired').length;
 
   if (loading) {
     return (
@@ -144,37 +142,199 @@ const AmbulanceDriverHistory: React.FC = () => {
           <Text style={styles.headerTitle}>Trip History</Text>
         </View>
 
-        {/* Stats Card - Only Total Completed Trips */}
-        <View style={styles.statsCard}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totalTrips}</Text>
-            <Text style={styles.statLabel}>Total Completed Trips</Text>
-          </View>
-        </View>
+        {/* Filter Buttons */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+          style={styles.filterScrollContainer}
+        >
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'all' && styles.filterButtonActive,
+            ]}
+            onPress={() => setActiveFilter('all')}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'all' && styles.filterButtonTextActive,
+              ]}
+            >
+              All
+            </Text>
+            <View style={[
+              styles.filterCountBadge,
+              activeFilter === 'all' && styles.filterCountBadgeActive,
+            ]}>
+              <Text style={[
+                styles.filterCountText,
+                activeFilter === 'all' && styles.filterCountTextActive,
+              ]}>
+                {allCount}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'completed' && styles.filterButtonActive,
+            ]}
+            onPress={() => setActiveFilter('completed')}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'completed' && styles.filterButtonTextActive,
+              ]}
+            >
+              Completed
+            </Text>
+            <View style={[
+              styles.filterCountBadge,
+              activeFilter === 'completed' && styles.filterCountBadgeActive,
+            ]}>
+              <Text style={[
+                styles.filterCountText,
+                activeFilter === 'completed' && styles.filterCountTextActive,
+              ]}>
+                {completedCount}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'in_progress' && styles.filterButtonActive,
+            ]}
+            onPress={() => setActiveFilter('in_progress')}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'in_progress' && styles.filterButtonTextActive,
+              ]}
+            >
+              Active
+            </Text>
+            <View style={[
+              styles.filterCountBadge,
+              activeFilter === 'in_progress' && styles.filterCountBadgeActive,
+            ]}>
+              <Text style={[
+                styles.filterCountText,
+                activeFilter === 'in_progress' && styles.filterCountTextActive,
+              ]}>
+                {activeCount}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'cancelled' && styles.filterButtonActive,
+            ]}
+            onPress={() => setActiveFilter('cancelled')}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'cancelled' && styles.filterButtonTextActive,
+              ]}
+            >
+              Cancelled
+            </Text>
+            <View style={[
+              styles.filterCountBadge,
+              activeFilter === 'cancelled' && styles.filterCountBadgeActive,
+            ]}>
+              <Text style={[
+                styles.filterCountText,
+                activeFilter === 'cancelled' && styles.filterCountTextActive,
+              ]}>
+                {cancelledCount}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'expired' && styles.filterButtonActive,
+            ]}
+            onPress={() => setActiveFilter('expired')}
+          >
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'expired' && styles.filterButtonTextActive,
+              ]}
+            >
+              Expired
+            </Text>
+            <View style={[
+              styles.filterCountBadge,
+              activeFilter === 'expired' && styles.filterCountBadgeActive,
+            ]}>
+              <Text style={[
+                styles.filterCountText,
+                activeFilter === 'expired' && styles.filterCountTextActive,
+              ]}>
+                {expiredCount}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
 
         <View style={styles.historyList}>
           {history.length === 0 ? (
             <Text style={styles.emptyText}>No trip history found</Text>
           ) : (
-            history.map((trip) => (
+            history
+              .filter((trip) => {
+                if (activeFilter === 'all') return true;
+                if (activeFilter === 'cancelled') {
+                  return trip.status === 'cancelled_by_patient' || 
+                         trip.status === 'cancelled_by_driver';
+                }
+                if (activeFilter === 'in_progress') {
+                  return trip.status === 'searching' || 
+                         trip.status === 'accepted' || 
+                         trip.status === 'on_the_way' || 
+                         trip.status === 'in_progress';
+                }
+                return trip.status === activeFilter;
+              })
+              .map((trip) => (
               <View key={trip.id} style={styles.historyCard}>
                 <View style={styles.historyHeader}>
                   <Text style={styles.historyDate}>{trip.date}</Text>
                   <View
                     style={[
                       styles.statusBadge,
-                      trip.status === 'completed'
-                        ? styles.statusCompleted
-                        : styles.statusCancelled,
+                      trip.status === 'completed' && styles.statusCompleted,
+                      (trip.status === 'cancelled_by_patient' || trip.status === 'cancelled_by_driver') && styles.statusCancelled,
+                      trip.status === 'expired' && styles.statusExpired,
+                      (trip.status === 'searching' || trip.status === 'accepted' || trip.status === 'on_the_way' || trip.status === 'in_progress') && styles.statusActive,
                     ]}
                   >
                     <Text
                       style={[
                         styles.statusText,
-                        { color: trip.status === 'completed' ? COLORS.success : COLORS.error },
+                        trip.status === 'completed' && { color: COLORS.success },
+                        (trip.status === 'cancelled_by_patient' || trip.status === 'cancelled_by_driver') && { color: COLORS.error },
+                        trip.status === 'expired' && { color: '#f59e0b' },
+                        (trip.status === 'searching' || trip.status === 'accepted' || trip.status === 'on_the_way' || trip.status === 'in_progress') && { color: COLORS.primary },
                       ]}
                     >
-                      {trip.status === 'completed' ? 'Completed' : 'Cancelled'}
+                      {trip.status === 'completed' && 'Completed'}
+                      {trip.status === 'cancelled_by_patient' && 'Cancelled by Patient'}
+                      {trip.status === 'cancelled_by_driver' && 'Cancelled by Driver'}
+                      {trip.status === 'expired' && 'Expired'}
+                      {trip.status === 'searching' && 'Searching'}
+                      {trip.status === 'accepted' && 'Accepted'}
+                      {trip.status === 'on_the_way' && 'On the Way'}
+                      {trip.status === 'in_progress' && 'In Progress'}
                     </Text>
                   </View>
                 </View>
@@ -197,16 +357,7 @@ const AmbulanceDriverHistory: React.FC = () => {
                   </View>
                 )}
 
-                <View style={styles.historyFooter}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Distance</Text>
-                    <Text style={styles.detailValue}>{trip.distance}</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Duration</Text>
-                    <Text style={styles.detailValue}>{trip.duration}</Text>
-                  </View>
-                </View>
+                
               </View>
             ))
           )}
@@ -256,30 +407,67 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
-  statsCard: {
+  filterScrollContainer: {
     backgroundColor: '#fff',
-    margin: 16,
-    padding: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  statItem: {
-    alignItems: 'center',
+  filterScrollContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 12,
   },
-  statValue: {
-    fontSize: 36,
-    fontWeight: '800',
+  filterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: '#fff',
+    marginRight: 0,
+    gap: 8,
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: COLORS.primary,
   },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
+  filterButtonTextActive: {
+    color: '#fff',
+  },
+  filterCountBadge: {
+    backgroundColor: COLORS.primary + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  filterCountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  filterCountTextActive: {
+    color: '#fff',
   },
   historyList: {
     padding: 16,
@@ -316,6 +504,12 @@ const styles = StyleSheet.create({
   },
   statusCancelled: {
     backgroundColor: '#fee2e2',
+  },
+  statusExpired: {
+    backgroundColor: '#fef3c7',
+  },
+  statusActive: {
+    backgroundColor: '#dbeafe',
   },
   statusText: {
     fontSize: 11,
