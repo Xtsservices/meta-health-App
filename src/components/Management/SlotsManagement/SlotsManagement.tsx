@@ -29,6 +29,7 @@ import {
 import CalendarModal from "./CalendarModal";
 import SlotModal from "./SlotModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Trash2 } from "lucide-react-native";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -92,7 +93,6 @@ const SlotsManagement: React.FC = () => {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const user = useSelector(selectCurrentUser);
-  const token = user?.token || "";
 
   // Fetch slots and leaves data - GET API
   const fetchSlots = async () => {
@@ -440,7 +440,10 @@ const SlotsManagement: React.FC = () => {
             {deleting === item.id ? (
               <ActivityIndicator size="small" color="#ef4444" />
             ) : (
-              <Text style={styles.deleteText}>Delete</Text>
+              <>
+
+              <Text style={styles.deleteText}><Trash2 size={12} color="#ef4444" />  Delete</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -469,7 +472,6 @@ const SlotsManagement: React.FC = () => {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.title}>Slots Management</Text>
-          <Text style={styles.subtitle}>Manage doctor appointment slots</Text>
         </View>
 
         <TouchableOpacity
@@ -956,7 +958,7 @@ const styles = StyleSheet.create({
   slotTimeText: {
     fontWeight: "600",
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: 13,
     marginLeft: 8,
   },
   slotActions: {
@@ -967,7 +969,6 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     paddingVertical: 4,
-    paddingHorizontal: 6,
     borderRadius: 4,
     // no background so it appears as simple italic text
   },
@@ -1030,8 +1031,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fee2e2",
   },
   statusText: {
-    fontSize: 10,
-    fontWeight: "600",
+    fontSize: 8,
+    fontWeight: "500",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },

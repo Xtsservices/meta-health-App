@@ -524,6 +524,8 @@ const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
           navigation.navigate("DashboardTriage");
         } else if (user?.patientStatus == 1) {
           navigation.navigate("DashboardOpd");
+        } else if (user?.patientStatus == 7) {
+          navigation.navigate("ReceptionPatientsList");
         }
       } else {
         dispatch(showError("message" in res && res?.message || res?.status || "data" in res && res?.data?.message || "Patient registration failed"))

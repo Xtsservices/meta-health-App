@@ -365,7 +365,9 @@ const postopSubmit = useCallback(
 
       if (response.status === "success") {
         dispatch(showSuccess("Post-op record updated successfully"));
-        navigation.navigate("OtTabs" as never);
+        navigation.navigate("PatientProfile" as never, {
+          id: patientFromStore?.id,
+        } as never);
       } else {
         dispatch(showError("Post-op Record Failed"));
       }
@@ -395,7 +397,9 @@ const postopSubmit = useCallback(
       );
       if (response.status === "success" ) {
         dispatch(showSuccess("Anesthesia record updated successfully"));
-        navigation.navigate("OtTabs" as never);
+        navigation.navigate("PatientProfile" as never, {
+      id: patientFromStore?.id,
+      } as never);
       } else {
         dispatch(showError("Anesthesia record update failed"));
       }

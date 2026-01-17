@@ -191,7 +191,9 @@ export default function TimelineRow({
                         t?.transferFromDepartment
                       )} to ${getDepartment(t?.transferToDepartment)}`}
                 </Pill>,
-                <Pill key={`td-doc-${i}`}>Transfer to : {docName}</Pill>,
+                <Pill key={`td-doc-${i}`}>
+                {sameDept ? "Transfer to" : "Transfer By"} : {docName}
+              </Pill>
               ],
               actor: docName,
             });

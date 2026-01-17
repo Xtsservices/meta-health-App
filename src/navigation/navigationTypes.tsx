@@ -155,4 +155,5 @@ DischargeSummaryDownload: undefined;
   AmbulanceDriverSettings:undefined;
   AmbulanceDriverTripDetail: undefined;
   AmbulanceDriverHistory: undefined;
+  OrderExpenseDialog: undefined;
 };

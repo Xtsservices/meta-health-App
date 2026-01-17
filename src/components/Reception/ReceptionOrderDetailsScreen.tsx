@@ -43,6 +43,9 @@ interface TestItem {
   loinc_num_?: string;
   reason?: string;
   doctorName?: string;
+  rejectedReason?: string;
+  alertStatus?: string;
+  status?: string;
 }
 
 interface MedicineItem {
@@ -63,6 +66,10 @@ interface MedicineItem {
   nurseID?: number;
   datetime?: string;
   doctorName?: string;
+  rejectReason?: string;
+  rejectedOn?: string;
+  rejectedBy?: number;
+  status?: string;
 }
 
 interface OrderData {
@@ -116,7 +123,6 @@ const ReceptionOrderDetailsScreen: React.FC = () => {
   const user = useSelector((state: any) => state.currentUser);
   const [nurseError, setNurseError] = useState("");
   const { orderData, patientID, patientTimeLineID, departmentName: passedDepartmentName ,isRejectedTab = false,doctorName: passedDoctorName,orderDate: passedOrderDate } = route.params as RouteParams;
-  console.log("111",orderData)
 
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
   const [originalQuantities, setOriginalQuantities] = useState<{ [key: string]: number }>({});
@@ -132,6 +138,13 @@ const ReceptionOrderDetailsScreen: React.FC = () => {
   const [currentMedicineId, setCurrentMedicineId] = useState<string | null>(null);
   const [currentOriginalQuantity, setCurrentOriginalQuantity] = useState<number>(0);
   const [tempReason, setTempReason] = useState("");
+
+  // Check if there are any rejected medicines or tests
+  const hasRejectedMedicines = orderData?.medicinesList?.some(med => (med.status === "rejected" && med.rejectReason) || (med.alertStatus === "rejected" && med.rejectedReason)) || false;
+  const hasRejectedTests = orderData?.testsList?.some(test => (test.status === "rejected" && test.rejectedReason) || (test.alertStatus === "rejected" && test.rejectedReason)) || false;
+  
+  // Check if any item is rejected (either medicine or test)
+  const hasRejectedItems = hasRejectedMedicines || hasRejectedTests;
 
   // Check if this is IPD/Emergency (needs nurse selection for medicines)
   const isIpdOrEmergency = orderData?.departmemtType === 2 || orderData?.departmemtType === 3 || orderData?.ptype === 2 || orderData?.ptype === 3;
@@ -465,7 +478,7 @@ const ReceptionOrderDetailsScreen: React.FC = () => {
 </View>
             
             {/* Nurse Information for IPD/Emergency with medicines */}
-            {isIpdOrEmergency && hasMedicines && (
+            {isIpdOrEmergency && hasMedicines && !hasRejectedItems && (
               <View style={styles.nurseSection}>
                 <View style={styles.row}>
                   <Text style={styles.label}>Nurse</Text>
@@ -503,6 +516,22 @@ const ReceptionOrderDetailsScreen: React.FC = () => {
                     * Nurse selection is required for IPD/Emergency medicine orders
                   </Text>
                 )}
+              </View>
+            )}
+            
+            {/* Rejection Reason Display */}
+            {hasRejectedItems && (
+              <View style={styles.rejectionSection}>
+                <View style={styles.row}>
+                  <Text style={styles.label}>Rejection Reason</Text>
+                  <View style={styles.rejectionReasonContainer}>
+                    <Text style={styles.rejectionReasonText}>
+                      {orderData?.medicinesList?.find(med => med.rejectReason || med.rejectedReason)?.rejectReason || 
+                       orderData?.medicinesList?.find(med => med.rejectReason || med.rejectedReason)?.rejectedReason ||
+                       orderData?.testsList?.find(test => test.rejectedReason)?.rejectedReason || "n"}
+                    </Text>
+                  </View>
+                </View>
               </View>
             )}
           </View>
@@ -574,7 +603,7 @@ const ReceptionOrderDetailsScreen: React.FC = () => {
                         <Text style={styles.tdSub}>HSN: {medicine.hsn}</Text>
                       ) : null}
                       <Text style={styles.tdSub}>
-                        Price: ₹{medicine.sellingPrice || medicine.price || 0} • GST: {medicine.gst || 0}%
+                        Price: ₹{medicine.sellingPrice || medicine.price || 0} 
                       </Text>
                       {decreasedQuantities[medId || ''] && (
                         <View style={styles.reasonContainer}>
@@ -927,6 +956,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 4,
     fontStyle: 'italic',
+  },
+  rejectionSection: {
+    marginTop: 8,
+  },
+  rejectionReasonContainer: {
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.danger,
+    backgroundColor: COLORS.dangerLight,
+    maxWidth: '70%',
+  },
+  rejectionReasonText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.danger,
+    fontWeight: "600",
+    textAlign: 'right',
   },
   tableHeaderRow: {
     flexDirection: "row",

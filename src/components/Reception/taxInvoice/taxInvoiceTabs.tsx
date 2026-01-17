@@ -83,8 +83,9 @@ export type PatientData = {
   dueAmount?: number;
   totalAmount?: number;
   prescriptionURL?: string; 
-  medicineDueAmount: number;
-testDueAmount: number;
+medicineDueAmount?: number;
+testDueAmount?: number;
+
 };
 
 type Mode = "billing" | "allTax";
@@ -136,6 +137,32 @@ const BillingTaxInvoiceMobile: React.FC = () => {
     const yyyy = d.getFullYear();
     return `${dd}-${mm}-${yyyy}`;
   };
+  const calculateTotalsFromLists = (
+  medicines: MedicineItem[] = [],
+  tests: TestItem[] = [],
+  paidAmount = 0
+) => {
+  const medicineTotal = medicines.reduce(
+    (sum, m) => sum + (Number(m.amount) || 0),
+    0
+  );
+
+  const testTotal = tests.reduce(
+    (sum, t) => sum + (Number(t.amount) || 0),
+    0
+  );
+
+  const grandTotal = medicineTotal + testTotal;
+  const payable = Math.max(0, grandTotal - paidAmount);
+
+  return {
+    medicineTotal,
+    testTotal,
+    grandTotal,
+    payable,
+  };
+};
+
 
   const openDatePicker = (target: "start" | "end") => {
     setPickerTarget(target);
@@ -244,9 +271,7 @@ const BillingTaxInvoiceMobile: React.FC = () => {
       : [];
 
     const processed: PatientData[] = [];
-    console.log("Processed",processed)
     rawData.forEach((item: any, index: number) => {
-      console.log("111111pppp",item)
       // 🔹 1. Start with raw lists
       let tests = Array.isArray(item.testsList) ? [...item.testsList] : [];
       const meds = Array.isArray(item.medicinesList) ? [...item.medicinesList] : [];
@@ -323,43 +348,30 @@ const BillingTaxInvoiceMobile: React.FC = () => {
 
       // 🔹 6. DUE AMOUNT LOGIC (same concept as web)
 
-      // raw dues from backend
-      const backendMedicineDue = Number(item?.medicine_dueAmount) || 0;
-      const backendTestDue = Number(item?.test_dueAmount) || 0;
 
-      // full payable from medicines list (price + GST)
-      const medicineTotalFromList = meds.reduce((sum: number, m: any) => {
-        const qty = Number(m.updatedQuantity ?? m.quantity ?? 1);
-        const price = Number(m.sellingPrice ?? m.price ?? 0);
-        const gst = Number(m.gst ?? 0);
+const paidAmount =
+  Number(item?.medicine_paidAmount || 0) +
+  Number(item?.test_paidAmount || 0);
 
-        const base = qty * price;
-  return sum + base + (base * gst) / 100;
-}, 0);
-
-      // full payable from *filtered* tests list (price + GST)
-      const testTotalFromList = tests.reduce((sum: number, t: any) => {
-        const price = Number(t.testPrice ?? t.price ?? 0);
-        const gst = Number(t.gst ?? 0);
-
-  return sum + price + (price * gst) / 100;
-      }, 0);
-
-      // 🔹 Combined TOTAL amount (medicines + tests)
-      const totalAmount = medicineTotalFromList + testTotalFromList;
-
-      // 🔹 Combine paid amounts from backend (if present)
-      const rawMedicinePaid = Number(item?.medicine_paidAmount) || 0;
-      const rawTestPaid = Number(item?.test_paidAmount) || 0;
-      const paidAmount = rawMedicinePaid + rawTestPaid;
-
-
-
-      // If BOTH dues are 0 → treat full amount as due (first payment case)
-const medicineDue = backendMedicineDue > 0 ? backendMedicineDue : medicineTotalFromList;
-const testDue = backendTestDue > 0 ? backendTestDue : testTotalFromList;
-
-      const totalDue = medicineDue + testDue;
+  const {
+  medicineTotal,
+  testTotal,
+  grandTotal,
+  payable,
+} = calculateTotalsFromLists(
+  meds.map((m: any) => ({
+    amount:
+      (Number(m.sellingPrice ?? m.price) *
+        Number(m.updatedQuantity ?? m.quantity ?? 1)) *
+      (1 + Number(m.gst ?? 0) / 100),
+  })),
+  tests.map((t: any) => ({
+    amount:
+      Number(t.testPrice ?? t.price ?? 0) *
+      (1 + Number(t.gst ?? 0) / 100),
+  })),
+  paidAmount
+);
 
 const patient: PatientData = {
   id: index + 1,
@@ -380,11 +392,12 @@ const patient: PatientData = {
   admissionDate: item.admittedOn ?? addedOn,
 
   // ✅ DUE FIELDS (aligned with web)
-  totalAmount,
-  paidAmount,
-  medicineDueAmount: medicineDue,
-  testDueAmount: testDue,
-  dueAmount: totalDue,
+totalAmount: grandTotal,
+paidAmount,
+medicineDueAmount: medicineTotal,
+testDueAmount: testTotal,
+dueAmount: payable,
+
 
   // 🔹 7. Use ALL medicines (unfiltered)
   medicinesList: meds.map((m: any) => {
@@ -462,7 +475,6 @@ const fetchPharmacyBilling = async (token: string) => {
   }
 
   const response = await AuthFetch(url, token);
-  console.log("Pharmacy Billing Response:", response);
   
   if (response?.status === "success" && "data" in response) {
     const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
@@ -489,7 +501,24 @@ const fetchPharmacyBilling = async (token: string) => {
       if (deptNum === 1 || deptNum === 2) {
         totalAmount = Number(item.totalAmount) || 0;
         paidAmount = Number(item.paidAmount) || 0;
-        dueAmount = Number(item.dueAmount) || totalAmount - paidAmount;
+const medicinesForCalc = medicinesArray.map((m: any) => {
+  const base =
+    Number(m.sellingPrice || 0) *
+    Number(m.updatedQuantity || m.quantity || 1);
+
+  return { amount: base + (base * Number(m.gst || 0)) / 100 };
+});
+
+const { grandTotal, payable } = calculateTotalsFromLists(
+  medicinesForCalc,
+  [],
+  paidAmount
+);
+
+totalAmount = grandTotal;
+dueAmount = payable;
+
+
       } else {
         totalAmount = medicinesArray.reduce((sum: number, medicine: any) => {
             const sellingPrice = Number(medicine.sellingPrice) || 0;
@@ -502,7 +531,24 @@ const fetchPharmacyBilling = async (token: string) => {
         }, 0);
         
         paidAmount = Number(item.paidAmount) || 0;
-        dueAmount = Number(item.dueAmount) || totalAmount - paidAmount;
+const medicinesForCalc = medicinesArray.map((m: any) => {
+  const base =
+    Number(m.sellingPrice || 0) *
+    Number(m.updatedQuantity || m.quantity || 1);
+
+  return { amount: base + (base * Number(m.gst || 0)) / 100 };
+});
+
+const { grandTotal, payable } = calculateTotalsFromLists(
+  medicinesForCalc,
+  [],
+  paidAmount
+);
+
+totalAmount = grandTotal;
+dueAmount = payable;
+
+
       }
 
       // Get doctor names from item or from first medicine
@@ -597,6 +643,7 @@ const fetchPharmacyBilling = async (token: string) => {
     setData([]);
   }
 };
+
   // Lab/Radiology billing function - MODIFIED to include dueAmount
   const fetchLabRadiologyBilling = async (token: string) => {
     if (!user?.hospitalID) return;
@@ -606,7 +653,6 @@ const fetchPharmacyBilling = async (token: string) => {
     
     const response = await AuthFetch(url, token)as any;
     // FIXED: Use the correct response structure from working code
-    console.log("555",response)
     
     if ((response?.status === "success") && Array.isArray(response?.data?.billingData)) {
     const billingData = response?.data?.billingData || response?.billingData || response?.data?.data || response?.data;
@@ -618,10 +664,8 @@ const fetchPharmacyBilling = async (token: string) => {
         if (departmentType === "2") return ptype === 2 || ptype === 3; // IPD (2 or 3)
         return true;
       });
-      console.log("filter",filteredData)
 
       const processed: PatientData[] = filteredData.map((item: any, index: number) => {
-        console.log("item",item)
         // Calculate total amount from tests
         const totalAmount = Array.isArray(item.testsList) 
           ? item.testsList.reduce((sum: number, test: any) => {
@@ -630,10 +674,29 @@ const fetchPharmacyBilling = async (token: string) => {
               return sum + (price * (1 + gst / 100));
             }, 0)
           : 0;
+const tests: TestItem[] = Array.isArray(item.testsList)
+  ? item.testsList.map((t: any) => ({
+      testID: t.id || t.testID,
+      testName: t.test || t.testName,
+      loinc_num_: t.loinc_num_ || "",
+      category: t.category || "pathology",
+      price: Number(t.testPrice) || 0,
+      gst: Number(t.gst) || 0,
+      amount:
+        (Number(t.testPrice) || 0) *
+        (1 + (Number(t.gst) || 0) / 100),
+    }))
+  : [];
 
-        // Get paid amount and due amount from API response
-        const paidAmount = Number(item.paidAmount) || 0;
-        const dueAmount = Number(item.dueAmount) || totalAmount; // Use dueAmount from API, fallback to totalAmount
+const paidAmount = Number(item.paidAmount) || 0;
+const { grandTotal, payable } = calculateTotalsFromLists(
+  [],
+  tests,
+  paidAmount
+);
+
+
+
 
         return {
           id: index + 1,
@@ -659,12 +722,11 @@ const fetchPharmacyBilling = async (token: string) => {
           medicinesList: [],
           procedures: [],
           // ADDED: Include payment amounts from API response
-          totalAmount: totalAmount,
-          paidAmount: paidAmount,
-          dueAmount: dueAmount,
+totalAmount: grandTotal,
+paidAmount,
+dueAmount: payable,
         };
       });
-      console.log("processed",processed)
 
       const sorted = processed.sort((a, b) => {
         const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
@@ -702,12 +764,42 @@ const fetchPharmacyBilling = async (token: string) => {
             },
           ];
 
-    const allRawItems: any[] = [];
+const allRawItems: any[] = [];
+
+for (const ep of endpoints) {
+  try {
+    const res: any = await AuthFetch(ep.url, token);
+    const arr = Array.isArray(res?.data?.data) ? res.data.data : [];
+    arr.forEach((item: any) =>
+      allRawItems.push({ ...item, deptType: ep.deptType })
+    );
+  } catch {}
+}
+
+/* ✅ FILTER AFTER DATA IS READY */
+const filteredItems = allRawItems.filter((item) => {
+  const dept =
+    item?.lab?.departmentType ??
+    item?.pharmacy?.departmentType ??
+    null;
+
+  // OPD
+  if (departmentType === "1") {
+    return dept === 1;
+  }
+
+  // IPD / Emergency
+  if (departmentType === "2") {
+    return dept !== 1;
+  }
+
+  return true;
+});
+
 
     for (const ep of endpoints) {
       try {
         const res: any = await AuthFetch(ep.url, token);
-        
         const arr = Array.isArray(res?.data?.data) ? res.data?.data : [];
         arr.forEach((item: any) =>
           
@@ -719,7 +811,7 @@ const fetchPharmacyBilling = async (token: string) => {
       }
     }
 
-   const normalized: PatientData[] = allRawItems.map(
+   const normalized: PatientData[] = filteredItems.map(
   (item: any, index: number) => {
     
     const deptType =
@@ -898,7 +990,6 @@ const fetchPharmacyBilling = async (token: string) => {
         testList: [],
         procedures: [],
       }));
-      console.log("000",processed)
 
       setData(processed);
     }
@@ -922,7 +1013,6 @@ const fetchPharmacyBilling = async (token: string) => {
         if (departmentType === "2") return item.departmemtType === 2; // IPD
         return true;
       });
-      console.log("filter",filteredData)
 
       const processed: PatientData[] = filteredData.map((item: any, index: number) => ({
         id: index + 1,

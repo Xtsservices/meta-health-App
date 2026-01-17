@@ -123,11 +123,9 @@ const sortedData = useMemo(() => {
 }, [data]);
 
   const renderCard = ({ item }: { item: PatientData }) => {
-    console.log("iiiiitttttt",item)
     const rejectedMedicines = item.medicinesList?.filter(med => 
     med?.status === "rejected" && med?.rejectReason
     ) || [];
-    console.log("000",rejectedMedicines)
     const hasRejectedMedicine = rejectedMedicines.length > 0;
     const firstRejection = rejectedMedicines[0]; 
     const totalTests = item.testList?.length ?? 0;
@@ -204,9 +202,13 @@ const calculateAmounts = () => {
   let total = 0;
   
   if (itemIsPharmacy) {
-    total = item.medicinesList?.reduce((sum, medicine) => sum + medicine.amount, 0) || 0;
+    total = item.medicinesList?.reduce((sum, medicine) => sum + Number(medicine.amount || 0),
+        0
+      ) || 0;
   } else {
-    total = item.testList?.reduce((sum, test) => sum + test.amount, 0) || 0;
+    total = item.testList?.reduce((sum, test) => sum + Number(test.amount || 0),
+        0
+      ) || 0;
   }
   
   // Get paid amount from the item data

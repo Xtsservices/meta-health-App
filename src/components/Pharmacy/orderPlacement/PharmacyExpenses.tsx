@@ -290,7 +290,7 @@ const PharmacyExpenses: React.FC = () => {
   };
 
   const navigateToAddItem = () => {
-    setOpenOrderExpense(true);
+    navigation.navigate("OrderExpenseDialog");
   };
 
   // Handle card press to navigate to detail screen
@@ -537,7 +537,6 @@ const PharmacyExpenses: React.FC = () => {
           </Modal>
         )}
 
-        <OrderExpenseDialog open={openOrderExpense} setOpen={setOpenOrderExpense} onOrderPlaced={fetchExpenseData} />
       </View>
     </TouchableWithoutFeedback>
   );

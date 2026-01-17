@@ -85,7 +85,7 @@ const BookAppointment: React.FC = () => {
     useState<doctorAppointmentDetailType>({
       department: { valid: false, value: -1, showError: false, message: "" },
       doctorName: { valid: true, value: -1, showError: false, message: "" },
-      services: { valid: false, value: "", showError: false, message: "" },
+      services: { valid: true, value: "Consultation", showError: false, message: "" },
       gender: { valid: false, value: -1, showError: false, message: "" },
       pName: { valid: false, value: "", showError: false, message: "" },
       age: { valid: false, value: "", showError: false, message: "" },
@@ -187,10 +187,6 @@ const BookAppointment: React.FC = () => {
     updateField("doctorName", doctorID);
   };
 
-  const handleServiceChange = (value: string) => {
-    updateField("services", value);
-  };
-
   // Gender chips
   const handleClickGender = (label: string) => {
     let genderValue: number;
@@ -249,7 +245,7 @@ const BookAppointment: React.FC = () => {
     setAppointmentFormData({
       department: { valid: false, value: -1, showError: false, message: "" },
       doctorName: { valid: true, value: -1, showError: false, message: "" },
-      services: { valid: false, value: "", showError: false, message: "" },
+      services: { valid: true, value: "Consultation", showError: false, message: "" },
       gender: { valid: false, value: -1, showError: false, message: "" },
       pName: { valid: false, value: "", showError: false, message: "" },
       age: { valid: false, value: "", showError: false, message: "" },
@@ -536,23 +532,9 @@ const debouncedSubmit = useMemo(
 
         {/* Services */}
         <View style={styles.block}>
-          <Text style={styles.label}>Service *</Text>
-      <View style={styles.Select}>
-        <Text style={styles.SelectText}>
-          {appointmentFormData.services.value || "Select Service"}
-        </Text>
-
-            <Picker
-              selectedValue={appointmentFormData.services.value || ""}
-              onValueChange={handleServiceChange}
-              style={styles.hiddenPicker}
-            >
-              <Picker.Item label="Select Service" value="" />
-              <Picker.Item label="Consultation" value="Consultation" />
-              <Picker.Item label="Routine Checkup" value="Routine Checkup" />
-              <Picker.Item label="Emergency" value="Emergency" />
-              <Picker.Item label="Follow-Up" value="Follow-Up" />
-            </Picker>
+          <Text style={styles.label}>Service</Text>
+          <View style={styles.serviceDisplay}>
+            <Text style={styles.serviceText}>Consultation</Text>
           </View>
         </View>
 
@@ -587,11 +569,13 @@ const debouncedSubmit = useMemo(
           <View style={styles.block}>
             <Text style={styles.label}>Doctor *</Text>
 <View style={styles.Select}>
-  <Text style={styles.SelectText}>
-    {filteredDoctors.find(d => d.id === appointmentFormData.doctorName.value)
-      ? `${filteredDoctors.find(d => d.id === appointmentFormData.doctorName.value)?.firstName}
-         ${filteredDoctors.find(d => d.id === appointmentFormData.doctorName.value)?.lastName || ""}`
-      : "Select Doctor"}
+  <Text style={styles.SelectText}numberOfLines={1} ellipsizeMode="tail">
+    {(() => {
+      const doc = filteredDoctors.find(d => d.id === appointmentFormData.doctorName.value );
+      return doc
+        ? `${doc.firstName} ${doc.lastName || ""}`
+      : "Select Doctor";
+    })()}
   </Text>
 
               <Picker
@@ -825,6 +809,22 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     color: COLORS.text,
     backgroundColor: "#f9fafb",
+  },
+
+  serviceDisplay: {
+    height: responsiveHeight(6),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    backgroundColor: "#f9fafb",
+    justifyContent: "center",
+    paddingHorizontal: SPACING.sm,
+  },
+  
+  serviceText: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    fontWeight: "500",
   },
 
   pickerContainer: {

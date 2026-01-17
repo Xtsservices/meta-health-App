@@ -783,6 +783,7 @@ return base.sort(
         )}
 
         {/* Date Range Filter Button - for ALL users (not just OT) */}
+        {isOt && (
         <TouchableOpacity
           style={[styles.dateFilterButton, { 
             backgroundColor: dateFilterApplied ? COLORS.brand : COLORS.card,
@@ -797,7 +798,7 @@ return base.sort(
             {dateFilterApplied ? 'Date Filter' : 'Date'}
           </Text>
         </TouchableOpacity>
-
+          )}
         {/* Only show Add button for IPD (status 2) */}
         {user?.patientStatus === 2 && (
           <TouchableOpacity
@@ -879,10 +880,54 @@ const patientStatusKey = patient?.status?.toUpperCase() as keyof typeof OTPatien
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
     const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—").toString();
-    const age = formatAgeCompact(
-      item?.age ?? undefined,
-      item?.dob ?? undefined
-    );
+    const calculateAgeFromDOB = (dob?: string, age?: string): string => {
+  if (dob) {
+    const birthDate = new Date(dob);
+    const today = new Date();
+
+    const diffTime = today.getTime() - birthDate.getTime();
+    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // 🔹 Less than 1 month → show days
+    if (totalDays < 30) {
+      return `${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+    }
+
+    let years = today.getFullYear() - birthDate.getFullYear();
+    let months = today.getMonth() - birthDate.getMonth();
+
+    if (today.getDate() < birthDate.getDate()) {
+      months--;
+    }
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    // 🔹 If years exist → SHOW ONLY YEARS
+    if (years > 0) {
+      return `${years} year${years !== 1 ? "s" : ""}`;
+    }
+
+    // 🔹 Only months
+    if (months > 0) {
+      return `${months} month${months !== 1 ? "s" : ""}`;
+    }
+  }
+
+  // 🔹 DOB missing → fallback to age (years only)
+  if (age) {
+    const ageNum = parseInt(age, 10);
+    if (!isNaN(ageNum)) {
+      return `${ageNum} year${ageNum !== 1 ? "s" : ""}`;
+    }
+  }
+
+  return "—";
+};
+const age = calculateAgeFromDOB(item?.dob, item?.age);
+
     const hasNotification = item.notificationCount && item.notificationCount > 0;
     const wardName = (user?.patientStatus === 2 || user?.patientStatus === 3) ? wardList.find(w => w.id === item.wardID)?.name || "—" : "—";
     const approvedDate = formatDate(item?.approvedTime);
@@ -1006,12 +1051,14 @@ const patientStatusKey = patient?.status?.toUpperCase() as keyof typeof OTPatien
             >
               Phone: {phone}
             </Text>
+            {isOt && (
             <Text
             style={[styles.sub, { color: COLORS.sub }]}
             numberOfLines={1}
           >
             Added On: {addedDate}
           </Text>
+            )}
           </View>
 
           <TouchableOpacity

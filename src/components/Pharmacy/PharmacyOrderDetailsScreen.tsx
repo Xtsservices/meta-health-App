@@ -256,7 +256,7 @@ const handleConfirmDecrement = () => {
     const medId = medicine.medId?.toString() ?? medicine.id?.toString();
     const quantity = medId ? quantities[medId] : medicine.quantity ?? 1;
     const unitPrice = medicine.sellingPrice ?? medicine.price ?? 0;
-    const gst = medicine.gst ?? 18;
+    const gst = medicine.gst ?? 0;
     
     const baseTotal = unitPrice * quantity;
     const gstAmount = (baseTotal * gst) / 100;
@@ -530,7 +530,7 @@ const handleConfirmDecrement = () => {
                         <Text style={styles.tdSub}>HSN: {medicine.hsn}</Text>
                       ) : null}
                       <Text style={styles.tdSub}>
-                        Price: ₹{medicine.sellingPrice || medicine.price || 0} • GST: {medicine.gst || 18}%
+                        Price: ₹{medicine.sellingPrice || medicine.price || 0} 
                       </Text>
                       {decreasedQuantities[medId || ''] && (
                         <View style={styles.reasonContainer}>

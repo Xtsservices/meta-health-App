@@ -451,6 +451,7 @@ const dispatch = useDispatch();
     amount,
     requiresFullPayment,
     type,
+    totalDue, // Add totalDue to dependencies
   ]);
 
   // stabilize handlers
@@ -515,6 +516,13 @@ const dispatch = useDispatch();
   const setRemainingAmount = useCallback(
     (method: PaymentMethod) => {
       const remaining = totalDue;
+    
+    // Add validation for minimum amount
+    if (remaining > 0 && remaining < 1) {
+      dispatch(showError("Remaining amount should be at least ₹1.00"));
+      return;
+    }
+    
       if (remaining > 0) {
         setEnteredAmountStr((prev) => ({
           ...prev,
@@ -530,9 +538,11 @@ const dispatch = useDispatch();
           ns.add(method);
           return ns;
         });
+    } else {
+      dispatch(showError("No remaining amount to set"));
       }
     },
-    [totalDue]
+    [totalDue, dispatch]
   );
 
   const handleInputFocus = useCallback((method: PaymentMethod) => {
@@ -658,7 +668,7 @@ const handleSalesPayment = useCallback(
           expiryDate: medicine.expiryDate,
           costPrice: Number(medicine.costPrice) || 0,
           sellingPrice: Number(medicine.sellingPrice) || 0,
-          gst: medicine.gst?.toString() || "18.00", // Default 18% GST
+          gst: medicine.gst?.toString() || "0.00", 
           totalQuantity: medicine.quantity?.toString() || "1",
           quantity: medicine.selectedQuantity || 1, // Use selectedQuantity for actual purchase
           manufacturer: medicine.manufacturer || "Unknown",
@@ -930,22 +940,9 @@ const handleSalesPayment = useCallback(
           .toString()
           .trim();
 
-      const getTimelineId = (d: any): string =>
-        (
-          d.patientTimeLineID ??
-          d.timelineID ??
-          d.timeLineID ??
-          d.patienttimelineID ??
-          d.patient_timeLine_id ??
-          d.visitID ??
-          d.orderID ??
-          ""
-        )
-          .toString()
-          .trim();
-
+    // Get patient ID from receptionData
       const patientId = getPatientId(receptionData);
-      const timelineId = getTimelineId(receptionData);
+      const timelineId = orderData?.patientTimeLineID?.toString() || "";
 
       if (!patientId || patientId === "0") {
         throw new Error("Invalid patient ID");
@@ -968,6 +965,7 @@ const handleSalesPayment = useCallback(
       discountReason,
       discountReasonID,
       amount,
+      orderData, // ADD orderData to dependencies
     ]
   );
 
@@ -976,6 +974,11 @@ const handleSalesPayment = useCallback(
     const totalEntered = Object.values(
       enteredAmountNum
     ).reduce((s, v) => s + v, 0);
+
+      if (totalDue > 0 && totalDue < 1) {
+        dispatch(showError("Remaining due amount should be at least ₹1.00 or be fully paid."));
+        return;
+      }
 
     // validate according to mode
     if (requiresFullPayment ) {
@@ -1080,7 +1083,7 @@ const handleSalesPayment = useCallback(
           navigation.navigate("PatientListLab");
         } else {
           // Keep existing navigation for other flows
-          navigation.navigate("TaxInvoiceTabs", { mode: "billing" });
+          navigation.navigate("TaxInvoiceTabs", { mode: "billing", userRole: user?.roleName });
         }
       } else {
         dispatch(showError(response?.message || "Failed to process payment"));
@@ -1096,6 +1099,7 @@ const handleSalesPayment = useCallback(
     amount,
     enteredAmountNum,
     selectedMethods,
+    totalDue,
     isBillingOrder,
     isReceptionPayment,
     handleBillingPayment,

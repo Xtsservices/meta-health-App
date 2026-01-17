@@ -168,7 +168,7 @@ const nurseLabel = orderNurse
     const price = Number(test?.testPrice || 0);
     const gst = test?.gst !== undefined && test?.gst !== null
       ? Number(test.gst)
-      : 18;
+      : 0;
     const base = isNaN(price) ? 0 : price;
     const gstVal = isNaN(gst) ? 0 : gst;
     return base + (base * gstVal) / 100;
@@ -294,7 +294,7 @@ const nurseLabel = orderNurse
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>GST:</Text>
                 <Text style={styles.detailValue}>
-                  {test?.gst ?? 18}%
+                  {test?.gst ?? 0}%
                 </Text>
               </View>
               <View style={styles.detailRow}>
