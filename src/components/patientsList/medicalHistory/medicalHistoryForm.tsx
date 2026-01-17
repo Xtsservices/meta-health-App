@@ -2057,19 +2057,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                 return;
               }
 
-              // Check if medicine exists in suggestions or local list
-              const isMedicineValid = 
-                prescribedMedicineSuggestions.includes(name) ||
-                medicineList.includes(name);
-              
-              if (!isMedicineValid) {
-                Alert.alert(
-                  "Validation",
-                  "Please select medicine from the search suggestions."
-                );
-                return;
-              }
-
               setPrescribedMeds((prev) => ({
                 ...prev,
                 items: [...prev.items, { ...newPrescribedMed }],
@@ -2301,19 +2288,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
                 Alert.alert(
                   "Validation",
                   "Medicine name and duration are mandatory."
-                );
-                return;
-              }
-
-              // Check if medicine exists in suggestions or local list
-              const isMedicineValid = 
-                selfMedicineSuggestions.includes(name) ||
-                medicineList.includes(name);
-              
-              if (!isMedicineValid) {
-                Alert.alert(
-                  "Validation",
-                  "Please select medicine from the search suggestions."
                 );
                 return;
               }

@@ -485,3 +485,24 @@ export const formatDurationParameter = (param: string = "", duration: string = "
   // Return as is if not matched
   return paramLower;
 };
+
+// Build UTC ISO from local HH:MM (IST wall-clock)
+export const createTimeISO = (hhmm: string, baseDate = new Date()): string => {
+  if (!hhmm) return "";
+
+  const [h, m] = hhmm.split(":").map(Number);
+
+  // Create local wall-clock time
+  const local = new Date(
+    baseDate.getFullYear(),
+    baseDate.getMonth(),
+    baseDate.getDate(),
+    h,
+    m,
+    0,
+    0
+  );
+
+  // Convert once to UTC ISO
+  return local.toISOString();
+};

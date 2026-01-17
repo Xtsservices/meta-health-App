@@ -128,7 +128,7 @@ const TriageDialogMobile: React.FC<Props> = ({
 
       if (res?.status === "success") {
         dispatch(
-          showSuccess("Patient transfered to Red zone successfully")
+          showSuccess(res?.data?.message || "Patient transfered to Red zone successfully")
         );
         onClose();
         navigation.navigate("PatientList" as never);

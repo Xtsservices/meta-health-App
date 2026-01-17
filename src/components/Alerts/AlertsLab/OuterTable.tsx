@@ -381,7 +381,7 @@ const getLatestOrderDate = (patient: any) => {
       const gst =
         t?.gst !== undefined && t?.gst !== null
           ? Number(t.gst)
-          : 18; // keep previous default
+          : 0; // keep previous default
       const base = isNaN(price) ? 0 : price;
       const gstVal = isNaN(gst) ? 0 : gst;
       return total + base + (base * gstVal) / 100;

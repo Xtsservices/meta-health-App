@@ -529,7 +529,52 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
       : "";
 
   const genderText = currentPatient?.gender === 1 ? "Male" : "Female";
-  const ageText = formatAgeDisplay(currentPatient?.age, currentPatient?.dob);
+const ageText = useMemo(() => {
+  if (currentPatient?.dob) {
+    const dob = new Date(currentPatient.dob);
+    const today = new Date();
+
+    // Total difference in days
+    const diffTime = today.getTime() - dob.getTime();
+    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Less than 1 month → show days
+    if (totalDays < 30) {
+      return `${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+    }
+
+    let years = today.getFullYear() - dob.getFullYear();
+    let months = today.getMonth() - dob.getMonth();
+
+    if (today.getDate() < dob.getDate()) {
+      months--;
+    }
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    // Years only
+    if (years > 0 && months === 0) {
+      return `${years} year${years !== 1 ? "s" : ""}`;
+    }
+
+    // Months only
+    if (years === 0 && months > 0) {
+      return `${months} month${months !== 1 ? "s" : ""}`;
+    }
+  }
+
+  // DOB not present → fallback to age field
+  if (currentPatient?.age) {
+    return `${currentPatient.age} year${Number(currentPatient.age) !== 1 ? "s" : ""}`;
+  }
+
+  return "";
+}, [currentPatient?.dob, currentPatient?.age]);
+
+  
   const doctorText = (() => {
     if (currentPatient?.doctorName) {
       const d = currentPatient.doctorName;
@@ -802,6 +847,9 @@ const getMenuItems = () => {
               </View>
               <View style={styles.infoItem}>
                 <Text style={[styles.fieldValue, { color: COLORS.text }]}>{doctorText}</Text>
+                {/* <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
+                    • Secondary Doctor: {currentPatient?.department || "—"}
+                  </Text> */}
                 <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
                     • Department: {currentPatient?.department || "—"}
                   </Text>

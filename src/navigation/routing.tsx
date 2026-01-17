@@ -143,6 +143,7 @@ import AmbulanceDriverSettings from '../components/ambulanceDriver/AmbulanceDriv
 import AmbulanceDriverHistory from '../components/ambulanceDriver/AmbulanceDriverHistory';
 import OrderDetailScreen from '../components/Pharmacy/orderPlacement/OrderDetailScreen';
 import ReceptionOrderDetailsScreen from '../components/Reception/ReceptionOrderDetailsScreen';
+import OrderExpenseDialog from '../components/Pharmacy/orderPlacement/OrderExpenseDialog';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -1095,10 +1096,44 @@ const Routing = () => {
         <Stack.Screen
           name="TaxInvoiceTabs"
           component={taxInvoiceTabs}
-          options={({ route }) => ({
+          options={({ navigation, route }) => ({
             headerShown: true,
-            headerTitleAlign: 'center',
-            title: route.params?.mode === 'billing' ? 'Billing' : 'Tax Invoice',
+            headerTitleAlign: "center",
+            title:
+      route.params?.mode === "billing"
+        ? "Billing"
+        : "Tax Invoice",
+
+    headerLeft: () => (
+      <HeaderBackButton
+        onPress={() => {
+          const userRole = route.params?.userRole;
+
+
+          if (userRole === "pathology") {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "DashboardLab" }],
+            });
+          } else if (userRole === "pharmacy") {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "DashboardPharma" }],
+            });
+          } else if (userRole === "reception") {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "DashboardReception" }],
+            });
+          } else {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Home" }],
+            });
+          }
+        }}
+      />
+    ),
           })}
         />
         <Stack.Screen
@@ -1173,6 +1208,14 @@ const Routing = () => {
             title: 'Doctor Profile',
             headerTitleAlign: 'center',
             headerShown: true,
+          }}
+        />
+        <Stack.Screen 
+          name="OrderExpenseDialog" 
+          component={OrderExpenseDialog}
+          options={{
+            title: "Create New Order",
+            headerShown: true, // or customize as needed
           }}
         />
         <Stack.Screen

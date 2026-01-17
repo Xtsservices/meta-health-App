@@ -69,7 +69,6 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data, onCar
   };
 
   const renderCard = (item: ExpenseData) => {
-    console.log("itemm",item)
     const medicinesCount = Array.isArray(item.medicinesList) ? item.medicinesList.length : 0;
     const date = item.addedOn ? new Date(item.addedOn).toLocaleDateString('en-US', {
       year: 'numeric',

@@ -208,6 +208,7 @@ const MedicineCardsList = ({
   medFilterOptions: MedicineFilter[];
   onAddedByPress: (medicine: MedicineType) => void;
 }) => {
+  const user = useSelector((s: RootState) => s.currentUser);
   const safeMedicines = Array.isArray(medicines) ? medicines : [];
 
   const filteredMedicines =
@@ -237,7 +238,6 @@ const MedicineCardsList = ({
         const dosageValue = medicine?.doseCount || medicine?.dosage || '-';
         const daysValue = medicine?.daysCount ?? '-';
         const timing = medicine?.medicationTime || medicine?.doseTimings || '';
-        const user = useSelector((s: RootState) => s.currentUser);
 
         return (
           <View
@@ -340,7 +340,9 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
     currentPatient?.status === "approved" ||
     activetab === "PatientFile";
 
-  const [medicineList, setMedicineList] = useState<MedicineType[]>([]);
+  const [activeTab, setActiveTab] = useState<'current' | 'previous'>('current');
+  const [currentMedicines, setCurrentMedicines] = useState<MedicineType[]>([]);
+  const [previousMedicines, setPreviousMedicines] = useState<MedicineType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [medFilter, setMedFilter] = useState<number>(-1);
@@ -381,7 +383,8 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
       if (shouldShowPreOpTests || shouldShowPostOpTests) {
         const sourceMeds = shouldShowPreOpTests ? preOpMedications : postOpMedications;
         const mapped = convertPreOpMedicationsToArray(sourceMeds);
-        setMedicineList(mapped || []);
+        setCurrentMedicines(mapped || []);
+        setPreviousMedicines([]);
         setLoading(false);
         return;
       }
@@ -399,16 +402,20 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
         return;
       }
 
-      const response = await AuthFetch(`medicine/${currentPatient.patientTimeLineID}`, token) as any;
+      const response = await AuthFetch(`medicine/${currentPatient.id}/${currentPatient.patientTimeLineID}/getPatientMedicineHistory`, token) as any;
       if (response && response.status === "success" && "data" in response) {
-        setMedicineList(response?.data?.medicines || []);
+        const data = response.data?.data;
+        setCurrentMedicines(data?.currentMedicines || []);
+        setPreviousMedicines(data?.previousMedicines || []);
       } else {
         setError(response?.message || 'Failed to load medicines');
-        setMedicineList([]);
+        setCurrentMedicines([]);
+        setPreviousMedicines([]);
       }
     } catch (error: any) {
       setError(error?.message || 'Network error');
-      setMedicineList([]);
+      setCurrentMedicines([]);
+      setPreviousMedicines([]);
     } finally {
       setLoading(false);
     }
@@ -427,14 +434,16 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
     useCallback(() => {
       if (shouldShowPreOpTests) {
       const mapped = convertPreOpMedicationsToArray(preOpMedications);
-      setMedicineList(mapped || []);
+      setCurrentMedicines(mapped || []);
+      setPreviousMedicines([]);
       setLoading(false);
       return;
     }
 
     if (shouldShowPostOpTests) {
       const mapped = convertPreOpMedicationsToArray(postOpMedications);
-      setMedicineList(mapped || []);
+      setCurrentMedicines(mapped || []);
+      setPreviousMedicines([]);
       setLoading(false);
       return;
     }
@@ -457,10 +466,10 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
   useEffect(() => {
     if (shouldShowPreOpTests && preOpMedications) {
       const mapped = convertPreOpMedicationsToArray(preOpMedications);
-      setMedicineList(mapped || []);
+      setCurrentMedicines(mapped || []);
     } else if (shouldShowPostOpTests && postOpMedications) {
       const mapped = convertPreOpMedicationsToArray(postOpMedications);
-      setMedicineList(mapped || []);
+      setCurrentMedicines(mapped || []);
     }
   }, [preOpMedications, postOpMedications, shouldShowPreOpTests, shouldShowPostOpTests]);
 
@@ -545,6 +554,11 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
     handleUserPress(medicine.userID as number);
   };
 
+  // Get active medicines based on selected tab
+  const getActiveMedicines = () => {
+    return activeTab === 'current' ? currentMedicines : previousMedicines;
+  };
+
   // Loading State
   if (loading) {
     return (
@@ -582,11 +596,14 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
     );
   }
 
+  const activeMedicines = getActiveMedicines();
+  const totalMedicines = currentMedicines.length + previousMedicines.length;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {medicineList.length === 0 ? (
+      {totalMedicines === 0 ? (
         <EmptyTreatmentPlan onAddMedicine={handleAddMedicine} readOnly={readOnly} />
       ) : (
         <View style={styles.container}>
@@ -614,6 +631,39 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
 
           {/* Main Content */}
           <View style={styles.content}>
+            {/* Tab Section */}
+            <View style={styles.tabSection}>
+              <TouchableOpacity
+                style={[
+                  styles.tabButton,
+                  activeTab === 'current' && styles.activeTabButton
+                ]}
+                onPress={() => setActiveTab('current')}
+              >
+                <Text style={[
+                  styles.tabButtonText,
+                  activeTab === 'current' && styles.activeTabButtonText
+                ]}>
+                  Current ({currentMedicines.length})
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.tabButton,
+                  activeTab === 'previous' && styles.activeTabButton
+                ]}
+                onPress={() => setActiveTab('previous')}
+              >
+                <Text style={[
+                  styles.tabButtonText,
+                  activeTab === 'previous' && styles.activeTabButtonText
+                ]}>
+                  Previous ({previousMedicines.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Filter Section */}
             <View style={styles.filterSection}>
               <View style={styles.filterDropdownContainer}>
@@ -652,11 +702,11 @@ const TreatmentPlanScreen: React.FC<TreatmentPlanProps> = (props) => {
               >
                 <View style={styles.headerContent}>
                   <Text style={styles.headerTitle}>
-                    Treatment Plan {currentPatient?.pName ? `For ${currentPatient.pName}` : 'Patient medications'}
+                    {activeTab === 'current' ? 'Current' : 'Previous'} Treatment Plan {currentPatient?.pName ? `For ${currentPatient.pName}` : 'Patient medications'}
                   </Text>
                 </View>
                 <MedicineCardsList
-                  medicines={medicineList}
+                  medicines={activeMedicines}
                   category={medFilter}
                   medFilterOptions={medFilterOptions}
                   onAddedByPress={openAddedByModal}
@@ -924,14 +974,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', 
     gap: 5             ,
   },
-
   content: {
     flex: 1,
      marginBottom: 80,
   },
+  // Tab Section Styles
+  tabSection: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTabButton: {
+    borderBottomColor: '#14b8a6',
+  },
+  tabButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  activeTabButtonText: {
+    color: '#14b8a6',
+    fontWeight: '700',
+  },
   filterSection: {
     paddingHorizontal: 20,
-    paddingVertical: 5,
+    paddingVertical: 12,
     borderBottomColor: '#f1f5f9',
   },
   filterDropdownContainer: {
@@ -1140,25 +1218,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  primaryButtonSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 6,
-    shadowColor: '#14b8a6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  primaryButtonTextSmall: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1190,8 +1249,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'transparent',
   },
-
-  // User "Added By" row (from TestsScreen)
   userContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1203,7 +1260,6 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     color: COLORS.brand,
   },
-
   // User Details Modal
   modalOverlay: {
     flex: 1,
@@ -1318,11 +1374,6 @@ const styles = StyleSheet.create({
     padding: moderateScale(40),
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: moderateScale(12),
-    fontSize: moderateScale(14),
-    color: '#666',
   },
 });
 

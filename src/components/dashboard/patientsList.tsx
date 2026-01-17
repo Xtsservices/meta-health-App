@@ -36,6 +36,52 @@ const PatientTable = ({
   const fetchOnce = useRef(true);
   const dispatch = useDispatch()
 const user = useSelector((s: RootState) => s.currentUser);
+const calculateAgeFromDOB = (dob?: string, age?: string): string => {
+  if (dob) {
+    const birthDate = new Date(dob);
+    const today = new Date();
+
+    const diffTime = today.getTime() - birthDate.getTime();
+    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // 🔹 Less than 1 month → show days
+    if (totalDays < 30) {
+      return `${totalDays} day${totalDays !== 1 ? 's' : ''}`;
+    }
+
+    let years = today.getFullYear() - birthDate.getFullYear();
+    let months = today.getMonth() - birthDate.getMonth();
+
+    if (today.getDate() < birthDate.getDate()) {
+      months--;
+    }
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    // 🔹 If years exist → SHOW ONLY YEARS
+    if (years > 0) {
+      return `${years} year${years !== 1 ? 's' : ''}`;
+    }
+
+    // 🔹 Only months (years === 0)
+    if (months > 0) {
+      return `${months} month${months !== 1 ? 's' : ''}`;
+    }
+  }
+
+  // 🔹 DOB missing → fallback to age (years only)
+  if (age) {
+    const ageNum = parseInt(age, 10);
+    if (!isNaN(ageNum)) {
+      return `${ageNum} year${ageNum !== 1 ? 's' : ''}`;
+    }
+  }
+
+  return '';
+};
   // Fetch Recent Patients
   const fetchRecentPatients = async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
@@ -129,7 +175,7 @@ const user = useSelector((s: RootState) => s.currentUser);
     <View style={styles.card}>
       <View style={styles.cardContent}>
         <View style={styles.patientInfo}>
-          <Text style={styles.patientName}>{item?.pName || '-'}, {formatAgeDisplay(item?.age)}</Text>
+          <Text style={styles.patientName}>{item?.pName || '-'}, {calculateAgeFromDOB(item?.dob, item?.age)}</Text>
           <Text style={styles.dateText}>
             {formatDateTime( item?.lastModified)}
           </Text>

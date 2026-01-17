@@ -65,18 +65,18 @@ interface PhysicalExaminationData {
 const FOOTER_H = 70;
 
 const SECTIONS = [
-  { key: 'general', label: 'General' },
-  { key: 'head', label: 'Head' },
-  { key: 'ent', label: 'ENT' },
-  { key: 'neuroPsych', label: 'Neuro/Psych' },
-  { key: 'neckSpine', label: 'Neck/Spine' },
-  { key: 'respiratory', label: 'Respiratory' },
-  { key: 'cardiac', label: 'Cardiac' },
-  { key: 'abdominal', label: 'Abdominal' },
-  { key: 'pelvis', label: 'Pelvis' },
-  { key: 'guRectal', label: 'GU/Rectal' },
-  { key: 'musculoskeletal', label: 'Musculoskeletal' },
-  { key: 'skin', label: 'Skin' },
+  { key: 'general', label: 'General :' },
+  { key: 'head', label: 'Head :' },
+  { key: 'ent', label: 'ENT :' },
+  { key: 'neuroPsych', label: 'Neuro/Psych :' },
+  { key: 'neckSpine', label: 'Neck/Spine :' },
+  { key: 'respiratory', label: 'Respiratory :' },
+  { key: 'cardiac', label: 'Cardiac :' },
+  { key: 'abdominal', label: 'Abdominal :' },
+  { key: 'pelvis', label: 'Pelvis :' },
+  { key: 'guRectal', label: 'GU/Rectal :' },
+  { key: 'musculoskeletal', label: 'Musculoskeletal :' },
+  { key: 'skin', label: 'Skin :' },
 ];
 
 export default function PhysicalExaminationScreen() {
@@ -132,8 +132,8 @@ export default function PhysicalExaminationScreen() {
         })) ?? [];
         
         physicalExaminationData?.sort((a, b) => 
-          new Date(b?.createdAt || b?.addedOn || 0).getTime() - 
-          new Date(a?.createdAt || a?.addedOn || 0).getTime()
+          new Date(a?.createdAt || a?.addedOn || 0).getTime() - 
+          new Date(b?.createdAt || b?.addedOn || 0).getTime()
         );
         setList(physicalExaminationData);
       } else {
@@ -341,13 +341,11 @@ const styles = StyleSheet.create({
 
   grid: {
     flexDirection: RESPONSIVE.isTablet ? "row" : "column",
-    flexWrap: "wrap",
+    flexWrap: RESPONSIVE.isTablet ? "wrap" : "nowrap",
     gap: RESPONSIVE.spacing.sm,
   },
   gridItem: {
-    flex: RESPONSIVE.isTablet ? 1 : 0,
     width: RESPONSIVE.isTablet ? "48%" : "100%",
-    minWidth: RESPONSIVE.isTablet ? 200 : "100%",
     gap: RESPONSIVE.spacing.xs,
   },
   sectionTitle: {

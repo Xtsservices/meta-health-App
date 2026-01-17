@@ -291,7 +291,7 @@ const IpdOrders: React.FC = () => {
     pharmacyOrder.medicinesList.forEach((medicine: any) => {
         const price = medicine?.sellingPrice || 0;
         const quantity = medicine?.updatedQuantity || 1;
-        const gst = medicine?.gst || 18;
+        const gst = medicine?.gst || 0;
         totalAmount += (price * quantity) + ((price * quantity) * gst) / 100;
       });
       
@@ -305,7 +305,7 @@ const IpdOrders: React.FC = () => {
       let totalAmount = 0;
     labOrder.testsList.forEach((test: any) => {
       const price = test?.testPrice || 0;
-      const gst = test?.gst || 18;
+      const gst = test?.gst || 0;
       totalAmount += price + (price * gst) / 100;
     });
     
@@ -475,7 +475,7 @@ const OpdOrders: React.FC = () => {
       pharmacyOrder.medicinesList.forEach((medicine: any) => {
         const price = medicine?.sellingPrice || 0;
         const quantity = medicine?.updatedQuantity || 1;
-        const gst = medicine?.gst || 18;
+        const gst = medicine?.gst || 0;
         totalAmount += (price * quantity) + ((price * quantity) * gst) / 100;
       });
       
@@ -489,7 +489,7 @@ const OpdOrders: React.FC = () => {
       let totalAmount = 0;
       labOrder.testsList.forEach((test: any) => {
       const price = test?.testPrice || 0;
-      const gst = test?.gst || 18;
+      const gst = test?.gst || 0;
       totalAmount += price + (price * gst) / 100;
     });
     
