@@ -227,19 +227,21 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
 
 // Rejected Alerts Component
 const RejectedAlerts: React.FC<RejectedAlertsProps> = ({ rejectedOrders }) => {
+  const displayData = [...(rejectedOrders ?? [])].reverse(); 
+
   return (
     <View style={styles.tabContent}>
       <PatientOuterTable
         title="Rejected Alerts"
-        data={rejectedOrders ?? []}
+        data={displayData}
         isButton={false}
         alertFrom="Lab"
         isRejectedTab={true}
       />
 
       <Text style={styles.resultsText}>
-        Showing {rejectedOrders?.length ?? 0} result
-        {rejectedOrders?.length !== 1 ? "s" : ""}
+        Showing {displayData.length} result
+        {displayData.length !== 1 ? "s" : ""}
       </Text>
     </View>
   );
@@ -542,8 +544,30 @@ const AlertsLab: React.FC = () => {
   // Apply department filter for Test Alerts
   useEffect(() => {
     let filtered = [...allAlerts];
+
+  if (isReceptionAlerts) {
+    // 🔹 RECEPTION LOGIC
+  if (filter === "OPD") {
+      filtered =
+        allAlerts?.filter(
+          (order) =>
+            order?.ptype === 1 ||   // OPD
+            order?.ptype === 21     // Reception OPD special
+        ) ?? [];
+    } else if (filter === "IPD_EMERGENCY") {
+      filtered =
+        allAlerts?.filter(
+          (order) =>
+            order?.ptype === 2 ||   // IPD
+            order?.ptype === 3 ||   // Emergency
+            order?.departmemtType === 2 ||
+            order?.departmemtType === 3
+        ) ?? [];
+    } else {
+      filtered = allAlerts;
+    }
+  } else {
     if (filter === "OPD") {
-      
       filtered = allAlerts?.filter((order) => order?.ptype === 1 || order?.departmemtType === 1) ?? [];
     } else if (filter === "IPD") {
       filtered = allAlerts?.filter((order) => order?.ptype === 2 || order?.departmemtType === 2) ?? [];
@@ -552,9 +576,10 @@ const AlertsLab: React.FC = () => {
     } else {
       filtered = allAlerts;
     }
+    }
     setFilteredAlerts(filtered);
     setCurrentPage(0);
-  }, [filter, allAlerts]);
+  }, [filter, allAlerts, isReceptionAlerts]);
 
   // HANDLE REJECTION SUCCESS
   const handleRejectionSuccess = () => {

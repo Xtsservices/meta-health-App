@@ -131,7 +131,7 @@ const SurgeryChart: React.FC<SurgeryChartProps> = ({
           <View style={styles.filterBox}>
             <Picker
               selectedValue={year}
-              mode="dropdown"
+              mode="dialog"
               style={styles.filterPicker}
               dropdownIconColor="#0f172a"
               onValueChange={val => onYearChange(String(val))}
@@ -145,7 +145,7 @@ const SurgeryChart: React.FC<SurgeryChartProps> = ({
           <View style={styles.filterBox}>
             <Picker
               selectedValue={month}
-              mode="dropdown"
+              mode="dialog"
               style={styles.filterPicker}
               dropdownIconColor="#0f172a"
               onValueChange={val => onMonthChange(String(val))}
@@ -176,12 +176,12 @@ const SurgeryChart: React.FC<SurgeryChartProps> = ({
         <Text style={styles.subtitle}>Total Procedures: {total}</Text>
       </View>
 
-      {/* Filters (same pattern as cards) */}
+      {/* Filters */}
       <View style={styles.filterRow}>
         <View style={styles.filterBox}>
           <Picker
             selectedValue={year}
-            mode="dropdown"
+            mode="dialog"
             style={styles.filterPicker}
             dropdownIconColor="#0f172a"
             onValueChange={val => onYearChange(String(val))}
@@ -195,7 +195,7 @@ const SurgeryChart: React.FC<SurgeryChartProps> = ({
         <View style={styles.filterBox}>
           <Picker
             selectedValue={month}
-            mode="dropdown"
+            mode="dialog"
             style={styles.filterPicker}
             dropdownIconColor="#0f172a"
             onValueChange={val => onMonthChange(String(val))}
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Filters row (same style vibe as dashboard cards)
+  // Filters row
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -344,30 +344,29 @@ const styles = StyleSheet.create({
   filterBox: {
   flex: 1,
   minWidth: 80,
-  height: 40, // Increased from 40
-  borderRadius: 12, // Changed from 8
-  borderWidth: 1.5, // Changed from 1
+  height: 44,
+  borderRadius: 12,
+  borderWidth: 1.5,
   borderColor: "#CBD5E1",
   flexDirection: "row",
   alignItems: "center",
   overflow: "hidden",
   backgroundColor: "#ffffff",
   justifyContent: "center",
-  paddingHorizontal: 8, // Increased from 4
+  paddingHorizontal: 8,
 },
   filterPicker: {
-  flex: 1, // Changed from width: "100%"
-  height: 98, // Match parent height
+  flex: 1,
+  height: 50,        
   fontSize: 14,
   color: "#0f172a",
-  marginLeft: 4, // Added slight margin
   ...Platform.select({
     android: {
-      marginTop: 0, // Changed from -8
-      marginVertical: -8, // Added to center text on Android
+      paddingVertical: 0, 
+      marginTop: -2,     
     },
     ios: {
-      marginTop: 0,
+      height: 50,
     },
   }),
 },

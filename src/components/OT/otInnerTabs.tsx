@@ -115,6 +115,7 @@ const PatientTabsGrid: React.FC<Props> = ({
   const activeTab = route.params?.tabName;
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  console.log("currentPatient12345",currentPatient)
  
   /** Build tiles depending on tabName coming from route */
   const tiles: GridItem[] = useMemo(() => {
@@ -266,10 +267,14 @@ case "AnesthesiaRecord":
         token
       );
 
-      if (response.status === "success") {
-        dispatch(showSuccess("Physical examination updated successfully"));
-        navigation.navigate("OtTabs" as never);
-      } else {
+     if (response.status === "success") {
+  dispatch(showSuccess("Physical examination updated successfully"));
+
+  navigation.navigate("PatientProfile" as never, {
+    id: patientFromStore?.id,
+  } as never);
+}
+else {
         dispatch(showError("Physical Examination Failed"));
       }
     } catch (err: any) {
@@ -317,7 +322,7 @@ case "AnesthesiaRecord":
           dispatch(showSuccess("Pre-op record updated successfully"));
           setRejectModalVisible(false);
           setRejectReason("");
-          navigation.navigate("OtTabs" as never);
+          navigation.navigate("OtDashboard" as never)
         } else {
           dispatch(showError("Pre-op Record Failed"));
         }
@@ -341,9 +346,8 @@ case "AnesthesiaRecord":
     ]
   );
 
- const postopSubmit = useCallback(
-  async () => {
-
+const postopSubmit = useCallback(
+  async () => {    
     const postopRecordData = {
       notes: postNotes,
       tests: postTests,
@@ -352,17 +356,18 @@ case "AnesthesiaRecord":
     };
 
     try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));      
       const response = await AuthPost(
         `ot/${user?.hospitalID}/${timelineId}/postopRecord`,
         { postopRecordData },
         token
       );
 
-
       if (response.status === "success") {
         dispatch(showSuccess("Post-op record updated successfully"));
-        navigation.navigate("OtTabs" as never);
+        navigation.navigate("PatientProfile" as never, {
+          id: patientFromStore?.id,
+        } as never);
       } else {
         dispatch(showError("Post-op Record Failed"));
       }
@@ -370,7 +375,7 @@ case "AnesthesiaRecord":
       dispatch(showError(err?.message || "Post-op Record Failed"));
     }
   },
-  [postNotes, postTests, postMeds, selectedType, user?.hospitalID, timelineId]
+  [postNotes, postTests, postMeds, selectedType, user?.hospitalID, timelineId, dispatch, navigation]
 );
 
 
@@ -392,7 +397,9 @@ case "AnesthesiaRecord":
       );
       if (response.status === "success" ) {
         dispatch(showSuccess("Anesthesia record updated successfully"));
-        navigation.navigate("OtTabs" as never);
+        navigation.navigate("PatientProfile" as never, {
+      id: patientFromStore?.id,
+      } as never);
       } else {
         dispatch(showError("Anesthesia record update failed"));
       }
@@ -481,6 +488,9 @@ case "AnesthesiaRecord":
   const keyExtractor = (it: GridItem) => it.key;
 
   const renderFooter = () => {
+  if (activeTab === "PatientFile") {
+    return null;
+  }
     // ---- Pre-Op tab: show Approve + Reject ----
     if (activeTab === "PreOpRecord" && user?.roleName !== "surgeon" && currentPatient?.status !== "approved") {
       return (
@@ -523,11 +533,14 @@ case "AnesthesiaRecord":
       );
     }
 
-    // ---- Other tabs: show Save ----
-return (
-  <>
-    {user?.roleName !== "surgeon" &&
-      currentPatient?.status !== "approved" && (
+    // ---- Other  tabs: show Save ----
+if (
+  activeTab === "AnesthesiaRecord" ||
+  activeTab === "PhysicalExamination" ||
+  activeTab === "PostOpRecord"
+) {
+  if (currentPatient?.status !== "approved") {
+    return (
         <View style={styles.saveContainer}>
           <Pressable
             onPress={debouncedSubmit}
@@ -542,11 +555,13 @@ return (
             <Text style={styles.formNavButtonTextPrimary}>Save</Text>
           </Pressable>
         </View>
-      )}
-  </>
-);
+    );
+  }
+}
 
-  };
+
+  return null;
+};
 
   return (
     <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
@@ -667,8 +682,8 @@ const styles = StyleSheet.create({
     minHeight: 72,
   },
   iconWrap: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",

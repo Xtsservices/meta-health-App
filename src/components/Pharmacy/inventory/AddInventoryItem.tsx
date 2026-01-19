@@ -23,6 +23,7 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import {
   SPACING,
   FONT_SIZE,
+  FOOTER_HEIGHT,
 } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
 
@@ -37,13 +38,15 @@ import {
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Footer from "../../dashboard/footer";
 import { showSuccess, showError } from "../../../store/toast.slice";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-interface AddInventoryItemRouteProps {
+type AddInventoryItemRouteProps = {
   AddInventoryItem: {
     editData?: any;
     editId?: number;
   };
-}
+};
+
 
 interface MedicineData {
   name: string;
@@ -99,7 +102,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
   const { editData, editId } = route.params || {};
   const user = useSelector((state: RootState) => state.currentUser);
   const nav = useNavigation();
-
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -212,15 +215,19 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
     }
 
     // Category search
+  if (showDropdown.category) {
+    // When dropdown is open, show filtered results based on search
     if (searchQuery.category.trim()) {
-      const filteredCategories = medicineTypes?.filter(category =>
+      const filteredCategories = medicineTypes.filter(category =>
         category.toLowerCase().includes(searchQuery.category.toLowerCase())
-      ) ?? [];
+      );
       setSuggestions(prev => ({ ...prev, category: filteredCategories }));
-      setShowDropdown(prev => ({ ...prev, category: filteredCategories?.length > 0 }));
+    } else {
+      // When no search query, show all categories
+      setSuggestions(prev => ({ ...prev, category: medicineTypes }));
+    }
     } else {
       setSuggestions(prev => ({ ...prev, category: [] }));
-      setShowDropdown(prev => ({ ...prev, category: false }));
     }
 
     // Agency search
@@ -258,7 +265,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       setSuggestions(prev => ({ ...prev, hsn: [] }));
       setShowDropdown(prev => ({ ...prev, hsn: false }));
     }
-  }, [searchQuery, medicineInStockData, manufactureData]);
+  }, [searchQuery, medicineInStockData, manufactureData, showDropdown.category]);
 
   // Sync contact/email when agency/manufacturer change
   useEffect(() => {
@@ -356,13 +363,14 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
       !medicineData.category ||
       !medicineData.costPrice ||
       !medicineData.expiryDate ||
-      !medicineData.hsn ||
       medicineData.gst === null ||
       !medicineData.quantity ||
       !medicineData.sellingPrice ||
       !medicineData.lowStockValue ||
       !medicineData.agencyName ||
-      !medicineData.manufacturer
+      !medicineData.manufacturer ||
+      !medicineData.agentCode ||
+      !medicineData.contactNo
     ) {
       dispatch(showError("Please fill all required fields"));
       return;
@@ -588,7 +596,8 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
     type: "text" | "number" = "text",
     required: boolean = false,
     dropdownType?: 'medicine' | 'category' | 'agency' | 'manufacturer' | 'hsn',
-    yOffset: number = 0
+    yOffset: number = 0,
+    editable: boolean = true // Add this parameter
   ) => {
     const displayValue = dropdownType 
       ? medicineData[dropdownType === 'medicine' ? 'name' : 
@@ -597,6 +606,57 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                     dropdownType === 'manufacturer' ? 'manufacturer' : 
                     'hsn']
       : (value !== null && value !== undefined ? String(value) : "");
+
+  if (dropdownType === 'category') {
+    // Special handling for category - make it non-editable
+    return (
+      <View style={styles.field}>
+        <Text style={styles.label}>
+          {label} {required && <Text style={styles.required}>*</Text>}
+        </Text>
+        <Pressable
+          style={styles.input}
+          onPress={() => {
+            // Clear previous search and show all categories
+            setSearchQuery(prev => ({ ...prev, category: "" }));
+            setShowDropdown(prev => ({ 
+              ...prev, 
+              category: true,
+              medicine: false,
+              agency: false,
+              manufacturer: false,
+              hsn: false
+            }));
+            handleInputFocus('category', yOffset);
+            
+            // Show all categories when dropdown opens
+            setSuggestions(prev => ({ ...prev, category: medicineTypes }));
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flex: 1 }}>
+            <Text style={medicineData.category ? styles.dateText : styles.placeholderText}>
+              {medicineData.category || placeholder}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {medicineData.category && (
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setMedicineData(prev => ({ ...prev, category: "" }));
+                  }}
+                  hitSlop={10}
+                >
+                  <XIcon size={16} color={COLORS.sub} />
+                </Pressable>
+              )}
+              <ChevronDownIcon size={18} color={COLORS.sub} />
+            </View>
+          </View>
+        </Pressable>
+        {renderDropdown('category')}
+      </View>
+    );
+  }
 
     return (
       <View style={styles.field}>
@@ -641,6 +701,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                 }
               }, 200);
             }}
+          editable={editable}
           />
           {dropdownType && renderDropdown(dropdownType)}
         </View>
@@ -705,7 +766,8 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
               "text",
               true,
               'category',
-              100
+              100,
+              false
             )}
 
             <View style={styles.row}>
@@ -734,17 +796,6 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                 )}
               </View>
             </View>
-
-            {renderField(
-              "HSN Code",
-              medicineData.hsn,
-              (value) => setMedicineData((p) => ({ ...p, hsn: value })),
-              "Enter HSN code",
-              "text",
-              true,
-              'hsn',
-              300
-            )}
 
             <View style={styles.row}>
               <View style={styles.col}>
@@ -849,7 +900,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                   (value) => setMedicineData((p) => ({ ...p, agentCode: Number(value) || null })),
                   "Enter agent code",
                   "number",
-                  false,
+                  true,
                   undefined,
                   900
                 )}
@@ -859,25 +910,14 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                   "Contact No",
                   medicineData.contactNo,
                   (value) => setMedicineData((p) => ({ ...p, contactNo: value })),
-                  "Enter contact number",
+                  "Enter contact",
                   "text",
-                  false,
+                  true,
                   undefined,
                   900
                 )}
               </View>
             </View>
-
-            {renderField(
-              "Email",
-              medicineData.email,
-              (value) => setMedicineData((p) => ({ ...p, email: value })),
-              "Enter email address",
-              "text",
-              false,
-              undefined,
-              1000
-            )}
           </View>
 
           {/* Add Medicine Button */}
@@ -924,10 +964,6 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
                     <View style={styles.medicineRow}>
                       <Text style={styles.medicineLabel}>Category:</Text>
                       <Text style={styles.medicineValue}>{medicine.category}</Text>
-                    </View>
-                    <View style={styles.medicineRow}>
-                      <Text style={styles.medicineLabel}>HSN Code:</Text>
-                      <Text style={styles.medicineValue}>{medicine.hsn}</Text>
                     </View>
                     <View style={styles.medicineRow}>
                       <Text style={styles.medicineLabel}>Expiry:</Text>
@@ -994,7 +1030,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
         </ScrollView>
 
         {/* Footer */}
-        <View style={styles.footerWrap}>
+        <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
           <Footer active={"billing"} brandColor={COLORS.brand} />
         </View>
       </KeyboardAvoidingView>
@@ -1092,7 +1128,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   required: { 
-    color: COLORS.danger,
+    color: '#000000',
     fontWeight: "700",
   },
   input: {
@@ -1298,10 +1334,12 @@ const styles = StyleSheet.create({
 
   // Footer
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
-    bottom: 0,
+    height: FOOTER_HEIGHT,
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
 });
 

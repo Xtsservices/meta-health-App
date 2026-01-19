@@ -238,8 +238,8 @@ const PharmacyExpensesInnerTable: React.FC<InnerTableProps> = ({
 
               <View style={styles.metaRow}>
                 <View style={styles.costSection}>
-                  <RupeeIcon size={12} color={COLORS.sub} />
-                  <Text style={styles.costText}>{formatCurrency(row?.costPrice)}</Text>
+                  {/* <RupeeIcon size={12} color={COLORS.sub} /> */}
+                  {/* <Text style={styles.costText}>{formatCurrency(row?.costPrice)}</Text> */}
                 </View>
 
                 <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
@@ -431,15 +431,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   idText: {
-    fontSize: FONT_SIZE.xxs,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
   },
   dot: {
-    fontSize: FONT_SIZE.xxs,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
   },
   categoryText: {
-    fontSize: FONT_SIZE.xxs,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.brand,
     fontWeight: "500",
   },
@@ -449,10 +449,10 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   quantityBadge: {
-    backgroundColor: COLORS.brandLight,
+    backgroundColor: COLORS.chip,
     paddingHorizontal: SPACING.xs,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 2,
+    borderRadius: 15,
   },
   quantityText: {
     fontSize: FONT_SIZE.xs,
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statusText: {
-    fontSize: FONT_SIZE.xxs,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "700",
     color: COLORS.buttonText,
   },
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     width: '48%',
   },
   detailLabel: {
-    fontSize: FONT_SIZE.xxs,
+    fontSize: FONT_SIZE.sm,
     color: COLORS.sub,
     marginBottom: 2,
     fontWeight: "500",
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.dangerLight,
   },
   actionText: {
-    fontSize: FONT_SIZE.xxs,
+    fontSize: FONT_SIZE.sm,
     fontWeight: "700",
     color: COLORS.buttonText,
   },

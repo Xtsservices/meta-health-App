@@ -15,54 +15,35 @@ import LinearGradient from 'react-native-linear-gradient';
 
 // Icons
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
   PackageIcon,
   UserIcon,
   PhoneIcon,
   EmailIcon,
   CalendarIcon,
   RupeeIcon,
+  ChevronRightIcon,
 } from "../../../utils/SvgIcons";
-import PharmacyExpensesInnerTable from "./PharmacyExpensesInnerTable";
 
 interface ExpenseData {
   id: number;
-  agencyName: string;
-  email: string;
-  contactNo: string;
-  agentCode: number | string;
-  manufacturer: string;
-  addedOn: string;
-  medicinesList: any[];
+  agencyName?: string;
+  email?: string;
+  contactNo?: string | number;
+  agentCode?: number | string;
+  manufacturer?: string;
+  addedOn?: string;
+  medicinesList?: any[];
   totalValue?: number;
   status?: string;
 }
 
 interface PharmacyExpensesCardProps {
   data: ExpenseData[];
+  onCardPress?: (item: ExpenseData) => void;
 }
 
-const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => {
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data, onCardPress }) => {
   const [animation] = useState(new Animated.Value(0));
-
-  const handleToggleExpand = (id: number) => {
-    if (expandedId === id) {
-      Animated.timing(animation, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }).start(() => setExpandedId(null));
-    } else {
-      setExpandedId(id);
-      Animated.timing(animation, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
-    }
-  };
 
   const getStatusColors = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -100,11 +81,10 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
       minute: '2-digit'
     }) : "-";
 
-    const isExpanded = expandedId === item.id;
     const statusColors = getStatusColors(item.status || "processing");
 
     return (
-      <View key={item.id} style={styles.card}>
+      <TouchableOpacity key={item.id} style={styles.card} activeOpacity={0.9} onPress={() => onCardPress && onCardPress(item)}>
         {/* Card Header */}
         <View style={styles.cardHeader}>
           <View style={styles.headerLeft}>
@@ -135,16 +115,9 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
               </Text>
             </LinearGradient>
             
-            <TouchableOpacity 
-              onPress={() => handleToggleExpand(item.id)} 
-              style={styles.expandBtn}
-            >
-              {isExpanded ? (
-                <ChevronUpIcon size={20} color={COLORS.brand} />
-              ) : (
-                <ChevronDownIcon size={20} color={COLORS.brand} />
-              )}
-            </TouchableOpacity>
+            <View style={styles.chevronBtn}>
+              <ChevronRightIcon size={20} color={COLORS.brand} />
+            </View>
           </View>
         </View>
 
@@ -182,10 +155,10 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
             <View style={styles.infoBlock}>
               <View style={styles.infoRow}>
                 <RupeeIcon size={14} color={COLORS.sub} />
-                <Text style={styles.infoLabel}>Total Value</Text>
+                <Text style={styles.infoLabel}>Manufacturer</Text>
               </View>
               <Text style={[styles.infoValue, styles.totalValue]}>
-                {formatCurrency(item.totalValue || 0)}
+                {formatCurrency(item?.manufacturer || 0)}
               </Text>
             </View>
           </View>
@@ -197,45 +170,7 @@ const PharmacyExpensesCard: React.FC<PharmacyExpensesCardProps> = ({ data }) => 
             </Text>
           </View>
         </View>
-
-        {/* Expanded Section */}
-        {isExpanded && (
-          <Animated.View 
-            style={[
-              styles.expandedSection,
-              {
-                opacity: animation,
-                transform: [{
-                  translateY: animation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-10, 0]
-                  })
-                }]
-              }
-            ]}
-          >
-            <View style={styles.expandedContent}>
-              {item.email && (
-                <View style={styles.emailSection}>
-                  <EmailIcon size={14} color={COLORS.sub} />
-                  <Text style={styles.emailText} numberOfLines={1}>
-                    {item.email}
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.medicinesSection}>
-                <Text style={styles.medicinesTitle}>Medicines Ordered</Text>
-                <PharmacyExpensesInnerTable
-                  data={item.medicinesList || []}
-                  isButton={false}
-                  parentComponentName={"Order"}
-                />
-              </View>
-            </View>
-          </Animated.View>
-        )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -310,7 +245,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: COLORS.buttonText,
   },
-  expandBtn: {
+  chevronBtn: {
     padding: SPACING.xs,
     borderRadius: 8,
     backgroundColor: COLORS.brandLight,
@@ -358,37 +293,6 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
-  },
-  expandedSection: {
-    marginTop: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: SPACING.md,
-  },
-  expandedContent: {
-    gap: SPACING.md,
-  },
-  emailSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    padding: SPACING.sm,
-    backgroundColor: COLORS.brandLight,
-    borderRadius: 8,
-  },
-  emailText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.brand,
-    fontWeight: "500",
-    flex: 1,
-  },
-  medicinesSection: {
-    gap: SPACING.sm,
-  },
-  medicinesTitle: {
-    fontSize: FONT_SIZE.sm,
-    fontWeight: "600",
-    color: COLORS.text,
   },
 });
 

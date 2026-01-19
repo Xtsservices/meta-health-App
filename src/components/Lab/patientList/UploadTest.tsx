@@ -399,7 +399,6 @@ const FileUpload: React.FC<{
                 />
               )}
             </View>
-          r
         </View>
         </View>
       </Modal>
@@ -531,15 +530,12 @@ const normalizeUriForUpload = async (uri: string, name: string) => {
     return uri; // Return original URI as fallback
   }
 };
-  const handleFileChange = async (file: FileType) => {
-    const normalizedUri = Platform.OS === "ios" && file.uri?.startsWith("file://")
-      ? file.uri.replace("file://", "")
-      : file.uri;
-    // If content:// on Android, normalize to file://
-    const finalUri = await normalizeUriForUpload(file.uri, file.name);
-    const fileObj = { ...file, uri: finalUri, mimeType: file.mimeType ?? file.type };
-    setFiles(prev => [...prev, fileObj]);
-  };
+const handleFileChange = async (file: FileType) => {
+  setFiles(prev => [
+    ...prev,
+    { ...file, mimeType: file.mimeType ?? file.type }
+  ]);
+};
 
   const handleFileRemove = (index: number) => {
     setFiles(prev => prev?.filter((_, i) => i !== index));
@@ -563,22 +559,27 @@ const takePhoto = async () => {
       {
         mediaType: "photo",
         quality: 0.8,
-        cameraType: "back", // or "front" based on your preference
-        saveToPhotos: true,
+        cameraType: "back",
+        saveToPhotos: false, 
       },
-      (response) => {
+      async (response) => {
         if (response.didCancel) return;
         if (response.errorCode) {
           Alert.alert("Error", response.errorMessage ?? "Failed to take photo");
         return;
       }
 
-      const asset: Asset | undefined = response.assets && response.assets[0];
-      if (!asset || !asset.uri) return;
+      const asset = response.assets?.[0];
+      if (!asset?.uri) return;
 
-        // Process the captured image
+    // ✅ WAIT for file to be normalized
+    const normalizedUri = await normalizeUriForUpload(
+      asset.uri,
+      asset.fileName ?? `camera_${Date.now()}.jpg`
+    );
+
         handleFileChange({
-        uri: asset.uri,
+        uri: normalizedUri,
         name: asset.fileName ?? `camera_${Date.now()}.jpg`,
         type: asset.type ?? "image/jpeg",
         mimeType: asset.type ?? "image/jpeg",
@@ -673,6 +674,29 @@ const takePhoto = async () => {
       { cancelable: true }
     );
   };
+const waitForFileReady = async (uri: string) => {
+  try {
+    const path = uri.replace("file://", "");
+    let attempts = 0;
+
+    while (attempts < 5) {
+      const stat = await RNFS.stat(path);
+
+      if (stat.size > 0) {
+        return true;
+      }
+
+      // wait 200ms and retry
+      await new Promise(res => setTimeout(res, 200));
+      attempts++;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 
   // File upload and status update
   const handleSubmit = async () => {
@@ -680,9 +704,18 @@ const takePhoto = async () => {
       const isAuthenticated = await checkAuth();
       if (!isAuthenticated) return;
 
-      if (files?.length === 0) {
+      if (files.length === 0) {
         dispatch(showError("Please select at least one file to upload"));
         return;
+      }
+
+      // ✅ WAIT FOR FILE SYSTEM TO FLUSH
+      for (const file of files) {
+        const ready = await waitForFileReady(file.uri);
+        if (!ready) {
+          dispatch(showError("Preparing image, please try again…"));
+          return;
+        }
       }
 
       setUploading(true);
@@ -713,23 +746,11 @@ const takePhoto = async () => {
     let response;
     const isWalkinPatient = walkinID && loincCode && (!timeLineID || timeLineID === walkinID);
     
-    console.log("Uploading files:", {
-      isWalkinPatient,
-      walkinID,
-      loincCode,
-      timeLineID,
-      testID,
-      patientDetails,
-      filesCount: files.length
-    });
-
     if (isWalkinPatient) {
       // Walk-in patient upload
-      console.log("Uploading for walk-in patient");
       
       // CORRECTED: Added all required parameters
       const endpoint = `attachment/${user?.hospitalID}/${walkinID}/${user?.id}/walkinAttachment?testID=${loincCode}`;
-      console.log("Walk-in endpoint:", endpoint);
       
       response = await AuthPost(
         endpoint,
@@ -742,10 +763,8 @@ const takePhoto = async () => {
           timeout: 60000, // 60 second timeout for large files
         }
       ) as any;
-      console.log("Walk-in upload response:", response);
     } else {
       // Regular patient upload
-      console.log("Uploading for regular patient");
       
       // CORRECTED: Get patient ID properly
       const patientID = patientDetails?.patientID || 

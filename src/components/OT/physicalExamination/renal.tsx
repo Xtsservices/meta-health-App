@@ -1,6 +1,5 @@
 // src/screens/ot/GeneralPhysicalExaminationMobile.tsx
-
-import React, { useMemo } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -45,21 +44,20 @@ const CHECKBOX_ITEMS: { key: keyof RenalState; label: string }[] = [
 
 ];
 
-const Hepato: React.FC = () => {
+const RenalMobile: React.FC = () => {
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const isDark = scheme === "dark";
 
-const user = useSelector((s: RootState) => s.currentUser);
-const isReadOnly = user?.roleName === "surgeon";
 
-  const { renal, setRenal} =
-    usePhysicalExaminationForm() 
+  const user = useSelector((s: RootState) => s.currentUser);
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
 
-  
+  const { renal, setRenal } = usePhysicalExaminationForm();
 
   const toggleField = (key: keyof RenalState) => {
+    if (isReadOnly) return; // Add check
     const current = Boolean(renal?.[key]);
     setRenal({ [key]: !current });
   };
@@ -73,14 +71,8 @@ const isReadOnly = user?.roleName === "surgeon";
   };
 
   return (
-    <SafeAreaView
-      style={[
-        styles.safeArea,
-        { backgroundColor: COLORS.bg},
-      ]}
-    >
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.bg }]}>
       <View style={styles.root}>
-        {/* Scrollable form, keyboard-safe */}
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
           contentContainerStyle={styles.scrollContent}
@@ -94,6 +86,9 @@ const isReadOnly = user?.roleName === "surgeon";
               { backgroundColor: COLORS.card, borderColor: COLORS.border },
             ]}
           >
+            <Text style={[styles.title, { color: COLORS.text }]}>
+              Renal & Endocrine
+            </Text>
             <Text style={[styles.subtitle, { color: COLORS.sub }]}>
               Select all applicable findings
             </Text>
@@ -108,7 +103,10 @@ const isReadOnly = user?.roleName === "surgeon";
                     onPress={() => toggleField(item.key)}
                     style={({ pressed }) => [
                       styles.checkboxRow,
-                      { backgroundColor: pressed ? COLORS.brandSoft : "transparent" },
+                      { 
+                        backgroundColor: pressed && !isReadOnly ? COLORS.brandSoft : "transparent",
+                        opacity: isReadOnly ? 0.6 : 1,
+                      },
                     ]}
                   >
                     <View
@@ -130,7 +128,6 @@ const isReadOnly = user?.roleName === "surgeon";
               })}
             </View>
 
-            {/* Prev / Next buttons at end of form */}
             <View style={styles.formNavRow}>
               <Pressable
                 onPress={handlePrev}
@@ -169,7 +166,6 @@ const isReadOnly = user?.roleName === "surgeon";
           </View>
         </KeyboardAwareScrollView>
 
-        {/* Bottom app footer */}
         <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
           <Footer active={"dashboard"} brandColor="#14b8a6" />
         </View>
@@ -184,19 +180,15 @@ const isReadOnly = user?.roleName === "surgeon";
   );
 };
 
-export default Hepato;
+export default RenalMobile;
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  root: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
+  root: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 110, // extra so buttons are not hidden behind footer
+    paddingBottom: 110,
   },
   card: {
     borderRadius: 16,
@@ -218,9 +210,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginBottom: 12,
   },
-  checkboxGroup: {
-    gap: 6,
-  },
+  checkboxGroup: { gap: 6 },
   checkboxRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -241,8 +231,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
-
-  // Prev / Next inside form
   formNavRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -256,9 +244,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  formNavButtonSecondary: {
-    borderWidth: 1.5,
-  },
+  formNavButtonSecondary: { borderWidth: 1.5 },
   formNavButtonTextSecondary: {
     fontSize: 15,
     fontWeight: "700",
@@ -268,8 +254,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#ffffff",
   },
-
-  // Bottom Footer
   footerWrap: {
     position: "absolute",
     left: 0,

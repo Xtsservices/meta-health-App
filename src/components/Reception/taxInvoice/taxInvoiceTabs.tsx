@@ -45,6 +45,8 @@ export type MedicineItem = {
   rejectReason?: string | null;
   rejectedOn?: string | null;
   rejectedBy?: number | null;
+  date?: string;
+  completedOn?: string;
 };
 
 export type TestItem = {
@@ -55,6 +57,7 @@ export type TestItem = {
   price: number;
   gst: number;
   amount: number;
+  date?: string;
 };
 
 export type PatientData = {
@@ -80,8 +83,9 @@ export type PatientData = {
   dueAmount?: number;
   totalAmount?: number;
   prescriptionURL?: string; 
-  medicineDueAmount: number;
-testDueAmount: number;
+medicineDueAmount?: number;
+testDueAmount?: number;
+
 };
 
 type Mode = "billing" | "allTax";
@@ -133,6 +137,32 @@ const BillingTaxInvoiceMobile: React.FC = () => {
     const yyyy = d.getFullYear();
     return `${dd}-${mm}-${yyyy}`;
   };
+  const calculateTotalsFromLists = (
+  medicines: MedicineItem[] = [],
+  tests: TestItem[] = [],
+  paidAmount = 0
+) => {
+  const medicineTotal = medicines.reduce(
+    (sum, m) => sum + (Number(m.amount) || 0),
+    0
+  );
+
+  const testTotal = tests.reduce(
+    (sum, t) => sum + (Number(t.amount) || 0),
+    0
+  );
+
+  const grandTotal = medicineTotal + testTotal;
+  const payable = Math.max(0, grandTotal - paidAmount);
+
+  return {
+    medicineTotal,
+    testTotal,
+    grandTotal,
+    payable,
+  };
+};
+
 
   const openDatePicker = (target: "start" | "end") => {
     setPickerTarget(target);
@@ -188,6 +218,11 @@ const BillingTaxInvoiceMobile: React.FC = () => {
     if (ptype === 2 || ptype === 3) return "IPD / Emergency";
     return "Unknown";
   };
+    if (isPharmacy) {
+      if (ptype === 21 || ptype === 1) return "OPD";
+      if (ptype === 2 || ptype === 3) return "IPD";
+      return "Walk-in";
+    }
     // For all other departments (pharmacy, lab, radiology, etc.)
     if (ptype === 21 || ptype === 1) return "OPD";
     if (ptype === 2 || ptype === 3) return "IPD ";
@@ -236,9 +271,7 @@ const BillingTaxInvoiceMobile: React.FC = () => {
       : [];
 
     const processed: PatientData[] = [];
-    console.log("Processed",processed)
     rawData.forEach((item: any, index: number) => {
-      console.log("111111pppp",item)
       // 🔹 1. Start with raw lists
       let tests = Array.isArray(item.testsList) ? [...item.testsList] : [];
       const meds = Array.isArray(item.medicinesList) ? [...item.medicinesList] : [];
@@ -310,59 +343,35 @@ const BillingTaxInvoiceMobile: React.FC = () => {
 
       const firstMed = hasMeds ? meds[0] : null;
       const firstTest = hasTests ? tests[0] : null;
-      const addedOn = firstMed?.addedOn || firstTest?.addedOn || firstMed?.datetime || "";
+      const addedOn = firstMed?.completedOn || firstMed?.addedOn || firstMed?.datetime || firstTest?.addedOn || firstTest?.datetime || "";
       const timelineIDNum = Number(timelineID);
 
       // 🔹 6. DUE AMOUNT LOGIC (same concept as web)
 
-      // raw dues from backend
-      const rawMedicineDue = Number(item?.medicine_dueAmount) || 0;
-      const rawTestDue = Number(item?.test_dueAmount) || 0;
 
-      // start with backend dues if > 0
-      let medicineDue = rawMedicineDue > 0 ? rawMedicineDue : 0;
-      let testDue = rawTestDue > 0 ? rawTestDue : 0;
+const paidAmount =
+  Number(item?.medicine_paidAmount || 0) +
+  Number(item?.test_paidAmount || 0);
 
-      // full payable from medicines list (price + GST)
-      const medicineTotalFromList = meds.reduce((sum: number, m: any) => {
-        const qty = Number(m.updatedQuantity ?? m.quantity ?? 1);
-        const price = Number(m.sellingPrice ?? m.price ?? 0);
-        const gst = Number(m.gst ?? 0);
-
-        const base = qty * price;
-        const totalWithGst = base + (base * gst) / 100;
-
-        return sum + totalWithGst;
-      }, 0);
-
-      // full payable from *filtered* tests list (price + GST)
-      const testTotalFromList = tests.reduce((sum: number, t: any) => {
-        const price = Number(t.testPrice ?? t.price ?? 0);
-        const gst = Number(t.gst ?? 0);
-
-        const base = price;
-        const totalWithGst = base + (base * gst) / 100;
-
-        return sum + totalWithGst;
-      }, 0);
-
-      // 🔹 Combined TOTAL amount (medicines + tests)
-      const totalAmount = medicineTotalFromList + testTotalFromList;
-
-      // 🔹 Combine paid amounts from backend (if present)
-      const rawMedicinePaid = Number(item?.medicine_paidAmount) || 0;
-      const rawTestPaid = Number(item?.test_paidAmount) || 0;
-      const paidAmount = rawMedicinePaid + rawTestPaid;
-
-
-
-      // If BOTH dues are 0 → treat full amount as due (first payment case)
-      if (medicineDue === 0 && testDue === 0) {
-        medicineDue = medicineTotalFromList;
-        testDue = testTotalFromList;
-      }
-
-      const totalDue = medicineDue + testDue;
+  const {
+  medicineTotal,
+  testTotal,
+  grandTotal,
+  payable,
+} = calculateTotalsFromLists(
+  meds.map((m: any) => ({
+    amount:
+      (Number(m.sellingPrice ?? m.price) *
+        Number(m.updatedQuantity ?? m.quantity ?? 1)) *
+      (1 + Number(m.gst ?? 0) / 100),
+  })),
+  tests.map((t: any) => ({
+    amount:
+      Number(t.testPrice ?? t.price ?? 0) *
+      (1 + Number(t.gst ?? 0) / 100),
+  })),
+  paidAmount
+);
 
 const patient: PatientData = {
   id: index + 1,
@@ -383,11 +392,12 @@ const patient: PatientData = {
   admissionDate: item.admittedOn ?? addedOn,
 
   // ✅ DUE FIELDS (aligned with web)
-  totalAmount,
-  paidAmount,
-  medicineDueAmount: medicineDue,
-  testDueAmount: testDue,
-  dueAmount: totalDue,
+totalAmount: grandTotal,
+paidAmount,
+medicineDueAmount: medicineTotal,
+testDueAmount: testTotal,
+dueAmount: payable,
+
 
   // 🔹 7. Use ALL medicines (unfiltered)
   medicinesList: meds.map((m: any) => {
@@ -465,37 +475,110 @@ const fetchPharmacyBilling = async (token: string) => {
   }
 
   const response = await AuthFetch(url, token);
-  console.log("Pharmacy Billing Response:", response);
   
   if (response?.status === "success" && "data" in response) {
     const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
     const processed: PatientData[] = rawData.map((item: any, index: number) => {
-      console.log("Processing item:", item);
+      let medicinesArray: any[] = [];
+      if (deptNum === 1 || deptNum === 2) {
+        // IPD/OPD uses 'medicines'
+        medicinesArray = Array.isArray(item.medicines) ? item.medicines : [];
+      } else {
+        // Walk-in and Rejected use 'medicinesList'
+        medicinesArray = Array.isArray(item.medicinesList) ? item.medicinesList : [];
+      }
       
       // Check if any medicine has rejection data
-      const hasRejectedMedicine = Array.isArray(item.medicinesList) && 
-        item.medicinesList.some((med: any) => med.status === "rejected");
+      const hasRejectedMedicine = medicinesArray.some((med: any) => med.status === "rejected");
       
       // Get first rejected medicine if exists
       const rejectedMedicine = hasRejectedMedicine ? 
-        item.medicinesList.find((med: any) => med.status === "rejected") : null;
+        medicinesArray.find((med: any) => med.status === "rejected") : null;
+      let totalAmount = 0;
+      let paidAmount = 0;
+      let dueAmount = 0;
+      
+      if (deptNum === 1 || deptNum === 2) {
+        totalAmount = Number(item.totalAmount) || 0;
+        paidAmount = Number(item.paidAmount) || 0;
+const medicinesForCalc = medicinesArray.map((m: any) => {
+  const base =
+    Number(m.sellingPrice || 0) *
+    Number(m.updatedQuantity || m.quantity || 1);
 
-      // Calculate total amount from medicines
-      const totalAmount = Array.isArray(item.medicinesList) 
-        ? item.medicinesList.reduce((sum: number, medicine: any) => {
+  return { amount: base + (base * Number(m.gst || 0)) / 100 };
+});
+
+const { grandTotal, payable } = calculateTotalsFromLists(
+  medicinesForCalc,
+  [],
+  paidAmount
+);
+
+totalAmount = grandTotal;
+dueAmount = payable;
+
+
+      } else {
+        totalAmount = medicinesArray.reduce((sum: number, medicine: any) => {
             const sellingPrice = Number(medicine.sellingPrice) || 0;
-            const quantity = Number(medicine.updatedQuantity) || 1;
+            const quantity = Number(medicine.updatedQuantity || medicine.quantity || 1);
             const gst = Number(medicine.gst) || 0;
             
             const baseAmount = sellingPrice * quantity;
             const gstAmount = (baseAmount * gst) / 100;
             return sum + (baseAmount + gstAmount);
-          }, 0)
-        : 0;
+        }, 0);
+        
+        paidAmount = Number(item.paidAmount) || 0;
+const medicinesForCalc = medicinesArray.map((m: any) => {
+  const base =
+    Number(m.sellingPrice || 0) *
+    Number(m.updatedQuantity || m.quantity || 1);
 
-      // Get payment amounts from API response
-      const paidAmount = Number(item.paidAmount) || 0;
-      const dueAmount = Number(item.dueAmount) || totalAmount;
+  return { amount: base + (base * Number(m.gst || 0)) / 100 };
+});
+
+const { grandTotal, payable } = calculateTotalsFromLists(
+  medicinesForCalc,
+  [],
+  paidAmount
+);
+
+totalAmount = grandTotal;
+dueAmount = payable;
+
+
+      }
+
+      // Get doctor names from item or from first medicine
+      const doctorName = item.doctorName || "";
+      const [firstName = "", lastName = ""] = doctorName.split(" ");
+
+      // Get timeline ID from item or from first medicine
+      const timelineID = item.timelineID || 
+                         item.patientTimeLineID || 
+                         (medicinesArray[0]?.timelineID || 
+                          medicinesArray[0]?.patientTimeLineID || "");
+
+      // Get location - different field names
+      const location = item.location || "";
+
+      // Get addedOn date - different sources
+      let addedOn = "";
+      if (deptNum === 3) {
+        // Walk-in has paymentDetails[0].timestamp
+        addedOn = item?.paymentDetails?.[0]?.timestamp || item?.addedOn || "";
+      } else if (deptNum === 4) {
+        // Rejected has rejectedOn in medicine
+        addedOn = rejectedMedicine?.rejectedOn || item?.addedOn || "";
+      } else {
+        // IPD/OPD has completedOn in medicine
+        addedOn = medicinesArray[0]?.completedOn || item?.addedOn || "";
+      }
+
+      // Get prescriptionURL for walk-in
+      const prescriptionURL = item.prescriptionURL || undefined;
 
       return {
         id: index + 1,
@@ -504,22 +587,24 @@ const fetchPharmacyBilling = async (token: string) => {
         pIdNew: String(item.pIdNew || item.patientID || `PHAR${index + 1}`),
         pName: item.pName || "Unknown Patient",
         dept: getDepartmentLabelBilling(item.ptype || deptNum),
-        addedOn: item?.paymentDetails?.[0]?.timestamp || item?.addedOn || "",
-        firstName: item.doctorFirstName || "",
-        lastName: item.doctorLastName || "",
-        category: item.location || "",
-        patientTimeLineID: String(item.timeLineID || item.patientTimeLineID || ""),
-        pType: deptNum === 1 ? "Outpatient" : "Inpatient",
+        addedOn: addedOn,
+        firstName: firstName,
+        lastName: lastName,
+        category: location,
+        patientTimeLineID: String(timelineID),
+        pType: deptNum === 1 ? "Outpatient" : 
+               deptNum === 2 ? "Inpatient" : 
+               deptNum === 3 ? "Walk-in" : "Rejected",
         type: "medicine",
         // 🔹 ADD THIS: Include prescriptionURL if available
-        prescriptionURL: item.prescriptionURL || undefined,
+        prescriptionURL: prescriptionURL,
         // Payment amounts
         totalAmount: totalAmount,
         paidAmount: paidAmount,
         dueAmount: dueAmount,
-        medicinesList: Array.isArray(item.medicinesList) ? item.medicinesList.map((m: any) => {
+        medicinesList: medicinesArray.map((m: any) => {
           const sellingPrice = Number(m.sellingPrice) || 0;
-          const quantity = Number(m.updatedQuantity) || 1;
+          const quantity = Number(m.updatedQuantity || m.quantity || 1);
           const gst = Number(m.gst) || 0;
           
           const baseAmount = sellingPrice * quantity;
@@ -527,21 +612,21 @@ const fetchPharmacyBilling = async (token: string) => {
           const totalAmount = baseAmount + gstAmount;
 
           return {
-            id: m.id,
-            name: m.name || m.medicineName || "Unknown",
+            id: m.medicineID || m.id,
+            name: m.medicineName || m.name || "Unknown",
             qty: quantity,
             hsn: m.hsn || "",
             price: sellingPrice,
             gst: gst,
             amount: totalAmount,
-            nurseID: m.nurseID,
+            nurseID: m.nurseID || m.medGivenBy,
             // 🔹 ADD: Include rejection data if medicine is rejected
             status: m.status || "completed",
             rejectReason: m.rejectReason || null,
             rejectedOn: m.rejectedOn || null,
             rejectedBy: m.rejectedBy || null,
           };
-        }) : [],
+        }),
         testList: [],
         procedures: [],
       };
@@ -552,10 +637,13 @@ const fetchPharmacyBilling = async (token: string) => {
       const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
       return dateB - dateA;
     });
-    console.log("Processed Pharmacy Data:", sorted);
+
     setData(sorted);
+  } else {
+    setData([]);
   }
 };
+
   // Lab/Radiology billing function - MODIFIED to include dueAmount
   const fetchLabRadiologyBilling = async (token: string) => {
     if (!user?.hospitalID) return;
@@ -565,7 +653,6 @@ const fetchPharmacyBilling = async (token: string) => {
     
     const response = await AuthFetch(url, token)as any;
     // FIXED: Use the correct response structure from working code
-    console.log("555",response)
     
     if ((response?.status === "success") && Array.isArray(response?.data?.billingData)) {
     const billingData = response?.data?.billingData || response?.billingData || response?.data?.data || response?.data;
@@ -577,10 +664,8 @@ const fetchPharmacyBilling = async (token: string) => {
         if (departmentType === "2") return ptype === 2 || ptype === 3; // IPD (2 or 3)
         return true;
       });
-      console.log("filter",filteredData)
 
       const processed: PatientData[] = filteredData.map((item: any, index: number) => {
-        console.log("item",item)
         // Calculate total amount from tests
         const totalAmount = Array.isArray(item.testsList) 
           ? item.testsList.reduce((sum: number, test: any) => {
@@ -589,10 +674,29 @@ const fetchPharmacyBilling = async (token: string) => {
               return sum + (price * (1 + gst / 100));
             }, 0)
           : 0;
+const tests: TestItem[] = Array.isArray(item.testsList)
+  ? item.testsList.map((t: any) => ({
+      testID: t.id || t.testID,
+      testName: t.test || t.testName,
+      loinc_num_: t.loinc_num_ || "",
+      category: t.category || "pathology",
+      price: Number(t.testPrice) || 0,
+      gst: Number(t.gst) || 0,
+      amount:
+        (Number(t.testPrice) || 0) *
+        (1 + (Number(t.gst) || 0) / 100),
+    }))
+  : [];
 
-        // Get paid amount and due amount from API response
-        const paidAmount = Number(item.paidAmount) || 0;
-        const dueAmount = Number(item.dueAmount) || totalAmount; // Use dueAmount from API, fallback to totalAmount
+const paidAmount = Number(item.paidAmount) || 0;
+const { grandTotal, payable } = calculateTotalsFromLists(
+  [],
+  tests,
+  paidAmount
+);
+
+
+
 
         return {
           id: index + 1,
@@ -618,12 +722,11 @@ const fetchPharmacyBilling = async (token: string) => {
           medicinesList: [],
           procedures: [],
           // ADDED: Include payment amounts from API response
-          totalAmount: totalAmount,
-          paidAmount: paidAmount,
-          dueAmount: dueAmount,
+totalAmount: grandTotal,
+paidAmount,
+dueAmount: payable,
         };
       });
-      console.log("processed",processed)
 
       const sorted = processed.sort((a, b) => {
         const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
@@ -661,12 +764,42 @@ const fetchPharmacyBilling = async (token: string) => {
             },
           ];
 
-    const allRawItems: any[] = [];
+const allRawItems: any[] = [];
+
+for (const ep of endpoints) {
+  try {
+    const res: any = await AuthFetch(ep.url, token);
+    const arr = Array.isArray(res?.data?.data) ? res.data.data : [];
+    arr.forEach((item: any) =>
+      allRawItems.push({ ...item, deptType: ep.deptType })
+    );
+  } catch {}
+}
+
+/* ✅ FILTER AFTER DATA IS READY */
+const filteredItems = allRawItems.filter((item) => {
+  const dept =
+    item?.lab?.departmentType ??
+    item?.pharmacy?.departmentType ??
+    null;
+
+  // OPD
+  if (departmentType === "1") {
+    return dept === 1;
+  }
+
+  // IPD / Emergency
+  if (departmentType === "2") {
+    return dept !== 1;
+  }
+
+  return true;
+});
+
 
     for (const ep of endpoints) {
       try {
         const res: any = await AuthFetch(ep.url, token);
-        
         const arr = Array.isArray(res?.data?.data) ? res.data?.data : [];
         arr.forEach((item: any) =>
           
@@ -678,7 +811,7 @@ const fetchPharmacyBilling = async (token: string) => {
       }
     }
 
-   const normalized: PatientData[] = allRawItems.map(
+   const normalized: PatientData[] = filteredItems.map(
   (item: any, index: number) => {
     
     const deptType =
@@ -687,7 +820,6 @@ const fetchPharmacyBilling = async (token: string) => {
       (item.lab ? "1" : null) ||
       (item.pharmacy ? "2" : null) ||
       "1";
-console.log("item",item)
     const medicinesList: MedicineItem[] =
       item.pharmacy?.medicinesList?.map((m: any) => {
         const price = Number(m.sellingPrice) * Number(m.updatedQuantity) || 0;
@@ -704,6 +836,7 @@ console.log("item",item)
           gst,
           amount,
           nurseID: m.nurseID,
+            date: m.completedOn || m.datetime || "",
         };
       }) || [];
 
@@ -721,6 +854,7 @@ console.log("item",item)
           price,
           gst,
           amount,
+            date: t.lastUpdatedOn || t.addedOn || "",
         };
       }) || [];
 
@@ -734,20 +868,45 @@ console.log("item",item)
       0
     );
 
-    const labDate =
-      item.tests?.[0]?.datetime || item.lab?.updatedOn || "";
-    const medDate =
-      item.medicines?.[0]?.medicinesList?.[0]?.datetime ||
-      item.pharmacy?.updatedOn ||
-      "";
+      // 🔹 UPDATED: Get dates from all possible sources and find the latest
+      const allDates: string[] = [];
 
-    const finalDate =
-      [labDate, medDate, item.addedOn]
-        .filter(Boolean)
-        .sort(
-          (a: string, b: string) =>
+      // From medicines
+      medicinesList.forEach((med) => {
+        if (med.date) allDates.push(med.date);
+      });
+
+      // From tests
+      testList.forEach((test) => {
+        if (test.date) allDates.push(test.date);
+      });
+
+      // From pharmacy payment details
+      if (item.pharmacy?.paymentDetails?.[0]?.timestamp) {
+        allDates.push(item.pharmacy.paymentDetails[0].timestamp);
+      }
+
+      // From pharmacy completedOn
+      if (item.pharmacy?.medicinesList?.[0]?.completedOn) {
+        allDates.push(item.pharmacy.medicinesList[0].completedOn);
+      }
+
+      // From lab lastUpdatedOn
+      if (item.lab?.labTests?.[0]?.lastUpdatedOn) {
+        allDates.push(item.lab.labTests[0].lastUpdatedOn);
+      }
+
+      // From item addedOn
+      if (item.addedOn) {
+        allDates.push(item.addedOn);
+      }
+
+      // 🔹 Find the latest date
+      const latestDate = allDates.length > 0
+        ? allDates.sort((a: string, b: string) => 
             new Date(b).getTime() - new Date(a).getTime()
-        )[0] || "";
+        )[0]
+        : "";
 
     return {
       id: index + 1,
@@ -759,8 +918,8 @@ console.log("item",item)
       dept: getDepartmentLabelTax(deptType),
       firstName: item.firstName || "",
       lastName: item.lastName || "",
-      date: finalDate,
-      addedOn: finalDate,
+      date: latestDate, 
+      addedOn: latestDate, 
       admissionDate: item.admissionDate || "",
       category: item.category || (deptType === "1" ? "OPD" : "IPD"),
       testList,
@@ -809,7 +968,7 @@ console.log("item",item)
         patientID: String(item.patientID || item.pID || ""),
         pName: item.pName || "Unknown Patient",
         dept: getDepartmentLabelTax(String(deptNum)),
-        addedOn: item.addedOn || item.datetime || "",
+        addedOn: item.addedOn || item.datetime || item.patientAddedOn || "",
         firstName: item.firstName || "",
         lastName: item.lastName || "",
         category: "",
@@ -826,11 +985,11 @@ console.log("item",item)
           gst: Number(m.gst) || 0,
           amount: (Number(m.sellingPrice) || 0) * (Number(m.updatedQuantity) || 1) * (1 + (Number(m.gst) || 0) / 100),
           nurseID: m.nurseID,
+          completedOn:m.completedOn || ""
         })) : [],
         testList: [],
         procedures: [],
       }));
-      console.log("000",processed)
 
       setData(processed);
     }
@@ -854,7 +1013,6 @@ console.log("item",item)
         if (departmentType === "2") return item.departmemtType === 2; // IPD
         return true;
       });
-      console.log("filter",filteredData)
 
       const processed: PatientData[] = filteredData.map((item: any, index: number) => ({
         id: index + 1,

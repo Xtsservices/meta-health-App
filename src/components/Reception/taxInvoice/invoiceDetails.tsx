@@ -1,6 +1,6 @@
 // src/screens/billing/InvoiceDetailsMobile.tsx
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useRoute, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelector } from "react-redux";
 import { RootState } from "../../../store/store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { FONT_SIZE, FOOTER_HEIGHT, SPACING } from "../../../utils/responsive";
 import { COLORS } from "../../../utils/colour";
@@ -21,6 +22,7 @@ import { PatientData } from "./taxInvoiceTabs";
 import { Download } from "lucide-react-native";
 import InvoiceDownloadModal from "./invoiceDownload";
 import { UserIcon } from "../../../utils/SvgIcons";
+import { AuthFetch } from "../../../auth/auth";
 
 const FOOTER_H = FOOTER_HEIGHT || 70;
 
@@ -36,9 +38,33 @@ const InvoiceDetailsMobile: React.FC = () => {
   const insets = useSafeAreaInsets();
   const user = useSelector((s: RootState) => s.currentUser);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
-
+  const [timelineId, setTimelineId] = useState<number | null>(null);
   const { invoice, source, nurses }: RouteParams = route.params;
-  console.log("invoicee",invoice)
+
+useEffect(() => {
+  const fetchPatientData = async () => {
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      
+      const response = await AuthFetch(
+        `patient/${user?.hospitalID}/patients/single/${invoice.patientID}`,
+        token
+      );      
+      // Store the timeline ID if available
+      if (response?.status === "success" && response?.data?.patient?.patientTimeLineID) {
+        setTimelineId(response.data.patient.patientTimeLineID);
+      }
+      
+    } catch (error) {
+      console.error("Error fetching patient data:", error);
+    }
+  };
+
+  if (invoice?.patientID && user?.hospitalID) {
+    fetchPatientData();
+  } else {}
+}, [invoice?.patientID, user?.hospitalID, user?.token]);
+
   const getNurseName = (nurseId: number) => {
     const nurse = nurses?.find(n => n.id === nurseId);
     return nurse ? `${nurse.firstName} ${nurse.lastName}` : `Nurse #${nurseId}`;
@@ -52,16 +78,27 @@ const isBillingSource = source === "billing";
 const isReceptionUser = user?.roleName?.toLowerCase() === 'reception';
 const isPharmacyUser = user?.roleName?.toLowerCase() === 'pharmacy';
 let displayTotal = 0;
-let payableAmount = 0;
 let numericPaid = 0;
 let numericDue = 0;
 let useApiDueAmount = false;
-const medsTotal = useMemo(() => {
+  const medsBaseTotal = useMemo(() => {
+    return (invoice.medicinesList || []).reduce(
+      (sum, m: any) => sum + Number(m.totalPrice || m.amount || 0),
+      0
+    );
+  }, [invoice.medicinesList]);
+
+const medsGstTotal = useMemo(() => {
   return (invoice.medicinesList || []).reduce(
-    (sum, m) => sum + (m.amount  || 0), // Remove the multiplication by quantity since amount should already be total
+      (sum, m: any) => {
+        const price = Number(m.totalPrice || 0);
+        const gst = Number(m.gst || 0);
+        return sum + (price * gst) / 100;
+      },
     0
   );
 }, [invoice.medicinesList]);
+  const medsGrandTotal = medsBaseTotal + medsGstTotal;
 
 const testsTotal = useMemo(() => {
   return (invoice.testList || []).reduce(
@@ -70,32 +107,50 @@ const testsTotal = useMemo(() => {
   );
 }, [invoice.testList]);
 
-const grandTotal = medsTotal + testsTotal;
-// Get payment amounts from API
-const rawPaid = (invoice as any)?.paidAmount || 
-                (invoice as any)?.paymentDetails?.[0]?.paidAmount || 
-                0;
-const rawDue = (invoice as any)?.dueAmount || 0;
-const rawTotal = (invoice as any)?.totalAmount || grandTotal;
+const grandTotal = medsGrandTotal + testsTotal;
+const getCompletedDate = () => {
+  if (!isPharmacyUser) {
+    return null;
+  }
+  
+  const completedDates = invoice.medicinesList
+    ?.map(med => med?.completedOn)
+    .filter(date => date) || [];
+  
+  if (completedDates.length === 0) {
+    return null;
+  }
+  
+  // Find the most recent completed date
+  const sortedDates = completedDates.sort((a, b) => 
+    Date.parse(b || "") - Date.parse(a || "")
+  );
+  
+  return sortedDates[0];
+};
 
+  const completedDate = getCompletedDate();
+  const paidAmount = Number(
+    (invoice as any)?.paidAmount ||
+    (invoice as any)?.paymentDetails?.reduce(
+      (sum: number, p: any) => sum + Number(p.cash || 0),
+      0
+    ) ||
+    0
+  );
+const payableAmount = Math.max(0, medsGrandTotal - paidAmount);
 // For pharmacy users in billing mode, always show total amount only
 if (isBillingSource && isPharmacyUser) {
-  payableAmount = rawDue;
-  displayTotal = grandTotal;
-  numericPaid = rawPaid;
-  numericDue = rawDue;
+    displayTotal = medsGrandTotal;
+  numericPaid = paidAmount;
+  numericDue = payableAmount;
   useApiDueAmount = false;
 } else {
-  // Original logic for other users
-  let useApiDueAmount = isBillingSource  && 
-                       rawDue !== undefined && rawDue !== null && !isNaN(Number(rawDue));
-                       
+    numericPaid = paidAmount;
+    numericDue = Math.max(0, grandTotal - numericPaid);
+    displayTotal = grandTotal;
+  }
 
-   numericPaid = useApiDueAmount ? Number(rawPaid) : (Number(rawPaid) || 0);
-   numericDue = useApiDueAmount ? Number(rawDue) : Math.max(0, grandTotal - numericPaid);
-   payableAmount = useApiDueAmount ? numericDue : (numericPaid > 0 ? numericDue : grandTotal);
-   displayTotal = useApiDueAmount ? (numericPaid + numericDue) : grandTotal;
-}
   const handlePayPress = () => {
   const payload: any = {
     amount: numericDue,
@@ -103,6 +158,7 @@ if (isBillingSource && isPharmacyUser) {
     orderData: {
       patientID: invoice.patientID,
       ptype: invoice.pType,
+      patientTimeLineID: timelineId,
     },
     user,
   };
@@ -171,7 +227,7 @@ if (isBillingSource && isPharmacyUser) {
 
           <View style={styles.row}>
             <Text style={styles.label}>Patient ID</Text>
-            <Text style={styles.value}>{invoice.patientID}</Text>
+            <Text style={styles.value}>{invoice.patientID || invoice.pIdNew}</Text>
           </View>
 
           {/* <View style={styles.row}>
@@ -179,10 +235,10 @@ if (isBillingSource && isPharmacyUser) {
             <Text style={styles.value}>{invoice.dept}</Text>
           </View> */}
 
-          <View style={styles.row}>
+          {/* <View style={styles.row}>
             <Text style={styles.label}>Type</Text>
             <Text style={styles.value}>{invoice.pType || "-"}</Text>
-          </View>
+          </View> */}
 
             <View style={styles.row}>
               <Text style={styles.label}>Doctor</Text>
@@ -191,12 +247,12 @@ if (isBillingSource && isPharmacyUser) {
               </Text>
             </View>
 
-          {invoice.category && (
+          {/* {invoice.category && (
             <View style={styles.row}>
               <Text style={styles.label}>Category</Text>
               <Text style={styles.value}>{invoice.category}</Text>
             </View>
-          )}
+          )} */}
 
           <View style={styles.row}>
             <Text style={styles.label}>Added On</Text>
@@ -219,14 +275,16 @@ if (isBillingSource && isPharmacyUser) {
           </View>
         )}
 
-          {invoice?.admissionDate ? (
+          {isPharmacyUser && completedDate && (
             <View style={styles.row}>
-              <Text style={styles.label}>Admission Date</Text>
-              <Text style={styles.value}>
-                {formatDateTime(invoice.admissionDate)}
+              <Text style={[styles.label, { color: COLORS.success, fontWeight: '600' }]}>
+                Completed On
+              </Text>
+              <Text style={[styles.value, { color: COLORS.success, fontWeight: '600' }]}>
+                {formatDateTime(completedDate)}
               </Text>
             </View>
-          ) : null}
+          )}
         </View>
 
         {/* Medicines section */}
@@ -270,7 +328,7 @@ if (isBillingSource && isPharmacyUser) {
 
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Medicines Total</Text>
-              <Text style={styles.totalValue}>₹{medsTotal.toFixed(2)}</Text>
+              <Text style={styles.totalValue}>₹{medsBaseTotal.toFixed(2)}</Text>
             </View>
           </View>
         )}
@@ -338,7 +396,7 @@ if (isBillingSource && isPharmacyUser) {
 
       {/* Due Amount (outstanding) */}
       <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Due Amount:</Text>
+        <Text style={styles.totalLabel}>Total Due Amount:</Text>
         <Text
           style={[
             styles.totalValue,
@@ -358,13 +416,12 @@ if (isBillingSource && isPharmacyUser) {
   )}
 </View>
 
-
+2
 
         {/* Pay button for Billing source */}
        {isBillingSource &&
   numericDue > 0 &&
-  !hasPrescription &&
-  !(isPharmacyUser ) && (
+  !hasPrescription && (
   <View style={styles.payButtonContainer}>
     <TouchableOpacity
       style={[styles.payButton, { backgroundColor: COLORS.brand }]}

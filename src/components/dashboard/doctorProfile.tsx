@@ -781,7 +781,8 @@ if (!passwordForm.oldPassword.value.trim()) {
   const formatRole = (role: number | null) => {
     try {
       if (role !== null && Role_list[role as keyof typeof Role_list]) {
-        return Role_list[role as keyof typeof Role_list];
+        const r = Role_list[role as keyof typeof Role_list];
+        return r.charAt(0).toUpperCase() + r.slice(1).toLowerCase();
       }
       return "User";
     } catch {

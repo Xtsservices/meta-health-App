@@ -40,20 +40,32 @@ import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
 import Footer from "../dashboard/footer";
 import { useFocusEffect } from "@react-navigation/native";
 import { COLORS } from "../../utils/colour";
-
-
+import {
+  // Import all utilities from dateTime.ts
+  SLOT_START,
+  SLOT_END,
+  type Interval,
+  buildMonthGrid,
+  asLocalWallClock,
+  sameDay,
+  toMinutes,
+  toHHMM,
+  clampToDay,
+  overlaps,
+  isPastDate,
+  isPastTime,
+  getMinFromTime,
+  generateHours,
+  generateMinutes,
+  formatDate,
+  formatTime,
+} from "../../utils/dateTime";
 
 dayjs.extend(utc);
 
-
-
 const FOOTER_H = 64;
-const SLOT_START = 6 * 60; // 06:00
-const SLOT_END = 22 * 60; // 22:00;
 
-type Interval = [number, number];
-
-interface Errors {
+type Errors = {
   roomNumber?: string;
   attendees?: string;
   fromTime?: string;
@@ -98,66 +110,6 @@ const initialFormData: FormData = {
   toTime: "",
 };
 
-const buildMonthGrid = (anchor: dayjs.Dayjs) => {
-  const startOfMonth = anchor.startOf("month");
-  const gridStart = startOfMonth.startOf("week"); // Sunday
-  return Array.from({ length: 42 }, (_, i) => gridStart.add(i, "day"));
-};
-
-const asLocalWallClock = (iso: string | Date) => {
-  if (iso instanceof Date) return iso;
-  if (/Z$/i.test(iso)) {
-    const u = dayjs.utc(iso);
-    return new Date(
-      u.year(),
-      u.month(),
-      u.date(),
-      u.hour(),
-      u.minute(),
-      u.second(),
-      u.millisecond()
-    );
-  }
-  return new Date(iso);
-};
-
-const sameDay = (a: Date | string, d: dayjs.Dayjs) => dayjs(a).isSame(d, "day");
-
-const toMinutes = (hhmm: string) => {
-  if (!hhmm) return 0;
-  const [hStr, mStr] = hhmm.split(":");
-  const h = Number(hStr) || 0;
-  const m = Number(mStr) || 0;
-  return h * 60 + m;
-};
-
-const toHHMM = (mins: number) => {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
-  return `${pad(h)}:${pad(m)}`;
-};
-
-const clampToDay = (
-  start: Date | string,
-  end: Date | string,
-  d: dayjs.Dayjs
-): Interval | null => {
-  const s = dayjs(start);
-  const e = dayjs(end);
-  if (!s.isSame(d, "day") && !e.isSame(d, "day")) {
-    if (d.isAfter(s, "day") && d.isBefore(e, "day")) return [0, 24 * 60];
-    return null;
-  }
-  const dayStart = d.startOf("day");
-  const from = Math.max(0, s.diff(dayStart, "minute"));
-  const to = Math.min(24 * 60, e.diff(dayStart, "minute"));
-  if (to <= 0 || from >= 24 * 60) return null;
-  return [Math.max(from, 0), Math.max(to, 0)];
-};
-
-const overlaps = (a: Interval, b: Interval) => a[0] < b[1] && b[0] < a[1];
-
 const getRoomFromEvent = (ev: EventItem): string | undefined => {
   if (ev.extendedProps?.roomNumber) return ev.extendedProps.roomNumber;
   const m = /Room Number:\s*([A-Za-z0-9-_]+)/i.exec(ev.title);
@@ -169,40 +121,44 @@ const formatTitleMain = (title: string) => {
   return lines[0] || title;
 };
 
-const isPastDate = (d: dayjs.Dayjs) =>
-  d.isBefore(dayjs().startOf("day"), "day");
-
 /* ---------- Time Picker Field (HH:MM wheel style) ---------- */
 function TimePickerField({
   label,
   value,
   onChange,
+  minTime,
+  maxTime = "22:00",
+  disabled = false,
 }: {
   label: string;
   value?: string;
   onChange: (hhmm: string) => void;
+  minTime?: string;
+  maxTime?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [h, setH] = useState<number>(() => {
-    const hh = Number((value || "00:00").split(":")[0] || 0);
-    return Math.min(23, Math.max(0, isNaN(hh) ? 0 : hh));
+    const hh = Number((value || "06:00").split(":")[0] || 6);
+    return Math.min(23, Math.max(0, isNaN(hh) ? 6 : hh));
   });
   const [m, setM] = useState<number>(() => {
-    const mm = Number((value || "00:00").split(":")[1] || 0);
+    const mm = Number((value || "06:00").split(":")[1] || 0);
     return Math.min(59, Math.max(0, isNaN(mm) ? 0 : mm));
   });
 
   useEffect(() => {
     if (!value) return;
     const [hhS, mmS] = value.split(":");
-    const nh = Math.min(23, Math.max(0, Number(hhS) || 0));
+    const nh = Math.min(23, Math.max(0, Number(hhS) || 6));
     const nm = Math.min(59, Math.max(0, Number(mmS) || 0));
     setH(nh);
     setM(nm);
   }, [value]);
 
-  const hours = Array.from({ length: 24 }, (_, i) => i);
-  const minutes = Array.from({ length: 60 }, (_, i) => i);
+  // Use imported utility functions
+  const hours = generateHours(minTime, maxTime);
+  const minutes = generateMinutes(h, minTime, maxTime);
 
   const format = (n: number) => (n < 10 ? `0${n}` : String(n));
 
@@ -210,11 +166,16 @@ function TimePickerField({
     <View style={styles.block}>
       <Text style={[styles.label, { marginBottom: 6 }]}>{label}</Text>
       <Pressable
-        onPress={() => setOpen(true)}
+        onPress={() => !disabled && setOpen(true)}
         style={[
           styles.input,
-          { borderColor: COLORS.border, backgroundColor: COLORS.field },
+          { 
+            borderColor: disabled ? COLORS.borderLight : COLORS.border,
+            backgroundColor: disabled ? COLORS.disabled : COLORS.field,
+            opacity: disabled ? 0.6 : 1,
+          },
         ]}
+        disabled={disabled}
       >
         <Text
           style={{
@@ -242,7 +203,7 @@ function TimePickerField({
                 marginBottom: 8,
               }}
             >
-              Select time
+              Select time {minTime && `(min: ${minTime})`}
             </Text>
 
             <View
@@ -267,7 +228,7 @@ function TimePickerField({
                   data={hours}
                   keyExtractor={(i) => `h-${i}`}
                   style={styles.wheel}
-                  initialScrollIndex={h}
+                  initialScrollIndex={h >= hours[0] ? h - hours[0] : 0}
                   getItemLayout={(_, idx) => ({
                     length: 36,
                     offset: 36 * idx,
@@ -278,7 +239,14 @@ function TimePickerField({
                     const selected = item === h;
                     return (
                       <TouchableOpacity
-                        onPress={() => setH(item)}
+                        onPress={() => {
+                          setH(item);
+                          // Reset minutes to first available when hour changes
+                          const newMinutes = generateMinutes(item, minTime, maxTime);
+                          if (!newMinutes.includes(m)) {
+                            setM(newMinutes[0] || 0);
+                          }
+                        }}
                         style={[
                           styles.wheelItem,
                           selected && {
@@ -316,7 +284,7 @@ function TimePickerField({
                   data={minutes}
                   keyExtractor={(i) => `m-${i}`}
                   style={styles.wheel}
-                  initialScrollIndex={m}
+                  initialScrollIndex={minutes.indexOf(m) >= 0 ? minutes.indexOf(m) : 0}
                   getItemLayout={(_, idx) => ({
                     length: 36,
                     offset: 36 * idx,
@@ -387,7 +355,7 @@ function TimePickerField({
 /* =========================================================
    Main Screen
    ========================================================= */
-const OTScheduleScreen: React.FC = () => {
+const OTScheduleScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
 
@@ -406,6 +374,7 @@ const OTScheduleScreen: React.FC = () => {
   const [formErrors, setFormErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [showAddButton, setShowAddButton] = useState(true);
 
   const fetchGuard = useRef(false);
 
@@ -416,7 +385,7 @@ const OTScheduleScreen: React.FC = () => {
   const patientID =  cp?.id;
   const disabledSchedule = !timeLineID || !patientID;
 
-  // ---------- Fetch attendees ----------
+  // Fetch attendees
   const fetchAttendees = useCallback(async () => {
     try {
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
@@ -433,21 +402,64 @@ const OTScheduleScreen: React.FC = () => {
     }
   }, [user?.hospitalID, dispatch]);
 
-  // ---------- Fetch events ----------
-  
+  // Fetch events
+  const fetchEvents = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      if (!user?.hospitalID || !user?.id || !token) {
+        setEvents([]);
+        return;
+      }
 
-  // ---------- Initial hydrate ----------
+      const res = await AuthFetch(
+        `schedule/${user.hospitalID}/${user.id}/viewSchedule`,
+        token
+      );
+
+      if (res?.status === 'success' && "data" in res) {
+        const arr: EventItem[] = (res?.data?.data || []).map((eventData: any) => ({
+          id: String(eventData.pID),
+          title:
+            `PatientName: ${eventData.pName}\n` +
+            `PatientId: ${eventData.pID}\n` +
+            `Attendees: ${eventData.attendees}\n` +
+            `Room Number: ${eventData.roomID}\n` +
+            `Surgery Type: ${eventData.surgeryType}`,
+          start: asLocalWallClock(eventData.startTime),
+          end: asLocalWallClock(eventData.endTime),
+          extendedProps: {
+            patientId: String(eventData.pID),
+            patientName: eventData.pName,
+            attendees: eventData.attendees,
+            surgeryType: eventData.surgeryType,
+            roomNumber: eventData.roomID,
+          },
+        }));
+        setEvents(arr);
+      } else {
+        setEvents([]);
+      }
+    } catch {
+      dispatch(showError("Failed to load schedule"));
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.hospitalID, user?.id, dispatch]);
+
+  // Initial hydrate
   useFocusEffect(
-   useCallback(() => {
-    let mounted = true;
-    (async () => {
-      await Promise.all([fetchAttendees()]);
-      if (mounted) setIsHydrating(false);
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [fetchAttendees]))
+    useCallback(() => {
+      let mounted = true;
+      (async () => {
+        await Promise.all([fetchAttendees(), fetchEvents()]);
+        if (mounted) setIsHydrating(false);
+      })();
+      return () => {
+        mounted = false;
+      };
+    }, [fetchAttendees, fetchEvents])
+  );
 
   /* ---------- Calendar derived ---------- */
   const monthCells = useMemo(() => buildMonthGrid(anchorMonth), [anchorMonth]);
@@ -527,6 +539,13 @@ const OTScheduleScreen: React.FC = () => {
     if (selectedDate && formData.fromTime && formData.toTime) {
       const s = toMinutes(formData.fromTime);
       const e = toMinutes(formData.toTime);
+      
+      // Check if time is in the past
+      if (isPastTime(selectedDate, formData.fromTime)) {
+        errors.fromTime = "Cannot select a time in the past";
+        valid = false;
+      }
+      
       if (e <= s) {
         errors.toTime = "End time must be after start time";
         valid = false;
@@ -576,34 +595,23 @@ const OTScheduleScreen: React.FC = () => {
       );
       if ( res?.status === "success" && "data" in res) {
         dispatch(showSuccess("Scheduled successfully"));
-        // push newly added event for current view without refetch
-        const newEvent: EventItem = {
-          id: String(Date.now()),
-          title:
-            `PatientName: ${res?.data?.[0]?.pName ?? ""}\n` +
-            `PatientId: ${res.data?.[0]?.pID ?? ""}\n` +
-            `Attendees: ${attendeesString}\n` +
-            `Room Number: ${formData.roomNumber}\n` +
-            `Surgery Type: ${res.data?.[0]?.surgeryType ?? ""}`,
-          start: asLocalWallClock(startTime),
-          end: asLocalWallClock(endTime),
-          extendedProps: {
-            patientId: String(res.data?.[0]?.pID ?? ""),
-            patientName: res.data?.[0]?.pName ?? "",
-            attendees: formData.attendees,
-            surgeryType: res.data?.[0]?.surgeryType ?? "",
-            roomNumber: formData.roomNumber,
-          },
-        };
-        setEvents((prev) => [...prev, newEvent]);
+        
+        // Hide the add button after successful schedule
+        setShowAddButton(false);
+        
+        // Navigate to the list screen after successful schedule
+        if (navigation) {
+          navigation.navigate('SurgerySchedule');
+        }
+        
+        // Close modal and reset form
         setScheduleModalOpen(false);
         setFormData(initialFormData);
         setFormErrors({});
-      } 
-    // else if (res?.status === 403) {
-    //     dispatch(showError("Already scheduled"));
-    //   }
-     else {
+        
+        // Refresh events to show the newly added event
+        fetchEvents();
+      } else {
         dispatch(showError("message" in res && res?.message || "Scheduling failed"));
       }
     } catch {
@@ -635,6 +643,8 @@ const OTScheduleScreen: React.FC = () => {
     }));
     setFormErrors({});
     setScheduleModalOpen(true);
+    // Show add button when opening modal
+    setShowAddButton(true);
   };
 
   /* ---------- Upcoming list (from today onward) ---------- */
@@ -856,8 +866,62 @@ const OTScheduleScreen: React.FC = () => {
           )}
         </View>
 
-       
-       
+        {/* Upcoming Surgeries Section */}
+        {futureEvents.length > 0 && (
+          <View style={{ marginTop: 16 }}>
+            <Text style={styles.sectionTitle}>Upcoming Surgeries</Text>
+            <View style={styles.upcomingCard}>
+              {futureEvents.slice(0, 3).map((ev) => {
+                const start = dayjs(ev.start);
+                const end = dayjs(ev.end);
+                const main = formatTitleMain(ev.title);
+                const patient = main.replace("PatientName: ", "");
+                const room = getRoomFromEvent(ev) || "—";
+                const attendees =
+                  typeof ev.extendedProps.attendees === "string"
+                    ? ev.extendedProps.attendees
+                    : Array.isArray(ev.extendedProps.attendees)
+                    ? ev.extendedProps.attendees
+                        .map((a: any) => `${a.firstName} ${a.lastName}`)
+                        .join(", ")
+                    : "—";
+
+                return (
+                  <View
+                    key={ev.id}
+                    style={{
+                      paddingVertical: 8,
+                      borderBottomWidth: 1,
+                      borderBottomColor: COLORS.borderLight,
+                    }}
+                  >
+                    <View style={styles.rowBetween}>
+                      <Text style={styles.upcomingDate}>
+                        {formatDate(start)} {/* Using imported formatDate */}
+                      </Text>
+                      <Text style={styles.upcomingTime}>
+                        {formatTime(start)} – {formatTime(end)} {/* Using imported formatTime */}
+                      </Text>
+                    </View>
+                    <Text style={styles.upcomingPatient}>{patient}</Text>
+                    <Text style={styles.upcomingSurgery}>
+                      {ev.extendedProps.surgeryType}
+                    </Text>
+                    <Text style={styles.upcomingAttendees} numberOfLines={1}>
+                      {attendees}
+                    </Text>
+                    <View style={{ marginTop: 4 }}>
+                      <View style={styles.roomPill}>
+                        <MapPin size={14} color="#0369a1" />
+                        <Text style={styles.roomText}>Room {room}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Footer pinned above navigation */}
@@ -895,7 +959,7 @@ const OTScheduleScreen: React.FC = () => {
                 <Text style={styles.sheetTitle}>Add Surgery</Text>
                 {selectedDate && (
                   <Text style={styles.sheetSub}>
-                    {selectedDate.format("ddd, DD MMM YYYY")}
+                    {formatDate(selectedDate.toDate())} {/* Using imported formatDate */}
                   </Text>
                 )}
               </View>
@@ -911,12 +975,12 @@ const OTScheduleScreen: React.FC = () => {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 12 }}
             >
-              {/* Room selection */}
+              {/* Room selection with radio buttons */}
               <View style={styles.block}>
                 <Text style={[styles.label, { marginBottom: 6 }]}>
                   Room Number *
                 </Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                   {["101", "102", "103"].map((room) => {
                     const active = formData.roomNumber === room;
                     return (
@@ -927,18 +991,23 @@ const OTScheduleScreen: React.FC = () => {
                             ...p,
                             roomNumber: room,
                           }));
+                          setFormErrors((e) => ({ ...e, roomNumber: undefined }));
                         }}
                         style={[
-                          styles.chip,
+                          styles.radioContainer,
                           active && {
-                            backgroundColor: COLORS.brand,
+                            borderColor: COLORS.brand,
+                            backgroundColor: "rgba(45,212,191,0.08)",
                           },
                         ]}
                       >
+                        <View style={styles.radioCircle}>
+                          {active && <View style={styles.radioInner} />}
+                        </View>
                         <Text
                           style={[
-                            styles.chipText,
-                            active && { color: "#fff" },
+                            styles.radioText,
+                            active && { color: COLORS.brandDark, fontWeight: "800" },
                           ]}
                         >
                           Room {room}
@@ -954,7 +1023,7 @@ const OTScheduleScreen: React.FC = () => {
                 )}
               </View>
 
-              {/* Attendees */}
+              {/* Attendees with radio buttons */}
               <View style={styles.block}>
                 <View
                   style={{ flexDirection: "row", alignItems: "center" }}
@@ -1006,14 +1075,21 @@ const OTScheduleScreen: React.FC = () => {
                               const exists = p.attendees.some(
                                 (s) => s.id === a.id
                               );
-                              return {
-                                ...p,
-                                attendees: exists
-                                  ? p.attendees.filter(
-                                      (s) => s.id !== a.id
-                                    )
-                                  : [...p.attendees, a],
-                              };
+                              if (exists) {
+                                // Unselect if already selected
+                                return {
+                                  ...p,
+                                  attendees: p.attendees.filter(
+                                    (s) => s.id !== a.id
+                                  ),
+                                };
+                              } else {
+                                // Select if not selected
+                                return {
+                                  ...p,
+                                  attendees: [...p.attendees, a],
+                                };
+                              }
                             });
                           }}
                           style={[
@@ -1023,7 +1099,10 @@ const OTScheduleScreen: React.FC = () => {
                             },
                           ]}
                         >
-                          <View style={{ flex: 1 }}>
+                          <View style={styles.radioCircle}>
+                            {selected && <View style={styles.radioInner} />}
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 10 }}>
                             <Text style={styles.attendeeName}>
                               {a.firstName} {a.lastName}
                             </Text>
@@ -1077,8 +1156,13 @@ const OTScheduleScreen: React.FC = () => {
                       setFormData((p) => ({
                         ...p,
                         fromTime: v,
+                        // Reset toTime when fromTime changes
+                        toTime: "",
                       }));
                     }}
+                    minTime={selectedDate ? getMinFromTime(selectedDate) : "06:00"}
+                    maxTime="22:00"
+                    disabled={!selectedDate}
                   />
                   {formErrors.fromTime && (
                     <Text style={styles.errorText}>
@@ -1100,6 +1184,9 @@ const OTScheduleScreen: React.FC = () => {
                         toTime: v,
                       }));
                     }}
+                    minTime={formData.fromTime || "06:00"}
+                    maxTime="22:00"
+                    disabled={!formData.fromTime}
                   />
                   {formErrors.toTime && (
                     <Text style={styles.errorText}>
@@ -1159,7 +1246,7 @@ const OTScheduleScreen: React.FC = () => {
               )}
             </ScrollView>
 
-            {/* Modal actions */}
+            {/* Modal actions - Only show Add Surgery button if showAddButton is true */}
             <View
               style={{
                 flexDirection: "row",
@@ -1168,7 +1255,12 @@ const OTScheduleScreen: React.FC = () => {
               }}
             >
               <Pressable
-                onPress={() => setScheduleModalOpen(false)}
+                onPress={() => {
+                  setScheduleModalOpen(false);
+                  setFormData(initialFormData);
+                  setFormErrors({});
+                  setShowAddButton(true); // Reset for next time
+                }}
                 style={[
                   styles.sheetBtn,
                   { backgroundColor: COLORS.chip },
@@ -1180,30 +1272,52 @@ const OTScheduleScreen: React.FC = () => {
                   Cancel
                 </Text>
               </Pressable>
-              <Pressable
-                onPress={() => debouncedSubmit()}
-                disabled={saving}
-                style={[
-                  styles.sheetBtn,
-                  {
-                    backgroundColor: COLORS.brand,
-                    opacity: saving ? 0.6 : 1,
-                  },
-                ]}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
+              {showAddButton ? (
+                <Pressable
+                  onPress={() => debouncedSubmit()}
+                  disabled={saving}
+                  style={[
+                    styles.sheetBtn,
+                    {
+                      backgroundColor: COLORS.brand,
+                      opacity: saving ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  {saving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontWeight: "800",
+                      }}
+                    >
+                      Add Surgery
+                    </Text>
+                  )}
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={[
+                    styles.sheetBtn,
+                    {
+                      backgroundColor: COLORS.success,
+                      opacity: 0.8,
+                    },
+                  ]}
+                  disabled
+                >
                   <Text
                     style={{
                       color: "#fff",
                       fontWeight: "800",
                     }}
                   >
-                    Add Surgery
+                    Scheduled ✓
                   </Text>
-                )}
-              </Pressable>
+                </Pressable>
+              )}
             </View>
           </View>
         </View>
@@ -1319,6 +1433,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: COLORS.text,
+    marginBottom: 6,
   },
 
   upcomingCard: {
@@ -1354,11 +1469,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: COLORS.text,
+    marginTop: 2,
   },
   upcomingSurgery: {
     fontSize: 13,
     fontWeight: "600",
     color: COLORS.text,
+    marginTop: 1,
   },
   upcomingAttendees: {
     fontSize: 12,
@@ -1372,6 +1489,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 3,
+    alignSelf: "flex-start",
+    marginTop: 4,
   },
   roomText: {
     marginLeft: 4,
@@ -1380,7 +1499,7 @@ const styles = StyleSheet.create({
     color: "#0369a1",
   },
 
-  // Generic form styles (used by TimePicker + modal)
+  // Generic form styles
   block: {
     borderRadius: 12,
     padding: 10,
@@ -1405,6 +1524,41 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 12,
     paddingVertical: 12,
+  },
+
+  // Radio button styles
+  radioContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: "#fff",
+    marginBottom: 4,
+    minWidth: 100,
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.brand,
+  },
+  radioText: {
+    fontSize: 12,
+    color: COLORS.text,
+    fontWeight: "600",
   },
 
   // Time modal (shared)

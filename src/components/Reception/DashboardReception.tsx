@@ -61,8 +61,8 @@ import {
   SCREEN_HEIGHT
 } from "../../utils/responsive";
 import { COLORS } from "../../utils/colour";
-import MyTasks from '../../pages/nurseDashboard/MyTasks';
 import { MONTH_OPTIONS } from '../../utils/yearMonth';
+import Svg, { Circle, Line, Polygon, Text as SvgText, TSpan } from "react-native-svg";
 
 interface DeptCount {
   department: string;
@@ -459,15 +459,22 @@ const BarChartComponent: React.FC<{
 
           <View style={styles.xAxisLabels}>
             {data.slice(0, 6).map((d, i) => (
-              <Text key={i} numberOfLines={1} style={[
-                styles.xAxisLabel,
+    <View
+      key={i}  style={[
+                styles.xAxisLabelWrap,
                 { width: barWidth }
-              ]}>
-                {d.department.length > (isSmallDevice ? 4 : 6) ? 
-                  d.department.substring(0, isSmallDevice ? 4 : 6) + '...' : d.department}
+      ]}
+    >
+      <Text
+        style={styles.xAxisLabelRotated}
+        numberOfLines={2}
+      >
+        {d.department}
               </Text>
+              </View>
             ))}
           </View>
+
         </View>
       </View>
     </View>
@@ -642,100 +649,144 @@ const SpiderChartComponent: React.FC<{
   data: Array<{ department: string; wardPatients: number }>;
   loading: boolean;
 }> = ({ data, loading }) => {
-  const maxValue = useMemo(() => 
-    Math.max(...data?.map(item => item.wardPatients) ?? [1]),
-    [data]
-  );
 
   if (loading) {
-    return (
-      <View style={styles.chartContainer}>
-        <ActivityIndicator size="small" color={COLORS.success} />
-      </View>
-    );
+    return <ActivityIndicator color={COLORS.success} />;
   }
 
   if (!data?.length) {
-    return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.noDataText}>No data available</Text>
-      </View>
-    );
+    return <Text style={styles.noDataText}>No data available</Text>;
   }
 
-  const containerSize = isSmallDevice ? 160 : 200;
-  const baseRadius = isSmallDevice ? 50 : 60;
+const size = isSmallDevice ? 260 : 300;
+const viewBoxSize = size + 120; // 👈 extra padding
+const center = viewBoxSize / 2;
+  const maxValue = Math.max(...data.map(d => d.wardPatients), 1);
+  const radius = center - 100;
+  const levels = 5;
+  const angleStep = (2 * Math.PI) / data.length;
+
+  const getPoint = (value: number, index: number) => {
+    const r = (value / maxValue) * radius;
+    const angle = index * angleStep - Math.PI / 2;
+    return {
+      x: center + r * Math.cos(angle),
+      y: center + r * Math.sin(angle),
+    };
+  };
+
+  const polygonPoints = data
+    .map((d, i) => {
+      const p = getPoint(d.wardPatients, i);
+      return `${p.x},${p.y}`;
+    })
+    .join(" ");
 
   return (
-    <View style={styles.spiderContainer}>
-      <View style={styles.spiderContent}>
-        <View style={[styles.spiderGrid, { width: containerSize, height: containerSize }]}>
-          {data.slice(0, 8).map((item, index) => {
-            const angle = (index * 2 * Math.PI) / Math.max(data.length, 1);
-            const valueRadius = (item.wardPatients / maxValue) * baseRadius;
-            const center = containerSize / 2;
-            const x = center + Math.cos(angle) * valueRadius;
-            const y = center + Math.sin(angle) * valueRadius;
-            
-            return (
-              <View key={index}>
-                <View 
-                  style={[
-                    styles.spiderLine,
-                    {
-                      transform: [
-                        { rotate: `${angle}rad` },
-                        { scaleX: valueRadius / baseRadius }
-                      ],
-                      left: center,
-                      top: center,
-                    }
-                  ]} 
-                />
-                <View 
-                  style={[
-                    styles.spiderPoint,
-                    { left: x - 4, top: y - 4 }
-                  ]} 
-                />
-                <View 
-                  style={[
-                    styles.spiderLabel,
-                    { 
-                      left: center + Math.cos(angle) * (baseRadius + 20),
-                      top: center + Math.sin(angle) * (baseRadius + 20)
-                    }
-                  ]}
-                >
-                  <Text style={styles.spiderLabelText} numberOfLines={1}>
-                    {item.department.substring(0, isSmallDevice ? 3 : 5)}
-                  </Text>
-                  <Text style={styles.spiderValueText}>{item.wardPatients}</Text>
-                </View>
-              </View>
-            );
-          })}
-          
-          {[20, 40, 60, 80].map((size, index) => (
-            <View 
-              key={index}
-              style={[
-                styles.spiderCircle, 
-                { 
-                  width: (baseRadius * 2 * size) / 100, 
-                  height: (baseRadius * 2 * size) / 100,
-                  top: (containerSize - (baseRadius * 2 * size) / 100) / 2,
-                  left: (containerSize - (baseRadius * 2 * size) / 100) / 2
-                }
-              ]} 
+    <View style={{ alignItems: "center" }}>
+      <Svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
+      >
+
+        {/* Grid circles */}
+        {[...Array(levels)].map((_, i) => (
+          <Circle
+            key={i}
+            cx={center}
+            cy={center}
+            r={(radius / levels) * (i + 1)}
+            stroke={COLORS.border}
+            strokeDasharray="4,4"
+            fill="none"
+          />
+        ))}
+
+        {/* Axis lines */}
+        {data.map((_, i) => {
+          const angle = i * angleStep - Math.PI / 2;
+          return (
+            <Line
+              key={i}
+              x1={center}
+              y1={center}
+              x2={center + radius * Math.cos(angle)}
+              y2={center + radius * Math.sin(angle)}
+              stroke={COLORS.border}
             />
-          ))}
-        </View>
-      </View>
-      
-      {data.length > 8 && (
-        <Text style={styles.moreItemsText}>+{data.length - 8} more departments</Text>
+          );
+        })}
+
+        {/* Radar area */}
+        <Polygon
+          points={polygonPoints}
+          fill="rgba(76, 175, 80, 0.35)"
+          stroke={COLORS.success}
+          strokeWidth={2}
+        />
+
+        {/* Points */}
+        {data.map((d, i) => {
+          const p = getPoint(d.wardPatients, i);
+          return (
+            <Circle
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r={4}
+              fill={COLORS.success}
+            />
+          );
+        })}
+
+{/* Labels */}
+{data.map((d, i) => {
+  const angle = i * angleStep - Math.PI / 2;
+
+  const BASE_OFFSET = 42;
+  const isBottom = angle > Math.PI / 2 - 0.4 && angle < Math.PI / 2 + 0.4;
+
+  const x =
+    center + (radius + BASE_OFFSET) * Math.cos(angle);
+
+  const y =
+    center + (radius + BASE_OFFSET) * Math.sin(angle) +
+    (isBottom ? 10 : 0); // push bottom labels down
+
+  // Alignment by side
+  let anchor: "start" | "middle" | "end" = "middle";
+  if (Math.cos(angle) > 0.35) anchor = "start";
+  if (Math.cos(angle) < -0.35) anchor = "end";
+
+  // 🔥 Split label into lines (max 2 lines)
+  const words = d.department.split(" ");
+  const line1 = words.slice(0, Math.ceil(words.length / 2)).join(" ");
+  const line2 = words.slice(Math.ceil(words.length / 2)).join(" ");
+
+  return (
+    <SvgText
+      key={i}
+      x={x}
+      y={y}
+      fontSize="10"
+      fill={COLORS.text}
+      textAnchor={anchor}
+    >
+      <TSpan x={x} dy="0">{line1}</TSpan>
+      {line2 !== "" && (
+        <TSpan x={x} dy="12">{line2}</TSpan>
       )}
+    </SvgText>
+  );
+})}
+
+
+      </Svg>
+
+      <Text style={{ marginTop: 8, color: COLORS.success, fontWeight: "600" }}>
+        Ward Patients
+      </Text>
     </View>
   );
 };
@@ -993,7 +1044,7 @@ const DashboardReception: React.FC = () => {
           count: Number(item.visit_count ?? 0),
         }))
         ?.filter((item: DeptCount) => item.count > 0)
-        ?.sort((a, b) => b.count - a.count) ?? [];
+        ?.sort((a: DeptCount, b: DeptCount) => b.count - a.count) ?? [];
     }
 
     if (Array.isArray(res.data)) {
@@ -1007,7 +1058,7 @@ const DashboardReception: React.FC = () => {
           count: Number(item.visit_count ?? item.count ?? 0),
         }))
         ?.filter((d: DeptCount) => d.count > 0)
-        ?.sort((a, b) => b.count - a.sort) ?? [];
+        ?.sort((a: DeptCount, b: DeptCount) => b.count - a.count) ?? [];
     }
 
     return [];
@@ -1238,24 +1289,6 @@ const DashboardReception: React.FC = () => {
           </Text>
         </View>
 
-        {/* Stats Container - Two cards side by side */}
-        <View style={styles.statsContainer}>
-          <View style={styles.topRow}>
-            <StatCard
-              title="This Month"
-              value={statsLoading ? '...' : stats.thisMonth}
-              icon={Users}
-              color={COLORS.brand}
-            />
-            <StatCard
-              title="This Year"
-              value={statsLoading ? '...' : stats.thisYear}
-              icon={UserPlus}
-              color={COLORS.success}
-            />
-          </View>
-        </View>
-
         <ChartCard 
           title="Emergency Statistics" 
           icon={Activity} 
@@ -1271,10 +1304,6 @@ const DashboardReception: React.FC = () => {
             color={COLORS.primaryDark}
           />
         </ChartCard>
-
-        <View style={styles.notesSection}>
-          <MyTasks />
-        </View>
 
         <ChartCard 
           title="Out Patient (OPD)" 
@@ -1310,6 +1339,9 @@ const DashboardReception: React.FC = () => {
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"dashboard"} brandColor={COLORS.brand} />
       </View>
+            {insets.bottom > 0 && (
+             <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+           )}
 
       <Sidebar
         open={menuOpen}
@@ -1677,6 +1709,19 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
+  xAxisLabelWrap: {
+  alignItems: "flex-start",
+  justifyContent: "flex-start",
+},
+
+xAxisLabelRotated: {
+  color: COLORS.sub,
+  fontSize: FONT_SIZE.xs - 1,
+  transform: [{ rotate: "-35deg" }], // 👈 slant
+  textAlign: "left",
+  width: 80, // 👈 allows long names
+},
+
   pieChartWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1902,6 +1947,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
   },
   footerWrap: {
+    position:"absolute",
     left: 0,
     right: 0,
     bottom: 0,
@@ -1911,7 +1957,14 @@ const styles = StyleSheet.create({
     zIndex: 10,
     elevation: 6,
   },
-
+    navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    zIndex: 9,
+  },
   // Sidebar Styles
   sidebarContainer: {
     position: "absolute",

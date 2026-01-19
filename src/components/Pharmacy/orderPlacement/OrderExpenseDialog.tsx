@@ -6,16 +6,19 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Modal,
   FlatList,
   Platform,
   ActivityIndicator,
   Pressable,
+  SafeAreaView,
+  StatusBar,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
+import { useNavigation } from "@react-navigation/native";
 import {
   SPACING,
   FONT_SIZE,
+  FOOTER_HEIGHT,
 } from "../../../utils/responsive";
 
 // Icons
@@ -24,6 +27,7 @@ import {
   PlusIcon,
   ShoppingCartIcon,
   DeleteIcon,
+  ArrowLeftIcon,
 } from "../../../utils/SvgIcons";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -31,6 +35,9 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { RootState } from "../../../store/store";
 import { COLORS } from "../../../utils/colour";
 import { showError, showSuccess } from "../../../store/toast.slice";
+import Footer from "../../dashboard/footer";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+const FOOTER_H = FOOTER_HEIGHT;
 
 /* ===================== TYPES ===================== */
 
@@ -70,19 +77,10 @@ interface ManufacturerData {
   manufacturer: string;
 }
 
-interface OrderExpenseDialogProps {
-  open: boolean;
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  onOrderPlaced?: () => void;
-}
-
 /* ===================== COMPONENT ===================== */
 
-const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
-  open,
-  setOpen,
-  onOrderPlaced,
-}) => {
+const AddOrderScreen: React.FC = () => {
+  const navigation = useNavigation();
   const user = useSelector((state: RootState) => state.currentUser);
   const dispatch = useDispatch();
 
@@ -98,6 +96,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
   const medicineInputRef = useRef<TextInput>(null);
   const categoryInputRef = useRef<TextInput>(null);
   const agencyInputRef = useRef<TextInput>(null);
+  const insets = useSafeAreaInsets();
 
   const initialSelectedMedicineData: SelectedMedicineData = {
     id: null,
@@ -133,7 +132,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
   /* ===================== FETCH MANUFACTURERS ===================== */
 
   useEffect(() => {
-    if (!open || !user?.hospitalID) return;
+    if (!user?.hospitalID) return;
 
     const getManufactureData = async () => {
       try {
@@ -155,12 +154,12 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
     };
 
     getManufactureData();
-  }, [open, user, dispatch]);
+  }, [user, dispatch]);
 
   /* ===================== FETCH INVENTORY ===================== */
 
   useEffect(() => {
-    if (!open || !user?.hospitalID) return;
+    if (!user?.hospitalID) return;
 
     const getMedicineInventory = async () => {
       try {
@@ -182,7 +181,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
     };
 
     getMedicineInventory();
-  }, [open, user, dispatch]);
+  }, [user, dispatch]);
 
   /* ===================== AUTO FILL AGENCY ===================== */
 
@@ -299,8 +298,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
         dispatch(showSuccess(response?.data?.message));
         setMedicineList([]);
         setSelectedMedicineData(initialSelectedMedicineData);
-        setOpen(false);
-        onOrderPlaced?.();
+        navigation.goBack();
       } else {
         dispatch(showError(`Failed to place order. Status: ${response?.status}`));
       }
@@ -311,12 +309,12 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
     }
   };
 
-  const handleClose = () => {
-    if (!medicineList.length) {
-      setOpen(false);
-      return;
+  const handleGoBack = () => {
+    if (medicineList.length > 0) {
+      dispatch(showError("You have unsaved changes. Please submit or clear the order before going back."));
+    } else {
+      navigation.goBack();
     }
-    dispatch(showError("You have unsaved changes. Please submit or clear the order before closing."));
   };
 
   // Handle outside clicks for dropdowns
@@ -369,23 +367,8 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
   );
 
   return (
-    <Modal 
-      visible={open} 
-      animationType="slide"
-      presentationStyle={Platform.OS === "ios" ? "pageSheet" : "formSheet"}
-      onRequestClose={handleClose}
-    >
-      <Pressable style={styles.container} onPress={handleOutsideClick}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTitle}>
-            <Text style={styles.title}>Order Medicine</Text>
-            <Text style={styles.subtitle}>Add medicines to create new supplier order</Text>
-          </View>
-          <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-            <XIcon size={22} color={COLORS.text} />
-          </TouchableOpacity>
-        </View>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.card} />
 
         <ScrollView 
           ref={scrollViewRef}
@@ -457,49 +440,56 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
             <View style={styles.row}>
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.label}>Category *</Text>
-                <View style={{ position: "relative" }}>
-                  <TextInput
-                    ref={categoryInputRef}
-                    style={styles.input}
-                    placeholder="Select category"
-                    placeholderTextColor={COLORS.sub}
-                    value={selectedMedicineData.category}
-                    onChangeText={(t) => {
-                      setSelectedMedicineData((p) => ({ ...p, category: t }));
-                      setShowCategorySuggestions(true);
-                    }}
-                    onFocus={() => setShowCategorySuggestions(true)}
-                  />
-                  
-                  {showCategorySuggestions && filteredCategorySuggestions.length > 0 && (
-                    <View style={styles.chipRow}>
-                      {filteredCategorySuggestions.map((c) => (
+  <Pressable
+    style={styles.dropdownSelector}
+    onPress={() => setShowCategorySuggestions(!showCategorySuggestions)}
+  >
+    <Text style={[
+      styles.dropdownText,
+      !selectedMedicineData.category && styles.placeholderText
+    ]}>
+      {selectedMedicineData.category || "Select category"}
+    </Text>
+    <ArrowLeftIcon 
+      size={16} 
+      color={COLORS.sub}
+      style={{
+        transform: [{ rotate: showCategorySuggestions ? '-90deg' : '90deg' }]
+      }}
+    />
+  </Pressable>
+  
+  {showCategorySuggestions && (
+    <View style={styles.dropdownList}>
+      <FlatList
+        data={medicineTypes}
+        keyExtractor={(item) => item}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={medicineTypes.length > 6}
+        style={{ maxHeight: 200 }}
+        renderItem={({ item }) => (
                         <Pressable
-                          key={c}
                           style={[
-                            styles.chip,
-                            {
-                              borderColor: selectedMedicineData.category === c ? COLORS.brand : COLORS.border,
-                              backgroundColor: selectedMedicineData.category === c ? COLORS.brandLight : COLORS.pill,
-                            }
+                            styles.dropdownItem,
+                            selectedMedicineData.category === item && styles.dropdownItemSelected
                           ]}
                           onPress={() => {
-                            setSelectedMedicineData((p) => ({ ...p, category: c }));
+                            setSelectedMedicineData((p) => ({ ...p, category: item }));
                             setShowCategorySuggestions(false);
                           }}
                         >
                           <Text style={[
-                            styles.chipText,
-                            { color: selectedMedicineData.category === c ? COLORS.brand : COLORS.text }
+                            styles.dropdownItemText,
+                            selectedMedicineData.category === item && styles.dropdownItemTextSelected
                           ]}>
-                            {c}
+                            {item}
                           </Text>
                         </Pressable>
-                      ))}
+                      )}
+                    />
                     </View>
                   )}
-                </View>
-              </View>
+  </View>
 
               <View style={[styles.inputGroup, { width: 100 }]}>
                 <Text style={styles.label}>Quantity *</Text>
@@ -617,7 +607,7 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Agent Code</Text>
+              <Text style={styles.label}>Agent Code *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter agent code"
@@ -666,19 +656,15 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
             </View>
           )}
           
-          {/* Bottom padding for scrolling */}
-          <View style={{ height: 100 }} />
-        </ScrollView>
-
-        {/* Footer Button */}
+        {/* Order Action Buttons - NOW INSIDE SCROLLVIEW */}
         {medicineList.length > 0 && (
-          <View style={styles.footer}>
+          <View style={styles.orderActionsContainer}>
             <Pressable 
               style={[styles.cancelBtn, isLoading && styles.disabledBtn]}
               onPress={() => {
                 setMedicineList([]);
                 setSelectedMedicineData(initialSelectedMedicineData);
-                setOpen(false);
+                navigation.goBack();
               }}
               disabled={isLoading}
             >
@@ -703,12 +689,25 @@ const OrderExpenseDialog: React.FC<OrderExpenseDialogProps> = ({
             </Pressable>
           </View>
         )}
-      </Pressable>
-    </Modal>
+        
+        {/* Bottom padding for scrolling */}
+        <View style={{ height: FOOTER_H + 20 }} />
+      </ScrollView>
+
+      {/* Footer Navigation - Fixed at bottom */}
+      <View style={[styles.footerWrap, { bottom: insets.bottom || 0 }]}>
+        <Footer active={"orderplacement"} brandColor={COLORS.brand} />
+      </View>
+
+      {/* Bottom Safe Area Shield */}
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
+    </SafeAreaView>
   );
 };
 
-export default OrderExpenseDialog;
+export default AddOrderScreen;
 
 /* ===================== STYLES ===================== */
 
@@ -717,39 +716,76 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: COLORS.bg 
   },
+dropdownSelector: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  borderWidth: 1.5,
+  borderColor: COLORS.border,
+  borderRadius: 12,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  backgroundColor: COLORS.field,
+  minHeight: 44, // Match input height
+},
 
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
+dropdownText: {
+  fontSize: 15,
+  color: COLORS.text,
+  flex: 1,
+},
+
+placeholderText: {
+  color: COLORS.sub,
+},
+
+dropdownList: {
+  position: 'absolute',
+  left: 0,
+  right: 0,
+  top: '100%',
+  marginTop: 4,
+  borderWidth: 1,
+  borderColor: COLORS.border,
+  borderRadius: 12,
+  backgroundColor: COLORS.card,
+  maxHeight: 200,
+  overflow: 'hidden',
+  zIndex: 1000,
+  elevation: 10,
+  shadowColor: '#000',
+  shadowOpacity: 0.1,
+  shadowOffset: { width: 0, height: 4 },
+  shadowRadius: 8,
+},
+
+dropdownItem: {
+  paddingHorizontal: 12,
+  paddingVertical: 12,
+  borderBottomWidth: StyleSheet.hairlineWidth,
+  borderBottomColor: COLORS.border,
+},
+
+dropdownItemSelected: {
+  backgroundColor: COLORS.brandLight,
+},
+
+dropdownItemText: {
+  fontSize: 14,
+  color: COLORS.text,
+  fontWeight: '500',
+},
+
+dropdownItemTextSelected: {
+  color: COLORS.brand,
+  fontWeight: '700',
+},
+
+
+  headerRightPlaceholder: {
+    width: 36,
   },
 
-  headerTitle: {
-    flex: 1,
-  },
-
-  title: { 
-    fontSize: 16, 
-    fontWeight: "800", 
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-
-  subtitle: {
-    fontSize: 12,
-    color: COLORS.sub,
-    lineHeight: 16,
-  },
-
-  closeBtn: {
-    padding: 4,
-    marginLeft: 8,
-  },
 
   body: {
     flex: 1,
@@ -978,24 +1014,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  footer: {
+  orderActionsContainer: {
     flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.card,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    paddingHorizontal: 0,
+    paddingVertical: 8,
+    backgroundColor: 'transparent',
     gap: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: -2 },
-    shadowRadius: 4,
-    elevation: 5,
+    marginBottom: 16,
   },
 
   cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderWidth: 1.5,
     borderColor: COLORS.border,
     borderRadius: 12,
@@ -1015,7 +1045,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
   },
@@ -1028,5 +1058,26 @@ const styles = StyleSheet.create({
 
   disabledBtn: {
     opacity: 0.6,
+  },
+  
+  // Footer Navigation
+  footerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: FOOTER_H,
+    justifyContent: "center",
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: COLORS.card,
+    zIndex: 9,
   },
 });

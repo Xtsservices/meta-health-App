@@ -67,6 +67,7 @@ type RouteParams = {
   reception?: boolean;
   fromDischargeList?: boolean;
    isFromPreviousPatients?: boolean; 
+   wardName?: string;
 };
 
 const followUpStatus = { active: 1 };
@@ -179,6 +180,7 @@ const FOOTER_HEIGHT = 64; // visual height of Footer area
 
 const PatientProfileOPD: React.FC = () => {
   const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+  const { wardName: wardNameFromRoute } = route.params || {};
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
@@ -527,7 +529,52 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
       : "";
 
   const genderText = currentPatient?.gender === 1 ? "Male" : "Female";
-  const ageText = formatAgeDisplay(currentPatient?.age, currentPatient?.dob);
+const ageText = useMemo(() => {
+  if (currentPatient?.dob) {
+    const dob = new Date(currentPatient.dob);
+    const today = new Date();
+
+    // Total difference in days
+    const diffTime = today.getTime() - dob.getTime();
+    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Less than 1 month → show days
+    if (totalDays < 30) {
+      return `${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+    }
+
+    let years = today.getFullYear() - dob.getFullYear();
+    let months = today.getMonth() - dob.getMonth();
+
+    if (today.getDate() < dob.getDate()) {
+      months--;
+    }
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    // Years only
+    if (years > 0 && months === 0) {
+      return `${years} year${years !== 1 ? "s" : ""}`;
+    }
+
+    // Months only
+    if (years === 0 && months > 0) {
+      return `${months} month${months !== 1 ? "s" : ""}`;
+    }
+  }
+
+  // DOB not present → fallback to age field
+  if (currentPatient?.age) {
+    return `${currentPatient.age} year${Number(currentPatient.age) !== 1 ? "s" : ""}`;
+  }
+
+  return "";
+}, [currentPatient?.dob, currentPatient?.age]);
+
+  
   const doctorText = (() => {
     if (currentPatient?.doctorName) {
       const d = currentPatient.doctorName;
@@ -541,15 +588,15 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
     return "—";
   })();
 
-  // Get menu items based on patient status
-  const getMenuItems = () => {
+const getMenuItems = () => {
   // Hide Request Surgery and Transfer Patient for surgeon and anesthetist
   
   // For surgeon and anesthetist, only show reports regardless of patient status
   if (isSurgeonOrAnesthetist) {
-    return [
+    const menuItems = [];
      
-     {
+    if (user?.roleName === "surgeon") {
+     menuItems.push({
         label: "Handshake Patient",
         onPress: () => {
           setMenuOpen(false);
@@ -559,10 +606,13 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
           });
         },
         disabled: false,
-      },
+      });
+    }
+    menuItems.push(
        { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
-      { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
-    ];
+      { label: "Test Reports", onPress: () => openReportFromMenu("tests") }
+    );
+    return menuItems;
   }
 
   if (shouldShowPatientRevisit) {
@@ -797,13 +847,20 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
               </View>
               <View style={styles.infoItem}>
                 <Text style={[styles.fieldValue, { color: COLORS.text }]}>{doctorText}</Text>
+                {/* <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
+                    • Secondary Doctor: {currentPatient?.department || "—"}
+                  </Text> */}
                 <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
                     • Department: {currentPatient?.department || "—"}
                   </Text>
                   {/* Updated Ward display */}
-                  {startStatus !== 1 && (
+                  {startStatus !== 1 && !isSurgeonOrAnesthetist && (
                   <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
-                    • Ward: {capitalizeFirstLetter(getWardName(currentPatient?.wardID))}
+                    • Ward: {
+      isReceptionView && wardNameFromRoute 
+        ? capitalizeFirstLetter(wardNameFromRoute)
+        : capitalizeFirstLetter(getWardName(currentPatient?.wardID))
+    }
                   </Text>
                   )}
               </View>

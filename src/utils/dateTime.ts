@@ -1,6 +1,157 @@
 // utils/dateTime.ts
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
+
+// Time constants
+export const SLOT_START = 6 * 60; // 06:00
+export const SLOT_END = 22 * 60; // 22:00;
+
+export type Interval = [number, number];
+
 type InputDate = string | number | Date | null | undefined;
 
+/* ---------- DayJS Helpers ---------- */
+export const buildMonthGrid = (anchor: dayjs.Dayjs) => {
+  const startOfMonth = anchor.startOf("month");
+  const gridStart = startOfMonth.startOf("week"); // Sunday
+  return Array.from({ length: 42 }, (_, i) => gridStart.add(i, "day"));
+};
+
+export const asLocalWallClock = (iso: string | Date) => {
+  if (iso instanceof Date) return iso;
+  if (/Z$/i.test(iso)) {
+    const u = dayjs.utc(iso);
+    return new Date(
+      u.year(),
+      u.month(),
+      u.date(),
+      u.hour(),
+      u.minute(),
+      u.second(),
+      u.millisecond()
+    );
+  }
+  return new Date(iso);
+};
+
+export const sameDay = (a: Date | string, d: dayjs.Dayjs) => dayjs(a).isSame(d, "day");
+
+export const toMinutes = (hhmm: string) => {
+  if (!hhmm) return 0;
+  const [hStr, mStr] = hhmm.split(":");
+  const h = Number(hStr) || 0;
+  const m = Number(mStr) || 0;
+  return h * 60 + m;
+};
+
+export const toHHMM = (mins: number) => {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const pad = (n: number) => (n < 10 ? `0${n}` : String(n));
+  return `${pad(h)}:${pad(m)}`;
+};
+
+export const clampToDay = (
+  start: Date | string,
+  end: Date | string,
+  d: dayjs.Dayjs
+): Interval | null => {
+  const s = dayjs(start);
+  const e = dayjs(end);
+  if (!s.isSame(d, "day") && !e.isSame(d, "day")) {
+    if (d.isAfter(s, "day") && d.isBefore(e, "day")) return [0, 24 * 60];
+    return null;
+  }
+  const dayStart = d.startOf("day");
+  const from = Math.max(0, s.diff(dayStart, "minute"));
+  const to = Math.min(24 * 60, e.diff(dayStart, "minute"));
+  if (to <= 0 || from >= 24 * 60) return null;
+  return [Math.max(from, 0), Math.max(to, 0)];
+};
+
+export const overlaps = (a: Interval, b: Interval) => a[0] < b[1] && b[0] < a[1];
+
+export const isPastDate = (d: dayjs.Dayjs) =>
+  d.isBefore(dayjs().startOf("day"), "day");
+
+// Helper to check if a time is in the past for the selected date
+export const isPastTime = (selectedDate: dayjs.Dayjs | null, time: string): boolean => {
+  if (!selectedDate || !time) return false;
+  
+  const now = dayjs();
+  const today = dayjs().startOf('day');
+  
+  // If selected date is today
+  if (selectedDate.isSame(today, 'day')) {
+    const [hours, minutes] = time.split(':').map(Number);
+    const selectedTime = today.add(hours, 'hour').add(minutes, 'minute');
+    return selectedTime.isBefore(now);
+  }
+  
+  // If selected date is before today
+  return selectedDate.isBefore(today, 'day');
+};
+
+// Get minimum selectable time for "From Time"
+export const getMinFromTime = (selectedDate: dayjs.Dayjs | null): string => {
+  if (!selectedDate) return "06:00";
+  
+  const now = dayjs();
+  const today = dayjs().startOf('day');
+  
+  // If selected date is today
+  if (selectedDate.isSame(today, 'day')) {
+    const currentMinutes = now.hour() * 60 + now.minute();
+    
+    // Round up to next 15-minute interval
+    const roundedMinutes = Math.ceil(currentMinutes / 15) * 15;
+    
+    // Ensure it's within slot times
+    const clampedMinutes = Math.max(SLOT_START, Math.min(SLOT_END, roundedMinutes));
+    
+    // Add 15 minutes buffer for realistic scheduling
+    const bufferMinutes = clampedMinutes + 15;
+    
+    if (bufferMinutes >= SLOT_END) return toHHMM(SLOT_END - 30); // Last possible slot
+    
+    return toHHMM(bufferMinutes);
+  }
+  
+  // For future dates, start from 06:00
+  return "06:00";
+};
+
+// Generate hours based on min/max constraints for time picker
+export const generateHours = (minTime?: string, maxTime?: string) => {
+  const minHour = minTime ? Number(minTime.split(":")[0]) : 0;
+  const maxHour = maxTime ? Number(maxTime.split(":")[0]) : 23;
+  
+  return Array.from({ length: 24 }, (_, i) => i)
+    .filter(hour => hour >= minHour && hour <= maxHour);
+};
+
+// Generate minutes based on constraints for selected hour
+export const generateMinutes = (selectedHour: number, minTime?: string, maxTime?: string) => {
+  let allMinutes = Array.from({ length: 60 }, (_, i) => i);
+  
+  // If this is the min hour, filter minutes
+  if (minTime && selectedHour === Number(minTime.split(":")[0])) {
+    const minMinute = Number(minTime.split(":")[1]);
+    allMinutes = allMinutes.filter(minute => minute >= minMinute);
+  }
+  
+  // If this is the max hour, filter minutes
+  if (maxTime && selectedHour === Number(maxTime.split(":")[0])) {
+    const maxMinute = Number(maxTime.split(":")[1]);
+    allMinutes = allMinutes.filter(minute => minute <= maxMinute);
+  }
+  
+  return allMinutes;
+};
+
+/* ---------- Formatting Helpers ---------- */
 // --- Normalizer: makes iOS/Safari-friendly ISO and preserves UTC when provided ---
 function normalize(input: InputDate): Date | null {
   if (!input) return null;
@@ -333,4 +484,25 @@ export const formatDurationParameter = (param: string = "", duration: string = "
   
   // Return as is if not matched
   return paramLower;
+};
+
+// Build UTC ISO from local HH:MM (IST wall-clock)
+export const createTimeISO = (hhmm: string, baseDate = new Date()): string => {
+  if (!hhmm) return "";
+
+  const [h, m] = hhmm.split(":").map(Number);
+
+  // Create local wall-clock time
+  const local = new Date(
+    baseDate.getFullYear(),
+    baseDate.getMonth(),
+    baseDate.getDate(),
+    h,
+    m,
+    0,
+    0
+  );
+
+  // Convert once to UTC ISO
+  return local.toISOString();
 };

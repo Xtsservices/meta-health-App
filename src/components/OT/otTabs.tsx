@@ -391,8 +391,8 @@ const styles = StyleSheet.create({
     minHeight: 72,
   },
   iconWrap: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",

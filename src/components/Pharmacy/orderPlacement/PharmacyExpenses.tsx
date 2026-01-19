@@ -101,7 +101,7 @@ const PharmacyExpenses: React.FC = () => {
       const response = await AuthFetch(
         `medicineInventoryExpense/${user.hospitalID}/getInventoryExpenseData`,
         token
-      );
+      ) as any;
 
       if (response?.data?.status === 200 && response?.data?.data) {
         const sortedData = [...response?.data?.data].sort((a: ExpenseData, b: ExpenseData) => {
@@ -217,6 +217,12 @@ const PharmacyExpenses: React.FC = () => {
   const startIndex = (currentPage - 1) * PAGE_SIZE;
   const endIndex = Math.min(totalItems, startIndex + PAGE_SIZE);
   const paginatedData = filteredData.slice(startIndex, endIndex);
+  const getMaximumDate = () => {
+    return new Date();
+  };
+  const getMinimumDateForEnd = () => {
+    return startDate || undefined;
+  };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === "android") {
@@ -224,8 +230,19 @@ const PharmacyExpenses: React.FC = () => {
     }
 
     if (selectedDate) {
+      // Normalize the selected date to remove time
+      const normalizedDate = new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate()
+      );
+
       if (datePickerMode === "start") {
-        setStartDate(selectedDate);
+        if (endDate && normalizedDate > endDate) {
+          setEndDate(null);
+        }
+        setStartDate(normalizedDate);
+        
         if (Platform.OS === "android") {
           setTimeout(() => {
             setDatePickerMode("end");
@@ -235,7 +252,12 @@ const PharmacyExpenses: React.FC = () => {
           setDatePickerMode("end");
         }
       } else {
-        setEndDate(selectedDate);
+        // For end date, ensure it's not before start date
+        if (startDate && normalizedDate < startDate) {
+          // Optionally show an alert or just don't set it
+          return;
+        }
+        setEndDate(normalizedDate);
       }
     }
   };
@@ -268,7 +290,15 @@ const PharmacyExpenses: React.FC = () => {
   };
 
   const navigateToAddItem = () => {
-    setOpenOrderExpense(true);
+    navigation.navigate("OrderExpenseDialog");
+  };
+
+  // Handle card press to navigate to detail screen
+  const handleCardPress = (item: ExpenseData) => {
+    navigation.navigate("OrderDetailScreen", { 
+      orderData: item,
+      source: "supplier" 
+    });
   };
 
   const renderStatCard = (title: string, value: string | number, IconComponent: React.ElementType, color: string) => {
@@ -299,7 +329,7 @@ const PharmacyExpenses: React.FC = () => {
             <Text style={styles.headerSubtitle}>Manage supplier orders and procurement</Text>
           </View>
           <TouchableOpacity style={styles.addButton} onPress={navigateToAddItem}>
-            <PlusIcon size={20} color={COLORS.buttonText} />
+            <PlusIcon size={15} color={COLORS.buttonText} />
             <Text style={styles.addButtonText}>Create</Text>
           </TouchableOpacity>
         </View>
@@ -317,7 +347,10 @@ const PharmacyExpenses: React.FC = () => {
           <View style={styles.searchContainer}>
             <View style={styles.searchInner}>
               <View style={styles.searchLeft}>
-                <SearchIcon size={20} color={COLORS.sub} style={styles.searchIcon} />
+                <View style={styles.searchIcon}>
+  <SearchIcon size={20} color={COLORS.sub} />
+</View>
+
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Search supplier, contact, manufacturer"
@@ -326,9 +359,6 @@ const PharmacyExpenses: React.FC = () => {
                   placeholderTextColor={COLORS.sub}
                 />
               </View>
-              <TouchableOpacity style={styles.filterButton}>
-                <FilterIcon size={18} color={COLORS.brand} />
-              </TouchableOpacity>
             </View>
           </View>
           {/* Orders Section */}
@@ -382,7 +412,10 @@ const PharmacyExpenses: React.FC = () => {
                 <View style={styles.ordersList}>
                   {paginatedData.map((item, index) => (
                     <View key={item?.id?.toString() || index.toString()}>
-                      <PharmacyExpensesCard data={[item]} />
+                      <PharmacyExpensesCard 
+                        data={[item]} 
+                        onCardPress={handleCardPress}
+                      />
                     </View>
                   ))}
                 </View>
@@ -478,12 +511,19 @@ const PharmacyExpenses: React.FC = () => {
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker
-                  value={datePickerMode === "start" ? startDate || new Date() : endDate || new Date()}
+                  value={datePickerMode === "start" ? startDate || new Date() : endDate || startDate || new Date()}
                   mode="date"
                   display={Platform.OS === "ios" ? "inline" : "calendar"}
                   onChange={handleDateChange}
+                  maximumDate={getMaximumDate()}
+                  minimumDate={datePickerMode === "end" ? getMinimumDateForEnd() : undefined}
                   style={styles.dateTimePicker}
                 />
+                {datePickerMode === "end" && startDate && (
+                  <Text>
+                    End date must be on or after {formatDate(startDate)}
+                  </Text>
+                )}
                 <View style={styles.datePickerActions}>
                   <TouchableOpacity style={styles.datePickerCancel} onPress={() => setShowDatePicker(false)}>
                     <Text style={styles.datePickerCancelText}>Cancel</Text>
@@ -497,7 +537,6 @@ const PharmacyExpenses: React.FC = () => {
           </Modal>
         )}
 
-        <OrderExpenseDialog open={openOrderExpense} setOpen={setOpenOrderExpense} onOrderPlaced={fetchExpenseData} />
       </View>
     </TouchableWithoutFeedback>
   );
@@ -530,8 +569,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.brand,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderRadius: 12,
     gap: SPACING.xs,
   },
@@ -564,8 +603,6 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     color: COLORS.text,
   },
-  filterButton: { padding: SPACING.xs, marginLeft: SPACING.sm },
-  
   // Stats Section
   statsSection: { marginHorizontal: SPACING.sm },
   statsGrid: {
@@ -796,7 +833,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: COLORS.card,
-    zIndex: 9,
+    zIndex:9,
   },
 
   // Date Picker Modal

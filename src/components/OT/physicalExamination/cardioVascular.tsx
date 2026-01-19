@@ -59,15 +59,14 @@ const Hepato: React.FC = () => {
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const isDark = scheme === "dark";
   const user = useSelector((s: RootState) => s.currentUser);
-const isReadOnly = user?.roleName === "surgeon";
-  const { cardioVascular, setCardioVascular } =
-    usePhysicalExaminationForm() 
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
 
- 
+  const { cardioVascular, setCardioVascular } = usePhysicalExaminationForm();
 
   const toggleField = (key: keyof CardioVascularState) => {
+    if (isReadOnly) return; // Add check
     const current = Boolean(cardioVascular?.[key]);
     setCardioVascular({ [key]: !current });
   };
@@ -81,14 +80,8 @@ const isReadOnly = user?.roleName === "surgeon";
   };
 
   return (
-    <SafeAreaView
-      style={[
-        styles.safeArea,
-        { backgroundColor: COLORS.bg},
-      ]}
-    >
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: COLORS.bg }]}>
       <View style={styles.root}>
-        {/* Scrollable form, keyboard-safe */}
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
           contentContainerStyle={styles.scrollContent}
@@ -102,6 +95,9 @@ const isReadOnly = user?.roleName === "surgeon";
               { backgroundColor: COLORS.card, borderColor: COLORS.border },
             ]}
           >
+            <Text style={[styles.title, { color: COLORS.text }]}>
+              Cardiovascular
+            </Text>
             <Text style={[styles.subtitle, { color: COLORS.sub }]}>
               Select all applicable findings
             </Text>
@@ -116,7 +112,10 @@ const isReadOnly = user?.roleName === "surgeon";
                     onPress={() => toggleField(item.key)}
                     style={({ pressed }) => [
                       styles.checkboxRow,
-                      { backgroundColor: pressed ? COLORS.brandSoft : "transparent" },
+                      { 
+                        backgroundColor: pressed && !isReadOnly ? COLORS.brandSoft : "transparent",
+                        opacity: isReadOnly ? 0.6 : 1,
+                      },
                     ]}
                   >
                     <View
@@ -138,7 +137,6 @@ const isReadOnly = user?.roleName === "surgeon";
               })}
             </View>
 
-            {/* Prev / Next buttons at end of form */}
             <View style={styles.formNavRow}>
               <Pressable
                 onPress={handlePrev}
@@ -177,7 +175,6 @@ const isReadOnly = user?.roleName === "surgeon";
           </View>
         </KeyboardAwareScrollView>
 
-        {/* Bottom app footer */}
         <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
           <Footer active={"dashboard"} brandColor="#14b8a6" />
         </View>
@@ -195,16 +192,12 @@ const isReadOnly = user?.roleName === "surgeon";
 export default Hepato;
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  root: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
+  root: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 110, // extra so buttons are not hidden behind footer
+    paddingBottom: 110,
   },
   card: {
     borderRadius: 16,

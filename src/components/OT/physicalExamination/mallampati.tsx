@@ -17,13 +17,17 @@ import { useNavigation } from "@react-navigation/native";
 import usePhysicalExaminationForm from "../../../utils/usePhysicalExaminationForm";
 import Footer from "../../dashboard/footer";
 import { COLORS } from "../../../utils/colour";
-// 🔹 adjust this path as per your RN assets structure
+import { RootState } from "../../../store/store";
+import { useSelector } from "react-redux";
 
 const MallampatiGradeMobile: React.FC = () => {
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const isDark = scheme === "dark";
+  const user = useSelector((s: RootState) => s.currentUser);
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
 
   const { mallampatiGrade, setMallampatiGrade } =
     usePhysicalExaminationForm() as {
@@ -34,6 +38,7 @@ const MallampatiGradeMobile: React.FC = () => {
 
 
   const handleSelect = (grade: number) => {
+    if (isReadOnly) return; // Add check
     setMallampatiGrade({ class: grade });
   };
 
@@ -78,11 +83,11 @@ const MallampatiGradeMobile: React.FC = () => {
 
             {/* Image section - responsive to screen width */}
             <View style={styles.imageWrapper}>
-              {/* <Image
-                source={require('./../../../assets/mallampati.png')}
+              <Image
+                source={require('../../../assets/mallampati.jpg')}
                 style={styles.image}
                 resizeMode="contain"
-              /> */}
+              />
             </View>
 
             {/* Grade buttons */}
@@ -92,6 +97,7 @@ const MallampatiGradeMobile: React.FC = () => {
                 return (
                   <Pressable
                     key={g}
+                    disabled={isReadOnly}
                     onPress={() => handleSelect(g)}
                     style={({ pressed }) => [
                       styles.gradeButton,
@@ -100,7 +106,7 @@ const MallampatiGradeMobile: React.FC = () => {
                           ? COLORS.brand
                           : "#ffffff",
                         borderColor: COLORS.brand,
-                        opacity: pressed ? 0.85 : 1,
+                        opacity: isReadOnly ? 0.6 : (pressed ? 0.85 : 1),
                       },
                     ]}
                   >
@@ -211,13 +217,16 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 12,
     overflow: "hidden",
-    marginBottom: 16,
+    marginBottom: 20,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#f8fafc",
+    padding: 8,
   },
   image: {
     width: "100%",
-    height: 260, // will scale with width due to resizeMode="contain"
+    height: 220,
+    borderRadius: 8,
   },
   buttonRow: {
     flexDirection: "row",

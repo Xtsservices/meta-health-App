@@ -88,12 +88,13 @@ export default function VitalsTabScreen() {
             oxygen: vital?.oxygen ?? "",
             hrv: vital?.hrv ?? "",
             recordedDate:
-              vital?.addedOn ||
               vital?.temperatureTime ||
               vital?.pulseTime ||
+              vital?.bpTime ||
               vital?.oxygenTime ||
               vital?.respiratoryRateTime ||
-              vital?.hrvTime,
+              vital?.hrvTime ||
+              vital?.addedOn,
           }));
         }
       }
@@ -313,7 +314,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   footerWrap: {
-    position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,

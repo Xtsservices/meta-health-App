@@ -9,20 +9,22 @@ import {
   Modal,
   Alert,
   Dimensions,
-  Platform
 } from "react-native";
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { 
   formatDate,
   formatDateForInput, 
   convertTo12Hour, 
-  isValidTime,
   isValidDate,
   getCurrentDateFormatted 
 } from "../../../utils/dateTime";
-import { XIcon, ClockIcon, SaveIcon, UserIcon, CalendarIcon } from "../../../utils/SvgIcons";
+import { XIcon, ClockIcon, SaveIcon, UserIcon, CalendarIcon,ChevronDownIcon,ChevronUpIcon,} from "../../../utils/SvgIcons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { Platform } from "react-native";
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { height: screenHeight } = Dimensions.get('window');
+
+/* ------------------ CONSTANT HOURS (9 AM – 5 PM) ------------------ */
+const HOURS = Array.from({ length: 9 }, (_, i) => i + 9); // 09 → 17
 
 interface SlotModalProps {
   visible: boolean;
@@ -44,9 +46,9 @@ const SlotModal: React.FC<SlotModalProps> = ({
     availableSlots: "6"
   });
 
+  const [showFromHourDropdown, setShowFromHourDropdown] = useState(false);
+  const [showToHourDropdown, setShowToHourDropdown] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showFromTimePicker, setShowFromTimePicker] = useState(false);
-  const [showToTimePicker, setShowToTimePicker] = useState(false);
 
   const handleSave = () => {
     // Validate all fields
@@ -57,200 +59,122 @@ const SlotModal: React.FC<SlotModalProps> = ({
 
     // Validate date format
     if (!isValidDate(formData.date)) {
-      Alert.alert("Error", "Please enter a valid date in YYYY-MM-DD format");
+      Alert.alert("Error", "Invalid date");
       return;
     }
 
-    // Validate time formats
-    if (!isValidTime(formData.shiftFromTime) || !isValidTime(formData.shiftToTime)) {
-      Alert.alert("Error", "Please enter valid time in HH:MM format");
-      return;
-    }
+    const startHour = Number(formData.shiftFromTime.split(":")[0]);
+    const endHour = Number(formData.shiftToTime.split(":")[0]);
 
-  const selectedDate = new Date(formData.date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  selectedDate.setHours(0, 0, 0, 0);
-  
-  if (selectedDate < today) {
-    Alert.alert("Error", "Cannot create slots for past dates");
-    return;
-  }
-
-  // If date is today, check if times are in the future
-  if (selectedDate.getTime() === today.getTime()) {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    
-    const [startHour, startMinute] = formData.shiftFromTime.split(':').map(Number);
-    const [endHour, endMinute] = formData.shiftToTime.split(':').map(Number);
-    
-    // Check if start time is in the past
-    if (startHour < currentHour || (startHour === currentHour && startMinute < currentMinute)) {
-      Alert.alert("Error", "Cannot create slots with start time in the past");
-      return;
-    }
-    
-    // Check if end time is in the past
-    if (endHour < currentHour || (endHour === currentHour && endMinute < currentMinute)) {
-      Alert.alert("Error", "Cannot create slots with end time in the past");
-      return;
-    }
-  }
-
-    const availableSlotsNum = parseInt(formData.availableSlots ?? '0');
-    if (isNaN(availableSlotsNum) || availableSlotsNum <= 0) {
-      Alert.alert("Error", "Available slots must be greater than 0");
-      return;
-    }
-
-    const startHour = parseInt(formData.shiftFromTime?.split(':')?.[0] ?? '0');
-    const endHour = parseInt(formData.shiftToTime?.split(':')?.[0] ?? '0');
-    
     if (startHour >= endHour) {
-      Alert.alert("Error", "Shift end time must be after shift start time");
+      Alert.alert("Error", "End time must be after start time");
+      return;
+    }
+
+    const slots = Number(formData.availableSlots);
+    if (isNaN(slots) || slots <= 0) {
+      Alert.alert("Error", "Slots must be greater than 0");
       return;
     }
 
     onSave(formData);
   };
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
+  /* ------------------ DATE PICKER (SIMPLE) ------------------ */
+  const handleDateSelect = (date: Date) => {
     setShowDatePicker(false);
-    if (selectedDate) {
-      setFormData(prev => ({
-        ...prev,
-        date: formatDateForInput(selectedDate)
-      }));
-    }
+    setFormData((p) => ({ ...p, date: formatDateForInput(date) }));
   };
 
-  const handleFromTimeChange = (event: any, selectedTime?: Date) => {
-    setShowFromTimePicker(false);
-    if (selectedTime) {
-      const hours = String(selectedTime.getHours()).padStart(2, '0');
-      const minutes = String(selectedTime.getMinutes()).padStart(2, '0');
-      setFormData(prev => ({
-        ...prev,
-        shiftFromTime: `${hours}:${minutes}`
-      }));
-    }
-  };
-
-  const handleToTimeChange = (event: any, selectedTime?: Date) => {
-    setShowToTimePicker(false);
-    if (selectedTime) {
-      const hours = String(selectedTime.getHours()).padStart(2, '0');
-      const minutes = String(selectedTime.getMinutes()).padStart(2, '0');
-      setFormData(prev => ({
-        ...prev,
-        shiftToTime: `${hours}:${minutes}`
-      }));
-    }
-  };
-
-  const generateTimeSlots = () => {
-    const slots = [];
-    const start = parseInt(formData.shiftFromTime?.split(':')?.[0] ?? '0');
-    const end = parseInt(formData.shiftToTime?.split(':')?.[0] ?? '0');
+  /* ------------------ SELECT HOUR ------------------ */
+  const selectHour = (hour: number, type: "from" | "to") => {
+    const hourString = `${String(hour).padStart(2, "0")}:00`;
+    setFormData((prev) => ({
+      ...prev,
+      [type === "from" ? "shiftFromTime" : "shiftToTime"]: hourString,
+    }));
     
-    const now = new Date();
-    const selectedDate = new Date(formData.date);
-    const isToday = selectedDate.toDateString() === now.toDateString();
-    const currentHour = now.getHours();
-    
-    for (let i = start; i < end; i++) {
-      // Skip past hours if it's today
-      if (isToday && i < currentHour) {
-        continue;
-      }
-      
-      const fromTime = `${i.toString().padStart(2, '0')}:00`;
-      const toTime = `${(i + 1).toString().padStart(2, '0')}:00`;
-      slots.push({
-        time: `${convertTo12Hour(fromTime)} - ${convertTo12Hour(toTime)}`,
-        fromTime,
-        toTime,
-        available: parseInt(formData.availableSlots ?? '0')
-      });
-    }
-    return slots;
-  };
-
-  const timeSlots = generateTimeSlots();
-
-const selectedDateIsToday = () => {
-  const today = new Date();
-  const selectedDate = new Date(formData.date);
-  return (
-    today.getFullYear() === selectedDate.getFullYear() &&
-    today.getMonth() === selectedDate.getMonth() &&
-    today.getDate() === selectedDate.getDate()
-  );
-};
-  const getCurrentDate = () => {
-    try {
-      return formData.date ? new Date(formData.date + 'T00:00:00') : new Date();
-    } catch {
-      return new Date();
+    if (type === "from") {
+      setShowFromHourDropdown(false);
+    } else {
+      setShowToHourDropdown(false);
     }
   };
 
-  const getCurrentFromTime = () => {
-    try {
-      const [hours, minutes] = formData.shiftFromTime?.split(':') ?? ['9', '0'];
-      const date = new Date();
-      date.setHours(parseInt(hours ?? '9'), parseInt(minutes ?? '0'));
-      return date;
-    } catch {
-      return new Date();
-    }
-  };
+  /* ------------------ HOUR DROPDOWN COMPONENT ------------------ */
+  const HourDropdown = ({ 
+    visible, 
+    onClose, 
+    selectedHour, 
+    onSelect,
+    type 
+  }: { 
+    visible: boolean; 
+    onClose: () => void; 
+    selectedHour: string; 
+    onSelect: (hour: number) => void;
+    type: "from" | "to";
+  }) => {
+    if (!visible) return null;
 
-  const getCurrentToTime = () => {
-    try {
-      const [hours, minutes] = formData.shiftToTime?.split(':') ?? ['17', '0'];
-      const date = new Date();
-      date.setHours(parseInt(hours ?? '17'), parseInt(minutes ?? '0'));
-      return date;
-    } catch {
-      return new Date();
-    }
+    const currentHour = parseInt(selectedHour.split(":")[0]);
+    const availableHours = type === "to" 
+      ? HOURS.filter(h => h > parseInt(formData.shiftFromTime.split(":")[0]))
+      : HOURS.filter(h => h < parseInt(formData.shiftToTime.split(":")[0]));
+
+    return (
+      <View style={styles.hourDropdownContainer}>
+        <View style={styles.hourDropdown}>
+          <ScrollView 
+            style={styles.hourScrollView}
+            showsVerticalScrollIndicator={false}
+          >
+            {availableHours.map((hour) => (
+              <TouchableOpacity
+                key={hour}
+                style={[
+                  styles.hourOption,
+                  currentHour === hour && styles.hourOptionSelected
+                ]}
+                onPress={() => onSelect(hour)}
+              >
+                <ClockIcon 
+                  size={16} 
+                  color={currentHour === hour ? "#14b8a6" : "#64748b"} 
+                />
+                <Text style={[
+                  styles.hourOptionText,
+                  currentHour === hour && styles.hourOptionTextSelected
+                ]}>
+                  {convertTo12Hour(`${String(hour).padStart(2, "0")}:00`)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+        </View>
+      </View>
+    );
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContainer, { maxHeight: screenHeight * 0.85 }]}>
-          {/* Header */}
+        <View style={styles.modalContainer}>
+          {/* HEADER */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add New Slots</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <XIcon size={24} color="#64748b" />
+            <TouchableOpacity onPress={onClose}>
+              <XIcon size={22} color="#64748b" />
             </TouchableOpacity>
           </View>
 
-          {/* Content Area */}
-          <View style={styles.contentArea}>
-            <ScrollView 
-              style={styles.scrollView}
-              showsVerticalScrollIndicator={true}
-              contentContainerStyle={styles.scrollContent}
-            >
-              {/* Form Fields */}
+          {/* CONTENT */}
+          <ScrollView>
               <View style={styles.formSection}>
-                <Text style={styles.sectionTitle}>Schedule Details</Text>
-                
-                {/* Date Input */}
-                <View style={styles.formGroup}>
+                  {/* DATE */}
                   <Text style={styles.label}>Date</Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.inputWithIcon}
                     onPress={() => setShowDatePicker(true)}
                   >
@@ -259,335 +183,292 @@ const selectedDateIsToday = () => {
                       {formatDate(formData.date)}
                     </Text>
                   </TouchableOpacity>
-                </View>
 
-                {/* Time Row */}
+                {/* TIME SELECTION */}
                 <View style={styles.timeRow}>
+                {/* START TIME */}
                   <View style={styles.timeFormGroup}>
-                    <Text style={styles.label}>Shift Start Time</Text>
-                    <TouchableOpacity 
-                      style={styles.inputWithIcon}
-                      onPress={() => setShowFromTimePicker(true)}
+                    <Text style={styles.label}>Start Time</Text>
+                  <View style={styles.timeInputContainer}>
+                    <TouchableOpacity
+                      style={styles.timeInput}
+                      onPress={() => {
+                        setShowFromHourDropdown(!showFromHourDropdown);
+                        setShowToHourDropdown(false);
+                      }}
                     >
-                      <ClockIcon size={16} color="#64748b" />
-                      <Text style={styles.inputDisplayText}>
+                      <ClockIcon size={16} color="#14b8a6" />
+                      <Text style={styles.timeDisplayText}>
                         {convertTo12Hour(formData.shiftFromTime)}
                       </Text>
+                      {showFromHourDropdown ? (
+                        <ChevronUpIcon size={16} color="#64748b" />
+                      ) : (
+                        <ChevronDownIcon size={16} color="#64748b" />
+                      )}
                     </TouchableOpacity>
+                    
+                    <HourDropdown
+                      visible={showFromHourDropdown}
+                      onClose={() => setShowFromHourDropdown(false)}
+                      selectedHour={formData.shiftFromTime}
+                      onSelect={(hour) => selectHour(hour, "from")}
+                      type="from"
+                    />
+                  </View>
                   </View>
 
+                {/* END TIME */}
                   <View style={styles.timeFormGroup}>
-                    <Text style={styles.label}>Shift End Time</Text>
-                    <TouchableOpacity 
-                      style={styles.inputWithIcon}
-                      onPress={() => setShowToTimePicker(true)}
+                    <Text style={styles.label}>End Time</Text>
+                  <View style={styles.timeInputContainer}>
+                    <TouchableOpacity
+                      style={styles.timeInput}
+                      onPress={() => {
+                        setShowToHourDropdown(!showToHourDropdown);
+                        setShowFromHourDropdown(false);
+                      }}
                     >
-                      <ClockIcon size={16} color="#64748b" />
-                      <Text style={styles.inputDisplayText}>
+                      <ClockIcon size={16} color="#14b8a6" />
+                      <Text style={styles.timeDisplayText}>
                         {convertTo12Hour(formData.shiftToTime)}
                       </Text>
+                      {showToHourDropdown ? (
+                        <ChevronUpIcon size={16} color="#64748b" />
+                      ) : (
+                        <ChevronDownIcon size={16} color="#64748b" />
+                      )}
                     </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Available Slots */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Available Slots per Hour</Text>
-                  <View style={styles.inputWithIcon}>
-                    <UserIcon size={16} color="#64748b" />
-                    <TextInput
-                      style={styles.inputField}
-                      value={formData.availableSlots}
-                      onChangeText={(text) => setFormData({...formData, availableSlots: text})}
-                      placeholder="6"
-                      keyboardType="numeric"
+                    
+                    <HourDropdown
+                      visible={showToHourDropdown}
+                      onClose={() => setShowToHourDropdown(false)}
+                      selectedHour={formData.shiftToTime}
+                      onSelect={(hour) => selectHour(hour, "to")}
+                      type="to"
                     />
                   </View>
                 </View>
               </View>
 
-              {/* Preview Section */}
-              {/* {timeSlots?.length > 0 && (
-                <View style={styles.previewSection}>
-                  <Text style={styles.sectionTitle}>Preview Slots</Text>
-                  <Text style={styles.previewSubtitle}>
-                    {timeSlots?.length ?? 0} time slots will be created
-                  </Text>
-                  
-                  <View style={styles.slotsPreview}>
-                    {timeSlots?.map?.((slot, index) => (
-                      <View key={index} style={styles.slotPreviewItem}>
-                        <View style={styles.slotPreviewTime}>
-                          <ClockIcon size={14} color="#14b8a6" />
-                          <Text style={styles.slotPreviewTimeText}>{slot?.time}</Text>
-                        </View>
-                        <View style={styles.slotPreviewCount}>
-                          <Text style={styles.slotPreviewCountText}>
-                            {slot?.available ?? 0} slots
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )} */}
-            </ScrollView>
-          </View>
+              {/* SLOTS */}
+              <Text style={styles.label}>Available Slots / Hour</Text>
+              <View style={styles.inputWithIcon}>
+                <UserIcon size={16} color="#64748b" />
+                <TextInput
+                  style={styles.inputField}
+                  keyboardType="numeric"
+                  value={formData.availableSlots}
+                  onChangeText={(t) =>
+                    setFormData((p) => ({ ...p, availableSlots: t }))
+                  }
+                />
+              </View>
+            </View>
+          </ScrollView>
 
-          {/* Actions */}
+          {/* ACTIONS */}
           <View style={styles.modalActions}>
-            <TouchableOpacity 
-              style={styles.cancelButton} 
-              onPress={onClose}
-              disabled={creating}
-            >
+            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.saveButton, creating && styles.disabledButton]} 
+            <TouchableOpacity
+              style={styles.saveButton}
               onPress={handleSave}
               disabled={creating}
             >
               <SaveIcon size={16} color="#fff" />
-              <Text style={styles.saveButtonText}>
-                {creating ? "Creating..." : "Create Slots"}
-              </Text>
+              <Text style={styles.saveButtonText}>Create Slots</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
 
-      {/* Date and Time Pickers */}
       {showDatePicker && (
         <DateTimePicker
-          value={getCurrentDate()}
+          value={new Date(formData.date)}
           mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleDateChange}
-          minimumDate={new Date()}
-        />
-      )}
+          display={Platform.OS === "android" ? "spinner" : "inline"}
+    onChange={(event, selectedDate) => {
+      if (event.type === "dismissed") {
+        setShowDatePicker(false);
+        return;
+      }
 
-      {showFromTimePicker && (
-        <DateTimePicker
-          value={getCurrentFromTime()}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleFromTimeChange}
-          is24Hour={false}
-          {...(selectedDateIsToday && {
-            minimumDate: new Date()
-          })}
-        />
-      )}
+      setShowDatePicker(false);
+      if (selectedDate) {
+        handleDateSelect(selectedDate);
+      }
+    }}
+  />
+)}
 
-      {showToTimePicker && (
-        <DateTimePicker
-          value={getCurrentToTime()}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleToTimeChange}
-          is24Hour={false}
-        />
-      )}
     </Modal>
   );
 };
 
+export default SlotModal;
+
+/* ------------------ STYLES ------------------ */
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 16,
   },
   modalContainer: {
+     height: "90%", 
     backgroundColor: "#fff",
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 500,
-    minHeight: 500,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
+    width: "92%",
+    borderRadius: 14,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    borderBottomColor: "#eee",
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#0f172a",
-  },
-  closeButton: {
-    padding: 4,
-  },
-  contentArea: {
-    flex: 1,
-    minHeight: 400,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 20,
-  },
-  formSection: {
-    padding: 20,
-    paddingBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#0f172a",
-    marginBottom: 20,
-  },
-  formGroup: {
-    marginBottom: 20,
-  },
-  timeRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 10,
-  },
-  timeFormGroup: {
-    flex: 1,
-  },
-  label: {
-    fontWeight: "600",
+  modalTitle: { fontSize: 18, fontWeight: "700" },
+  formSection: { padding: 16 },
+  label: { 
+    fontWeight: "600", 
+    marginBottom: 6,
     color: "#374151",
     fontSize: 14,
-    marginBottom: 8,
   },
   inputWithIcon: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#d1d5db",
     borderRadius: 8,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    height: 44,
+    padding: 12,
+    marginBottom: 16,
+    backgroundColor: "#f9fafb",
   },
-  inputDisplayText: {
+  inputDisplayText: { 
+    marginLeft: 10, 
+    fontSize: 14,
+    color: "#374151",
     flex: 1,
-    paddingLeft: 8,
-    paddingVertical: 10,
+  },
+  inputField: { 
+    flex: 1, 
+    marginLeft: 10,
     fontSize: 14,
     color: "#374151",
   },
-  inputField: {
-    flex: 1,
-    borderWidth: 0,
-    paddingLeft: 8,
-    paddingVertical: 10,
-    fontSize: 14,
-    height: '100%',
+  timeRow: { 
+    flexDirection: "row", 
+    gap: 12,
+    marginBottom: 16,
   },
-  previewSection: {
-    padding: 20,
-    paddingTop: 10,
-    backgroundColor: "#f8fafc",
-    borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
-    marginTop: 10,
+  timeFormGroup: { flex: 1 },
+  timeInputContainer: {
+    position: "relative",
   },
-  previewSubtitle: {
-    color: "#64748b",
-    fontSize: 12,
-    marginBottom: 12,
-  },
-  slotsPreview: {
-    borderRadius: 8,
-    backgroundColor: "#fff",
+  timeInput: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  slotPreviewItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    borderColor: "#d1d5db",
+    borderRadius: 8,
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    backgroundColor: "#f9fafb",
   },
-  slotPreviewTime: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  timeDisplayText: {
+    marginLeft: 10,
+    marginRight: 8,
+    fontSize: 14,
+    color: "#374151",
     flex: 1,
-  },
-  slotPreviewTimeText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#475569",
-  },
-  slotPreviewCount: {
-    backgroundColor: "#f0fdfa",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  slotPreviewCountText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#14b8a6",
   },
   modalActions: {
     flexDirection: "row",
-    gap: 12,
-    padding: 20,
+    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
-    backgroundColor: "#fff",
+    borderTopColor: "#eee",
+    gap: 12,
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: "#f8fafc",
-    paddingVertical: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
     alignItems: "center",
-    justifyContent: "center",
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 8,
   },
-  cancelButtonText: {
-    color: "#475569",
+  cancelButtonText: { 
     fontWeight: "600",
-    fontSize: 14,
+    color: "#374151",
   },
   saveButton: {
-    flex: 2,
+    flex: 1,
+    backgroundColor: "#14b8a6",
+    borderRadius: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    padding: 12,
     gap: 8,
-    backgroundColor: "#14b8a6",
-    paddingVertical: 14,
+  },
+  saveButtonText: { 
+    color: "#fff", 
+    fontWeight: "600",
+    fontSize: 14,
+  },
+
+  /* Hour Dropdown Styles */
+  hourDropdownContainer: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    marginTop: 4,
+  },
+  hourDropdown: {
+    backgroundColor: "#fff",
     borderRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    elevation: 5,
+    maxHeight: 200,
   },
-  disabledButton: {
-    opacity: 0.6,
+  hourScrollView: {
+    maxHeight: 180,
   },
-  saveButtonText: {
-    color: "#fff",
-    fontWeight: "600",
+  hourOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  hourOptionSelected: {
+    backgroundColor: "#f0fdfa",
+  },
+  hourOptionText: {
+    marginLeft: 10,
     fontSize: 14,
+    color: "#374151",
+  },
+  hourOptionTextSelected: {
+    color: "#14b8a6",
+    fontWeight: "600",
+  },
+  /* Old modal styles (for date picker) */
+  hourOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
-
-export default SlotModal;

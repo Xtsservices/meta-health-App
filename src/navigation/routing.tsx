@@ -146,6 +146,9 @@ import AmbulanceStaffAddVitals from '../components/ambulanceStaff/AmbulanceStaff
 import AmbulanceStaffActiveTrip from '../components/ambulanceStaff/AmbulanceStaffActiveTrip';
 import AmbulanceStaffAssignments from '../components/ambulanceStaff/AmbulanceStaffAssignments';
 import AmbulanceStaffSettings from '../components/ambulanceStaff/AmbulanceStaffSettings';
+import OrderDetailScreen from '../components/Pharmacy/orderPlacement/OrderDetailScreen';
+import ReceptionOrderDetailsScreen from '../components/Reception/ReceptionOrderDetailsScreen';
+import OrderExpenseDialog from '../components/Pharmacy/orderPlacement/OrderExpenseDialog';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -509,18 +512,11 @@ const Routing = () => {
         <Stack.Screen
           name="OtInnerTabs"
           component={otInnerTabs}
-          options={({ navigation, route }) => ({
+           options={{
+            title: 'Surgery Details',
+            headerTitleAlign: 'center',
             headerShown: true,
-            headerLeft: () => (
-              <HeaderBackButton
-                onPress={() => {
-                  navigation.navigate('PatientProfile', {
-                    patientID: route.params?.patientID, // pass whatever you need
-                  });
-                }}
-              />
-            ),
-          })}
+          }}
         />
         <Stack.Screen
           name="InitialDetails"
@@ -598,7 +594,7 @@ const Routing = () => {
           name="ExaminationFindingNotes"
           component={examinationFindingNotes}
           options={{
-            title: 'Examination FindinfNotes',
+            title: 'Examination Finding Notes',
             headerTitleAlign: 'center',
             headerShown: true,
           }}
@@ -625,7 +621,7 @@ const Routing = () => {
           name="SurgerySchedule"
           component={surgerySchedule}
           options={{
-            title: 'Surgery Schedules',
+            title: 'Surgery Schedule',
             headerTitleAlign: 'center',
             headerShown: true,
           }}
@@ -634,7 +630,7 @@ const Routing = () => {
           name="Schedule"
           component={schedule}
           options={{
-            title: 'Schedules',
+            title: 'Schedule',
             headerTitleAlign: 'center',
             headerShown: true,
           }}
@@ -722,15 +718,23 @@ const Routing = () => {
             headerShown: true,
           }}
         />
-        <Stack.Screen
-          name="TreatmentPlan"
-          component={TreatmentPlanScreen}
-          options={{
-            title: 'Treatment Plan',
-            headerTitleAlign: 'center',
-            headerShown: true,
-          }}
-        />
+<Stack.Screen
+  name="TreatmentPlan"
+  component={TreatmentPlanScreen}
+  options={({ route }: any) => ({
+    title: route.params?.currentTab === 'PreOpRecord' 
+      ? 'Pre-Op Medications' 
+      : route.params?.currentTab === 'PostOpRecord'
+      ? 'Post-Op Medications'
+      : route.params?.currentTab === 'PatientFile'
+      ? 'Medications' // For Patient File tab
+      : route.params?.currentTab === 'AnesthesiaRecord'
+      ? 'Anesthesia Medications' // If needed
+      : 'Treatment Plan', // Default fallback
+    headerTitleAlign: 'center',
+    headerShown: true,
+  })}
+/>
         <Stack.Screen
           name="PreviousPrescriptions"
           component={PreviousPrescriptions}
@@ -1097,10 +1101,44 @@ const Routing = () => {
         <Stack.Screen
           name="TaxInvoiceTabs"
           component={taxInvoiceTabs}
-          options={({ route }) => ({
+          options={({ navigation, route }) => ({
             headerShown: true,
-            headerTitleAlign: 'center',
-            title: route.params?.mode === 'billing' ? 'Billing' : 'Tax Invoice',
+            headerTitleAlign: "center",
+            title:
+      route.params?.mode === "billing"
+        ? "Billing"
+        : "Tax Invoice",
+
+    headerLeft: () => (
+      <HeaderBackButton
+        onPress={() => {
+          const userRole = route.params?.userRole;
+
+
+          if (userRole === "pathology") {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "DashboardLab" }],
+            });
+          } else if (userRole === "pharmacy") {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "DashboardPharma" }],
+            });
+          } else if (userRole === "reception") {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "DashboardReception" }],
+            });
+          } else {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Home" }],
+            });
+          }
+        }}
+      />
+    ),
           })}
         />
         <Stack.Screen
@@ -1175,6 +1213,14 @@ const Routing = () => {
             title: 'Doctor Profile',
             headerTitleAlign: 'center',
             headerShown: true,
+          }}
+        />
+        <Stack.Screen 
+          name="OrderExpenseDialog" 
+          component={OrderExpenseDialog}
+          options={{
+            title: "Create New Order",
+            headerShown: true, // or customize as needed
           }}
         />
         <Stack.Screen
@@ -1308,6 +1354,11 @@ const Routing = () => {
           component={AmbulanceStaffAddVitals}
           options={{
             title: 'Add Vitals',
+        <Stack.Screen 
+          name="OrderDetailScreen" 
+          component={OrderDetailScreen}
+          options={{
+            title: 'Order Details',
             headerTitleAlign: 'center',
             headerShown: true,
           }}
@@ -1338,6 +1389,10 @@ const Routing = () => {
             headerTitleAlign: 'center',
             headerShown: false,
           }}
+        <Stack.Screen 
+          name="ReceptionOrderDetails" 
+          component={ReceptionOrderDetailsScreen} 
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>

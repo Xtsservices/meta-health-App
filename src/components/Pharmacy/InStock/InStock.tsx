@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
-  Share,
   ScrollView,
   Dimensions,
   SafeAreaView,
@@ -40,6 +39,9 @@ import {
   Activity,
   Package,
 } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import RNFS from "react-native-fs";
+import Share from "react-native-share";
 
 interface StockData {
   id: number;
@@ -98,7 +100,7 @@ const InStock: React.FC = () => {
   const [openModal, setOpenModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showStockFilterModal, setShowStockFilterModal] = useState(false);
-  
+  const insets = useSafeAreaInsets();
   const [newStock, setNewStock] = useState<Partial<StockData>>({
     name: "",
     category: "",
@@ -322,12 +324,12 @@ const getMedicineIcon = (category?: string) => {
       // Create CSV content
       const headers = [
         "Med ID", 
-        "Med Name", 
+        "Medicine Name", 
         "Category", 
         "HSN", 
-        "Stock Qty", 
+        "Stock Quantity",
         "Cost Price", 
-        "Sale Price", 
+        "Selling Price", 
         "Expiry Date", 
         "Status",
         "Manufacturer",
@@ -336,38 +338,45 @@ const getMedicineIcon = (category?: string) => {
       ];
       
       const rows = filteredData.map((it) => [
-        String(it.id || ""),
-        `"${(it.name || "").replace(/"/g, '""')}"`,
-        it.category || "",
-        it.hsn || "",
-        String(it.totalQuantity || 0),
-        String(it.costPrice || ""),
-        String(it.sellingPrice || ""),
+        `MED${String(it.id).padStart(3, "0")}`,
+        it.name ?? "",
+        it.category ?? "",
+        it.hsn ?? "",
+        it.totalQuantity ?? 0,
+        it.costPrice ?? "",
+        it.sellingPrice ?? "",
         it.expiryDate ? formatDate(it.expiryDate) : "",
         getStockStatus(it),
-        it.manufacturer || "",
-        it.location || "",
-        it.batchNumber || ""
-      ]);
+        it.manufacturer ?? "",
+        it.location ?? "",
+      it.batchNumber ?? "",
+    ]);
 
-      // Create proper CSV
-      const csvContent = [
-        headers.join(","),
-        ...rows.map(row => row.join(","))
-      ].join("\n");
+    const csvContent =
+      [headers, ...rows]
+        .map(row =>
+          row.map(cell =>
+            `"${String(cell).replace(/"/g, '""')}"`
+          ).join(",")
+        )
+        .join("\n");
 
-      // Create a blob/file for sharing
-      const base64Data = btoa(unescape(encodeURIComponent(csvContent)));
-      
-      // For React Native, we'll use Share API
-      await Share.share({
-        title: "Stock Export",
-        message: csvContent, // On iOS, this will be shared as text
-        url: `data:text/csv;base64,${base64Data}`, // On Android, this might work better
-        filename: `stock_export_${new Date().toISOString().split('T')[0]}.csv`
-      });
+    const fileName = `inventory_stock_${Date.now()}.csv`; // ✅ CSV
+    const filePath =
+      Platform.OS === "android"
+        ? `${RNFS.DownloadDirectoryPath}/${fileName}`
+        : `${RNFS.DocumentDirectoryPath}/${fileName}`;
 
-    } catch (e) {
+    await RNFS.writeFile(filePath, csvContent, "utf8");
+
+    await Share.open({
+      url: Platform.OS === "android" ? `file://${filePath}` : filePath,
+      type: "text/csv", // ✅ correct MIME
+      filename: fileName,
+      failOnCancel: false,
+    });
+
+  } catch (err) {
       Alert.alert("Export failed", "Could not export CSV file. Please try again.");
     }
   };
@@ -850,7 +859,7 @@ const IconComponent = getMedicineIcon(item.category);
       </View>
 
       {/* Footer */}
-      <View style={styles.footerWrap}>
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"inventory"} brandColor={COLORS.brand} />
       </View>
     </SafeAreaView>
@@ -1397,7 +1406,6 @@ medicationIcon: {
 
   // Footer
   footerWrap: {
-    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,

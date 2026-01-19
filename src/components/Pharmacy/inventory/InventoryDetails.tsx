@@ -44,11 +44,11 @@ import { formatDate, formatTime } from "../../../utils/dateTime";
 
 const FOOTER_H = FOOTER_HEIGHT || 70;
 
-interface InventoryDetailRouteProps {
+type InventoryDetailRouteProps = {
   InventoryDetail: {
     inventoryData: any;
   };
-}
+};
 
 const InventoryDetails: React.FC = () => {
   const route = useRoute<RouteProp<InventoryDetailRouteProps, "InventoryDetail">>();
@@ -146,6 +146,11 @@ const InventoryDetails: React.FC = () => {
                 <View style={styles.dot} />
                 <Text style={styles.medicineCategory}>{item?.category ?? "N/A"}</Text>
               </View>
+
+                <View style={styles.medicineSubInfo}>
+                <Text style={styles.medicineCategory}>Batch Info : {item?.hsn ?? "N/A"}</Text>
+              </View>
+              
             </View>
             <View style={styles.medicineRight}>
               <View

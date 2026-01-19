@@ -32,6 +32,22 @@ import { UserIcon, ArrowLeft, AlertCircle, ChevronDown } from "lucide-react-nati
 import Footer from "../dashboard/footer";
 import { RootStackParamList } from "../../navigation/navigationTypes";
 
+interface TestItem {
+  id: string;
+  test?: string;
+  testName?: string;
+  hsn?: string;
+  testPrice?: number;
+  gst?: number;
+  addedOn?: string;
+  loinc_num_?: string;
+  reason?: string;
+  doctorName?: string;
+  rejectedReason?: string;
+  alertStatus?: string;
+  status?: string;
+}
+
 interface MedicineItem {
   id: string | number;
   name?: string;
@@ -49,6 +65,11 @@ interface MedicineItem {
   category?: string;
   nurseID?: number;
   datetime?: string;
+  doctorName?: string;
+  rejectReason?: string;
+  rejectedOn?: string;
+  rejectedBy?: number;
+  status?: string;
 }
 
 interface OrderData {
@@ -62,11 +83,10 @@ interface OrderData {
   location?: string;
   departmemtType?: number;
   ptype?: number;
+  testsList?: TestItem[];
   medicinesList?: MedicineItem[];
   paidAmount?: string;
   nurseID?: number;
-  firstName?: string;  
-  lastName?: string;    
 }
 
 interface NurseType {
@@ -75,6 +95,16 @@ interface NurseType {
   lastName: string;
   phoneNo: string;
   departmentID: number;
+}
+
+interface RouteParams {
+  orderData: OrderData;
+  patientID: string;
+  patientTimeLineID: string;
+  departmentName?: string;
+  isRejectedTab?: boolean;
+  doctorName?: string; 
+  orderDate?: string; 
 }
 
 const medicineCategoryReverse: Record<number, string> = {
@@ -86,17 +116,13 @@ const medicineCategoryReverse: Record<number, string> = {
   6: "Drops"
 };
 
-const PharmacyOrderDetailsScreen: React.FC = () => {
+const ReceptionOrderDetailsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute();
   const dispatch = useDispatch();
   const user = useSelector((state: any) => state.currentUser);
   const [nurseError, setNurseError] = useState("");
-  const { orderData, patientID, patientTimeLineID } = route.params as {
-    orderData: OrderData;
-    patientID: string;
-    patientTimeLineID: string;
-  };
+  const { orderData, patientID, patientTimeLineID, departmentName: passedDepartmentName ,isRejectedTab = false,doctorName: passedDoctorName,orderDate: passedOrderDate } = route.params as RouteParams;
 
   const [quantities, setQuantities] = useState<{ [key: string]: number }>({});
   const [originalQuantities, setOriginalQuantities] = useState<{ [key: string]: number }>({});
@@ -113,10 +139,23 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
   const [currentOriginalQuantity, setCurrentOriginalQuantity] = useState<number>(0);
   const [tempReason, setTempReason] = useState("");
 
-  // Check if this is IPD/Emergency (needs nurse selection)
-  const isIpdOrEmergency = orderData?.departmemtType === 2 || orderData?.departmemtType === 3 || orderData?.ptype === 2 || orderData?.ptype === 3;
+  // Check if there are any rejected medicines or tests
+  const hasRejectedMedicines = orderData?.medicinesList?.some(med => (med.status === "rejected" && med.rejectReason) || (med.alertStatus === "rejected" && med.rejectedReason)) || false;
+  const hasRejectedTests = orderData?.testsList?.some(test => (test.status === "rejected" && test.rejectedReason) || (test.alertStatus === "rejected" && test.rejectedReason)) || false;
+  
+  // Check if any item is rejected (either medicine or test)
+  const hasRejectedItems = hasRejectedMedicines || hasRejectedTests;
 
-  // Initialize quantities from order data - FIXED TO USE quantity FIELD
+  // Check if this is IPD/Emergency (needs nurse selection for medicines)
+  const isIpdOrEmergency = orderData?.departmemtType === 2 || orderData?.departmemtType === 3 || orderData?.ptype === 2 || orderData?.ptype === 3;
+  
+  // Check if order has medicines
+  const hasMedicines = orderData?.medicinesList && orderData.medicinesList.length > 0;
+  
+  // Check if order has tests
+  const hasTests = orderData?.testsList && orderData.testsList.length > 0;
+ 
+  // Initialize quantities from order data
   useEffect(() => {
     const initialQuantities: { [key: string]: number } = {};
     const initialOriginalQuantities: { [key: string]: number } = {};
@@ -143,10 +182,10 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
     setDecreasedQuantities(initialDecreasedQuantities);
   }, [orderData]);
 
-  // Fetch nurses for IPD/Emergency orders
+  // Fetch nurses for IPD/Emergency orders with medicines
   useEffect(() => {
     const fetchNurses = async () => {
-      if (!isIpdOrEmergency) return;
+      if (!isIpdOrEmergency || !hasMedicines) return;
 
       try {
         const token = await AsyncStorage.getItem("token");
@@ -172,109 +211,52 @@ const PharmacyOrderDetailsScreen: React.FC = () => {
     };
 
     fetchNurses();
-  }, [isIpdOrEmergency, user.hospitalID]);
+  }, [isIpdOrEmergency, hasMedicines, user.hospitalID]);
 
-const handleDecrement = (medId: string, currentQty: number) => {
-  const originalQty = originalQuantities[medId] || currentQty;
-    if (currentQty > 1 && (currentQty - 1) < originalQty) {
-    if (!decreasedQuantities[medId]) {
-      setCurrentMedicineId(medId);
-      setCurrentOriginalQuantity(originalQty);
-      setTempReason(""); // Reset temp reason
-      setShowReasonModal(true);
-    } else {
-      // Already has reason - just decrease without popup
-      setQuantities(prev => ({
-        ...prev,
-        [medId]: currentQty - 1
-      }));
-    }
-  } else if (currentQty > 1) {
-    // Normal decrement (still above or equal to original)
-    setQuantities(prev => ({
-      ...prev,
-      [medId]: currentQty - 1
-    }));
-  }
-};
 
-  const handleIncrement = (medId: string, currentQty: number) => {
-    const originalQty = originalQuantities[medId] || currentQty;
-    
-    // If we increment back to or above original quantity, remove the decreased flag
-    if ((currentQty + 1) >= originalQty && decreasedQuantities[medId]) {
-      setDecreasedQuantities(prev => ({
-        ...prev,
-        [medId]: false
-      }));
-      
-      // Clear the reason if we're back at or above original quantity
-      setReasons(prev => {
-        const newReasons = { ...prev };
-        delete newReasons[medId];
-        return newReasons;
-      });
-    }
-    
-    setQuantities(prev => ({
-      ...prev,
-      [medId]: currentQty + 1
-    }));
+  const calculateTestTotal = (test: TestItem) => {
+    const price = Number(test?.testPrice || 0);
+    const gst = test?.gst !== undefined && test?.gst !== null
+      ? Number(test.gst)
+      : 18;
+    const base = isNaN(price) ? 0 : price;
+    const gstVal = isNaN(gst) ? 0 : gst;
+    return base + (base * gstVal) / 100;
   };
-
-const handleConfirmDecrement = () => {
-  if (currentMedicineId && tempReason.trim()) {
-    const currentQty = quantities[currentMedicineId];
-    if (currentQty > 1) {
-      const newQuantity = currentQty - 1;
-      setQuantities(prev => ({
-        ...prev,
-        [currentMedicineId]: newQuantity
-      }));
-      
-      // Mark this medicine as "has been decreased below original"
-      setDecreasedQuantities(prev => ({
-        ...prev,
-        [currentMedicineId]: true
-      }));
-      
-      // Store the reason
-      setReasons(prev => ({
-        ...prev,
-        [currentMedicineId]: tempReason.trim()
-      }));
-      
-      setShowReasonModal(false);
-      setCurrentMedicineId(null);
-      setCurrentOriginalQuantity(0);
-      setTempReason("");
-    }
-  }
-};
 
   const calculateMedicineTotal = (medicine: MedicineItem) => {
     const medId = medicine.medId?.toString() ?? medicine.id?.toString();
     const quantity = medId ? quantities[medId] : medicine.quantity ?? 1;
     const unitPrice = medicine.sellingPrice ?? medicine.price ?? 0;
-    const gst = medicine.gst ?? 0;
+    const gst = medicine.gst ?? 18;
     
     const baseTotal = unitPrice * quantity;
     const gstAmount = (baseTotal * gst) / 100;
     return baseTotal + gstAmount;
   };
 
-  const calculateOrderTotal = () => {
+  const calculateTestsTotal = () => {
+    return orderData?.testsList?.reduce((total, test) => {
+      return total + calculateTestTotal(test);
+    }, 0) || 0;
+  };
+
+  const calculateMedicinesTotal = () => {
     return orderData?.medicinesList?.reduce((total, medicine) => {
       return total + calculateMedicineTotal(medicine);
     }, 0) || 0;
   };
 
+  const calculateOrderTotal = () => {
+    return calculateTestsTotal() + calculateMedicinesTotal();
+  };
+
   const handleApproveOrder = async () => {
     try {
-      // Validate nurse selection for IPD/Emergency
-      if (isIpdOrEmergency && !selectedNurse) {
-        setNurseError("Please select a nurse first for IPD/Emergency orders");
-        dispatch(showError("Please select a nurse first for IPD/Emergency orders"));
+      // Validate nurse selection for IPD/Emergency with medicines
+      if (isIpdOrEmergency && hasMedicines && !selectedNurse) {
+        setNurseError("Please select a nurse first for IPD/Emergency medicine orders");
+        dispatch(showError("Please select a nurse first for IPD/Emergency medicine orders"));
         return;
       }
 
@@ -286,12 +268,13 @@ const handleConfirmDecrement = () => {
         dispatch(showError("Not authorized. Please login again."));
         return;
       }
+
       // Prepare payload
       const payload: any = {
         nurseID: selectedNurse?.id || null
       };
 
-      // Add updated quantities if any changes were made
+      // Add updated quantities if any changes were made to medicines
       const hasQuantityChanges = Object.keys(quantities).some(medId => {
         const originalQty = originalQuantities[medId];
         return quantities[medId] !== originalQty;
@@ -306,30 +289,40 @@ const handleConfirmDecrement = () => {
         payload.reasons = reasons;
       }
 
+      // Determine which parts to update
+      if (hasTests && hasMedicines) {
+        payload.updateMedicines = true;
+        payload.updateTests = true;
+      } else if (hasTests && !hasMedicines) {
+        payload.updateTests = true;
+      } else if (!hasTests && hasMedicines) {
+        payload.updateMedicines = true;
+      }
+
       const response = await AuthPost(
-        `medicineInventoryPatientsOrder/${user.hospitalID}/completed/${patientTimeLineID}/updatePatientOrderStatus`,
+        `reception/${user.hospitalID}/completed/${patientID}/${patientTimeLineID}/updateReceptionAlerts`,
         payload,
         token
       ) as any;
-      if (response?.data?.status === 201 || response?.status === 201 || response?.data?.status === 200) {
+
+      if (response?.data?.status === 200 || response?.status === 200) {
         const successMessage = response?.data?.message || "Order approved successfully";
-      dispatch(showSuccess(successMessage));
+        dispatch(showSuccess(successMessage));
         navigation.navigate("AlertsLab", {
-        refresh: true,
+          refresh: true,
         });
-
       } else {
-          const errorMessage =
-            response?.data?.message ||
-            response?.message ||
-            "Failed to approve order";
+        const errorMessage =
+          response?.data?.message ||
+          response?.message ||
+          "Failed to approve order";
 
-          if (errorMessage === "Stock is low for selected medicines") {
-            dispatch(showWarning(errorMessage));
-          } else {
-            dispatch(showError(errorMessage));
-          }
+        if (errorMessage === "Stock is low for selected medicines") {
+          dispatch(showWarning(errorMessage));
+        } else {
+          dispatch(showError(errorMessage));
         }
+      }
     } catch (error: any) {
       dispatch(showError(error?.response?.data?.message || "Failed to approve order"));
     } finally {
@@ -351,19 +344,32 @@ const handleConfirmDecrement = () => {
         dispatch(showError("Not authorized. Please login again."));
         return;
       }
+
+      // Determine which parts to update
+      let payload: any = { rejectReason };
+      
+      if (hasTests && hasMedicines) {
+        payload.updateMedicines = true;
+        payload.updateTests = true;
+      } else if (hasTests && !hasMedicines) {
+        payload.updateTests = true;
+      } else if (!hasTests && hasMedicines) {
+        payload.updateMedicines = true;
+      }
+
       const response = await AuthPost(
-        `medicineInventoryPatientsOrder/${user.hospitalID}/rejected/${patientTimeLineID}/updatePatientOrderStatus`,
-        { rejectReason },
+        `reception/${user.hospitalID}/rejected/${patientID}/${patientTimeLineID}/updateReceptionAlerts`,
+        payload,
         token
       ) as any;
-      if (response?.data?.status === 200 || response?.data?.status === 201 || response?.data?.status === 200) {
+      
+      if (response?.data?.status === 200 || response?.status === 200) {
         dispatch(showSuccess("Order rejected successfully"));
         setShowRejectModal(false);
         setRejectReason("");
         navigation.navigate("AlertsLab", {
           refresh: true,
         });
-
       } else {
         const errorMessage = response?.data?.message || response?.message || "Failed to reject order";
         dispatch(showError(errorMessage));
@@ -376,6 +382,12 @@ const handleConfirmDecrement = () => {
   };
 
   const getDepartmentName = (deptType?: number) => {
+    // If departmentName was passed from navigation, use it
+    if (passedDepartmentName && passedDepartmentName !== "Unknown Department") {
+      return passedDepartmentName;
+    }
+    
+    // Otherwise fallback to the type-based logic
     switch (deptType) {
       case 1: return "OPD";
       case 2: return "IPD";
@@ -396,6 +408,12 @@ const handleConfirmDecrement = () => {
 
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <ArrowLeft size={24} color={COLORS.text} />
+        </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Order Details</Text>
           <Text style={styles.subtitle}>
@@ -431,28 +449,36 @@ const handleConfirmDecrement = () => {
               <Text style={styles.label}>Department</Text>
               <Text style={styles.value}>
                 {getDepartmentName(orderData?.departmemtType || orderData?.ptype)}
-                {/* {isIpdOrEmergency && " (IPD/Emergency)"} */}
               </Text>
             </View>
 
-            <View style={styles.row}>
-              <Text style={styles.label}>Doctor</Text>
-              <Text style={styles.value}>
-                {orderData?.firstName && orderData?.lastName
-                  ? `${orderData.firstName} ${orderData.lastName}`
-                  : "Not Assigned"}
-              </Text>
-            </View>
+<View style={styles.row}>
+  <Text style={styles.label}>Doctor</Text>
+  <Text style={styles.value}>
+    {/* Use passed doctor name if available, otherwise fallback */}
+    {passedDoctorName && passedDoctorName !== "Not Assigned"
+      ? passedDoctorName
+      : orderData?.doctor_firstName && orderData?.doctor_lastName
+      ? `${orderData.doctor_firstName} ${orderData.doctor_lastName}`
+      : orderData?.doctor_firstName ||
+        orderData?.testsList?.[0]?.doctorName ||
+        orderData?.medicinesList?.[0]?.doctorName ||
+        "Not Assigned"}
+  </Text>
+</View>
 
-            <View style={styles.row}>
-              <Text style={styles.label}>Order Date</Text>
-              <Text style={styles.value}>
-                {formatDate(orderData?.addedOn)}
-              </Text>
-            </View>
+<View style={styles.row}>
+  <Text style={styles.label}>Order Date</Text>
+  <Text style={styles.value}>
+    {/* Use passed order date if available, otherwise fallback */}
+    {passedOrderDate && passedOrderDate !== "-"
+      ? passedOrderDate
+      : formatDate(orderData?.addedOn)}
+  </Text>
+</View>
             
-            {/* Nurse Information for IPD/Emergency */}
-            {isIpdOrEmergency && (
+            {/* Nurse Information for IPD/Emergency with medicines */}
+            {isIpdOrEmergency && hasMedicines && !hasRejectedItems && (
               <View style={styles.nurseSection}>
                 <View style={styles.row}>
                   <Text style={styles.label}>Nurse</Text>
@@ -487,18 +513,68 @@ const handleConfirmDecrement = () => {
                   </View>
                 ) : (
                   <Text style={styles.nurseHelpText}>
-                    * Nurse selection is required for IPD/Emergency orders
+                    * Nurse selection is required for IPD/Emergency medicine orders
                   </Text>
                 )}
               </View>
             )}
+            
+            {/* Rejection Reason Display */}
+            {hasRejectedItems && (
+              <View style={styles.rejectionSection}>
+                <View style={styles.row}>
+                  <Text style={styles.label}>Rejection Reason</Text>
+                  <View style={styles.rejectionReasonContainer}>
+                    <Text style={styles.rejectionReasonText}>
+                      {orderData?.medicinesList?.find(med => med.rejectReason || med.rejectedReason)?.rejectReason || 
+                       orderData?.medicinesList?.find(med => med.rejectReason || med.rejectedReason)?.rejectedReason ||
+                       orderData?.testsList?.find(test => test.rejectedReason)?.rejectedReason || "n"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
           </View>
 
-          {/* Medicines List */}
-          {orderData?.medicinesList && orderData.medicinesList.length > 0 && (
+          {/* Tests List */}
+          {hasTests && (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>
-                Medicines ({orderData.medicinesList.length})
+                Tests ({orderData.testsList?.length})
+              </Text>
+
+              <View style={styles.tableHeaderRow}>
+                <Text style={[styles.th, { flex: 2 }]}>Test Name</Text>
+              </View>
+
+              {orderData.testsList?.map((test, index) => {
+                const totalAmount = calculateTestTotal(test);
+                
+                return (
+                  <View key={test.id || `test-${index}`} style={styles.tableRow}>
+                    <View style={{ flex: 2 }}>
+                      <Text style={styles.tdMain}>
+                        {test.test || test.testName || "Unnamed Test"}
+                      </Text>
+                      {test.hsn ? (
+                        <Text style={styles.tdSub}>HSN: {test.hsn}</Text>
+                      ) : null}
+                      <Text style={styles.tdSub}>
+                        • Lonic Code: {test.loinc_num_ || 0}
+                      </Text>
+                    </View>
+                 
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Medicines List */}
+          {hasMedicines && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>
+                Medicines ({orderData.medicinesList?.length})
               </Text>
 
               <View style={styles.tableHeaderRow}>
@@ -506,12 +582,9 @@ const handleConfirmDecrement = () => {
                 <Text style={[styles.th, { flex: 1, textAlign: "center" }]}>
                   Qty
                 </Text>
-                <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>
-                  Amount
-                </Text>
               </View>
 
-              {orderData.medicinesList.map((medicine, index) => {
+              {orderData.medicinesList?.map((medicine, index) => {
                 const medId = (medicine.medId?.toString() ?? medicine.id?.toString());
                 const currentQuantity = medId ? quantities[medId] : medicine.quantity || 1;
                 const originalQuantity = medId ? originalQuantities[medId] : currentQuantity;
@@ -534,18 +607,12 @@ const handleConfirmDecrement = () => {
                       </Text>
                       {decreasedQuantities[medId || ''] && (
                         <View style={styles.reasonContainer}>
-                          <Text style={styles.reasonLabel}>Reason for decrease : {reasons[medId || '']}</Text>
+                          <Text style={styles.reasonLabel}>Reason for decrease: {reasons[medId || '']}</Text>
                         </View>
                       )}
                     </View>
                     <View style={{ flex: 1, alignItems: "center" }}>
                       <View style={styles.quantityControls}>
-                        <TouchableOpacity
-                          style={styles.quantityButton}
-                          onPress={() => handleDecrement(medId || '', currentQuantity)}
-                        >
-                          <Text style={styles.quantityButtonText}>-</Text>
-                        </TouchableOpacity>
                         <View style={styles.quantityDisplay}>
                           <Text style={styles.quantityValue}>{currentQuantity}</Text>
                           {currentQuantity < originalQuantity && (
@@ -554,78 +621,43 @@ const handleConfirmDecrement = () => {
                             </Text>
                           )}
                         </View>
-                        <TouchableOpacity
-                          style={styles.quantityButton}
-                          onPress={() => handleIncrement(medId || '', currentQuantity)}
-                        >
-                          <Text style={styles.quantityButtonText}>+</Text>
-                        </TouchableOpacity>
                       </View>
-                    </View>
-                    <View style={{ flex: 1, alignItems: "flex-end" }}>
-                      <Text style={styles.tdMain}>
-                        ₹{totalAmount.toFixed(2)}
-                      </Text>
                     </View>
                   </View>
                 );
               })}
-
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Medicines Total</Text>
-                <Text style={styles.totalValue}>
-                  ₹{calculateOrderTotal().toFixed(2)}
-                </Text>
-              </View>
             </View>
           )}
 
-          {/* Order Summary */}
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Order Summary</Text>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total Amount:</Text>
-              <Text style={styles.totalValue}>
-                ₹{calculateOrderTotal().toFixed(2)}
-              </Text>
-            </View>
-            {orderData?.paidAmount && parseFloat(orderData.paidAmount) > 0 && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Paid Amount:</Text>
-                <Text style={styles.totalValue}>
-                  ₹{parseFloat(orderData.paidAmount).toFixed(2)}
-                </Text>
-              </View>
-            )}
-          </View>
         </ScrollView>
 
-        {/* Action Buttons - Fixed at bottom above footer */}
-        <View style={styles.actionButtons}>
-          {getDepartmentName(orderData?.departmemtType || orderData?.ptype) === "OPD" && (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.rejectButton]}
-            onPress={() => setShowRejectModal(true)}
-            disabled={isProcessing}
-          >
-            <Text style={styles.rejectButtonText}>
-              {isProcessing ? "Processing..." : "✗ Reject Order"}
-            </Text>
-          </TouchableOpacity>)}
-          <TouchableOpacity
-            style={[styles.actionButton, styles.approveButton]}
-            onPress={handleApproveOrder}
-            disabled={isProcessing}
-          >
-            <Text style={styles.approveButtonText}>
-              {isProcessing ? "Processing..." : "✓ Approve Order"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+{/* Action Buttons - Fixed at bottom above footer */}
+{!isRejectedTab && (
+  <View style={styles.actionButtons}>
+    <TouchableOpacity
+      style={[styles.actionButton, styles.rejectButton]}
+      onPress={() => setShowRejectModal(true)}
+      disabled={isProcessing}
+    >
+      <Text style={styles.rejectButtonText}>
+        {isProcessing ? "Processing..." : "✗ Reject Order"}
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[styles.actionButton, styles.approveButton]}
+      onPress={handleApproveOrder}
+      disabled={isProcessing}
+    >
+      <Text style={styles.approveButtonText}>
+        {isProcessing ? "Processing..." : "✓ Approve Order"}
+      </Text>
+    </TouchableOpacity>
+  </View>
+)}
 
         {/* Footer */}
         <View style={styles.footerWrap}>
-          <Footer active={"pharmacy"} brandColor={COLORS.brand} />
+          <Footer active={"reception"} brandColor={COLORS.brand} />
         </View>
       </View>
 
@@ -640,7 +672,7 @@ const handleConfirmDecrement = () => {
           <View style={styles.nurseModal}>
             <Text style={styles.modalTitle}>Select Nurse</Text>
             <Text style={styles.modalSubtitle}>
-              Choose a nurse for this order
+              Choose a nurse for this medicine order
             </Text>
             
             <ScrollView style={styles.nurseList}>
@@ -713,7 +745,7 @@ const handleConfirmDecrement = () => {
               numberOfLines={4}
               textAlignVertical="top"
               value={tempReason}
-              onChangeText={setTempReason} // Just update state, don't close modal
+              onChangeText={setTempReason}
             />
             
             <View style={styles.modalButtons}>
@@ -728,7 +760,6 @@ const handleConfirmDecrement = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton]}
-                onPress={handleConfirmDecrement}
                 disabled={!tempReason.trim()}
               >
                 <Text style={styles.confirmButtonText}>
@@ -803,10 +834,11 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    marginTop:SPACING.md
   },
   header: {
     paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.xxl,
     paddingBottom: SPACING.xs,
     flexDirection: "row",
     alignItems: "center",
@@ -925,6 +957,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     fontStyle: 'italic',
   },
+  rejectionSection: {
+    marginTop: 8,
+  },
+  rejectionReasonContainer: {
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: COLORS.danger,
+    backgroundColor: COLORS.dangerLight,
+    maxWidth: '70%',
+  },
+  rejectionReasonText: {
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.danger,
+    fontWeight: "600",
+    textAlign: 'right',
+  },
   tableHeaderRow: {
     flexDirection: "row",
     borderBottomWidth: 1,
@@ -965,11 +1016,6 @@ const styles = StyleSheet.create({
     color: COLORS.warning,
     fontWeight: "600",
     fontStyle:'italic'
-  },
-  reasonText: {
-    fontSize: FONT_SIZE.xs,
-    color: COLORS.warningDark,
-    marginTop: 2,
   },
   quantityControls: {
     flexDirection: "row",
@@ -1203,4 +1249,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PharmacyOrderDetailsScreen;
+export default ReceptionOrderDetailsScreen;

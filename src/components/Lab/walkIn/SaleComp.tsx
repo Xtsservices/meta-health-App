@@ -442,7 +442,7 @@ const FileUpload: React.FC<{
                     </Text>
 
                     <View style={styles.fileActions}>
-                      {!isImage && (
+                      {/* {!isImage && (
                         <TouchableOpacity
                           style={styles.viewButton}
                           onPress={() => handleViewFile(url, file?.type || '')}
@@ -451,7 +451,7 @@ const FileUpload: React.FC<{
                           <Eye size={16} color={COLORS.brand} />
                           <Text style={{ color: COLORS.brand, fontSize: FONT_SIZE.xs, marginLeft: 4 }}>View</Text>
                         </TouchableOpacity>
-                      )}
+                      )} */}
                       <TouchableOpacity
                         style={styles.deleteButton}
                         onPress={() => onFileRemove(index)}
@@ -693,6 +693,9 @@ const SaleComp: React.FC = () => {
   const handleFileChange = (file: FileItem) => {
     setFiles((prev) => [...prev, file]);
     setFileURLs((prev) => [...prev, file.uri]);
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    });
   };
 
   const handleFileRemove = (index: number) => {
@@ -836,6 +839,10 @@ const SaleComp: React.FC = () => {
     dispatch(showError(`Please select a valid ${type} from the list.`));
   }, [type, selectedMedicine, selectedTest, searchQuery, medicineList, testList, suggestions, noteInput, selectedMedicines, selectedTests, dispatch]);
 
+  const getGSTPercent = (gst?: number | string) => {
+    const parsed = Number(gst);
+    return isNaN(parsed) ? 0 : parsed;
+  };
   const handleRemoveItem = (index: number) => {
     if (type === "medicine") {
       setSelectedMedicines((prev) => prev.filter((_, i) => i !== index));
@@ -870,9 +877,17 @@ const SaleComp: React.FC = () => {
     ? selectedMedicines.reduce((acc, item) => acc + (item?.sellingPrice ?? 0) * (item?.selectedQuantity || 1), 0)
     : selectedTests.reduce((acc, item) => acc + (item.testPrice ?? 0), 0);
 
-  const gstAmount = type === "medicine"
-    ? (grossAmount * 18) / 100
-    : selectedTests.reduce((acc, item) => acc + (item.testPrice ?? 0) * ((item.gst ?? 0) / 100), 0);
+  const gstAmount =
+    type === "medicine"
+      ? selectedMedicines.reduce((acc, item) => {
+        const gstPercent = getGSTPercent(item.gst);
+        const price = (item.sellingPrice ?? 0) * (item.selectedQuantity || 1);
+        return acc + (price * gstPercent) / 100;
+      }, 0)
+      : selectedTests.reduce((acc, item) => {
+        const gstPercent = getGSTPercent(item.gst);
+        return acc + (item.testPrice ?? 0) * (gstPercent / 100);
+      }, 0);
   const totalAmount = grossAmount + gstAmount;
   const discountedAmount = totalAmount - (totalAmount * discount) / 100;
 
@@ -968,7 +983,11 @@ const SaleComp: React.FC = () => {
 
   // Updated renderMedicineItem to use card style with quantity controls
   const renderMedicineItem = ({ item, index }: { item: MedicineType & { selectedQuantity?: number }; index: number }) => {
-    const amount = ((item.sellingPrice ?? 0) * (item.selectedQuantity || 1)) * 1.18; // 18% GST for medicines
+    const gstPercent = getGSTPercent(item.gst);
+    const baseAmount =
+      (item.sellingPrice ?? 0) * (item.selectedQuantity || 1);
+    const amount = baseAmount + (baseAmount * gstPercent) / 100;
+
     const maxQuantity = item.quantity || 1;
     const currentQuantity = item.selectedQuantity || 1;
 
@@ -1040,8 +1059,8 @@ const SaleComp: React.FC = () => {
         </View>
 
         <View style={styles.amountRow}>
-          <Text style={[styles.amountLabel, { color: COLORS.sub }]}>
-            Total (incl. 18% GST):
+          <Text style={styles.amountLabel}>
+            Total (incl. {gstPercent}% GST):
           </Text>
           <Text style={[styles.amountValue, { color: COLORS.text }]}>
             ₹{amount.toFixed(2)}
@@ -1061,7 +1080,7 @@ const SaleComp: React.FC = () => {
   };
 
   const renderMedicineSelection = () => {
-    const filteredMedicines = searchQuery.trim() === '' 
+    const filteredMedicines = searchQuery.trim() === ''
       ? [] 
       : medicineList.filter(medicine =>
           medicine.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -1376,25 +1395,18 @@ const SaleComp: React.FC = () => {
     <KeyboardAvoidingView
       style={styles.safe}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? FOOTER_H + insets.bottom : FOOTER_H}
+      keyboardVerticalOffset={FOOTER_H + insets.bottom}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
         <View style={[styles.container, { backgroundColor: COLORS.bg }]}>
           <StatusBar barStyle="dark-content" backgroundColor={COLORS.brand} />
 
           <ScrollView
             ref={scrollViewRef}
-            style={styles.scrollView}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{
-              paddingBottom:
-                FOOTER_H + insets.bottom + SPACING.xl + Math.min(keyboardHeight, FOOTER_H),
-              minHeight: Math.max(
-                SCREEN_HEIGHT - FOOTER_H - insets.top - insets.bottom,
-                SCREEN_HEIGHT * 0.7
-              ),
-            }}
+            style={styles.scrollView}
           >
             <View style={styles.content}>
               <View style={styles.formGroup}>
@@ -1617,7 +1629,7 @@ const SaleComp: React.FC = () => {
             <Footer active={"walkin"} brandColor={COLORS.brand} />
           </View>
         </View>
-      </TouchableWithoutFeedback>
+      </Pressable>
     </KeyboardAvoidingView>
   );
 };

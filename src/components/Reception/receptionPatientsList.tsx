@@ -257,7 +257,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
     }
 
     // optional: avoid API spam for 1–2 digits
-    if (mobile.length < 3) {
+    if (mobile.length < 1) {
       setSearchResults([]);
       return;
     }
@@ -277,10 +277,14 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
 
         let list: Patient[] = [];
         if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.patients)) {
-          list = res?.data?.patients;
+          list = res.data.patients;
         } else if (Array.isArray(res)) {
           list = res;
         }
+        const searchValue = mobile;
+        list = list.filter((p: Patient) =>
+          p.phoneNumber?.startsWith(searchValue)
+        );
 
         if (!cancelled) {
           setSearchResults(list);
@@ -367,12 +371,13 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
       zone: p.zone,
       dischargeType: p.dischargeType,
       patientStartStatus: p.patientStartStatus,
+      wardName: p.wardName,
     });
   };
 
   const handleViewPress = (p: Patient) => {
     if (!p?.id) return;
-    navigation.navigate("PatientProfile", { id: p.id, reception: true });
+    navigation.navigate("PatientProfile", { id: p.id, reception: true, wardName: p.wardName,  });
   };
 
   /* ------------------------------ UI Blocks -------------------------------- */
@@ -394,20 +399,18 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
         <SearchIcon size={18} color={COLORS.sub} />
         <TextInput
           value={search}
-          onChangeText={(text) => {
-            const numeric = text.replace(/\D/g, "").slice(0, 10);
-            setSearch(numeric);
-          }}
+          onChangeText={setSearch}
           keyboardType="number-pad"
+          maxLength={10}
+          textContentType="telephoneNumber"
           placeholder="Search by mobile number"
           placeholderTextColor={COLORS.placeholder}
           style={[
             styles.searchInput,
             {
               color: COLORS.text,
-            },
+            }
           ]}
-          maxLength={10}
         />
       </View>
 
@@ -435,7 +438,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
           </Text>
           <View style={styles.pickerOuter}>
             <Picker
-              mode="dropdown"
+              mode="dialog"
               selectedValue={filter}
               onValueChange={(val) => setFilter(Number(val))}
               style={[
@@ -479,7 +482,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
           <View style={styles.pickerOuter}>
             <Picker
               enabled={filter !== 1}
-              mode="dropdown"
+              mode="dialog"
               selectedValue={wardID}
               onValueChange={(val) => setWardID(Number(val))}
               style={[
@@ -520,7 +523,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
           </Text>
           <View style={styles.pickerOuter}>
             <Picker
-              mode="dropdown"
+              mode="dialog"
               selectedValue={year}
               onValueChange={(val) => setYear(String(val))}
               style={[
@@ -564,7 +567,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
           </Text>
           <View style={styles.pickerOuter}>
             <Picker
-              mode="dropdown"
+              mode="dialog"
               selectedValue={month}
               onValueChange={(val) => setMonth(String(val))}
               style={[

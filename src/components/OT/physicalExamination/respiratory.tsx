@@ -1,6 +1,5 @@
 // src/screens/ot/GeneralPhysicalExaminationMobile.tsx
-
-import React, { useMemo } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -19,7 +18,6 @@ import Footer from "../../dashboard/footer";
 import { RootState } from "../../../store/store";
 import { useSelector } from "react-redux";
 import { COLORS } from "../../../utils/colour";
-
 
 interface RespiratoryState {
   dryCough: boolean;
@@ -50,21 +48,21 @@ const CHECKBOX_ITEMS: { key: keyof RespiratoryState; label: string }[] = [
 
 ];
 
-const GeneralPhysicalExaminationMobile: React.FC = () => {
+const RespiratoryMobile: React.FC = () => {
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const isDark = scheme === "dark";
-
+  // Get user and patient from Redux
   const user = useSelector((s: RootState) => s.currentUser);
-const isReadOnly = user?.roleName === "surgeon";
+  const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  
+  // Updated isReadOnly logic
+  const isReadOnly = user?.roleName === "surgeon" || currentPatient?.status === "approved";
 
-  const { respiratory, setRespiratory } =
-    usePhysicalExaminationForm() 
-
- 
+  const { respiratory, setRespiratory } = usePhysicalExaminationForm();
 
   const toggleField = (key: keyof RespiratoryState) => {
+    if (isReadOnly) return; // Add check
     const current = Boolean(respiratory?.[key]);
     setRespiratory({ [key]: !current });
   };
@@ -85,7 +83,6 @@ const isReadOnly = user?.roleName === "surgeon";
       ]}
     >
       <View style={styles.root}>
-        {/* Scrollable form, keyboard-safe */}
         <KeyboardAwareScrollView
           style={{ flex: 1 }}
           contentContainerStyle={styles.scrollContent}
@@ -100,8 +97,9 @@ const isReadOnly = user?.roleName === "surgeon";
             ]}
           >
             <Text style={[styles.title, { color: COLORS.text }]}>
-             Respiratory
+              Respiratory
             </Text>
+
             <Text style={[styles.subtitle, { color: COLORS.sub }]}>
               Select all applicable findings
             </Text>
@@ -116,7 +114,10 @@ const isReadOnly = user?.roleName === "surgeon";
                     onPress={() => toggleField(item.key)}
                     style={({ pressed }) => [
                       styles.checkboxRow,
-                      { backgroundColor: pressed ? COLORS.brandSoft : "transparent" },
+                      { 
+                        backgroundColor: pressed && !isReadOnly ? COLORS.brandSoft : "transparent",
+                        opacity: isReadOnly ? 0.6 : 1,
+                      },
                     ]}
                   >
                     <View
@@ -138,7 +139,6 @@ const isReadOnly = user?.roleName === "surgeon";
               })}
             </View>
 
-            {/* Prev / Next buttons at end of form */}
             <View style={styles.formNavRow}>
               <Pressable
                 onPress={handlePrev}
@@ -177,7 +177,6 @@ const isReadOnly = user?.roleName === "surgeon";
           </View>
         </KeyboardAwareScrollView>
 
-        {/* Bottom app footer */}
         <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
           <Footer active={"dashboard"} brandColor="#14b8a6" />
         </View>
@@ -192,7 +191,7 @@ const isReadOnly = user?.roleName === "surgeon";
   );
 };
 
-export default GeneralPhysicalExaminationMobile;
+export default RespiratoryMobile;
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -204,7 +203,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 110, // extra so buttons are not hidden behind footer
+    paddingBottom: 110,
   },
   card: {
     borderRadius: 16,
@@ -249,8 +248,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
-
-  // Prev / Next inside form
   formNavRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -276,8 +273,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#ffffff",
   },
-
-  // Bottom Footer
   footerWrap: {
     position: "absolute",
     left: 0,

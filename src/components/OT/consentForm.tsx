@@ -8,12 +8,13 @@ import {
   Modal,
   Linking,
   Alert,
+  Image,
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import { pick, types } from "@react-native-documents/picker";
-import { X, Trash2, PlusCircle } from "lucide-react-native";
+import { X, Trash2, PlusCircle, FileText } from "lucide-react-native";
 import { RootState } from "../../store/store";
 import { useReportStore } from "../../store/zustandstore";
 import { AuthDelete, AuthFetch, UploadFiles } from "../../auth/auth";
@@ -27,13 +28,15 @@ const BORDER = "#e2e8f0";
 const ReportsTabMobile: React.FC = () => {
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
-const dispatch = useDispatch()
+const dispatch = useDispatch();
   const { reports, setReports } = useReportStore();
 
   // ⭐ local files before saving
   const [localFiles, setLocalFiles] = useState<any[]>([]);
   const [deleteModal, setDeleteModal] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<any>(null);
+  const [previewModal, setPreviewModal] = useState(false);
+  const [fileToPreview, setFileToPreview] = useState<any>(null);
 
   // 🔹 NEW: control showing uploader vs just reports
   const [showUploader, setShowUploader] = useState(false);
@@ -102,7 +105,11 @@ const dispatch = useDispatch()
         fileName: doc[0].name,
         type: "application/pdf",
       });
-    } catch {}
+    } catch { }
+  };
+const previewLocalFile = (file: any) => {
+    setFileToPreview(file);
+    setPreviewModal(true);
   };
 
   /* ================================================================
@@ -190,13 +197,23 @@ const dispatch = useDispatch()
   const renderCard = (item: any, isLocal = false) => {
     const isPdf =
       item.type === "application/pdf" || item.mimeType === "application/pdf";
+    const isImage = item.type?.includes('image') || item.mimeType?.includes('image');
 
     return (
       <View style={styles.card}>
         <View style={styles.cardRow}>
+          <View style={styles.fileInfo}>
+            {isPdf ? (
+              <FileText size={20} color="#dc2626" />
+            ) : (
+              <View style={[styles.fileIcon, { backgroundColor: '#dbeafe' }]}>
+                <Text style={{ color: '#1d4ed8', fontSize: 12, fontWeight: 'bold' }}>IMG</Text>
+              </View>
+            )}
           <Text style={styles.fileName}>
             {item.fileName ? item.fileName.slice(0, 20) : "File"}
           </Text>
+          </View>
 
           <Pressable
             onPress={() => {
@@ -212,13 +229,13 @@ const dispatch = useDispatch()
           style={styles.viewBtn}
           onPress={() => {
             if (isLocal) {
-              Alert.alert("Info", "Preview available after upload");
-              return;
-            }
+              previewLocalFile(item);
+            } else {
             if (item.fileURL) {
               Linking.openURL(item.fileURL);
             } else {
               Alert.alert("Info", "No file URL available");
+              }
             }
           }}
         >
@@ -290,6 +307,55 @@ const dispatch = useDispatch()
           reports.map((item, i) => <View key={i}>{renderCard(item, false)}</View>)
         )}
       </ScrollView>
+
+      {/* ---------- PREVIEW MODAL FOR LOCAL FILES ---------- */}
+      <Modal
+        visible={previewModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setPreviewModal(false);
+          setFileToPreview(null);
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.previewModalCard}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle} numberOfLines={1}>
+                {fileToPreview?.fileName || 'Preview'}
+              </Text>
+              <Pressable
+                onPress={() => {
+                  setPreviewModal(false);
+                  setFileToPreview(null);
+                }}
+                style={styles.closeBtn}
+              >
+                <X size={24} color="#374151" />
+              </Pressable>
+            </View>
+
+            <View style={styles.previewContent}>
+              {fileToPreview?.type === "application/pdf" ? (
+                <View style={styles.pdfPreview}>
+                  <FileText size={64} color="#9ca3af" />
+                  <Text style={styles.pdfText}>PDF Document</Text>
+                  <Text style={styles.pdfSubText}>
+                    This PDF will be uploaded to the server.
+                    You can view it after uploading.
+                  </Text>
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: fileToPreview?.uri }}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ---------- DELETE MODAL ---------- */}
       <Modal
@@ -413,7 +479,20 @@ const styles = StyleSheet.create({
   cardRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    justifyContent: "space-between",
+  },
+  fileInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 8,
+  },
+  fileIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fileName: {
     flex: 1,
@@ -488,5 +567,59 @@ const styles = StyleSheet.create({
   modalCancel: {
     color: COLORS.text,
     fontWeight: "700",
+  },
+
+  previewModalCard: {
+    width: "90%",
+    height: "80%",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  previewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    backgroundColor: '#f8fafc',
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.text,
+    flex: 1,
+    marginRight: 12,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  previewContent: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  pdfPreview: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  pdfText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  pdfSubText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: COLORS.sub,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

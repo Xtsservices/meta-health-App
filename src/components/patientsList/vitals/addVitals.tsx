@@ -26,6 +26,7 @@ import { AuthFetch, AuthPost } from "../../../auth/auth";
 import { debounce, DEBOUNCE_DELAY } from "../../../utils/debounce";
 import { Switch } from "react-native";
 import Footer from "../../dashboard/footer";
+import { createTimeISO } from "../../../utils/dateTime";
 
 const { width, height } = Dimensions.get("window");
 
@@ -257,7 +258,7 @@ export default function AddVitalsScreen() {
 
   const timeLineID = typeof timeline === "object" ? timeline?.id : timeline;
   const patientID = cp?.currentPatient?.id ?? cp?.id;
-  const wardID = typeof timeline === "object" ? timeline?.wardID : undefined;
+  const wardID = cp?.wardID;
 
   const hasAnyVital = useMemo(
     () =>
@@ -303,26 +304,16 @@ const onChange = (name: keyof VitalsForm, value: string) => {
   setForm((p) => ({ ...p, [name]: value }));
 };
 
-
-  const createTimeISO = (hhmm: string) => {
-    if (!hhmm) return "";
-    const [h, m] = hhmm.split(":").map((n) => parseInt(n, 10));
-    const now = new Date();
-    const dt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h || 0, m || 0, 0, 0);
-    const tzOffset = dt.getTimezoneOffset() * 60000;
-    return new Date(dt.getTime() - tzOffset).toISOString();
-  };
-
   const [wardName, setWardName] = useState<string>("");
   useEffect(() => {
     let mounted = true;
     (async () => {
       if (!wardID || !user?.hospitalID) return;
       try {
-        const token = user?.token ?? (await AsyncStorage.getItem("token"));
+        const token = await AsyncStorage.getItem("token");
         const res = await AuthFetch(`ward/${user.hospitalID}`, token);
-        if ((res?.status === "success" ) && mounted && "wards" in res) {
-          const wards = Array.isArray(res?.wards) ? (res!.wards as any[]) : [];
+        if (res?.status === "success" && mounted && Array.isArray(res?.data?.wards)) {
+          const wards = res?.data?.wards;
           const found = wards.find((w: any) => w?.id == wardID);
           setWardName(found?.name || "");
         }

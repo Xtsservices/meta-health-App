@@ -524,6 +524,8 @@ const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
           navigation.navigate("DashboardTriage");
         } else if (user?.patientStatus == 1) {
           navigation.navigate("DashboardOpd");
+        } else if (user?.patientStatus == 7) {
+          navigation.navigate("ReceptionPatientsList");
         }
       } else {
         dispatch(showError("message" in res && res?.message || res?.status || "data" in res && res?.data?.message || "Patient registration failed"))
@@ -544,23 +546,29 @@ const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
   }: {
     selectedValue: any;
     onValueChange: (item: any) => void;
-    items: { label: string; value: any }[];
+    items: { label: string; value: any; disabled?: boolean }[];
     placeholder: string;
     enabled?: boolean;
   }) => {
-    const selectedLabel = items.find(i => i.value === selectedValue)?.label || placeholder;
+    const selectedItem = items.find(i => i.value === selectedValue);
+    const selectedLabel = selectedItem?.label || placeholder;
 
     return (
       <View style={[styles.pickerContainer, { borderColor: COLORS.border, opacity: enabled ? 1 : 0.6 }]}>
         <Picker
-          selectedValue={selectedValue}
-          onValueChange={onValueChange}
+          selectedValue={selectedValue ?? null}
+          enabled={enabled}
+          onValueChange={(val) => {
+            const item = items.find(i => i.value === val);
+            if (item?.disabled) return; 
+            onValueChange(val);
+          }}
           style={styles.picker}
           dropdownIconColor={COLORS.brand}
-          enabled={enabled}
         >
+          <Picker.Item label={placeholder} value={null} />
           {items.map(item => (
-            <Picker.Item key={item.value} label={item.label} value={item.value} />
+            <Picker.Item key={item.value} label={item.label} value={item.value} enabled={!item.disabled} />
           ))}
         </Picker>
         <View style={styles.pickerOverlay}>
@@ -809,6 +817,17 @@ else if (name === "email") {
   const capitalizeFirstLetter = (str: string) => {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   };
+    const wardPickerItems = useMemo(() => {
+  return wardList.map((ward) => {
+    const isFull = Number(ward.availableBeds) === 0;
+
+    return {
+      label: `${capitalizeFirstLetter(ward.name)}${isFull ? " (Full)" : ""}`,
+      value: ward.id,
+      disabled: isFull,
+    };
+  });
+}, [wardList]);
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -1110,15 +1129,19 @@ else if (name === "email") {
                   <CustomPicker
                     selectedValue={formData.wardID.value}
                     onValueChange={(id) => {
+                      const ward = wardList.find(w => w.id === id);
+
+                      if (!ward || Number(ward.availableBeds) === 0) {
+                        dispatch(showError("Selected ward is full"));
+                        return;
+                      }
+
                       setFormData((prev) => ({
                         ...prev,
                         wardID: { value: id, valid: true, showError: false, message: "" },
                       }));
                     }}
-                    items={wardList?.map(ward => ({
-                      label: capitalizeFirstLetter(ward.name),
-                      value: ward.id
-                    }))}
+                    items={wardPickerItems}
                     placeholder="Select Ward"
                   />
                   {formData.wardID.showError && (
