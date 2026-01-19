@@ -25,7 +25,6 @@ import { RootState } from '../../store/store';
 import { AuthFetch, AuthPost } from '../../auth/auth';
 import AmbulanceDriverFooter from './AmbulanceDriverFooter';
 import {
-  reverseGeocode,
   calculateDistance,
   calculateEstimatedTime,
   formatDistance,
@@ -680,6 +679,22 @@ console.log('useEffect activeTrip', activeTrip);
           animated: true,
         });
         lastCameraUpdate.current = currentLocation;
+        
+        // After initial fit, zoom to road level view smoothly
+        setTimeout(() => {
+          mapRef.current?.animateCamera(
+            {
+              center: {
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+              },
+              zoom: 18.5, // Road-level zoom like Google Maps
+              pitch: 45, // 3D tilt for better road view
+              heading: 0, // North-up initially
+            },
+            { duration: 2000 },
+          );
+        }, 1000);
       }, 500);
     } else if (hasLocationChangedSignificantly()) {
       // During active tracking: smoothly follow ambulance only if moved significantly
@@ -687,16 +702,19 @@ console.log('useEffect activeTrip', activeTrip);
         activeTrip.status === 'accepted' ||
         activeTrip.status === 'in_progress'
       ) {
+        // Google Maps style: Stay at constant zoom level with smooth camera movement
         mapRef.current.animateCamera(
           {
             center: {
               latitude: currentLocation.latitude,
               longitude: currentLocation.longitude,
             },
-            zoom: 15, // Moderate zoom for navigation
+            zoom: 18.5, // Keep consistent road-level zoom (no blinking zoom in/out)
+            pitch: 45, // Maintain 3D perspective
+            heading: 0, // Can be updated with bearing if needed
           },
-          { duration: 2000 },
-        ); // Slower animation for smoother movement
+          { duration: 1500 }, // Smooth transition
+        );
 
         lastCameraUpdate.current = currentLocation;
       }
@@ -796,11 +814,24 @@ console.log('useEffect activeTrip', activeTrip);
             {
               latitude: currentLocation.latitude,
               longitude: currentLocation.longitude,
-              latitudeDelta: 0.005, // Very zoomed in
-              longitudeDelta: 0.005,
+              latitudeDelta: 0.003, // Road-level zoom (tighter delta)
+              longitudeDelta: 0.003,
             },
             1000,
           );
+          
+          // Apply 3D camera view for better road navigation
+          setTimeout(() => {
+            mapRef.current?.animateCamera(
+              {
+                center: currentLocation,
+                zoom: 18.5,
+                pitch: 45,
+                heading: 0,
+              },
+              { duration: 1000 },
+            );
+          }, 1000);
         }
       } else {
         throw new Error((response as any)?.message || 'Invalid OTP');
@@ -907,9 +938,7 @@ console.log('useEffect activeTrip', activeTrip);
     );
   };
 
-  // Determine if driver is close enough to pickup location (within 200 meters)
-  const isNearPickup = distanceToPickup !== null && distanceToPickup <= 0.2; // 200 meters
-
+  
   // Show hospital selection only if destination address is missing and journey hasn't started
   const canSelectHospital = (!activeTrip?.dropAddress || activeTrip?.dropAddress === 'Hospital (To be selected)') && activeTrip?.status !== 'in_progress';
   const hasSelectedHospital = activeTrip?.dropLatitude && activeTrip?.dropLongitude;
@@ -986,7 +1015,17 @@ console.log('useEffect activeTrip', activeTrip);
             showsMyLocationButton={true}
             followsUserLocation={false}
             showsTraffic={true}
+            showsBuildings={true}
+            showsIndoors={true}
+            showsPointsOfInterests={true}
             loadingEnabled={true}
+            pitchEnabled={true}
+            rotateEnabled={true}
+            scrollEnabled={true}
+            zoomEnabled={true}
+            zoomTapEnabled={true}
+            zoomControlEnabled={true}
+            mapType="standard"
             onTouchStart={() => setUserInteractingWithMap(true)}
             onTouchEnd={() => {
               // Re-enable auto-tracking after 10 seconds of no interaction
@@ -1138,7 +1177,9 @@ console.log('useEffect activeTrip', activeTrip);
                   mapRef.current.animateCamera(
                     {
                       center: currentLocation,
-                      zoom: 15,
+                      zoom: 18.5, // Road-level zoom
+                      pitch: 45, // 3D tilt
+                      heading: 0,
                     },
                     { duration: 1000 },
                   );
@@ -1352,7 +1393,7 @@ console.log('useEffect activeTrip', activeTrip);
                 style={[
                   styles.modalButton,
                   styles.modalButtonVerify,
-                  !cancelReason.trim() && { opacity: 0.5 },
+                  !cancelReason.trim() && styles.modalButtonVerifyDisabled,
                 ]}
                 onPress={async () => {
                   if (!cancelReason.trim()) return;
@@ -1545,7 +1586,7 @@ console.log('useEffect activeTrip', activeTrip);
                   <Text style={styles.hospitalEmptyText}>No hospitals found nearby</Text>
                 </View>
               ) : (
-                nearbyHospitals.map((hospital, index) => (
+                nearbyHospitals.map((hospital) => (
                   <TouchableOpacity
                     key={hospital.placeID}
                     style={[
@@ -2376,6 +2417,9 @@ const styles = StyleSheet.create({
   },
   modalButtonVerify: {
     backgroundColor: COLORS.success,
+  },
+  modalButtonVerifyDisabled: {
+    opacity: 0.5,
   },
   modalButtonText: {
     fontSize: 16,

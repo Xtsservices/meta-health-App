@@ -40,7 +40,7 @@ const getTabLabel = (k: AmbulanceTabKey): string => {
   const labels = {
     dashboard: "Dashboard",
   location: "Location",
-    drivers: "Drivers",
+    drivers: "Staff",
     settings: "Settings",
   };
   return labels[k];
