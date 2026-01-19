@@ -121,6 +121,10 @@ const Login: React.FC = () => {
             dispatch(currentUser(data));
           navigation.navigate('AmbulanceDriverDashboard' as never);
         }
+        else if(Role_NAME.ambulanceStaff === data?.role) {
+            dispatch(currentUser(data));
+          navigation.navigate('AmbulanceStaffDashboard' as never);
+        }
         
         else if (data?.role === 2002 || data?.role === 2003) {
             dispatch(currentUser(data));
