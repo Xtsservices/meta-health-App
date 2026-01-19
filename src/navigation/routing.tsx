@@ -1349,11 +1349,6 @@ const Routing = () => {
             headerShown: false,
           }}
         />
-        <Stack.Screen
-          name="AmbulanceStaffAddVitals"
-          component={AmbulanceStaffAddVitals}
-          options={{
-            title: 'Add Vitals',
         <Stack.Screen 
           name="OrderDetailScreen" 
           component={OrderDetailScreen}
@@ -1363,6 +1358,17 @@ const Routing = () => {
             headerShown: true,
           }}
         />
+
+        <Stack.Screen
+          name="AmbulanceStaffAddVitals"
+          component={AmbulanceStaffAddVitals}
+          options={{
+            title: 'Add Vitals',
+            headerTitleAlign: 'center',
+            headerShown: true,
+          }}
+        />
+        
         <Stack.Screen
           name="AmbulanceStaffActiveTrip"
           component={AmbulanceStaffActiveTrip}
@@ -1389,6 +1395,7 @@ const Routing = () => {
             headerTitleAlign: 'center',
             headerShown: false,
           }}
+        />
         <Stack.Screen 
           name="ReceptionOrderDetails" 
           component={ReceptionOrderDetailsScreen} 
