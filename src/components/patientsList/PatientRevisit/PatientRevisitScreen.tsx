@@ -181,7 +181,11 @@ const PatientRevisitScreen: React.FC = () => {
         Alert.alert("Success", "Patient successfully added for revisit");
         
         setTimeout(() => {
+        if (user?.role === 2002 || user?.role === 2003) {
+          navigation.navigate("nursePatientList" as never);
+        } else {
           navigation.navigate("PatientList" as never);
+        }
         }, 2000);
       } else {
         let errorMessage = "Failed to add patient revisit";

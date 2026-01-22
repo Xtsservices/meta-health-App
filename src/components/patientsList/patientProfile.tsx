@@ -247,7 +247,7 @@ if (startStatus === 1) {
   const endStatus = currentPatient?.patientEndStatus ?? 0;
 
   // Check if patient is discharged
-  const isDischargedPatient = fromDischargeList || endStatus === 21;
+  const isDischargedPatient = fromDischargeList || endStatus === 21 || patientFromStore?.ptype ===21;
   const isSurgeonOrAnesthetist = user?.roleName === "surgeon" || user?.roleName === "anesthetist";
   const shouldShowPatientRevisit = isDischargedPatient || isFromPreviousPatients;
 

@@ -351,7 +351,11 @@ export default function TransferPatientSheet() {
 
 if (("data" in res && res?.status === "success") || ("message" in res && res?.message === "success")) {
   dispatch(showSuccess("Patient successfully transferred"));
+  if (user?.role === 2002 || user?.role === 2003) {
+    navigation.navigate("NursePatientList" as never);
+  } else {
   navigation.navigate("PatientList" as never);
+  }
 } else {
   // Safely extract error message
   let errorMessage = "Failed to transfer patient";

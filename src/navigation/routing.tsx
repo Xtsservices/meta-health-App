@@ -149,6 +149,25 @@ import AmbulanceStaffSettings from '../components/ambulanceStaff/AmbulanceStaffS
 import OrderDetailScreen from '../components/Pharmacy/orderPlacement/OrderDetailScreen';
 import ReceptionOrderDetailsScreen from '../components/Reception/ReceptionOrderDetailsScreen';
 import OrderExpenseDialog from '../components/Pharmacy/orderPlacement/OrderExpenseDialog';
+import LandingPage from '../components/LandingPage';
+import ServicesScreen from '../components/ServicesScreen';
+import HospitalRegistrationScreen from '../components/registation/Hospital';
+import BloodBankRegistrationScreen from '../components/registation/BloodBank';
+import LabRegistrationScreen from '../components/registation/Lab';
+import DoctorRegistrationScreen from '../components/registation/Doctor';
+import PharmacyRegistrationScreen from '../components/registation/Pharmacy';
+import HospitalProfileForm from '../components/registation/HospitalProfileForm';
+import DiagnosticProfileForm from '../components/registation/DiagnosticProfileForm';
+import PharmacyProfileForm from '../components/registation/PharmacyProfileForm';
+import NurseDashboard from '../components/nurse/nursedashboard';
+import NursePatientsList from '../components/nurse/patientList/NursePatientsList';
+import nurseAlerts from '../components/nurse/alerts/nurseAlerts';
+import NurseAlerts from '../components/nurse/alerts/nurseAlerts';
+import NurseManagement from '../components/nurse/management/NurseManagement';
+import nurseProfile from '../components/nurse/nurseProfile';
+import AddShiftScreen from '../components/nurse/management/AddShiftScreen';
+import AddLeaveScreen from '../components/nurse/management/AddLeaveScreen';
+import EditShiftScreen from '../components/nurse/management/EditShiftScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -168,6 +187,97 @@ const Routing = () => {
           name="Login"
           component={login}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen name="LandingPage" 
+        component={LandingPage} />
+
+<Stack.Screen 
+  name="Services" 
+  component={ServicesScreen}
+  options={{  
+    title: 'Services',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+
+<Stack.Screen 
+  name="HospitalRegistration" 
+  component={HospitalRegistrationScreen}
+  options={{ 
+    title: 'Hospital Registration',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+
+<Stack.Screen 
+  name="DoctorRegistration" 
+  component={DoctorRegistrationScreen}
+  options={{ 
+    title: 'Doctor Registration',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+
+<Stack.Screen 
+  name="PharmacyRegistration" 
+  component={PharmacyRegistrationScreen}
+  options={{ 
+    title: 'Pharmacy Registration',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+
+<Stack.Screen 
+  name="LabRegistration" 
+  component={LabRegistrationScreen}
+  options={{ 
+    title: 'Lab Registration',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+
+<Stack.Screen 
+  name="BloodBankRegistration" 
+  component={BloodBankRegistrationScreen}
+  options={{ 
+    title: 'Blood Bank Registration',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+<Stack.Screen 
+  name="HospitalProfileForm" 
+  component={HospitalProfileForm}
+  options={{ 
+    title: 'Hospital Profile',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+
+<Stack.Screen 
+  name="DiagnosticProfileForm" 
+  component={DiagnosticProfileForm}
+  options={{ 
+    title: 'Diagnostic Profile',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+
+<Stack.Screen 
+  name="PharmacyProfileForm" 
+  component={PharmacyProfileForm}
+  options={{ 
+    title: 'Pharmacy Profile',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
         />
         <Stack.Screen
           name="Home"
@@ -1401,6 +1511,64 @@ const Routing = () => {
           component={ReceptionOrderDetailsScreen} 
           options={{ headerShown: false }}
         />
+
+        {/* nurse*/}
+        <Stack.Screen name="NurseDashboard" component={NurseDashboard} />
+        <Stack.Screen name="nursePatientList" component={NursePatientsList}
+        options={{
+        title: 'Patient List',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}/>
+        <Stack.Screen 
+          name="NurseAlerts" 
+          component={NurseAlerts}
+          options={{
+        title: 'Alerts',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}/>
+        <Stack.Screen 
+          name="NurseManagement" 
+          component={NurseManagement}
+                    options={{
+        title: 'Management',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}/>
+     <Stack.Screen name="nurseProfile" 
+     component={nurseProfile}
+         options={{
+        title: 'Profile',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}/>
+  <Stack.Screen 
+        name="AddShift" 
+        component={AddShiftScreen}
+        options={{
+        title: 'Add Shift',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}
+      />
+      <Stack.Screen 
+  name="AddLeave" 
+  component={AddLeaveScreen}
+   options={{
+        title: 'Add Leave',
+        headerTitleAlign: 'center',
+        headerShown: true,}}
+/>
+<Stack.Screen 
+  name="EditShift" 
+  component={EditShiftScreen} 
+   options={{
+        title: 'Edit Shift',
+        headerTitleAlign: 'center',
+        headerShown: true,}}
+/>
+
       </Stack.Navigator>
     </NavigationContainer>
   );

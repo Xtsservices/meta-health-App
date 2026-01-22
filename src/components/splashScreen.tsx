@@ -24,7 +24,7 @@ const SplashScreen = () => {
         const userId = await AsyncStorage.getItem('userID');
 
         if (!token || !userId) {
-          navigation.replace('Login');
+          navigation.replace('LandingPage');
           return;
         }
 
@@ -48,7 +48,9 @@ const SplashScreen = () => {
           navigation.navigate('AmbulanceStaffDashboard' as never);
         } else if (user.scope === '5007' || user.scope === '5008') {
           navigation.replace('OtDashboard');
-        } else {
+        } else if (user.role === 2002 || user.role === 2003) {
+          navigation.replace('NurseDashboard');
+        }else {
           navigation.replace('Home');
         }
       } catch (e) {
