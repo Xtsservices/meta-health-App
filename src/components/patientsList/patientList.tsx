@@ -146,8 +146,23 @@ const OpdPreviousPatients: React.FC = () => {
     try {
       setLoading(true);
       let url = "";
-      
-      if (user?.roleName !== "surgeon" && user?.roleName !== "anesthetist") {
+      if (user?.role === 4000) {
+      if (user?.patientStatus === 1) {
+        url = `patient/${user.hospitalID}/patients/recent/1?userID=${user?.id}&role=${user?.role}`;
+      } else if (user?.patientStatus === 2) {
+        url = `patient/${user.hospitalID}/patients/recent/2?userID=${user?.id}&role=${user?.role}`;
+      } else if (user?.patientStatus === 3) {
+        if (zone) {
+          url = `patient/${user.hospitalID}/patients/recent/3?userID=${user?.id}&role=${user?.role}&category=triage`;
+        } else {
+          url = `patient/${user.hospitalID}/patients/recent/3?userID=${user?.id}&role=${user?.role}`;
+        }
+      } else {
+        // Default to OPD if no status
+        url = `patient/${user.hospitalID}/patients/recent/1?userID=${user?.id}&role=${user?.role}`;
+      }
+    }
+      else if (user?.roleName !== "surgeon" && user?.roleName !== "anesthetist") {
 if (user?.patientStatus === 1) {
         if (user?.role === 2003) {
           url = `patient/${user.hospitalID}/patients/nurseopdprevious/${patientStatus.outpatient}?role=${user?.role}&userID=${user?.id}`;

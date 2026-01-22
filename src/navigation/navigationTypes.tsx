@@ -44,6 +44,7 @@ EditPatientProfile: undefined;
 AppointmentsList: undefined;
 DischargeSummaryDownload: undefined;
   Management: undefined;
+  AddDoctorLeave:undefined;
   SlotsManagement: undefined;
   HelpScreen: undefined;
   DashboardInfoScreen: undefined;
