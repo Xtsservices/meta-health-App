@@ -133,7 +133,7 @@ const AnimatedAmbulanceCard: React.FC<{
                 },
               ]}
             >
-              <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+              <Text style={styles.statusText}>{item?.status?.toUpperCase()}</Text>
             </View>
             <View style={styles.iconRow}>
               {hasActiveDriver && (
@@ -151,16 +151,16 @@ const AnimatedAmbulanceCard: React.FC<{
         </View>
 
         <View style={styles.cardBody}>
-          {item.ambulanceType && (
+          {item?.ambulanceType && (
             <View style={styles.infoRow}>
               <Text style={styles.label}>Type:</Text>
-              <Text style={styles.value}>{item.ambulanceType}</Text>
+              <Text style={styles.value}>{item?.ambulanceType}</Text>
             </View>
           )}
           {item.city && (
             <View style={styles.infoRow}>
               <Text style={styles.label}>City:</Text>
-              <Text style={styles.value}>{item.city}</Text>
+              <Text style={styles.value}>{item?.city}</Text>
             </View>
           )}
           <View style={styles.infoRow}>

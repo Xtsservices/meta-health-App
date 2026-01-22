@@ -168,6 +168,11 @@ DischargeSummaryDownload: undefined;
   AmbulanceDriverSettings:undefined;
   AmbulanceDriverTripDetail: undefined;
   AmbulanceDriverHistory: undefined;
+  AmbulanceStaffDashboard:undefined;
+  AmbulanceStaffAddVitals: { patientId?: number; patientName?: string } | undefined;
+  AmbulanceStaffActiveTrip:undefined;
+  AmbulanceStaffAssignments:undefined;
+  AmbulanceStaffSettings:undefined;
   OrderExpenseDialog: undefined;
 
   // nurse

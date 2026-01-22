@@ -9,21 +9,18 @@ import { currentUser } from '../store/store';
 import { showError } from '../store/toast.slice';
 import { Role_NAME } from '../utils/role';
 
-
 const { width } = Dimensions.get('window');
 
 const SplashScreen = () => {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
 
-
-
   // 🔹 AUTH FLOW
   useEffect(() => {
     const checkLogin = async () => {
       try {
         const token = await AsyncStorage.getItem('token');
-        console.log("Token retrieved:", token);
+        console.log('Token retrieved:', token);
         const userId = await AsyncStorage.getItem('userID');
 
         if (!token || !userId) {
@@ -32,7 +29,7 @@ const SplashScreen = () => {
         }
 
         const res = await AuthFetch(`user/${Number(userId)}`, token);
-        console.log("User data fetched:", res);
+        console.log('User data fetched:', res);
         const user = res?.data?.user;
 
         if (!user) {
@@ -46,6 +43,9 @@ const SplashScreen = () => {
           navigation.replace('AmbulanceAdminDashboard');
         } else if (user.role === Role_NAME.ambulanceDriver) {
           navigation.replace('AmbulanceDriverDashboard');
+        } else if (Role_NAME.ambulanceStaff === user?.role) {
+          dispatch(currentUser(user));
+          navigation.navigate('AmbulanceStaffDashboard' as never);
         } else if (user.scope === '5007' || user.scope === '5008') {
           navigation.replace('OtDashboard');
         } else if (user.role === 2002 || user.role === 2003) {

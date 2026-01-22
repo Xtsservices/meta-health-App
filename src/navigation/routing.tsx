@@ -141,6 +141,11 @@ import AmbulanceDriverDashboard from '../components/ambulanceDriver/AmbulanceDri
 import AmbulanceDriverActiveTrip from '../components/ambulanceDriver/AmbulanceDriverActiveTrip';
 import AmbulanceDriverSettings from '../components/ambulanceDriver/AmbulanceDriverSettings';
 import AmbulanceDriverHistory from '../components/ambulanceDriver/AmbulanceDriverHistory';
+import AmbulanceStaffDashboard from '../components/ambulanceStaff/AmbulanceStaffDashboard';
+import AmbulanceStaffAddVitals from '../components/ambulanceStaff/AmbulanceStaffAddVitals';
+import AmbulanceStaffActiveTrip from '../components/ambulanceStaff/AmbulanceStaffActiveTrip';
+import AmbulanceStaffAssignments from '../components/ambulanceStaff/AmbulanceStaffAssignments';
+import AmbulanceStaffSettings from '../components/ambulanceStaff/AmbulanceStaffSettings';
 import OrderDetailScreen from '../components/Pharmacy/orderPlacement/OrderDetailScreen';
 import ReceptionOrderDetailsScreen from '../components/Reception/ReceptionOrderDetailsScreen';
 import OrderExpenseDialog from '../components/Pharmacy/orderPlacement/OrderExpenseDialog';
@@ -1445,6 +1450,15 @@ const Routing = () => {
             headerShown: false,
           }}
         />
+        <Stack.Screen
+          name="AmbulanceStaffDashboard"
+          component={AmbulanceStaffDashboard}
+          options={{
+            title: 'Ambulance Staff',
+            headerTitleAlign: 'center',
+            headerShown: false,
+          }}
+        />
         <Stack.Screen 
           name="OrderDetailScreen" 
           component={OrderDetailScreen}
@@ -1452,6 +1466,44 @@ const Routing = () => {
             title: 'Order Details',
             headerTitleAlign: 'center',
             headerShown: true,
+          }}
+        />
+
+        <Stack.Screen
+          name="AmbulanceStaffAddVitals"
+          component={AmbulanceStaffAddVitals}
+          options={{
+            title: 'Add Vitals',
+            headerTitleAlign: 'center',
+            headerShown: true,
+          }}
+        />
+        
+        <Stack.Screen
+          name="AmbulanceStaffActiveTrip"
+          component={AmbulanceStaffActiveTrip}
+          options={{
+            title: 'Active Trip',
+            headerTitleAlign: 'center',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="AmbulanceStaffAssignments"
+          component={AmbulanceStaffAssignments}
+          options={{
+            title: 'Assignments',
+            headerTitleAlign: 'center',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="AmbulanceStaffSettings"
+          component={AmbulanceStaffSettings}
+          options={{
+            title: 'Settings',
+            headerTitleAlign: 'center',
+            headerShown: false,
           }}
         />
         <Stack.Screen 
