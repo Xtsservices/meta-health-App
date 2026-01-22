@@ -76,7 +76,6 @@ const AllTaxInvoiceMobile: React.FC<AllTaxInvoiceProps> = ({
   const user = useSelector((s: RootState) => s.currentUser);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<Record<string, AllTaxInvoiceProps>, string>>();
-  console.log("oooo",route)
 
   // Get department from route params or user role
   const department = route.params?.department || user?.roleName?.toLowerCase();
@@ -168,7 +167,6 @@ const AllTaxInvoiceMobile: React.FC<AllTaxInvoiceProps> = ({
     for (const ep of endpoints) {
       try {
         const res: any = await AuthFetch(ep.url, token);
-        console.log("111",res)
         const data = res?.data?.data || res?.data || res || [];
         const arr = Array.isArray(data) ? data : [data];
         
@@ -261,7 +259,6 @@ const AllTaxInvoiceMobile: React.FC<AllTaxInvoiceProps> = ({
     for (const ep of endpoints) {
       try {
         const res: any = await AuthFetch(ep.url, token);
-        console.log("222",res)
         const data = res?.data?.data || res?.data || res || [];
         const arr = Array.isArray(data) ? data : [data];
         
@@ -356,7 +353,6 @@ const AllTaxInvoiceMobile: React.FC<AllTaxInvoiceProps> = ({
       for (const ep of endpoints) {
         try {
           const res: any = await AuthFetch(ep.url, token);
-          console.log("333",res)
           const arr = Array.isArray(res?.data?.data) ? res.data?.data : [];
           arr.forEach((item: any) =>
             allRawItems.push({ ...item, deptType: ep.deptType })

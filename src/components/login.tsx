@@ -124,7 +124,7 @@ const Login: React.FC = () => {
         
         else if (data?.role === 2002 || data?.role === 2003) {
             dispatch(currentUser(data));
-          navigation.navigate('Nurse' as never);
+          navigation.navigate('NurseDashboard' as never);
         } else if (roleRoutes[data.role]) {
             dispatch(currentUser(data));
           navigation.navigate(roleRoutes[data.role] as never);

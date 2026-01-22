@@ -3,6 +3,19 @@ export type RootStackParamList = {
   Splash: undefined;
   Login: undefined;
   Home: undefined;
+  Services: undefined;
+  HospitalRegistration: undefined;
+  DoctorRegistration: undefined;
+  PharmacyRegistration: undefined;
+  LabRegistration: undefined;
+  BloodBankRegistration: undefined;
+  HospitalProfileForm: undefined;
+  HospitalDashboard: undefined;
+  DiagnosticProfileForm: undefined;
+  DiagnosticDashboard: undefined;
+  PharmacyProfileForm: undefined;
+  PharmacyDashboard: undefined;
+  LandingPage: undefined;
   DashboardOpd: undefined;
   DashboardIpd: undefined;
   DashboardRed: undefined;
@@ -156,4 +169,14 @@ DischargeSummaryDownload: undefined;
   AmbulanceDriverTripDetail: undefined;
   AmbulanceDriverHistory: undefined;
   OrderExpenseDialog: undefined;
+
+  // nurse
+  NurseDashboard:undefined;
+  nursePatientList:undefined;
+  NurseAlerts:undefined;
+  NurseManagement:undefined;
+  nurseProfile:undefined;
+  AddShift:undefined;
+  AddLeave:undefined;
+  EditShift:undefined;
 };

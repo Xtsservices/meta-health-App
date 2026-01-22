@@ -11,7 +11,82 @@ export const SLOT_END = 22 * 60; // 22:00;
 export type Interval = [number, number];
 
 type InputDate = string | number | Date | null | undefined;
+export function calculateAgeFromDOB(dob?: string, ageString?: string): string {
+  // First try to calculate from DOB
+  if (dob) {
+    try {
+      const birthDate = new Date(dob);
+      const today = new Date();
 
+      // Check if DOB is valid
+      if (isNaN(birthDate.getTime())) {
+        throw new Error('Invalid DOB');
+      }
+
+      // Calculate difference in milliseconds
+      const diffTime = Math.abs(today.getTime() - birthDate.getTime());
+      const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      // Less than 1 month → show days
+      if (totalDays < 30) {
+        return `${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+      }
+
+      let years = today.getFullYear() - birthDate.getFullYear();
+      let months = today.getMonth() - birthDate.getMonth();
+
+      if (today.getDate() < birthDate.getDate()) {
+        months--;
+      }
+
+      if (months < 0) {
+        years--;
+        months += 12;
+      }
+
+      // If years exist → SHOW ONLY YEARS
+      if (years > 0) {
+        return `${years} year${years !== 1 ? "s" : ""}`;
+      }
+
+      // Only months
+      if (months > 0) {
+        return `${months} month${months !== 1 ? "s" : ""}`;
+      }
+
+      return "—";
+    } catch (error) {
+      // Fall through to age string if DOB calculation fails
+    }
+  }
+
+  // DOB missing or invalid → fallback to age string (years only)
+  if (ageString) {
+    try {
+      const ageNum = parseInt(ageString, 10);
+      if (!isNaN(ageNum) && ageNum > 0) {
+        return `${ageNum} year${ageNum !== 1 ? "s" : ""}`;
+      }
+    } catch (error) {
+      // Continue to default
+    }
+  }
+
+  return "—";
+}
+export const formatMissedFromTimeline = (
+  timeline?: number | null
+): string => {
+  if (!timeline) return "—";
+
+  // Handle seconds vs milliseconds
+  const ts = timeline < 1e12 ? timeline * 1000 : timeline;
+
+  const d = dayjs(ts);
+  if (!d.isValid()) return "—";
+
+  return d.format("DD MMM YYYY");
+};
 /* ---------- DayJS Helpers ---------- */
 export const buildMonthGrid = (anchor: dayjs.Dayjs) => {
   const startOfMonth = anchor.startOf("month");
@@ -35,6 +110,7 @@ export const asLocalWallClock = (iso: string | Date) => {
   }
   return new Date(iso);
 };
+
 
 export const sameDay = (a: Date | string, d: dayjs.Dayjs) => dayjs(a).isSame(d, "day");
 

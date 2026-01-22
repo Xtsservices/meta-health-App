@@ -11,6 +11,10 @@ import {
 import {
   AlertTriangle,
   Stethoscope,
+  Bell,
+  Users,
+  ClipboardList,
+  Package,
 } from "lucide-react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -38,7 +42,18 @@ const Footer: React.FC<Props> = ({
   const { screenType, setScreenType } = useOTConfig();
 
   const isOTUser = user?.roleName === "surgeon" || user?.roleName === "anesthetist";
+  const isNurseUser = user?.role === 2002 || user?.role === 2003; // Nurse roles
+  
   const resolvedActive: TabKey = useMemo(() => {
+    if (isNurseUser) {
+      // For nurse users, map routes to tabs
+      if (route.name === "NurseDashboard") return "dashboard";
+      if (route.name === "NurseAlerts") return "addPatient"; // Alerts tab
+      if (route.name === "nursePatientList" || route.name === "NursePatientsList") return "patients";
+      if (route.name === "NurseManagement" || route.name === "NurseManagement") return "management";
+      return active;
+    }
+
     if (!isOTUser) return active;
 
     if (route.name === "PatientList") {
@@ -51,7 +66,7 @@ const Footer: React.FC<Props> = ({
     if (route.name === "OtDashboard") return "dashboard";
 
     return active;
-  }, [active, isOTUser, route.name, screenType]);
+  }, [active, isNurseUser, isOTUser, route.name, screenType]);
 
   /**
    * ✅ FORCE REFRESH ON MODE SWITCH for surgeon/anesthetist
@@ -64,6 +79,25 @@ const Footer: React.FC<Props> = ({
   };
 
   const handleTabPress = (k: TabKey) => {
+    // NURSE USERS (role 2002 or 2003)
+    if (isNurseUser) {
+      if (k === "dashboard") {
+        navigation.navigate("NurseDashboard");
+      } else if (k === "addPatient") {
+        // For nurse users, this should navigate to Medicine Alerts
+        navigation.navigate("NurseAlerts");
+      } else if (k === "patients") {
+        navigation.navigate("nursePatientList");
+      } else if (k === "management") {
+        // For nurse users, this should navigate to Management or Attendance
+        if (user?.role === 2002) { // Head nurse - show attendance
+          navigation.navigate("NurseManagement");
+        }
+      }
+      return;
+    }
+
+    // ORIGINAL LOGIC FOR OTHER ROLES
     if (k === "dashboard") {
       if (isOTUser) {
         navigation.navigate("OtDashboard");
@@ -129,6 +163,16 @@ const Footer: React.FC<Props> = ({
   };
 
   const getTabLabel = (k: TabKey): string => {
+    // NURSE USERS (role 2002 or 2003) - Use nurse-specific labels
+    if (isNurseUser) {
+      if (k === "addPatient") return "Alerts";
+      if (k === "patients") return "Patients";
+      if (k === "management") {
+        return user?.role === 2002 ? "Management" : "Management";
+      }
+      return "Dashboard";
+    }
+
     // Surgeon/Anesthetist specific labels
     if (isOTUser) {
       if (k === "addPatient") return "Alerts";
@@ -164,6 +208,16 @@ const Footer: React.FC<Props> = ({
   };
 
   const getTabIcon = (k: TabKey): React.ElementType => {
+    // NURSE USERS (role 2002 or 2003) - Use nurse-specific icons
+    if (isNurseUser) {
+      if (k === "dashboard") return LayoutDashboardIcon;
+      if (k === "addPatient") return Bell; // Alerts icon
+      if (k === "patients") return Users; // Patients icon
+      if (k === "management") {
+        return user?.role === 2002 ? ClipboardList : SettingsIcon; // Attendance for head nurse, Settings for regular nurse
+      }
+    }
+
     // Surgeon/Anesthetist specific icons
     if (isOTUser) {
       if (k === "addPatient") return AlertTriangle; // Alerts icon
