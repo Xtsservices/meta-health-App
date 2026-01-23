@@ -168,6 +168,7 @@ import nurseProfile from '../components/nurse/nurseProfile';
 import AddShiftScreen from '../components/nurse/management/AddShiftScreen';
 import AddLeaveScreen from '../components/nurse/management/AddLeaveScreen';
 import EditShiftScreen from '../components/nurse/management/EditShiftScreen';
+import AddDoctorLeave from '../components/Management/LeaveManagement/AddDoctorLeave';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -1568,7 +1569,15 @@ const Routing = () => {
         headerTitleAlign: 'center',
         headerShown: true,}}
 />
-
+<Stack.Screen 
+  name="AddDoctorLeave" 
+  component={AddDoctorLeave} 
+  options={{ 
+        headerTitleAlign: 'center',
+        headerShown: true,
+    title: 'Add Doctor Leave'
+  }} 
+/>
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -18,6 +18,7 @@ import { ChevronRight } from "lucide-react-native";
 import MySchedule from "./MySchedule/MySchedule";
 import SlotsManagement from "./SlotsManagement/SlotsManagement";
 import MyTasks from "../../pages/nurseDashboard/MyTasks";
+import LeaveManagement from "./LeaveManagement/LeaveManagement";
 
 const { width } = Dimensions.get("window");
 const BRAND = "#14b8a6";
@@ -69,6 +70,8 @@ const DoctorManagmentTabs: React.FC = () => {
         return <MySchedule />;
       case "MyTasks":
         return <MyTasks />;
+      case "LeaveManagment": // Add this case
+        return <LeaveManagement />;
       default:
         return <SlotsManagement />;
     }
