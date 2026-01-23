@@ -678,30 +678,81 @@ const DashboardTriage: React.FC = () => {
       >
         {/* KPI cards */}
         <View style={styles.statsGrid}>
+        {/* Today's Patients */}
+        <TouchableOpacity
+          style={{ width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2 }}
+          onPress={() => navigation.navigate('OPDTriagePatientList' as never, {
+            listType: 'today',
+            title: "Today's Triage Patients",
+            zoneType: 'triage',
+            emergencyTime: 'today'
+          })}
+          activeOpacity={0.85}
+        >
           <KpiCard
             title="Today's Patients"
             value={todayCount}
             icon={<UsersIcon size={ICON_SIZE.md} color="#2563EB" />}
             bg="#ffffffff"
           />
+        </TouchableOpacity>
+
+        {/* Appointments */}
+        <TouchableOpacity
+          style={{ width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2 }}
+          onPress={() => navigation.navigate('OPDTriagePatientList' as never, {
+            listType: 'appointment',
+            title: "Triage Appointments",
+            zoneType: 'triage',
+            emergencyTime: 'appointment'
+          })}
+          activeOpacity={0.85}
+        >
           <KpiCard
             title="Appointments"
             value={appointmentsToday}
             icon={<CalendarIcon size={ICON_SIZE.md} color="#10B981" />}
             bg="#ffffffff"
           />
+        </TouchableOpacity>
+
+        {/* This Month */}
+        <TouchableOpacity
+          style={{ width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2 }}
+          onPress={() => navigation.navigate('OPDTriagePatientList' as never, {
+            listType: 'month',
+            title: "This Month's Triage Patients",
+            zoneType: 'triage',
+            emergencyTime: 'month'
+          })}
+          activeOpacity={0.85}
+        >
           <KpiCard
             title="This Month"
             value={thisMonthCount}
             icon={<ClockIcon size={ICON_SIZE.md} color="#F59E0B" />}
             bg="#ffffffff"
           />
+        </TouchableOpacity>
+
+        {/* This Year */}
+        <TouchableOpacity
+          style={{ width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2 }}
+          onPress={() => navigation.navigate('OPDTriagePatientList' as never, {
+            listType: 'year',
+            title: "This Year's Triage Patients",
+            zoneType: 'triage',
+            emergencyTime: 'year'
+          })}
+          activeOpacity={0.85}
+        >
           <KpiCard
             title="This Year"
             value={thisYearCount}
             icon={<ActivityIcon size={ICON_SIZE.md} color="#7C3AED" />}
             bg="#ffffffff"
           />
+        </TouchableOpacity>
         </View>
 
         {/* Charts */}

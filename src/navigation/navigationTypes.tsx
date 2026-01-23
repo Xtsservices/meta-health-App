@@ -184,4 +184,12 @@ DischargeSummaryDownload: undefined;
   AddShift:undefined;
   AddLeave:undefined;
   EditShift:undefined;
+
+  OPDTriagePatientList:undefined;
+  PharmacyPatientListScreen:undefined;
+  IPDPatientListScreen:undefined;
+  OtPatientList:undefined;
+  ApprovedRejectedList:undefined;
+  NursePatientListScreen:undefined;
+  PatientListScreen:undefined;
 };

@@ -341,7 +341,7 @@ const NurseDashboard: React.FC = () => {
 
   // Navigation handlers
   const handleCardClick = (type: string) => {
-    navigation.navigate('NursePatientsList', { type });
+    navigation.navigate('NursePatientListScreen', { type });
   };
 
   const handleAttendanceClick = (attendanceType: 'present' | 'leave') => {

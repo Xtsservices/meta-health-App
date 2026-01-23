@@ -168,6 +168,12 @@ import nurseProfile from '../components/nurse/nurseProfile';
 import AddShiftScreen from '../components/nurse/management/AddShiftScreen';
 import AddLeaveScreen from '../components/nurse/management/AddLeaveScreen';
 import EditShiftScreen from '../components/nurse/management/EditShiftScreen';
+import PatientListScreen from '../components/cardList/PatientListScreen';
+import PharmacyPatientListScreen from '../components/cardList/PharmacyPatientList';
+import IPDPatientListScreen from '../components/cardList/IPDPatientList';
+import OtPatientList from '../components/cardList/OtPatientList';
+import ApprovedRejectedList from '../components/cardList/ApprovedRejectedList';
+import OPDTriagePatientListScreen from '../components/cardList/PatientListScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -1567,8 +1573,35 @@ const Routing = () => {
         title: 'Edit Shift',
         headerTitleAlign: 'center',
         headerShown: true,}}
-/>
-
+      />
+      <Stack.Screen 
+        name="PatientListScreen" 
+        component={PatientListScreen} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="IPDPatientListScreen" 
+        component={IPDPatientListScreen} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="PharmacyPatientListScreen" 
+        component={PharmacyPatientListScreen} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="OtPatientList" 
+        component={OtPatientList} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="ApprovedRejectedList" 
+        component={ApprovedRejectedList} 
+      />
+      <Stack.Screen 
+        name="OPDTriagePatientList" 
+        component={OPDTriagePatientListScreen} 
+      />     
       </Stack.Navigator>
     </NavigationContainer>
   );

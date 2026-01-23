@@ -513,6 +513,36 @@ export const DropletIcon = ({ size = 24, color = "#000000" }) => (
     <Path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
   </Svg>
 );
+export const UserCheckIcon = ({ size = 24, color = "#000000" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    {/* User body */}
+    <Path
+      d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* User head */}
+    <Circle
+      cx="8.5"
+      cy="7"
+      r="4"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Check mark */}
+    <Path
+      d="M17 11l2 2 4-4"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
 
 export const TestTubeIcon = ({ size = 24, color = "#000000" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
