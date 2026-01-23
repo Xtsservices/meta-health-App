@@ -51,6 +51,7 @@ import {
   FileMinusIcon,
   GridIcon,
   UserMinusIcon,
+  CommissionIcon,
 } from "../../utils/SvgIcons";
 
 // Import date utils
@@ -342,6 +343,8 @@ const DashboardIpd: React.FC = () => {
       icon: SettingsIcon, 
       onPress: () => go("Management") 
     },
+        { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
+
     { 
       key: "help", 
       label: "Help", 
@@ -363,7 +366,7 @@ const DashboardIpd: React.FC = () => {
       icon: LogOutIcon, 
       onPress: onLogoutPress, 
       variant: "danger" 
-    },
+    },    
   ];
 
   if (loading) {
