@@ -943,30 +943,69 @@ const DashboardPharma: React.FC = () => {
             <ActivityIndicator size="small" color={COLORS.brand} />
           ) : dashboardCounts ? (
             <>
+            <TouchableOpacity
+              style={{ width: (responsiveWidth(100) - SPACING.lg * 2 - SPACING.sm) / 2 }}
+              onPress={() => navigation.navigate('PharmacyPatientListScreen' as never, { 
+                listType: 'prescriptions_today',
+                title: "Today's Prescriptions"
+              })}
+              activeOpacity={0.85}
+            >
               <KpiCard
                 title="Prescriptions Today"
                 value={dashboardCounts.prescriptionsToday}
                 icon={<FileTextIcon size={25} color={brandColor} />}
                 bg={COLORS.card}
               />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={{ width: (responsiveWidth(100) - SPACING.lg * 2 - SPACING.sm) / 2 }}
+              onPress={() => navigation.navigate('PharmacyPatientListScreen' as never, { 
+                listType: 'pending_orders',
+                title: "Pending Orders"
+              })}
+              activeOpacity={0.85}
+            >
               <KpiCard
                 title="Pending Orders"
                 value={dashboardCounts.acceptedPrescriptions}
                 icon={<ClockIcon size={25} color={brandColor} />}
                 bg={COLORS.card}
               />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={{ width: (responsiveWidth(100) - SPACING.lg * 2 - SPACING.sm) / 2 }}
+              onPress={() => navigation.navigate('PharmacyPatientListScreen' as never, { 
+                listType: 'low_stock',
+                title: "Low Stock Items"
+              })}
+              activeOpacity={0.85}
+            >
               <KpiCard
                 title="Low Stock Items"
                 value={dashboardCounts.lowStockItems}
                 icon={<AlertTriangleIcon size={25} color={brandColor} />}
                 bg={COLORS.card}
               />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={{ width: (responsiveWidth(100) - SPACING.lg * 2 - SPACING.sm) / 2 }}
+              onPress={() => navigation.navigate('PharmacyPatientListScreen' as never, { 
+                listType: 'revenue_today',
+                title: "Today's Revenue"
+              })}
+              activeOpacity={0.85}
+            >
               <KpiCard
                 title="Revenue Today"
                 value={formatCurrency(dashboardCounts.revenueToday)}
                 icon={<IndianRupeeIcon size={25} color={brandColor} />}
                 bg={COLORS.card}
               />
+              </TouchableOpacity>
             </>
           ) : (
             <View style={styles.noDataContainer}>

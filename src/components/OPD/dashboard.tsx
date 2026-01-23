@@ -380,8 +380,9 @@ const KpiCard: React.FC<{
   value: number | string | null | undefined;
   icon: React.ReactNode;
   bg: string;
-}> = ({ title, value, icon, bg }) => {
-  return (
+  onPress?: () => void;
+}> = ({ title, value, icon, bg, onPress }) => {
+  const CardContent = (
     <View style={[styles.card, { backgroundColor: bg }]}>
       <View style={styles.cardContent}>
         <Text style={styles.cardTitle}>{title}</Text>
@@ -390,6 +391,20 @@ const KpiCard: React.FC<{
       <View style={styles.iconWrap}>{icon}</View>
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity 
+        onPress={onPress} 
+        activeOpacity={0.85}
+        style={{ flex: 1 }}
+      >
+        {CardContent}
+      </TouchableOpacity>
+    );
+  }
+
+  return CardContent;
 };
 
 /* -------------------------- Main Screen -------------------------- */
@@ -632,10 +647,53 @@ const Dashboard_Outpatient: React.FC = () => {
       >
         {/* KPI cards */}
         <View style={styles.statsGrid}>
+      <View style={{ width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2 }}>
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('PatientListScreen' as never, { 
+            listType: 'today',
+            title: "Today's Patients"
+          })}
+          activeOpacity={0.85}
+        >
           <KpiCard title="Today's Patients" value={todayCount} icon={<Users size={ICON_SIZE.md} color="#2563EB" />} bg="#ffffffff" />
+        </TouchableOpacity>
+      </View>
+      
+      <View style={{ width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2 }}>
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('PatientListScreen' as never, { 
+            listType: 'appointments',
+            title: "Today's Appointments"
+          })}
+          activeOpacity={0.85}
+        >
           <KpiCard title="Appointments" value={appointmentsToday} icon={<Calendar size={ICON_SIZE.md} color="#10B981" />} bg="#ffffffff" />
+        </TouchableOpacity>
+      </View>
+      
+      <View style={{ width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2 }}>
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('PatientListScreen' as never, { 
+            listType: 'month',
+            title: "This Month's Patients"
+          })}
+          activeOpacity={0.85}
+        >
           <KpiCard title="This Month" value={thisMonthCount} icon={<Clock size={ICON_SIZE.md} color="#F59E0B" />} bg="#ffffffff" />
+        </TouchableOpacity>
+      </View>
+      
+      <View style={{ width: (SCREEN_WIDTH - SPACING.md * 2 - SPACING.xs) / 2 }}>
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('PatientListScreen' as never, { 
+            listType: 'year',
+            title: "This Year's Patients"
+          })}
+          activeOpacity={0.85}
+        >
           <KpiCard title="This Year" value={thisYearCount} icon={<ActivityIcon size={ICON_SIZE.md} color="#7C3AED" />} bg="#ffffffff" />
+        </TouchableOpacity>
+      </View>
         </View>
 
         {/* Primary action */}

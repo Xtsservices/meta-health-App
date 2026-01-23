@@ -400,28 +400,56 @@ const DashboardIpd: React.FC = () => {
 <View style={styles.statsContainer}>
   {/* Top row - Two cards side by side */}
   <View style={styles.topRow}>
+    <TouchableOpacity 
+      style={{ flex: 1 }}
+      onPress={() => navigation.navigate('IPDPatientListScreen' as never, { 
+        listType: 'total',
+        title: "Total Patients"
+      })}
+      activeOpacity={0.85}
+    >
     <KpiCard 
       title="Total Patients" 
       value={totalPatients} 
       icon={<UsersIcon size={ICON_SIZE.md} color="#2563EB" />} 
       bg="#ffffffff" 
     />
+    </TouchableOpacity>
+    
+    <TouchableOpacity 
+      style={{ flex: 1 }}
+      onPress={() => navigation.navigate('IPDPatientListScreen' as never, { 
+        listType: 'inpatients',
+        title: "Current Inpatients"
+      })}
+      activeOpacity={0.85}
+    >
     <KpiCard 
       title="Current Inpatients" 
       value={inPatientCount} 
       icon={<ActivityIcon size={ICON_SIZE.md} color="#10B981" />} 
       bg="#ffffffff" 
     />
+    </TouchableOpacity>
   </View>
   
   {/* Bottom row - Single centered card */}
   <View style={styles.bottomRow}>
+    <TouchableOpacity 
+      style={{ width: SCREEN_WIDTH - SPACING.md * 2 - SPACING.sm }}
+      onPress={() => navigation.navigate('IPDPatientListScreen' as never, { 
+        listType: 'discharged',
+        title: "Discharged Patients"
+      })}
+      activeOpacity={0.85}
+    >
     <KpiCard 
       title="Discharged Patients" 
       value={dischargedCount} 
       icon={<UserMinusIcon size={ICON_SIZE.md} color="#F59E0B" />} 
       bg="#ffffffff" 
     />
+    </TouchableOpacity>
   </View>
 </View>
 

@@ -811,35 +811,95 @@ const { setScreenType } = useOTConfig();
 
                 {isSurgeon ? (
                   <View style={styles.kpiGrid}>
-                    <View style={styles.kpiItem}>
+                    {/* Total Surgeries */}
+                    <TouchableOpacity 
+                      style={styles.kpiItem}
+                      onPress={() => navigation.navigate("OtPatientList", { 
+                        view: "surgeon",
+                        type: "totalSurgeries",
+                        title: "Total Surgeries",
+                        year: filterYearSummary,
+                        month: filterMonthSummary
+                      })}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`Total Surgeries: ${surgeonCounts?.totalSurgeries || 0}`}
+                      accessibilityRole="button"
+                    >
                       <Text style={styles.kpiValue}>
                         {surgeonCounts?.totalSurgeries || 0}
                       </Text>
                       <Text style={styles.kpiLabel}>Total Surgeries</Text>
-                    </View>
-                    <View style={styles.kpiItem}>
+                    </TouchableOpacity>
+                    
+                    {/* Today Scheduled Surgeries */}
+                    <TouchableOpacity 
+                      style={styles.kpiItem}
+                      onPress={() => navigation.navigate("OtPatientList", { 
+                        view: "surgeon",
+                        type: "todayScheduledSurgeries",
+                        title: "Today Scheduled Surgeries"
+                      })}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`Today Scheduled Surgeries: ${surgeonCounts?.todayScheduledSurgeries || 0}`}
+                      accessibilityRole="button"
+                    >
                       <Text style={styles.kpiValue}>
                         {surgeonCounts?.todayScheduledSurgeries || 0}
                       </Text>
                       <Text style={styles.kpiLabel}>Today Scheduled</Text>
-                    </View>
-                    <View style={styles.kpiItem}>
+                    </TouchableOpacity>
+                    
+                    {/* Today Added Surgeries */}
+                    <TouchableOpacity 
+                      style={styles.kpiItem}
+                      onPress={() => navigation.navigate("OtPatientList", { 
+                        view: "surgeon",
+                        type: "todayAddedSurgeries",
+                        title: "Today Added Surgeries"
+                      })}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`Today Added Surgeries: ${surgeonCounts?.todayAddedSurgeries || 0}`}
+                      accessibilityRole="button"
+                    >
                       <Text style={styles.kpiValue}>
                         {surgeonCounts?.todayAddedSurgeries || 0}
                       </Text>
                       <Text style={styles.kpiLabel}>Today Added</Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 ) : (
                   <View style={styles.kpiGrid}>
-                    <View style={styles.kpiItem}>
+                    {/* Approved (Anesthetist) */}
+                    <TouchableOpacity 
+                      style={styles.kpiItem}
+                      onPress={() => navigation.navigate("ApprovedRejectedList", { 
+                        status: "approved",
+                        year: filterYearSummary,
+                        month: filterMonthSummary
+                      })}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`Approved Surgeries: ${approvedCount}`}
+                      accessibilityRole="button"
+                    >
                       <Text style={styles.kpiValue}>{approvedCount}</Text>
                       <Text style={styles.kpiLabel}>Approved</Text>
-                    </View>
-                    <View style={styles.kpiItem}>
+                    </TouchableOpacity>
+                    
+                    {/* Rejected (Anesthetist) */}
+                    <TouchableOpacity 
+                      style={styles.kpiItem}
+                      onPress={() => navigation.navigate("ApprovedRejectedList", { 
+                        status: "rejected",
+                        year: filterYearSummary,
+                        month: filterMonthSummary
+                      })}
+                      activeOpacity={0.7}
+                      accessibilityLabel={`Rejected Surgeries: ${rejectedCount}`}
+                      accessibilityRole="button"
+                    >
                       <Text style={styles.kpiValue}>{rejectedCount}</Text>
                       <Text style={styles.kpiLabel}>Rejected</Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
