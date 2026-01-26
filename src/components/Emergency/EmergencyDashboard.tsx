@@ -50,6 +50,7 @@ import {
   LogOutIcon,
   GridIcon,
   FileMinusIcon,
+  CommissionIcon,
 } from "../../utils/SvgIcons";
 import { showError } from "../../store/toast.slice";
 
@@ -350,6 +351,7 @@ const EmergencyDashboard: React.FC = () => {
       icon: SettingsIcon,
       onPress: () => go("Management")
     },
+    { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
     {
       key: "help",
       label: "Help",

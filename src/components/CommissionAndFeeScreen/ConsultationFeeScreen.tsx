@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { X, Plus } from 'lucide-react-native';
+import { X, Plus, History, CheckCircle } from 'lucide-react-native';
 import { AuthFetch, AuthPatch, AuthPost } from '../../auth/auth';
 import { RootState } from '../../store/store';
 import { 
@@ -43,7 +43,7 @@ interface ConsultationFee {
   hospitalID?: number;
   doctorProfileID?: number | null;
   fee?: number;
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'active';
   doctorApproval?: 0 | 1;
   adminApproval?: 0 | 1;
   rejectedBy?: string;
@@ -55,6 +55,14 @@ interface ConsultationFee {
   updatedAt?: string;
   createdBy?: number;
   updatedBy?: number | null;
+}
+
+interface ActiveFee {
+  id?: number;
+  fee?: number;
+  startDate?: string;
+  endDate?: string | null;
+  status?: string;
 }
 
 interface FeeHistory {
@@ -93,10 +101,12 @@ const COLORS = {
   modalOverlay: 'rgba(0, 0, 0, 0.5)',
   tagFee: '#0ea5e9',
   placeholder: '#94a3b8',
+  activeGreen: '#10b981',
 };
 
 const ConsultationFeeScreen = () => {
   const [fees, setFees] = useState<ConsultationFee[]>([]);
+  const [activeFee, setActiveFee] = useState<ActiveFee | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFee, setSelectedFee] = useState<ConsultationFee | null>(null);
@@ -105,10 +115,61 @@ const ConsultationFeeScreen = () => {
   const [newFee, setNewFee] = useState('');
   const [feeHistory, setFeeHistory] = useState<FeeHistory | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [commissionStatus, setCommissionStatus] = useState<{
+    isApproved: boolean;
+    message?: string;
+  }>({ isApproved: true });
   
   const user = useSelector((state: RootState) => state.currentUser);
   const dispatch = useDispatch();
 
+  // Add commission status check function
+  const checkCommissionStatus = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token || !user?.id || !user?.hospitalID) {
+        return { isApproved: false, message: "Missing user information" };
+      }
+
+      // Try different possible endpoints
+      const endpoints = [
+        `commission/doctor/${user.id}/hospital/${user.hospitalID}/status`,
+        `user/commission/check/${user.id}/${user.hospitalID}`,
+        `commission/details/doctor/${user.id}/hospital/${user.hospitalID}`,
+        `user/commission/doctor/${user.id}/hospital/${user.hospitalID}/status`
+      ];
+
+      let commissionResponse = null;
+      for (const endpoint of endpoints) {
+        try {
+          const response = await AuthFetch(endpoint, token) as any;
+          if (response?.status === 'success' || response?.data) {
+            commissionResponse = response;
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (commissionResponse?.status === 'success') {
+        const data = commissionResponse.data || commissionResponse;
+        const isApproved = data?.doctorApproved === 1 && data?.adminApproved === 1;
+        
+        return {
+          isApproved,
+          message: !isApproved 
+            ? "Commission terms pending approval. Please wait for admin approval."
+            : undefined
+        };
+      }
+      
+      return { isApproved: true, message: undefined }; // Default to true if endpoint not found
+    } catch (error) {
+      console.log("Commission check error:", error);
+      return { isApproved: true, message: undefined }; // Default to true to not block users
+    }
+  };
 
   const loadData = useCallback(async (showLoader = true) => {
     try {
@@ -116,19 +177,56 @@ const ConsultationFeeScreen = () => {
         setLoading(true);
       }
 
-      await loadFees();
+      // Check commission status first
+      const commissionCheck = await checkCommissionStatus();
+      setCommissionStatus(commissionCheck);
+
+      // Load active fee
+      await loadActiveFee();
+
+      // Only load pending fees if commission is approved
+      if (commissionCheck.isApproved) {
+        await loadFees();
+      } else {
+        setFees([]);
+      }
     } catch (error) {
-      showError('Failed to load fee data');
+      dispatch(showError('Failed to load fee data'));
     } finally {
       if (showLoader) {
         setLoading(false);
       }
     }
-  }, [ showError]);
+  }, [dispatch]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const loadActiveFee = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token || !user?.id || !user?.hospitalID) {
+        setActiveFee(null);
+        return;
+      }
+      const response = await AuthFetch(
+        `user/consultationFee/active/${user.id}/${user.hospitalID}`,
+        token
+      ) as any;
+      
+      console.log("Active fee response:", response);
+      
+      if (response?.status === 'success' && response?.data?.data) {
+        setActiveFee(response?.data?.data);
+      } else {
+        setActiveFee(null);
+      }
+    } catch (error) {
+      console.log("Error loading active fee:", error);
+      setActiveFee(null);
+    }
+  };
 
   const loadFees = async () => {
     try {
@@ -160,13 +258,19 @@ const ConsultationFeeScreen = () => {
   };
 
   const handleFeePropose = async () => {
+    // Check commission status first
+    if (!commissionStatus.isApproved) {
+      dispatch(showError(commissionStatus.message || "Commission approval required"));
+      return;
+    }
+
     if (!newFee || isNaN(Number(newFee))) {
-      showError('Please enter a valid fee amount');
+      dispatch(showError('Please enter a valid fee amount'));
       return;
     }
 
     if (parseFloat(newFee) <= 0) {
-      showError('Fee amount must be greater than zero');
+      dispatch(showError('Fee amount must be greater than zero'));
       return;
     }
 
@@ -174,7 +278,7 @@ const ConsultationFeeScreen = () => {
       setSubmitting(true);
       const token = await AsyncStorage.getItem('token');
       if (!token || !user?.id || !user?.hospitalID) {
-        showError('Missing required information');
+        dispatch(showError('Missing required information'));
         return;
       }
 
@@ -190,16 +294,40 @@ const ConsultationFeeScreen = () => {
         token
       ) as any;
       
-      if (response?.status === 'success') {
-        showSuccess('Fee proposed successfully');
+      console.log("Fee propose response:", response);
+      
+      // Check different possible success structures
+      if (response?.status === 'success' || response?.success === true) {
+        dispatch(showSuccess('Fee proposed successfully'));
+        loadData(false);
+        setNewFee('');
+        setShowFeeModal(false);
+      } else if (response?.data?.status === 'success') {
+        dispatch(showSuccess('Fee proposed successfully'));
         loadData(false);
         setNewFee('');
         setShowFeeModal(false);
       } else {
-        showError(response?.message || 'Failed to propose fee');
+        // Handle error - check multiple possible locations
+        const errorMessage = 
+          response?.message || 
+          response?.data?.message ||
+          response?.error ||
+          response?.data?.error ||
+          'Failed to propose fee';
+        
+        dispatch(showError(errorMessage));
       }
-    } catch (error) {
-      showError('Failed to propose fee');
+    } catch (error: any) {
+      console.error('Fee proposal error:', error);
+      
+      // Handle network or unexpected errors
+      const errorMessage = 
+        error?.message ||
+        error?.response?.data?.message ||
+        'Network error occurred';
+      
+      dispatch(showError(errorMessage));
     } finally {
       setSubmitting(false);
     }
@@ -209,7 +337,7 @@ const ConsultationFeeScreen = () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        showError('Please login to continue');
+        dispatch(showError('Please login to continue'));
         return;
       }
 
@@ -219,14 +347,20 @@ const ConsultationFeeScreen = () => {
         token
       ) as any;
       
-      if (response?.status === 'success') {
-        showSuccess('Fee approved successfully');
+      console.log("Fee approve response:", response);
+      
+      if (response?.status === 'success' || response?.success === true) {
+        dispatch(showSuccess('Fee approved successfully'));
         loadData(false);
       } else {
-        showError(response?.message || 'Failed to approve fee');
+        const errorMessage = 
+          response?.message || 
+          response?.data?.message ||
+          'Failed to approve fee';
+        dispatch(showError(errorMessage));
       }
-    } catch (error) {
-      showError('Failed to approve fee');
+    } catch (error: any) {
+      dispatch(showError('Failed to approve fee'));
     }
   };
 
@@ -234,7 +368,7 @@ const ConsultationFeeScreen = () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        showError('Please login to continue');
+        dispatch(showError('Please login to continue'));
         return;
       }
 
@@ -247,25 +381,74 @@ const ConsultationFeeScreen = () => {
         setFeeHistory(response?.data?.data || null);
         setShowHistoryModal(true);
       } else {
-        showError(response?.message || 'Failed to load history');
+        dispatch(showError(response?.message || 'Failed to load history'));
       }
     } catch (error) {
-      showError('Failed to load history');
+      dispatch(showError('Failed to load history'));
     }
   };
 
-  const getStatusColor = (doctorApproval?: number, adminApproval?: number) => {
+  const getStatusColor = (doctorApproval?: number, adminApproval?: number, status?: string) => {
+    if (status === 'active') return COLORS.activeGreen;
     if (doctorApproval === 1 && adminApproval === 1) return COLORS.success;
     if (doctorApproval === 0 && adminApproval === 0) return COLORS.warning;
     if (doctorApproval === 1 && adminApproval === 0) return COLORS.info;
     return COLORS.subText;
   };
 
-  const getStatusText = (doctorApproval?: number, adminApproval?: number) => {
+  const getStatusText = (doctorApproval?: number, adminApproval?: number, status?: string) => {
+    if (status === 'active') return 'ACTIVE';
     if (doctorApproval === 1 && adminApproval === 1) return 'APPROVED';
     if (doctorApproval === 0 && adminApproval === 0) return 'PENDING';
     if (doctorApproval === 1 && adminApproval === 0) return 'DOCTOR APPROVED';
     return 'UNKNOWN';
+  };
+
+  // Active Fee Card Component
+  const ActiveFeeCard = () => {
+    if (!activeFee) return null;
+
+    return (
+      <View style={[styles.activeFeeCard, { borderColor: COLORS.activeGreen }]}>
+        <View style={styles.activeFeeHeader}>
+          <View style={styles.activeFeeTitleRow}>
+            <CheckCircle size={moderateScale(20)} color={COLORS.activeGreen} />
+            <Text style={styles.activeFeeTitle}>Current Consultation Fee</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: COLORS.activeGreen }]}>
+            <Text style={styles.statusText}>{activeFee?.status?.toUpperCase() || 'ACTIVE'}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.activeFeeBody}>
+          <Text style={styles.activeFeeAmount}>₹{activeFee?.fee}</Text>
+          <Text style={styles.activeFeeSubtitle}>per consultation</Text>
+          
+          <View style={styles.activeFeeDate}>
+            <Text style={styles.activeFeeDateText}>
+              Effective from: {formatDate(activeFee?.startDate)}
+            </Text>
+            {activeFee?.endDate && (
+              <Text style={styles.activeFeeDateText}>
+                Valid until: {formatDate(activeFee?.endDate)}
+              </Text>
+            )}
+          </View>
+          
+          <TouchableOpacity
+            style={styles.historyButtonTop}
+            onPress={() => {
+              if (activeFee?.id) {
+                loadFeeHistory(activeFee.id);
+              }
+            }}
+          >
+            <History size={moderateScale(16)} color={COLORS.primary} />
+            <Text style={styles.historyButtonText}>View History</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   const FeeCard = ({ item }: { item: ConsultationFee }) => {
@@ -364,28 +547,42 @@ const ConsultationFeeScreen = () => {
           <View style={styles.modalBody}>
             <Text style={styles.modalSubtitle}>Enter the consultation fee amount you want to propose</Text>
             
+            {!commissionStatus.isApproved && (
+              <View style={styles.commissionWarningBox}>
+                <Text style={styles.commissionWarningText}>
+                  ⚠️ {commissionStatus.message || "Commission approval required"}
+                </Text>
+              </View>
+            )}
+            
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Fee Amount (₹)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, !commissionStatus.isApproved && styles.inputDisabled]}
                 placeholder="e.g., 500"
                 placeholderTextColor={COLORS.placeholder}
                 value={newFee}
                 onChangeText={setNewFee}
                 keyboardType="numeric"
-                editable={!submitting}
+                editable={!submitting && commissionStatus.isApproved}
               />
             </View>
             
             <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+              style={[
+                styles.submitButton, 
+                submitting && styles.submitButtonDisabled,
+                !commissionStatus.isApproved && styles.submitButtonDisabled
+              ]}
               onPress={handleFeePropose}
-              disabled={submitting}
+              disabled={submitting || !commissionStatus.isApproved}
             >
               {submitting ? (
                 <ActivityIndicator size="small" color={COLORS.card} />
               ) : (
-                <Text style={styles.submitButtonText}>Propose Fee</Text>
+                <Text style={styles.submitButtonText}>
+                  {!commissionStatus.isApproved ? "Commission Pending" : "Propose Fee"}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -407,7 +604,9 @@ const ConsultationFeeScreen = () => {
           { maxHeight: SCREEN_HEIGHT * 0.8 }
         ]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Fee History - #{feeHistory?.id}</Text>
+            <Text style={styles.modalTitle}>
+              Fee History - #{feeHistory?.id || activeFee?.id}
+            </Text>
             <TouchableOpacity 
               style={styles.closeButton}
               onPress={() => setShowHistoryModal(false)}
@@ -425,17 +624,17 @@ const ConsultationFeeScreen = () => {
               <>
                 <View style={styles.detailGrid}>
                   <View style={styles.detailSection}>
-                    <Text style={styles.detailLabel}>Current Fee</Text>
+                    <Text style={styles.detailLabel}>Fee Amount</Text>
                     <Text style={styles.detailValue}>₹{feeHistory?.fee}</Text>
                   </View>
                   
                   <View style={styles.detailSection}>
                     <Text style={styles.detailLabel}>Status</Text>
                     <View style={[styles.statusBadge, { 
-                      backgroundColor: getStatusColor(feeHistory?.doctorApproval, feeHistory?.adminApproval) 
+                      backgroundColor: getStatusColor(feeHistory?.doctorApproval, feeHistory?.adminApproval, feeHistory?.status) 
                     }]}>
                       <Text style={styles.statusText}>
-                        {getStatusText(feeHistory?.doctorApproval, feeHistory?.adminApproval)}
+                        {getStatusText(feeHistory?.doctorApproval, feeHistory?.adminApproval, feeHistory?.status)}
                       </Text>
                     </View>
                   </View>
@@ -487,17 +686,34 @@ const ConsultationFeeScreen = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyStateTitle}>No Fee Proposals</Text>
-      <Text style={styles.emptyStateText}>
-        You haven't proposed any consultation fees yet.
+      <Text style={styles.emptyStateTitle}>
+        {commissionStatus.isApproved 
+          ? "No Pending Fee Proposals" 
+          : "Commission Approval Required"
+        }
       </Text>
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => setShowFeeModal(true)}
-      >
-        <Plus size={moderateScale(16)} color="#ffffff" />
-        <Text style={styles.addButtonText}>Propose Your First Fee</Text>
-      </TouchableOpacity>
+      <Text style={styles.emptyStateText}>
+        {commissionStatus.isApproved 
+          ? "You don't have any pending fee proposals at the moment."
+          : commissionStatus.message || "Commission terms need approval before proposing fees."
+        }
+      </Text>
+      
+      {commissionStatus.isApproved ? (
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => setShowFeeModal(true)}
+        >
+          <Plus size={moderateScale(16)} color="#ffffff" />
+          <Text style={styles.addButtonText}>Propose New Fee</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.infoBox}>
+          <Text style={styles.infoBoxText}>
+            Please contact your hospital administrator to approve the commission terms.
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -510,14 +726,20 @@ const ConsultationFeeScreen = () => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Fee Proposals</Text>
         
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowFeeModal(true)}
-          activeOpacity={0.7}
-        >
-          <Plus size={moderateScale(16)} color="#ffffff" />
-          <Text style={styles.addButtonText}>Propose New</Text>
-        </TouchableOpacity>
+        {commissionStatus.isApproved ? (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowFeeModal(true)}
+            activeOpacity={0.7}
+          >
+            <Plus size={moderateScale(16)} color="#ffffff" />
+            <Text style={styles.addButtonText}>Propose New</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.commissionWarningBadge}>
+            <Text style={styles.commissionWarningBadgeText}>Commission Pending</Text>
+          </View>
+        )}
       </View>
       
       {/* Content Area */}
@@ -531,7 +753,7 @@ const ConsultationFeeScreen = () => {
           style={styles.content}
           contentContainerStyle={{ 
             flexGrow: 1,
-            paddingBottom: bottomPadding + responsiveHeight(10) // Space for footer
+            paddingBottom: bottomPadding + responsiveHeight(10)
           }}
           refreshControl={
             <RefreshControl 
@@ -542,6 +764,16 @@ const ConsultationFeeScreen = () => {
           }
           showsVerticalScrollIndicator={false}
         >
+          {/* Active Fee Section */}
+          {activeFee && <ActiveFeeCard />}
+          
+          {/* Pending Proposals Section */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              Pending Fee Proposals {fees.length > 0 && `(${fees.length})`}
+            </Text>
+          </View>
+          
           {fees?.length === 0 ? (
             renderEmptyState()
           ) : (
@@ -597,11 +829,112 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: getResponsiveFontSize(FONT_SIZE.xs),
   },
+  commissionWarningBadge: {
+    backgroundColor: COLORS.warning,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: getDeviceSpecificValue(SPACING.xs, SPACING.sm, SPACING.xs),
+    borderRadius: BORDER_RADIUS.md,
+  },
+  commissionWarningBadgeText: {
+    color: COLORS.card,
+    fontWeight: '700',
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+  },
+  
+  // Section Header
+  sectionHeader: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  sectionTitle: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  
+  // Active Fee Card Styles
+  activeFeeCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    margin: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderWidth: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: ELEVATION.md,
+      },
+    }),
+  },
+  activeFeeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  activeFeeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(8),
+  },
+  activeFeeTitle: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  activeFeeBody: {
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  activeFeeAmount: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xxl),
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  activeFeeSubtitle: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    color: COLORS.subText,
+    fontWeight: '600',
+    marginBottom: SPACING.sm,
+  },
+  activeFeeDate: {
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  activeFeeDateText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: COLORS.subText,
+    fontWeight: '600',
+  },
+  historyButtonTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(6),
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.chip,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  historyButtonText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
   
   // Content Styles
   content: {
     flex: 1,
-    padding: SPACING.lg,
   },
   
   // Loading Styles
@@ -622,6 +955,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
+    marginHorizontal: SPACING.lg,
     marginBottom: SPACING.md,
     borderWidth: 1.5,
     ...Platform.select({
@@ -766,11 +1100,11 @@ const styles = StyleSheet.create({
   
   // Empty State
   emptyState: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: responsiveHeight(15),
+    paddingVertical: responsiveHeight(10),
     paddingHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
   },
   emptyStateTitle: {
     fontSize: getResponsiveFontSize(FONT_SIZE.lg),
@@ -785,6 +1119,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: getResponsiveFontSize(FONT_SIZE.sm) * 1.5,
     marginBottom: SPACING.lg,
+  },
+  
+  // Info Box
+  infoBox: {
+    backgroundColor: '#fef3c7',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+    marginTop: SPACING.sm,
+  },
+  infoBoxText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: '#92400e',
+    textAlign: 'center',
+    fontWeight: '600',
   },
   
   // Modal Styles
@@ -837,6 +1187,22 @@ const styles = StyleSheet.create({
     color: COLORS.subText,
     marginBottom: SPACING.lg,
     lineHeight: getResponsiveFontSize(FONT_SIZE.sm) * 1.5,
+  },
+  
+  // Commission Warning in Modal
+  commissionWarningBox: {
+    backgroundColor: '#fef3c7',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: '#fbbf24',
+    marginBottom: SPACING.lg,
+  },
+  commissionWarningText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    color: '#92400e',
+    textAlign: 'center',
+    fontWeight: '600',
   },
   
   // Modal Detail Sections
@@ -946,6 +1312,10 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     backgroundColor: COLORS.card,
     fontWeight: '600',
+  },
+  inputDisabled: {
+    backgroundColor: '#f1f5f9',
+    color: COLORS.subText,
   },
   
   // Button Styles

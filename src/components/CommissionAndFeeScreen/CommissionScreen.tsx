@@ -305,6 +305,7 @@ const CommissionScreen = () => {
         { commissionPercentage: parseFloat(editCommission) },
         token
       ) as any;
+      console.log("555",response)
       
       if (response?.status === 'success') {
         showSuccess('Commission updated successfully');
@@ -319,19 +320,21 @@ const CommissionScreen = () => {
     }
   };
 
-  const getStatusColor = (doctorApproval?: number, adminApproval?: number) => {
-    if (doctorApproval === 1 && adminApproval === 1) return COLORS.success;
-    if (doctorApproval === 0 && adminApproval === 0) return COLORS.warning;
-    if (doctorApproval === 1 && adminApproval === 0) return COLORS.info;
-    return COLORS.subText;
-  };
+const getDoctorStatusColor = (doctorApproval?: number) => {
+  return doctorApproval === 1 ? COLORS.success : COLORS.warning;
+};
 
-  const getStatusText = (doctorApproval?: number, adminApproval?: number) => {
-    if (doctorApproval === 1 && adminApproval === 1) return 'APPROVED';
-    if (doctorApproval === 0 && adminApproval === 0) return 'PENDING';
-    if (doctorApproval === 1 && adminApproval === 0) return 'DOCTOR APPROVED';
-    return 'UNKNOWN';
-  };
+const getAdminStatusColor = (adminApproval?: number) => {
+  return adminApproval === 1 ? COLORS.success : COLORS.warning;
+};
+
+const getDoctorStatusText = (doctorApproval?: number) => {
+  return doctorApproval === 1 ? 'APPROVED' : 'PENDING';
+};
+
+const getAdminStatusText = (adminApproval?: number) => {
+  return adminApproval === 1 ? 'APPROVED' : 'PENDING';
+};
 
   const parseHistory = (history: any): any[] => {
     if (!history) return [];
@@ -352,80 +355,95 @@ const CommissionScreen = () => {
     return [];
   };
 
-  const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
-    const commissionRate = parseFloat(item?.commissionPercentage || '0');
-    const consultationFee = parseFloat(item?.consultationFee || '0');
-    const statusColor = getStatusColor(item?.doctorApproval, item?.adminApproval);
-    const statusText = getStatusText(item?.doctorApproval, item?.adminApproval);
-    
-    return (
-      <View style={[styles.card, { borderColor: COLORS.border }]}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Commission Proposal #{item?.id}</Text>
-          <View style={[styles.tagBadge, { backgroundColor: COLORS.tagCommission }]}>
-            <Text style={styles.tagText}>PENDING</Text>
+const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
+  console.log("999",item)
+  const commissionRate = parseFloat(item?.commissionPercentage || '0');
+  const consultationFee = parseFloat(item?.consultationFee || '0');
+  const doctorStatusColor = getDoctorStatusColor(item?.doctorApproval);
+  const doctorStatusText = getDoctorStatusText(item?.doctorApproval);
+  const adminStatusColor = getAdminStatusColor(item?.adminApproval);
+  const adminStatusText = getAdminStatusText(item?.adminApproval);
+  
+  return (
+    <View style={[styles.card, { borderColor: COLORS.border }]}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>Commission Proposal</Text>
+        <View style={[styles.tagBadge, { backgroundColor: COLORS.tagCommission }]}>
+          <Text style={styles.tagText}>PENDING</Text>
+        </View>
+      </View>
+      
+      <View style={styles.cardBody}>
+        <View style={styles.infoRow}>
+          <View style={styles.infoSection}>
+            <Text style={styles.fieldLabel}>Commission Rate</Text>
+            <Text style={styles.infoValue}>{commissionRate}%</Text>
+          </View>
+          
+          <View style={styles.infoSection}>
+            <Text style={styles.fieldLabel}>Consultation Fee</Text>
+            <Text style={styles.infoValue}>₹{consultationFee}</Text>
           </View>
         </View>
         
-        <View style={styles.cardBody}>
-          <View style={styles.infoRow}>
-            <View style={styles.infoSection}>
-              <Text style={styles.fieldLabel}>Commission Rate</Text>
-              <Text style={styles.infoValue}>{commissionRate}%</Text>
-            </View>
-            
-            <View style={styles.infoSection}>
-              <Text style={styles.fieldLabel}>Consultation Fee</Text>
-              <Text style={styles.infoValue}>₹{consultationFee}</Text>
+        {/* Doctor Approval Status */}
+        <View style={styles.statusRow}>
+          <View style={styles.infoSection}>
+            <Text style={styles.fieldLabel}>Doctor Approval</Text>
+            <View style={[styles.statusBadge, { backgroundColor: doctorStatusColor }]}>
+              <Text style={styles.statusText}>{doctorStatusText}</Text>
             </View>
           </View>
           
-          <View style={styles.statusRow}>
-            <View style={styles.infoSection}>
-              <Text style={styles.fieldLabel}>Status</Text>
-              <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                <Text style={styles.statusText}>{statusText}</Text>
-              </View>
-            </View>
-            
-            <View style={styles.infoSection}>
-              <Text style={styles.fieldLabel}>Employment Type</Text>
-              <Text style={styles.infoValue}>{item?.employmentType || 'Not specified'}</Text>
+          {/* Admin Approval Status */}
+          <View style={styles.infoSection}>
+            <Text style={styles.fieldLabel}>Admin Approval</Text>
+            <View style={[styles.statusBadge, { backgroundColor: adminStatusColor }]}>
+              <Text style={styles.statusText}>{adminStatusText}</Text>
             </View>
           </View>
-          
-          <View style={styles.dateRow}>
-            <Text style={styles.dateText}>Start Date: {formatDate(item?.startDate)}</Text>
-            {item?.endDate && (
-              <Text style={styles.dateText}>End Date: {formatDate(item?.endDate)}</Text>
-            )}
+        </View>
+        
+        <View style={styles.infoRow}>
+          <View style={styles.infoSection}>
+            <Text style={styles.fieldLabel}>Employment Type</Text>
+            <Text style={styles.infoValue}>{item?.employmentType || 'Not specified'}</Text>
           </View>
-          
-          {item?.doctorApproval === 0 && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.editButton]}
-                onPress={() => {
-                  setSelectedCommission(item);
-                  setEditCommission(commissionRate.toString());
-                  setShowCommissionModal(true);
-                }}
-              >
-                <Text style={styles.actionButtonText}>Edit</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.actionButton, styles.approveButton]}
-                onPress={() => handleCommissionApprove(item?.id || 0)}
-              >
-                <Text style={styles.actionButtonText}>Approve</Text>
-              </TouchableOpacity>
-            </View>
+        
+        </View>
+        
+        <View style={styles.dateRow}>
+          <Text style={styles.dateText}>Start Date: {formatDate(item?.startDate)}</Text>
+          {item?.endDate && (
+            <Text style={styles.dateText}>End Date: {formatDate(item?.endDate)}</Text>
           )}
         </View>
+        
+        {item?.doctorApproval === 0 && (
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.editButton]}
+              onPress={() => {
+                setSelectedCommission(item);
+                setEditCommission(commissionRate.toString());
+                setShowCommissionModal(true);
+              }}
+            >
+              <Text style={styles.actionButtonText}>Edit</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={() => handleCommissionApprove(item?.id || 0)}
+            >
+              <Text style={styles.actionButtonText}>Approve</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
-    );
-  };
+    </View>
+  );
+};
 
   const renderActiveCommissionCard = () => {
     if (!activeCommission) return null;
@@ -613,34 +631,34 @@ const CommissionScreen = () => {
                 </View>
               </View>
               
-              <View style={styles.statusSection}>
-                <Text style={styles.sectionTitle}>Approval Status</Text>
-                <View style={styles.statusGrid}>
-                  <View style={styles.statusItem}>
-                    <Text style={styles.statusLabel}>Doctor Approval</Text>
-                    <View style={[
-                      styles.statusIndicator,
-                      { backgroundColor: selectedCommission?.doctorApproval === 1 ? COLORS.success : COLORS.warning }
-                    ]}>
-                      <Text style={styles.statusIndicatorText}>
-                        {selectedCommission?.doctorApproval === 1 ? 'Approved' : 'Pending'}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.statusItem}>
-                    <Text style={styles.statusLabel}>Admin Approval</Text>
-                    <View style={[
-                      styles.statusIndicator,
-                      { backgroundColor: selectedCommission?.adminApproval === 1 ? COLORS.success : COLORS.warning }
-                    ]}>
-                      <Text style={styles.statusIndicatorText}>
-                        {selectedCommission?.adminApproval === 1 ? 'Approved' : 'Pending'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
+<View style={styles.statusSection}>
+  <Text style={styles.sectionTitle}>Approval Status</Text>
+  <View style={styles.statusGrid}>
+    <View style={styles.statusItem}>
+      <Text style={styles.statusLabel}>Doctor Approval</Text>
+      <View style={[
+        styles.statusIndicator,
+        { backgroundColor: selectedCommission?.doctorApproval === 1 ? COLORS.success : COLORS.warning }
+      ]}>
+        <Text style={styles.statusIndicatorText}>
+          {selectedCommission?.doctorApproval === 1 ? 'Approved' : 'Pending'}
+        </Text>
+      </View>
+    </View>
+    
+    <View style={styles.statusItem}>
+      <Text style={styles.statusLabel}>Admin Approval</Text>
+      <View style={[
+        styles.statusIndicator,
+        { backgroundColor: selectedCommission?.adminApproval === 1 ? COLORS.success : COLORS.warning }
+      ]}>
+        <Text style={styles.statusIndicatorText}>
+          {selectedCommission?.adminApproval === 1 ? 'Approved' : 'Pending'}
+        </Text>
+      </View>
+    </View>
+  </View>
+</View>
               
               <View style={styles.dateSection}>
                 <Text style={styles.sectionTitle}>Dates</Text>
