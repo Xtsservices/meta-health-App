@@ -4,10 +4,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   FlatList,
   Dimensions,
+  Alert,
 } from "react-native";
 import { useSelector } from "react-redux";
 import { RootState } from "../../../store/store";
@@ -23,13 +23,14 @@ import {
   CalendarIcon,
   ClockIcon,
   UsersIcon,
-  DeleteIcon,
   LeaveIcon,
 } from "../../../utils/SvgIcons";
 import CalendarModal from "./CalendarModal";
 import SlotModal from "./SlotModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Trash2 } from "lucide-react-native";
+import { useDispatch } from "react-redux";
+import { showSuccess, showError } from "../../../store/toast.slice";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -79,6 +80,7 @@ interface ApiResponse {
 const selectCurrentUser = (state: RootState) => state.currentUser;
 
 const SlotsManagement: React.FC = () => {
+  const dispatch = useDispatch();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [slots, setSlots] = useState<Slot[]>([]);
   const [leaves, setLeaves] = useState<Leave[]>([]);
@@ -197,12 +199,12 @@ const SlotsManagement: React.FC = () => {
 
       await fetchSlots();
       setShowSlotModal(false);
-      Alert.alert("Success", "Slots created successfully");
+      dispatch(showSuccess("Slots created successfully"));
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to create slots";
       setCreateError(errorMessage);
       setError(errorMessage);
-      Alert.alert("Error", errorMessage);
+      dispatch(showError(errorMessage));
     } finally {
       setCreating(false);
     }
@@ -263,10 +265,10 @@ const SlotsManagement: React.FC = () => {
             }
 
             setRefreshTrigger((prev) => prev + 1);
-            Alert.alert("Success", "Slot deleted successfully");
+            dispatch(showSuccess("Slot deleted successfully"));
           } catch (err: any) {
             setError(err?.message || "Failed to delete slot");
-            Alert.alert("Error", err?.message || "Failed to delete slot");
+            dispatch(showError(err?.message || "Failed to delete slot"));
           } finally {
             setDeleting(null);
           }
@@ -281,7 +283,7 @@ const SlotsManagement: React.FC = () => {
     const slotsForDate = getSlotsForSelectedDate();
 
     if (slotsForDate.length === 0) {
-      Alert.alert("Info", "No slots to delete for selected date");
+      dispatch(showError("No slots to delete for selected date"));
       return;
     }
 
@@ -320,10 +322,10 @@ const SlotsManagement: React.FC = () => {
               }
 
               setRefreshTrigger((prev) => prev + 1);
-              Alert.alert("Success", "All slots deleted successfully");
+              dispatch(showSuccess("All slots deleted successfully"));
             } catch (err: any) {
               setError(err?.message || "Failed to delete slots");
-              Alert.alert("Error", err?.message || "Failed to delete slots");
+              dispatch(showError(err?.message || "Failed to delete slots"));
             } finally {
               setDeleteAllLoading(false);
             }
@@ -648,7 +650,6 @@ const SlotsManagement: React.FC = () => {
         }}
         onSave={createSlots}
         creating={creating}
-        leaves={leaves}
       />
     </View>
   );

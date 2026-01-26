@@ -25,6 +25,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../../../utils/colour";
 
 type Unit = "days" | "weeks" | "months" | "year";
+type UnitDisplay = "day" | "week" | "month" | "year" | "days" | "weeks" | "months";
+
 const UNITS: Unit[] = ["days", "weeks", "months", "year"];
 
 type NewSym = {
@@ -97,7 +99,19 @@ export default function AddSymptomsScreen() {
     },
     [removeDuplicatesAndFilter, user?.token]
   );
-
+const getDisplayUnit = (unit: Unit, duration: string): UnitDisplay => {
+  const dur = parseInt(duration, 10);
+  if (dur === 1) {
+    switch (unit) {
+      case "days": return "day";
+      case "weeks": return "week";
+      case "months": return "month";
+      case "year": return "year";
+      default: return unit;
+    }
+  }
+  return unit;
+};
   const latestFetchRef = useRef(fetchSymptomsList);
   useFocusEffect(
     useCallback(() => {
@@ -323,6 +337,7 @@ export default function AddSymptomsScreen() {
           <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
             {UNITS.map((u) => {
               const selected = unit === u;
+              const displayUnit = getDisplayUnit(u, duration);
               return (
                 <Pressable
                   key={u}
@@ -336,7 +351,7 @@ export default function AddSymptomsScreen() {
                   ]}
                 >
                   <Text style={{ color: selected ? COLORS.buttonText : COLORS.text, fontWeight: "700", fontSize: 12 }}>
-                    {u}
+                    {displayUnit}
                   </Text>
                 </Pressable>
               );

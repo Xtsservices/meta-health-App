@@ -25,6 +25,7 @@ import {
   Clock,
   Activity as ActivityIcon,
   Plus,
+  DollarSign,
 } from "lucide-react-native";
 
 import { patientStatus } from "../../utils/role";
@@ -236,7 +237,7 @@ const Sidebar: React.FC<{
   ) ?? [];
   
   const operationsItems = items?.filter(item => 
-    item.key === "mgmt"
+    item.key === "mgmt" || item.key === "revenue"
   ) ?? [];
   
   const supportItems = items?.filter(item => 
@@ -606,6 +607,7 @@ const Dashboard_Outpatient: React.FC = () => {
     { key: "app", label: "Appointments List", icon: ListIcon, onPress: () => go("AppointmentsList") },
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
     { key: "addp", label: "Add Patient", icon: UserPlusIcon, onPress: () => go("AddPatient") },
+    { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueScreen") }, // Added Revenue tab
     { key: "mgmt", label: "Management", icon: SettingsIcon, onPress: () => go("Management") },
     { key: "help", label: "Help", icon: HelpCircleIcon, onPress: () => go("HelpScreen") },
   ];
