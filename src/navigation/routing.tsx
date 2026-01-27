@@ -1620,7 +1620,7 @@ const Routing = () => {
   options={{ 
         headerTitleAlign: 'center',
         headerShown: true,
-    title: 'RevenueScreen'
+    title: 'Revenue'
   }} 
 />
 <Stack.Screen 

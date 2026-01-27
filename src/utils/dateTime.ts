@@ -110,7 +110,20 @@ export const asLocalWallClock = (iso: string | Date) => {
   }
   return new Date(iso);
 };
+// In your utils/dateTime.ts file, add:
+export const getMonthName = (monthIndex: number): string => {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  return months[monthIndex] || '';
+};
 
+export const getMonthFromLabel = (label: string): string => {
+  // Extract month from labels like "Jan 2026"
+  const parts = label.split(' ');
+  return parts[0] || label;
+};
 
 export const sameDay = (a: Date | string, d: dayjs.Dayjs) => dayjs(a).isSame(d, "day");
 

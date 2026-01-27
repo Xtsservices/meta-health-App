@@ -11,12 +11,11 @@ import {
   Platform,
   StatusBar,
   Modal,
-  Dimensions,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Svg, { Circle, Rect, Line, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Rect, Line, Text as SvgText, Path } from "react-native-svg";
 
 import {
   SCREEN_WIDTH,
@@ -32,16 +31,15 @@ import {
   isTablet,
   isSmallDevice,
   getDeviceSpecificValue,
-  responsivePadding,
-  responsiveMargin,
   getSafeAreaInsets,
+  ICON_SIZE,
 } from "../utils/responsive";
 import { AuthFetch } from "../auth/auth";
 import { RootState } from "../store/store";
 import { showError, showSuccess } from "../store/toast.slice";
-import { formatDateTime, formatDate, formatDateForInput } from "../utils/dateTime";
+import { formatDateTime, formatDate } from "../utils/dateTime";
 
-// Icons - using only essential ones
+// Icons
 import {
   Wallet,
   Users,
@@ -50,20 +48,18 @@ import {
   Filter,
   XCircle,
   CheckCircle,
-  DollarSign,
-  TrendingUp,
   CreditCard,
-  X,
-  BarChart3,
   ChevronDown,
   ArrowUpRight,
   ArrowDownRight,
-  Bell,
-  Settings,
-  PieChart,
+  Calendar,
   Activity,
-  TrendingDown,
+  Banknote,
+  Building,
   AlertCircle,
+  X,
+  BarChart3,
+  TrendingUp,
 } from "lucide-react-native";
 
 /* ---------------- FILTER TYPES ---------------- */
@@ -75,6 +71,8 @@ const FILTER_TYPES = {
   THIS_MONTH: "this_month",
   LAST_MONTH: "last_month",
   THIS_YEAR: "this_year",
+  LAST_YEAR: "last_year",
+  CUSTOM: "custom",
   ALL: "all",
 };
 
@@ -86,58 +84,73 @@ const FILTER_LABELS = {
   [FILTER_TYPES.THIS_MONTH]: "This Month",
   [FILTER_TYPES.LAST_MONTH]: "Last Month",
   [FILTER_TYPES.THIS_YEAR]: "This Year",
+  [FILTER_TYPES.LAST_YEAR]: "Last Year",
+  [FILTER_TYPES.CUSTOM]: "Custom Date",
   [FILTER_TYPES.ALL]: "All Time",
+};
+
+const darkenColor = (hex: string, amount: number = 0.2): string => {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.max(0, (num >> 16) - 255 * amount);
+  const g = Math.max(0, ((num >> 8) & 0x00ff) - 255 * amount);
+  const b = Math.max(0, (num & 0x0000ff) - 255 * amount);
+
+  return `rgb(${r},${g},${b})`;
 };
 
 /* ---------------- COLORS ---------------- */
 const COLORS = {
-  primary: "#2d9f8f",
-  primaryDark: "#1f7569",
-  primaryLight: "#e6f5f3",
-  bg: "#f5f7fa",
+  primary: "#14b8a6",
+  primaryDark: "#0f766e",
+  primaryLight: "#ccfbf1",
+  bg: "#f8fafc",
   card: "#ffffff",
-  text: "#1a1f36",
-  textSecondary: "#4a5568",
-  subText: "#718096",
+  text: "#0f172a",
+  textSecondary: "#475569",
+  subText: "#64748b",
   border: "#e2e8f0",
-  borderLight: "#edf2f7",
-  placeholder: "#a0aec0",
+  borderLight: "#f1f5f9",
+  placeholder: "#94a3b8",
   
-  // Status colors
-  success: "#48bb78",
-  successLight: "#c6f6d5",
-  successBg: "#f0fff4",
-  warning: "#ed8936",
-  warningLight: "#fbd38d",
-  warningBg: "#fffaf0",
-  error: "#e53e3e",
-  errorLight: "#fc8181",
-  errorBg: "#fff5f5",
-  info: "#4299e1",
-  infoLight: "#bee3f8",
-  infoBg: "#ebf8ff",
+  success: "#10b981",
+  successLight: "#d1fae5",
+  successBg: "#ecfdf5",
+  warning: "#f59e0b",
+  warningLight: "#fde68a",
+  warningBg: "#fffbeb",
+  error: "#ef4444",
+  errorLight: "#fecaca",
+  errorBg: "#fef2f2",
+  info: "#3b82f6",
+  infoLight: "#dbeafe",
+  infoBg: "#eff6ff",
   
-  // Chart colors
-  chartBlue: "#4299e1",
-  chartPurple: "#9f7aea",
-  chartTeal: "#38b2ac",
-  chartOrange: "#ed8936",
-  chartGreen: "#48bb78",
-  chartPink: "#ed64a6",
-  chartYellow: "#ecc94b",
+  chartTeal: "#14b8a6",
+  chartPurple: "#a855f7",
+  chartBlue: "#3b82f6",
+  chartRed: "#ef4444",
+  chartGreen: "#10b981",
+  chartYellow: "#f59e0b",
+  chartPink: "#ec4899",
   
-  // Metric card colors
-  metricBlue: "#4299e1",
-  metricBlueBg: "#ebf8ff",
-  metricGreen: "#48bb78",
-  metricGreenBg: "#f0fff4",
-  metricPurple: "#9f7aea",
-  metricPurpleBg: "#faf5ff",
-  metricOrange: "#ed8936",
-  metricOrangeBg: "#fffaf0",
+  metricBlue: "#3b82f6",
+  metricBlueBg: "#eff6ff",
+  metricGreen: "#10b981",
+  metricGreenBg: "#ecfdf5",
+  metricPurple: "#8b5cf6",
+  metricPurpleBg: "#f5f3ff",
+  metricOrange: "#f97316",
+  metricOrangeBg: "#fff7ed",
   
-  shadowColor: "rgba(0, 0, 0, 0.08)",
-  modalOverlay: "rgba(0, 0, 0, 0.4)",
+  shadowColor: "rgba(0, 0, 0, 0.05)",
+  modalOverlay: "rgba(0, 0, 0, 0.3)",
+};
+
+const REVENUE_COLORS = {
+  totalFees: "#f59e0b",
+  doctorRevenue: "#14b8a6",
+  hospitalRevenue: "#8b5cf6",
+  appointments: "#22c55e",
 };
 
 /* ---------------- TYPES ---------------- */
@@ -146,6 +159,8 @@ interface QuickStats {
   thisWeek?: any;
   thisMonth?: any;
   thisYear?: any;
+  lastMonth?: any;
+  lastWeek?: any;
 }
 
 interface RevenueSummary {
@@ -203,7 +218,7 @@ interface RevenueHistory {
   };
 }
 
-interface ChartData {
+interface ChartDataItem {
   period?: number;
   periodLabel?: string;
   totalAppointments?: number;
@@ -213,545 +228,247 @@ interface ChartData {
   avgCommission?: number;
 }
 
-/* ---------------- ALERT PANEL COMPONENT ---------------- */
-const AlertPanel = ({ summary, quickStats }: { summary: RevenueSummary, quickStats: QuickStats }) => {
-  const alerts = [];
-  
-  // Generate dynamic alerts based on data
-  const todayStats = quickStats?.today;
-  const pendingRevenue = summary?.statusBreakdown?.pending?.revenue || 0;
-  const totalAppointments = summary?.totalAppointments || 0;
-  const avgCommission = summary?.avgCommissionPercentage || 0;
-  
-  if (pendingRevenue > 0) {
-    alerts.push({
-      type: "warning",
-      icon: <AlertCircle size={getResponsiveFontSize(16)} color={COLORS.warning} />,
-      text: `₹${pendingRevenue.toLocaleString()} pending revenue`,
-      subtext: `${summary?.statusBreakdown?.pending?.count || 0} appointments awaiting payment`,
-      color: COLORS.warning,
-      bgColor: COLORS.warningBg,
-    });
-  }
-  
-  if (todayStats?.totalAppointments > 0) {
-    alerts.push({
-      type: "info",
-      icon: <CheckCircle size={getResponsiveFontSize(16)} color={COLORS.info} />,
-      text: `${todayStats.totalAppointments} appointments today`,
-      subtext: `Total consultation fees: ₹${todayStats.totalConsultationFees?.toLocaleString() || 0}`,
-      color: COLORS.info,
-      bgColor: COLORS.infoBg,
-    });
-  }
-  
-  if (avgCommission > 0 && avgCommission < 5) {
-    alerts.push({
-      type: "error",
-      icon: <AlertCircle size={getResponsiveFontSize(16)} color={COLORS.error} />,
-      text: "Low commission rate detected",
-      subtext: `Average commission is ${avgCommission}% - Consider reviewing contracts`,
-      color: COLORS.error,
-      bgColor: COLORS.errorBg,
-    });
-  }
-  
-  if (alerts.length === 0) {
-    return (
-      <View style={styles.alertPanel}>
-        <View style={styles.alertHeader}>
-          <Bell size={getResponsiveFontSize(18)} color={COLORS.primary} />
-          <Text style={styles.alertTitle}>Alerts Panel</Text>
-        </View>
-        <View style={[styles.alertItem, { backgroundColor: COLORS.successBg }]}>
-          <View style={styles.alertIconContainer}>
-            <CheckCircle size={getResponsiveFontSize(16)} color={COLORS.success} />
-          </View>
-          <View style={styles.alertContent}>
-            <Text style={[styles.alertText, { color: COLORS.success }]}>
-              All systems operational
-            </Text>
-            <Text style={styles.alertSubtext}>No critical alerts at this time</Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.alertPanel}>
-      <View style={styles.alertHeader}>
-        <Bell size={getResponsiveFontSize(18)} color={COLORS.primary} />
-        <Text style={styles.alertTitle}>Alerts Panel</Text>
-      </View>
-      
-      {alerts.slice(0, 3).map((alert, index) => (
-        <View key={index} style={[styles.alertItem, { backgroundColor: alert.bgColor }]}>
-          <View style={styles.alertIconContainer}>
-            {alert.icon}
-          </View>
-          <View style={styles.alertContent}>
-            <Text style={[styles.alertText, { color: alert.color }]}>
-              {alert.text}
-            </Text>
-            <Text style={styles.alertSubtext}>{alert.subtext}</Text>
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-};
+interface ChartData {
+  chartData: ChartDataItem[];
+  metadata?: {
+    groupBy?: string;
+    month?: number;
+    year?: number;
+  };
+}
 
 /* ---------------- METRIC CARD COMPONENT ---------------- */
 const MetricCard = ({
   title,
   value,
-  change,
   icon,
   color,
   bgColor,
+  onPress,
 }: {
   title: string;
   value: string | number;
-  change: string;
   icon: React.ReactNode;
   color: string;
   bgColor: string;
+  onPress?: () => void;
 }) => {
-  const isPositive = change?.includes("+");
-  const changeColor = isPositive ? COLORS.success : COLORS.error;
-
-  return (
-    <View style={styles.metricCard}>
-      <View style={styles.metricHeader}>
+  const CardContent = (
+    <View style={[styles.metricCard, { backgroundColor: "#ffffff" }]}>
+      <View style={styles.metricContent}>
+        <View style={styles.metricTextContainer}>
+          <Text style={styles.metricTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.metricValue} numberOfLines={1}>
+            {value}
+          </Text>
+        </View>
         <View style={[styles.metricIconContainer, { backgroundColor: bgColor }]}>
           {icon}
         </View>
-        <Text style={styles.metricTitle} numberOfLines={1} ellipsizeMode="tail">
-          {title}
-        </Text>
       </View>
-      
-      <Text style={styles.metricValue} numberOfLines={1}>
-        {value}
-      </Text>
-      
-      {change !== "0%" && change && (
-        <View style={[styles.metricChange, { backgroundColor: isPositive ? COLORS.successBg : COLORS.errorBg }]}>
-          {isPositive ? (
-            <ArrowUpRight size={getResponsiveFontSize(12)} color={changeColor} />
-          ) : (
-            <ArrowDownRight size={getResponsiveFontSize(12)} color={changeColor} />
-          )}
-          <Text style={[styles.metricChangeText, { color: changeColor }]}>
-            {change}
-          </Text>
-        </View>
-      )}
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity 
+        onPress={onPress}
+        activeOpacity={0.85}
+        style={{ flex: 1 }}
+      >
+        {CardContent}
+      </TouchableOpacity>
+    );
+  }
+
+  return CardContent;
 };
 
-/* ---------------- BAR CHART COMPONENT ---------------- */
-const BarChart = ({ data, title, totalRevenue }: { data: any[]; title: string; totalRevenue?: number }) => {
-  const chartHeight = getDeviceSpecificValue(180, 220, 160);
-  const chartWidth = SCREEN_WIDTH - (SPACING.lg * 2) - (isTablet ? SPACING.xl * 2 : 0);
-  const barWidth = Math.min(
-    getDeviceSpecificValue(30, 40, 25),
-    (chartWidth - 80) / Math.max(data.length, 1)
-  );
-  const barSpacing = Math.min(
-    getDeviceSpecificValue(15, 20, 10),
-    (chartWidth - 80 - (data.length * barWidth)) / Math.max(data.length - 1, 1)
-  );
-  
-  const maxValue = Math.max(...data.map(d => d.value || 0), 1);
+/* ---------------- SIMPLE BAR CHART COMPONENT ---------------- */
+const SimpleBarChart = ({ data, title }: { data: any[]; title: string }) => {
+  const maxValue = Math.max(...data?.map(d => d?.value || 0), 1);
 
   return (
     <View style={styles.chartCard}>
       <View style={styles.chartCardHeader}>
-        <BarChart3 size={getResponsiveFontSize(20)} color={COLORS.primary} />
-        <Text style={styles.chartCardTitle} numberOfLines={1}>
-          {title}
-        </Text>
-        {totalRevenue !== undefined && (
-          <Text style={styles.chartRevenueTotal}>
-            ₹{totalRevenue?.toLocaleString()}
-          </Text>
-        )}
+        <BarChart3 size={20} color={COLORS.primary} />
+        <Text style={styles.chartCardTitle}>{title}</Text>
       </View>
 
-      {data?.length > 0 ? (
-        <>
-          <View style={styles.barChartContainer}>
-            <Svg width={chartWidth} height={chartHeight + 40}>
-              {/* Y-axis labels */}
-              {[0, 1, 2, 3, 4].map((i) => {
-                const value = Math.round((maxValue / 4) * (4 - i));
-                const y = (chartHeight / 4) * i;
-                return (
-                  <React.Fragment key={i}>
-                    <SvgText
-                      x="0"
-                      y={y + 5}
-                      fontSize={getResponsiveFontSize(9)}
-                      fill={COLORS.subText}
-                    >
-                      {value}
-                    </SvgText>
-                    <Line
-                      x1="30"
-                      y1={y}
-                      x2={chartWidth}
-                      y2={y}
-                      stroke={COLORS.borderLight}
-                      strokeWidth="1"
-                    />
-                  </React.Fragment>
-                );
-              })}
+      {data?.map((item, index) => {
+        const widthPercent = ((item?.value || 0) / maxValue) * 100;
 
-              {/* Bars */}
-              {data?.map((item, index) => {
-                const barHeight = ((item.value || 0) / maxValue) * chartHeight;
-                const x = 40 + (index * (barWidth + barSpacing));
-                const y = chartHeight - barHeight;
-
-                return (
-                  <React.Fragment key={index}>
-                    <Rect
-                      x={x}
-                      y={y}
-                      width={barWidth}
-                      height={barHeight}
-                      fill={item.color || COLORS.chartBlue}
-                      rx="4"
-                    />
-                    <SvgText
-                      x={x + barWidth / 2}
-                      y={chartHeight + 20}
-                      fontSize={getResponsiveFontSize(10)}
-                      fill={COLORS.subText}
-                      textAnchor="middle"
-                    >
-                      {item.label?.substring(0, 3) || `M${index + 1}`}
-                    </SvgText>
-                  </React.Fragment>
-                );
-              })}
-            </Svg>
-          </View>
-
-          {/* Legend */}
-          {data?.slice(0, 3).map((item, index) => (
-            <View key={index} style={styles.lineChartLegendItem}>
-              <View style={[styles.legendDot, { backgroundColor: item.color || COLORS.chartBlue }]} />
-              <Text style={styles.legendLabel} numberOfLines={1}>
-                {item.label} - ₹{item.value?.toLocaleString()}
+        return (
+          <View key={index} style={styles.metricRow}>
+            <View style={styles.metricRowTop}>
+              <Text style={styles.metricLabel}>{item?.label}</Text>
+              <Text style={styles.metricNumber}>
+                {item?.prefix || ""}
+                {(item?.value || 0)?.toLocaleString()}
               </Text>
             </View>
-          ))}
-        </>
-      ) : (
-        <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>No data available for this period</Text>
-        </View>
-      )}
-    </View>
-  );
-};
 
-/* ---------------- DONUT CHART COMPONENT ---------------- */
-const DonutChart = ({ data, title, totalValue }: { data: any[]; title: string; totalValue?: number }) => {
-  const size = getDeviceSpecificValue(140, 180, 120);
-  const strokeWidth = getDeviceSpecificValue(25, 30, 20);
-  const radius = (size - strokeWidth) / 2;
-  const center = size / 2;
-  const circumference = 2 * Math.PI * radius;
-
-  const total = totalValue || data?.reduce((sum, item) => sum + (item.value || 0), 0) || 0;
-  
-  let currentAngle = -90;
-  const segments = data?.map((item, index) => {
-    const percentage = total > 0 ? (item.value / total) * 100 : 0;
-    const angle = (percentage / 100) * 360;
-    const segment = {
-      ...item,
-      percentage,
-      startAngle: currentAngle,
-      endAngle: currentAngle + angle,
-      color: item.color || COLORS.chartBlue,
-    };
-    currentAngle += angle;
-    return segment;
-  }) || [];
-
-  return (
-    <View style={styles.chartCard}>
-      <View style={styles.chartCardHeader}>
-        <PieChart size={getResponsiveFontSize(20)} color={COLORS.primary} />
-        <Text style={styles.chartCardTitle} numberOfLines={1}>{title}</Text>
-        {totalValue !== undefined && (
-          <Text style={styles.chartRevenueTotal}>
-            Total: ₹{totalValue?.toLocaleString()}
-          </Text>
-        )}
-      </View>
-
-      {data?.length > 0 ? (
-        <View style={styles.donutChartContainer}>
-          <View style={styles.donutChartLeft}>
-            <Svg width={size} height={size}>
-              {segments.map((segment, index) => {
-                const dashArray = `${(segment.percentage / 100) * circumference} ${circumference}`;
-                const rotation = segment.startAngle;
-                
-                return (
-                  <Circle
-                    key={index}
-                    cx={center}
-                    cy={center}
-                    r={radius}
-                    stroke={segment.color}
-                    strokeWidth={strokeWidth}
-                    strokeDasharray={dashArray}
-                    fill="none"
-                    rotation={rotation}
-                    origin={`${center}, ${center}`}
-                    strokeLinecap="round"
-                  />
-                );
-              })}
-              {/* Center text */}
-              <SvgText
-                x={center}
-                y={center + 5}
-                fontSize={getResponsiveFontSize(12)}
-                fontWeight="bold"
-                fill={COLORS.text}
-                textAnchor="middle"
-              >
-                ₹{total?.toLocaleString()}
-              </SvgText>
-            </Svg>
-          </View>
-
-          <View style={styles.donutLegend}>
-            {data?.map((item, index) => (
-              <View key={index} style={styles.donutLegendItem}>
-                <View style={styles.donutLegendLeft}>
-                  <View style={[styles.donutLegendColor, { backgroundColor: item.color }]} />
-                  <Text style={styles.donutLegendLabel} numberOfLines={1}>
-                    {item.label}
-                  </Text>
-                </View>
-                <Text style={styles.donutLegendValue}>
-                  {item.percentage ? item.percentage.toFixed(1) : 0}%
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>No data available for this period</Text>
-        </View>
-      )}
-    </View>
-  );
-};
-
-/* ---------------- LINE CHART COMPONENT ---------------- */
-const LineChart = ({ data, title }: { data: any[]; title: string }) => {
-  const chartHeight = getDeviceSpecificValue(160, 200, 140);
-  const chartWidth = SCREEN_WIDTH - (SPACING.lg * 2) - (isTablet ? SPACING.xl * 2 : 0);
-  
-  const maxValue = Math.max(...data.map(d => d.value || 0), 1);
-  const points = data.map((item, index) => {
-    const x = (chartWidth / (data.length - 1)) * index + 40;
-    const y = chartHeight - ((item.value / maxValue) * chartHeight);
-    return { x, y, label: item.label, value: item.value };
-  });
-
-  return (
-    <View style={styles.chartCard}>
-      <View style={styles.chartCardHeader}>
-        <Activity size={getResponsiveFontSize(20)} color={COLORS.primary} />
-        <Text style={styles.chartCardTitle} numberOfLines={1}>{title}</Text>
-      </View>
-
-      {data?.length > 0 ? (
-        <View style={styles.lineChartContainer}>
-          <Svg width={chartWidth} height={chartHeight + 40}>
-            {/* Y-axis */}
-            {[0, 1, 2, 3, 4].map((i) => {
-              const value = Math.round((maxValue / 4) * (4 - i));
-              const y = (chartHeight / 4) * i;
-              return (
-                <React.Fragment key={i}>
-                  <SvgText 
-                    x="0" 
-                    y={y + 5} 
-                    fontSize={getResponsiveFontSize(9)} 
-                    fill={COLORS.subText}
-                  >
-                    {value}
-                  </SvgText>
-                  <Line
-                    x1="30"
-                    y1={y}
-                    x2={chartWidth}
-                    y2={y}
-                    stroke={COLORS.borderLight}
-                    strokeWidth="1"
-                  />
-                </React.Fragment>
-              );
-            })}
-
-            {/* Line */}
-            {points.map((point, index) => {
-              if (index === 0) return null;
-              const prevPoint = points[index - 1];
-              return (
-                <Line
-                  key={`line-${index}`}
-                  x1={prevPoint.x}
-                  y1={prevPoint.y}
-                  x2={point.x}
-                  y2={point.y}
-                  stroke={COLORS.chartBlue}
-                  strokeWidth="2"
-                />
-              );
-            })}
-
-            {/* Points */}
-            {points.map((point, index) => (
-              <Circle
-                key={`point-${index}`}
-                cx={point.x}
-                cy={point.y}
-                r="4"
-                fill={COLORS.chartBlue}
+            <View style={styles.metricBarTrack}>
+              <View
+                style={[
+                  styles.metricBarFill,
+                  {
+                    width: `${widthPercent}%`,
+                    backgroundColor: item?.color || COLORS.primary,
+                  },
+                ]}
               />
-            ))}
-
-            {/* X-axis labels */}
-            {points.map((point, index) => (
-              <SvgText
-                key={`label-${index}`}
-                x={point.x}
-                y={chartHeight + 20}
-                fontSize={getResponsiveFontSize(10)}
-                fill={COLORS.subText}
-                textAnchor="middle"
-              >
-                {point.label}
-              </SvgText>
-            ))}
-          </Svg>
-
-          <View style={styles.lineChartLegend}>
-            <Text style={styles.legendLabel}>Appointments trend over time</Text>
+            </View>
           </View>
-        </View>
-      ) : (
-        <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>No data available for this period</Text>
-        </View>
-      )}
+        );
+      })}
     </View>
   );
 };
 
-/* ---------------- HORIZONTAL BAR CHART ---------------- */
+/* ---------------- HORIZONTAL BAR CHART COMPONENT ---------------- */
 const HorizontalBarChart = ({ data, title }: { data: any[]; title: string }) => {
-  const maxValue = Math.max(...data.map(d => d.value || 0), 100);
+  const maxValue = Math.max(...data?.map(d => d?.value || 0), 1);
 
   return (
     <View style={styles.chartCard}>
       <View style={styles.chartCardHeader}>
-        <Target size={getResponsiveFontSize(20)} color={COLORS.primary} />
+        <Target size={20} color={COLORS.primary} />
         <Text style={styles.chartCardTitle} numberOfLines={1}>{title}</Text>
       </View>
 
       {data?.length > 0 ? (
         <View style={styles.horizontalBarContainer}>
-          {data.map((item, index) => (
+          {data?.map((item, index) => (
             <View key={index} style={styles.horizontalBarRow}>
               <Text style={styles.horizontalBarLabel} numberOfLines={1}>
-                {item.label}
+                {item?.label}
               </Text>
-              <View style={styles.horizontalBarTrack}>
-                <View
-                  style={[
-                    styles.horizontalBarFill,
-                    {
-                      width: `${(item.value / maxValue) * 100}%`,
-                      backgroundColor: item.color || COLORS.chartBlue,
-                    },
-                  ]}
-                />
+              <View style={styles.horizontalBarWrapper}>
+                <View style={styles.horizontalBarTrack}>
+                  <View
+                    style={[
+                      styles.horizontalBarFill,
+                      {
+                        width: `${((item?.value || 0) / maxValue) * 100}%`,
+                        backgroundColor: item?.color || COLORS.primary,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.horizontalBarValue}>{item?.value}</Text>
               </View>
-              <Text style={styles.horizontalBarValue}>{item.value}%</Text>
             </View>
           ))}
         </View>
       ) : (
         <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>No data available for this period</Text>
+          <Text style={styles.noDataText}>No data available</Text>
         </View>
       )}
     </View>
   );
 };
 
-/* ---------------- INQUIRY BREAKDOWN ---------------- */
-const InquiryBreakdown = ({ data, total, change, title }: { data: any[]; total: number; change: string; title: string }) => {
-  const isPositive = change?.includes("+");
+/* ---------------- 3D PIE CHART COMPONENT ---------------- */
+const Bent3DPie = ({ data, size = 220, depth = 18 }: { data: any[]; size?: number; depth?: number }) => {
+  const radius = size / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const total = data?.reduce((s, d) => s + (d?.value || 0), 0) || 1;
+
+  const polar = (a: number) => {
+    const r = ((a - 90) * Math.PI) / 180;
+    return {
+      x: cx + radius * Math.cos(r),
+      y: cy + radius * Math.sin(r),
+    };
+  };
+
+  const arc = (start: number, end: number) => {
+    const s = polar(end);
+    const e = polar(start);
+    const large = end - start > 180 ? 1 : 0;
+
+    return `
+      M ${cx} ${cy}
+      L ${s.x} ${s.y}
+      A ${radius} ${radius} 0 ${large} 0 ${e.x} ${e.y}
+      Z
+    `;
+  };
 
   return (
-    <View style={styles.chartCard}>
-      <View style={styles.chartCardHeader}>
-        <Users size={getResponsiveFontSize(20)} color={COLORS.primary} />
-        <Text style={styles.chartCardTitle} numberOfLines={1}>{title}</Text>
-      </View>
+    <Svg width={size} height={size + depth}  style={{ marginTop: moderateScale(10) }}>
+      {/* DEPTH */}
+      {Array.from({ length: depth }).map((_, z) => {
+        let a = 0;
+        return data?.map((d, i) => {
+          const slice = ((d?.value || 0) / total) * 360;
+          const p = arc(a, a + slice);
+          a += slice;
 
-      <View style={styles.inquiryHeader}>
-        <Text style={styles.inquiryTotal}>{total}</Text>
-        {change !== "0%" && change && (
-          <View style={[styles.inquiryChange, { 
-            backgroundColor: isPositive ? COLORS.successBg : COLORS.errorBg 
-          }]}>
-            {isPositive ? (
-              <ArrowUpRight size={getResponsiveFontSize(14)} color={COLORS.success} />
-            ) : (
-              <ArrowDownRight size={getResponsiveFontSize(14)} color={COLORS.error} />
-            )}
-            <Text style={[styles.inquiryChangeText, { 
-              color: isPositive ? COLORS.success : COLORS.error 
-            }]}>
-              {change}
+          return (
+            <Path
+              key={`d-${z}-${i}`}
+              d={p}
+              fill={darkenColor(d?.color || COLORS.primary, 0.35)}
+              transform={`translate(0 ${z}) scale(1 0.6)`}
+              origin={`${cx} ${cy}`}
+            />
+          );
+        });
+      })}
+
+      {/* TOP */}
+      {(() => {
+        let a = 0;
+        return data?.map((d, i) => {
+          const slice = ((d?.value || 0) / total) * 360;
+          const p = arc(a, a + slice);
+          a += slice;
+
+          return (
+            <Path
+              key={`t-${i}`}
+              d={p}
+              fill={d?.color || COLORS.primary}
+              transform="scale(1 0.6)"
+              origin={`${cx} ${cy}`}
+            />
+          );
+        });
+      })()}
+    </Svg>
+  );
+};
+
+/* ---------------- REVENUE LEGEND COMPONENT ---------------- */
+const RevenueLegendRight = ({ data }: { data: any[] }) => {
+  return (
+    <View style={{ marginLeft: moderateScale(20) }}>
+      {data?.map((item, index) => (
+        <View key={index} style={styles.legendRow}>
+          <View
+            style={[
+              styles.legendDot,
+              { backgroundColor: item?.color },
+            ]}
+          />
+          <View style={{ marginLeft: moderateScale(10) }}>
+            <Text style={styles.legendLabel}>
+              {item?.label}
+            </Text>
+            <Text style={styles.legendValue}>
+              {item?.label === "Appointments"
+                ? item?.value
+                : `₹${(item?.value || 0)?.toLocaleString("en-IN")}`}
             </Text>
           </View>
-        )}
-      </View>
-
-      {data?.length > 0 ? (
-        <View style={styles.inquiryList}>
-          {data.map((item, index) => (
-            <View key={index} style={styles.inquiryItem}>
-              <Text style={styles.inquiryLabel} numberOfLines={1}>{item.label}</Text>
-              <Text style={styles.inquiryValue}>{item.value}</Text>
-            </View>
-          ))}
         </View>
-      ) : (
-        <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>No data available for this period</Text>
-        </View>
-      )}
+      ))}
     </View>
   );
 };
@@ -767,29 +484,49 @@ const RevenueScreen = () => {
   const [quickStats, setQuickStats] = useState<QuickStats>({});
   const [summary, setSummary] = useState<RevenueSummary>({});
   const [history, setHistory] = useState<RevenueHistory>({});
-  const [chartData, setChartData] = useState<ChartData[]>([]);
+  const [chartData, setChartData] = useState<ChartData>({ chartData: [] });
   const [filterType, setFilterType] = useState<string>(FILTER_TYPES.THIS_MONTH);
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
   const [authError, setAuthError] = useState(false);
 
-  /* ---------------- TOKEN VALIDATION ---------------- */
-  const validateToken = async () => {
-    try {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) {
-        setAuthError(true);
-        dispatch(showError("Please login to access revenue dashboard"));
-        setTimeout(() => navigation.navigate("Login" as never), 2000);
-        return false;
-      }
-      return true;
-    } catch {
-      setAuthError(true);
-      dispatch(showError("Authentication error"));
-      return false;
+  /* ---------------- HELPER FUNCTIONS ---------------- */
+  const getChartGroupBy = (filter: string) => {
+    switch (filter) {
+      case FILTER_TYPES.TODAY:
+      case FILTER_TYPES.YESTERDAY:
+        return "hour";
+      case FILTER_TYPES.THIS_WEEK:
+      case FILTER_TYPES.LAST_WEEK:
+        return "day";
+      case FILTER_TYPES.THIS_MONTH:
+      case FILTER_TYPES.LAST_MONTH:
+        return "week";
+      case FILTER_TYPES.THIS_YEAR:
+      case FILTER_TYPES.LAST_YEAR:
+        return "month";
+      default:
+        return "month";
+    }
+  };
+
+  const getChartYear = (filter: string) => {
+    const now = new Date();
+    switch (filter) {
+      case FILTER_TYPES.LAST_YEAR:
+        return now.getFullYear() - 1;
+      default:
+        return now.getFullYear();
+    }
+  };
+
+  const getChartMonth = (filter: string) => {
+    const now = new Date();
+    switch (filter) {
+      case FILTER_TYPES.LAST_MONTH:
+        return now.getMonth(); // Previous month
+      default:
+        return now.getMonth() + 1; // Current month
     }
   };
 
@@ -800,14 +537,12 @@ const RevenueScreen = () => {
       if (!token || !user?.id || !user?.hospitalID) return;
 
       const response = await AuthFetch(
-        `revenue/doctor/${user.id}/quick-stats?hospitalID=${user.hospitalID}&year=${new Date().getFullYear()}&groupBy=month`,
+        `revenue/doctor/${user?.id}/quick-stats?hospitalID=${user?.hospitalID}&filterType=${filterType}`,
         token
       ) as any;
 
-      if (response?.data?.success) {
-        setQuickStats(response.data.data || {});
-      } else if (response?.success) {
-        setQuickStats(response.data || {});
+      if (response?.data?.success || response?.status === 'success') {
+        setQuickStats(response?.data?.data || response?.data || {});
       } else {
         setQuickStats({});
       }
@@ -822,14 +557,13 @@ const RevenueScreen = () => {
       if (!token || !user?.id || !user?.hospitalID) return;
 
       const response = await AuthFetch(
-        `revenue/doctor/${user.id}/summary?hospitalID=${user.hospitalID}&filterType=${filterType}`,
+        `revenue/doctor/${user?.id}/summary?hospitalID=${user?.hospitalID}&filterType=${filterType}`,
         token
       ) as any;
-
-      if (response?.data?.success) {
-        setSummary(response.data.data || {});
-      } else if (response?.success) {
-        setSummary(response.data || {});
+      
+      if (response?.data?.success || response?.status === 'success') {
+        const data = response?.data?.data || response?.data || {};
+        setSummary(data);
       } else {
         setSummary({});
       }
@@ -838,40 +572,19 @@ const RevenueScreen = () => {
     }
   };
 
-  const loadHistory = async (page: number = 1) => {
+  const loadHistory = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
       if (!token || !user?.id || !user?.hospitalID) return;
 
       const response = await AuthFetch(
-        `revenue/doctor/${user.id}/history?hospitalID=${user.hospitalID}&filterType=${filterType}&status=${statusFilter}&page=${page}&limit=10`,
+        `revenue/doctor/${user?.id}/history?hospitalID=${user?.hospitalID}&filterType=${filterType}&page=1&limit=5`,
         token
       ) as any;
 
-      if (response?.data?.success) {
-        const data = response.data.data || {};
-        if (page === 1) {
-          setHistory(data);
-        } else {
-          setHistory(prev => ({
-            ...data,
-            transactions: [...(prev?.transactions || []), ...(data?.transactions || [])]
-          }));
-        }
-        setCurrentPage(page);
-        setHasMore(data?.pagination?.hasNextPage || false);
-      } else if (response?.success) {
-        const data = response.data || {};
-        if (page === 1) {
-          setHistory(data);
-        } else {
-          setHistory(prev => ({
-            ...data,
-            transactions: [...(prev?.transactions || []), ...(data?.transactions || [])]
-          }));
-        }
-        setCurrentPage(page);
-        setHasMore(data?.pagination?.hasNextPage || false);
+      if (response?.data?.success || response?.status === 'success') {
+        const data = response?.data?.data || response?.data || {};
+        setHistory(data);
       } else {
         setHistory({});
       }
@@ -879,38 +592,56 @@ const RevenueScreen = () => {
       setHistory({});
     }
   };
-
   const loadChartData = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
       if (!token || !user?.id || !user?.hospitalID) return;
 
-      const response = await AuthFetch(
-        `revenue/doctor/${user.id}/chart?hospitalID=${user.hospitalID}&year=${new Date().getFullYear()}&groupBy=month`,
-        token
-      ) as any;
+      const groupBy = getChartGroupBy(filterType);
+      const year = getChartYear(filterType);
+      const month = getChartMonth(filterType);
 
-      if (response?.data?.success) {
-        setChartData(response.data.data?.chartData || []);
-      } else if (response?.success) {
-        setChartData(response.data?.chartData || []);
+      let url = `revenue/doctor/${user?.id}/chart?hospitalID=${user?.hospitalID}&groupBy=${groupBy}`;
+      
+      // Add year and month based on filter
+      if (filterType === FILTER_TYPES.THIS_MONTH || filterType === FILTER_TYPES.LAST_MONTH) {
+        url += `&year=${year}&month=${month}`;
+      } else if (filterType === FILTER_TYPES.THIS_YEAR || filterType === FILTER_TYPES.LAST_YEAR) {
+        url += `&year=${year}`;
       } else {
-        setChartData([]);
+        // For week/day filters, use current date range
+        url += `&filterType=${filterType}`;
+      }
+
+      const response = await AuthFetch(url, token) as any;
+
+      if (response?.data?.success || response?.status === 'success') {
+        const data = response?.data?.data || response?.data || { chartData: [] };
+        setChartData(data);
+      } else {
+        setChartData({ chartData: [] });
       }
     } catch (error) {
-      setChartData([]);
+      setChartData({ chartData: [] });
     }
   };
 
   const loadRevenueData = async () => {
     try {
-      const hasToken = await validateToken();
-      if (!hasToken) return;
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        setAuthError(true);
+        dispatch(showError("Please login to access revenue dashboard"));
+        setTimeout(() => {
+          navigation.navigate("Login" as never);
+        }, 1500);
+        return;
+      }
 
       await Promise.all([
         loadQuickStats(),
         loadSummary(),
-        loadHistory(1),
+        loadHistory(),
         loadChartData(),
       ]);
     } catch (error) {
@@ -932,7 +663,6 @@ const RevenueScreen = () => {
     setRefreshing(false);
   };
 
-  /* ---------------- HELPER FUNCTIONS ---------------- */
   const formatCurrency = (amount?: number) => {
     if (!amount) return "₹0";
     return `₹${amount.toLocaleString("en-IN")}`;
@@ -944,135 +674,164 @@ const RevenueScreen = () => {
     return `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
   };
 
-  /* ---------------- DYNAMIC CHART DATA GENERATION ---------------- */
-  const getAppointmentVolumeData = () => {
-    if (chartData?.length > 0) {
-      return chartData.map((item, index) => ({
-        label: item.periodLabel?.split(' ')[0] || `M${index + 1}`,
-        value: item.totalAppointments || 0,
-        color: [COLORS.chartBlue, COLORS.chartPurple, COLORS.chartTeal][index % 3]
-      }));
+  const getMetricsData = () => {
+    // Get stats based on current filter
+    let stats = {};
+    switch (filterType) {
+      case FILTER_TYPES.TODAY:
+        stats = quickStats?.today || {};
+        break;
+      case FILTER_TYPES.THIS_WEEK:
+        stats = quickStats?.thisWeek || {};
+        break;
+      case FILTER_TYPES.THIS_MONTH:
+        stats = quickStats?.thisMonth || {};
+        break;
+      case FILTER_TYPES.THIS_YEAR:
+        stats = quickStats?.thisYear || {};
+        break;
+      case FILTER_TYPES.YESTERDAY:
+        stats = quickStats?.yesterday || {};
+        break;
+      case FILTER_TYPES.LAST_WEEK:
+        stats = quickStats?.lastWeek || {};
+        break;
+      case FILTER_TYPES.LAST_MONTH:
+        stats = quickStats?.lastMonth || {};
+        break;
+      case FILTER_TYPES.LAST_YEAR:
+        stats = quickStats?.lastYear || {};
+        break;
+      default:
+        stats = summary || {};
     }
-    
+
     return [
-      { label: "Current", value: summary?.totalAppointments || 0, color: COLORS.chartBlue },
-      { label: "Previous", value: Math.round((summary?.totalAppointments || 0) * 0.7), color: COLORS.chartPurple }
+      {
+        title: filterType === FILTER_TYPES.TODAY ? "Today's Appointments" : "Appointments",
+        value: stats?.totalAppointments || summary?.totalAppointments || 0,
+        icon: <Users size={ICON_SIZE.md} color="#2563EB" />,
+        color: "#2563EB",
+        bgColor: "#eff6ff",
+        onPress: () => navigation.navigate("AppointmentsList" as never, { 
+          filter: filterType 
+        } as never),
+      },
+      {
+        title: filterType === FILTER_TYPES.TODAY ? "Today's Billings" : "Total Billings",
+        value: formatCurrency(stats?.totalConsultationFees || summary?.totalConsultationFees || 0),
+        icon: <Banknote size={ICON_SIZE.md} color="#10B981" />,
+        color: "#10B981",
+        bgColor: "#ecfdf5",
+        onPress: () => handleViewAllTransactions(),
+      },
+      {
+        title: "Doctor Revenue",
+        value: formatCurrency(stats?.totalDoctorRevenue || summary?.totalDoctorRevenue || 0),
+        icon: <Wallet size={ICON_SIZE.md} color="#7C3AED" />,
+        color: "#7C3AED",
+        bgColor: "#f5f3ff",
+        onPress: () => {
+          // Add specific navigation if needed
+        },
+      },
+      {
+        title: "Hospital Revenue",
+        value: formatCurrency(stats?.totalHospitalRevenue || summary?.totalHospitalRevenue || 0),
+        icon: <Building size={ICON_SIZE.md} color="#F59E0B" />,
+        color: "#F59E0B",
+        bgColor: "#fffbeb",
+        onPress: () => {
+          // Add specific navigation if needed
+        },
+      },
     ];
   };
 
-  const getRevenuePerClientData = () => {
-    const doctorRevenue = summary?.totalDoctorRevenue || 0;
-    const hospitalRevenue = summary?.totalHospitalRevenue || 0;
-    const totalRevenue = (summary?.totalConsultationFees || 0);
-    
+  const getSummaryBarData = () => {
     return [
-      { label: "Doctor", value: doctorRevenue, color: COLORS.chartBlue },
-      { label: "Hospital", value: hospitalRevenue, color: COLORS.chartPurple },
-      { label: "Other", value: Math.max(0, totalRevenue - doctorRevenue - hospitalRevenue), color: COLORS.chartTeal }
-    ].filter(item => item.value > 0);
+      {
+        label: "Appointments",
+        value: summary?.totalAppointments || 0,
+        color: COLORS.chartGreen,
+      },
+      {
+        label: "Total Fees",
+        value: summary?.totalConsultationFees || 0,
+        prefix: "₹",
+        color: COLORS.chartBlue,
+      },
+      {
+        label: "Doctor Revenue",
+        value: summary?.totalDoctorRevenue || 0,
+        prefix: "₹",
+        color: COLORS.chartTeal,
+      },
+      {
+        label: "Hospital Revenue",
+        value: summary?.totalHospitalRevenue || 0,
+        prefix: "₹",
+        color: COLORS.chartPurple,
+      },
+      {
+        label: "Avg Fee",
+        value: Math.round(summary?.avgConsultationFee || 0),
+        prefix: "₹",
+        color: COLORS.chartOrange,
+      },
+    ];
   };
 
-  const getConversionData = () => {
-    const totalAppointments = summary?.totalAppointments || 0;
+  const getRevenueBreakdownData = () => {
+    return [
+      {
+        label: "Total Fees",
+        value: summary?.totalConsultationFees || 0,
+        color: REVENUE_COLORS.totalFees,
+      },
+      {
+        label: "Doctor ",
+        value: summary?.totalDoctorRevenue || 0,
+        color: REVENUE_COLORS.doctorRevenue,
+      },
+      {
+        label: "Hospital",
+        value: summary?.totalHospitalRevenue || 0,
+        color: REVENUE_COLORS.hospitalRevenue,
+      },
+      {
+        label: "Appointments",
+        value: summary?.totalAppointments || 0,
+        color: REVENUE_COLORS.appointments,
+      },
+    ]?.filter(i => (i?.value || 0) > 0);
+  };
+
+  const getPerformanceMetricsData = () => {
+    const avgConsultationFee = summary?.avgConsultationFee || 0;
+    const maxConsultationFee = summary?.maxConsultationFee || 0;
+    const minConsultationFee = summary?.minConsultationFee || 0;
+    const commissionPercentage = summary?.avgCommissionPercentage || 0;
+    
+    return [
+      { label: "Avg Fee", value: Math.round(avgConsultationFee), color: COLORS.chartBlue },
+      { label: "Max Fee", value: maxConsultationFee, color: COLORS.chartGreen },
+      { label: "Min Fee", value: minConsultationFee, color: COLORS.chartOrange },
+      { label: "Commission %", value: commissionPercentage, color: COLORS.chartPurple }
+    ]?.filter(item => (item?.value || 0) > 0);
+  };
+
+  const getAppointmentBreakdownData = () => {
     const pendingCount = summary?.statusBreakdown?.pending?.count || 0;
     const paidCount = summary?.statusBreakdown?.paid?.count || 0;
     const cancelledCount = summary?.statusBreakdown?.cancelled?.count || 0;
     
     return [
-      { label: "Paid", value: paidCount, color: COLORS.chartGreen },
-      { label: "Pending", value: pendingCount, color: COLORS.chartOrange },
-      { label: "Cancelled", value: cancelledCount, color: COLORS.error }
-    ].filter(item => item.value > 0);
-  };
-
-  const getMissedCallsData = () => {
-    if (chartData?.length > 0) {
-      return chartData.map((item, index) => ({
-        label: item.periodLabel?.split(' ')[0] || `M${index + 1}`,
-        value: item.totalAppointments || 0
-      }));
-    }
-    
-    const baseValue = summary?.totalAppointments || 10;
-    return Array.from({ length: Math.min(6, baseValue) }, (_, i) => ({
-      label: `${i + 1}/28`,
-      value: Math.round(baseValue * (0.8 + Math.random() * 0.4))
-    }));
-  };
-
-  const getROIData = () => {
-    const commission = summary?.avgCommissionPercentage || 0;
-    const avgFee = summary?.avgConsultationFee || 0;
-    const maxFee = summary?.maxConsultationFee || 0;
-    const minFee = summary?.minConsultationFee || 0;
-    
-    return [
-      { label: "Commission", value: commission, color: COLORS.chartBlue },
-      { label: "Avg Fee", value: Math.round(avgFee / 10), color: COLORS.chartPurple },
-      { label: "Max Fee", value: Math.round(maxFee / 20), color: COLORS.chartGreen },
-      { label: "Min Fee", value: Math.round(minFee / 20), color: COLORS.chartOrange }
-    ].filter(item => item.value > 0);
-  };
-
-  const getInquiryData = () => {
-    return [
-      { label: "Appointments", value: summary?.totalAppointments || 0 },
-      { label: "Pending", value: summary?.statusBreakdown?.pending?.count || 0 },
-      { label: "Paid", value: summary?.statusBreakdown?.paid?.count || 0 },
-      { label: "Cancelled", value: summary?.statusBreakdown?.cancelled?.count || 0 }
-    ].filter(item => item.value > 0);
-  };
-
-  /* ---------------- DYNAMIC METRICS ---------------- */
-  const getMetricsData = () => {
-    const todayStats = quickStats?.today;
-    const weekStats = quickStats?.thisWeek;
-
-    const billingChange = weekStats ? 
-      calculatePercentageChange(weekStats.totalConsultationFees || 0, 0) : "0%";
-    
-    const expensesChange = calculatePercentageChange(
-      summary?.totalDoctorRevenue || 0, 
-      0
-    );
-    
-    const roiChange = todayStats ?
-      calculatePercentageChange(todayStats.totalDoctorRevenue || 0, 0) : "0%";
-
-    return [
-      {
-        title: "Total Billings",
-        value: formatCurrency(summary?.totalConsultationFees || 0),
-        change: billingChange,
-        icon: <DollarSign size={getResponsiveFontSize(20)} color={COLORS.metricBlue} />,
-        color: COLORS.metricBlue,
-        bgColor: COLORS.metricBlueBg
-      },
-      {
-        title: "Doctor Revenue",
-        value: formatCurrency(summary?.totalDoctorRevenue || 0),
-        change: expensesChange,
-        icon: <TrendingUp size={getResponsiveFontSize(20)} color={COLORS.metricGreen} />,
-        color: COLORS.metricGreen,
-        bgColor: COLORS.metricGreenBg
-      },
-      {
-        title: "Hospital Revenue",
-        value: formatCurrency(summary?.totalHospitalRevenue || 0),
-        change: calculatePercentageChange(summary?.totalHospitalRevenue || 0, 0),
-        icon: <Wallet size={getResponsiveFontSize(20)} color={COLORS.metricPurple} />,
-        color: COLORS.metricPurple,
-        bgColor: COLORS.metricPurpleBg
-      },
-      {
-        title: "Commission %",
-        value: `${summary?.avgCommissionPercentage?.toFixed(1) || 0}%`,
-        change: roiChange,
-        icon: <Percent size={getResponsiveFontSize(20)} color={COLORS.metricOrange} />,
-        color: COLORS.metricOrange,
-        bgColor: COLORS.metricOrangeBg
-      }
-    ];
+      { label: "Pending Appointments", value: pendingCount },
+      { label: "Paid Appointments", value: paidCount },
+      { label: "Cancelled Appointments", value: cancelledCount },
+      { label: "Total Appointments", value: summary?.totalAppointments || 0 }
+    ]?.filter(item => (item?.value || 0) > 0);
   };
 
   /* ---------------- FILTER MODAL ---------------- */
@@ -1080,15 +839,19 @@ const RevenueScreen = () => {
     <Modal 
       visible={showFilterModal} 
       transparent 
-      animationType="slide"
+      animationType="fade"
       onRequestClose={() => setShowFilterModal(false)}
     >
-      <View style={styles.modalOverlay}>
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowFilterModal(false)}
+      >
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Time Period</Text>
             <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-              <XCircle size={getResponsiveFontSize(22)} color={COLORS.subText} />
+              <X size={22} color={COLORS.subText} />
             </TouchableOpacity>
           </View>
 
@@ -1108,37 +871,42 @@ const RevenueScreen = () => {
                   setShowFilterModal(false);
                 }}
               >
-                <Text
-                  style={[
-                    styles.filterText,
-                    filterType === key && styles.filterTextActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {label}
-                </Text>
+                <View style={styles.filterRowContent}>
+                  <Calendar size={18} color={filterType === key ? COLORS.primary : COLORS.subText} />
+                  <Text
+                    style={[
+                      styles.filterText,
+                      filterType === key && styles.filterTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {label}
+                  </Text>
+                </View>
                 {filterType === key && (
-                  <CheckCircle size={getResponsiveFontSize(18)} color={COLORS.primary} />
+                  <CheckCircle size={18} color={COLORS.primary} />
                 )}
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
-      </View>
+      </TouchableOpacity>
     </Modal>
   );
 
-  /* ---------------- HANDLE VIEW ALL TRANSACTIONS ---------------- */
+  /* ---------------- HANDLE NAVIGATION ---------------- */
   const handleViewAllTransactions = () => {
-    // Navigate to transaction history screen
-    navigation.navigate("AllTransactions" as never);
+    navigation.navigate("AllTransactions" as never, { 
+      filterType, 
+      statusFilter 
+    } as never);
   };
 
-  /* ---------------- LOADER ---------------- */
+  /* ---------------- LOADER AND ERROR STATES ---------------- */
   if (authError) {
     return (
       <View style={styles.loader}>
-        <AlertCircle size={getResponsiveFontSize(48)} color={COLORS.error} />
+        <AlertCircle size={48} color={COLORS.error} />
         <Text style={styles.loaderText}>Please login to continue</Text>
         <Text style={styles.subText}>Redirecting to login...</Text>
       </View>
@@ -1155,23 +923,15 @@ const RevenueScreen = () => {
   }
 
   const metrics = getMetricsData();
-  const appointmentVolumeData = getAppointmentVolumeData();
-  const revenuePerClientData = getRevenuePerClientData();
-  const conversionData = getConversionData();
-  const missedCallsData = getMissedCallsData();
-  const roiData = getROIData();
-  const inquiryData = getInquiryData();
-  const totalInquiries = inquiryData.reduce((sum, item) => sum + (item.value || 0), 0);
-  const previousInquiries = Math.round(totalInquiries * 0.8);
-  const inquiryChange = calculatePercentageChange(totalInquiries, previousInquiries);
-
-  const currentYear = new Date().getFullYear();
+  const performanceMetricsData = getPerformanceMetricsData();
+  const appointmentBreakdownData = getAppointmentBreakdownData();
   const safeArea = getSafeAreaInsets();
+  const footerPadding = safeArea.bottom + SPACING.lg;
 
   /* ======================= MAIN UI ======================= */
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
       {/* HEADER */}
       <View style={[styles.header, { paddingTop: safeArea.top + SPACING.sm }]}>
@@ -1190,48 +950,17 @@ const RevenueScreen = () => {
         
         <View style={styles.headerRight}>
           <View style={styles.userInfo}>
-            <View>
-              <View style={styles.notifications}>
-
-                <TouchableOpacity 
-                  style={styles.notifLink}
-                  onPress={handleViewAllTransactions}
-                >
-                  <Text style={styles.notifLinkText}>View all transactions</Text>
-                  <ArrowUpRight size={getResponsiveFontSize(12)} color={COLORS.primary} />
-                </TouchableOpacity>
-              </View>
+            <View style={styles.notifications}>
+              <TouchableOpacity 
+                style={styles.notifLink}
+                onPress={handleViewAllTransactions}
+              >
+                <Text style={styles.notifLinkText}>View all transactions</Text>
+                <ArrowUpRight size={getResponsiveFontSize(12)} color={COLORS.primary} />
+              </TouchableOpacity>
             </View>
           </View>
-          
-          <TouchableOpacity 
-            style={styles.settingsBtn}
-            onPress={() => setShowFilterModal(true)}
-          >
-            <Filter size={getResponsiveFontSize(16)} color="#ffffff" />
-            <Text style={styles.settingsBtnText} numberOfLines={1}>
-              Filter: {FILTER_LABELS[filterType]}
-            </Text>
-            <ChevronDown size={getResponsiveFontSize(14)} color="#ffffff" />
-          </TouchableOpacity>
         </View>
-      </View>
-
-      {/* TIME PERIOD SELECTOR */}
-      <View style={styles.periodSelector}>
-        <Text style={styles.periodTitle}>Revenue Summary for</Text>
-        <TouchableOpacity 
-          style={styles.periodDropdown}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <Text style={styles.periodText} numberOfLines={1}>
-            {FILTER_LABELS[filterType]}
-          </Text>
-          <ChevronDown size={getResponsiveFontSize(16)} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.periodDates}>
-          Showing data for {currentYear}
-        </Text>
       </View>
 
       <ScrollView
@@ -1245,144 +974,167 @@ const RevenueScreen = () => {
         }
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: safeArea.bottom + SPACING.lg }
+          { paddingBottom: footerPadding }
         ]}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
       >
-        {/* ALERTS PANEL */}
-        <AlertPanel summary={summary} quickStats={quickStats} />
+        {/* FILTER ROW */}
+        <View style={styles.filterRowTop}>
+          <TouchableOpacity 
+            style={styles.settingsBtn}
+            onPress={() => setShowFilterModal(true)}
+            activeOpacity={0.85}
+          >
+            <Filter size={getResponsiveFontSize(16)} color="#ffffff" />
+            <Text style={styles.settingsBtnText} numberOfLines={1}>
+              Filter: {FILTER_LABELS[filterType]}
+            </Text>
+            <ChevronDown size={getResponsiveFontSize(14)} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
 
         {/* METRICS GRID */}
         <View style={styles.metricsGrid}>
           {metrics?.map((metric, index) => (
-            <MetricCard
-              key={index}
-              title={metric.title}
-              value={metric.value}
-              change={metric.change}
-              icon={metric.icon}
-              color={metric.color}
-              bgColor={metric.bgColor}
-            />
+            <View key={index} style={{ 
+              width: (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2 
+            }}>
+              <TouchableOpacity 
+                onPress={metric.onPress}
+                activeOpacity={0.85}
+              >
+                <MetricCard
+                  title={metric.title}
+                  value={metric.value}
+                  icon={metric.icon}
+                  color={metric.color}
+                  bgColor={metric.bgColor}
+                />
+              </TouchableOpacity>
+            </View>
           ))}
         </View>
 
-        {/* CHARTS ROW 1 */}
-        <View style={styles.chartsRow}>
-          <View style={styles.chartHalf}>
-            <BarChart
-              data={appointmentVolumeData}
-              title="Appointments by Month"
-              totalRevenue={summary?.totalConsultationFees || 0}
+        {/* CHARTS SECTION */}
+        <Text style={styles.sectionTitle}>Revenue Analytics</Text>
+        <SimpleBarChart
+          title="Summary Metrics"
+          data={getSummaryBarData()}
+        />
+
+        <Text style={styles.sectionTitle}>Revenue Overview</Text>
+        <View style={styles.revenueOverview}>
+          <View style={{ marginTop: moderateScale(12) }}>
+            <Bent3DPie
+              data={getRevenueBreakdownData()}
+              size={isTablet ? 280 : moderateScale(220)}
             />
           </View>
-          <View style={styles.chartHalf}>
-            <DonutChart
-              data={revenuePerClientData}
-              title="Revenue Distribution"
-              totalValue={summary?.totalConsultationFees || 0}
-            />
-          </View>
+          <RevenueLegendRight
+            data={getRevenueBreakdownData()}
+          />
         </View>
 
-        {/* CHARTS ROW 2 */}
-        <View style={styles.chartsRow}>
-          <View style={styles.chartHalf}>
-            <DonutChart
-              data={conversionData}
-              title="Appointment Status"
-              totalValue={summary?.totalAppointments || 0}
-            />
-          </View>
-          <View style={styles.chartHalf}>
-            <LineChart
-              data={missedCallsData}
-              title="Appointments Trend"
-            />
-          </View>
-        </View>
+        {/* Performance Metrics */}
+        <HorizontalBarChart
+          data={performanceMetricsData}
+          title="Performance Metrics"
+        />
 
-        {/* CHARTS ROW 3 */}
-        <View style={styles.chartsRow}>
-          <View style={styles.chartHalf}>
-            <HorizontalBarChart
-              data={roiData}
-              title="Performance Metrics"
-            />
-          </View>
-          <View style={styles.chartHalf}>
-            <InquiryBreakdown
-              data={inquiryData}
-              total={totalInquiries}
-              change={inquiryChange}
-              title="Appointment Breakdown"
-            />
-          </View>
-        </View>
-
-        {/* TRANSACTION HISTORY */}
-        <View style={styles.chartCard}>
-          <View style={styles.chartCardHeader}>
-            <CreditCard size={getResponsiveFontSize(20)} color={COLORS.primary} />
-            <Text style={styles.chartCardTitle}>Recent Transactions</Text>
+        {/* RECENT TRANSACTIONS */}
+        <View style={styles.transactionCard}>
+          <View style={styles.transactionHeader}>
+            <View style={styles.transactionTitleRow}>
+              <CreditCard size={20} color={COLORS.primary} />
+              <Text style={styles.transactionTitle}>Recent Transactions</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={handleViewAllTransactions}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <ArrowUpRight size={16} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
           
-          {history?.transactions && history.transactions.length > 0 ? (
+          {history?.transactions && history?.transactions?.length > 0 ? (
             <View style={styles.transactionList}>
-              {history.transactions.slice(0, 5).map((transaction, index) => (
-                <View key={index} style={styles.transactionItem}>
-                  <View style={styles.transactionLeft}>
-                    <Text style={styles.transactionPatient} numberOfLines={1}>
-                      {transaction.patientName || `Patient ${transaction.patientID}`}
-                    </Text>
-                    <Text style={styles.transactionDate}>
-                      {formatDate(transaction.date)}
-                    </Text>
-                  </View>
-                  <View style={styles.transactionRight}>
-                    <Text style={styles.transactionAmount}>
-                      {formatCurrency(transaction.consultationFee || 0)}
-                    </Text>
+              {history?.transactions?.slice(0, 5)?.map((transaction, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.transactionItem}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.transactionItemLeft}>
                     <View style={[
-                      styles.transactionStatus,
-                      { 
-                        backgroundColor: transaction.status === 'paid' 
-                          ? COLORS.successBg 
-                          : COLORS.warningBg 
-                      }
+                      styles.transactionStatusBadge,
+                      { backgroundColor: transaction?.status === 'paid' ? COLORS.successBg : COLORS.warningBg }
                     ]}>
                       <Text style={[
                         styles.transactionStatusText,
-                        { 
-                          color: transaction.status === 'paid' 
-                            ? COLORS.success 
-                            : COLORS.warning 
-                        }
+                        { color: transaction?.status === 'paid' ? COLORS.success : COLORS.warning }
                       ]}>
-                        {transaction.status || 'pending'}
+                        {transaction?.status?.toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.transactionInfo}>
+                      <Text style={styles.transactionPatient} numberOfLines={1}>
+                        {transaction?.patientName || `Patient ${transaction?.patientID}`}
+                      </Text>
+                      <Text style={styles.transactionDate}>
+                        {formatDate(transaction?.date)}
                       </Text>
                     </View>
                   </View>
-                </View>
+                  <View style={styles.transactionItemRight}>
+                    <Text style={styles.transactionAmount}>
+                      {formatCurrency(transaction?.consultationFee || 0)}
+                    </Text>
+                    <Text style={styles.transactionFee}>
+                      Fee: {transaction?.commissionPercentage || 0}%
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               ))}
-              
-              <TouchableOpacity 
-                style={styles.viewAllButton}
-                onPress={handleViewAllTransactions}
-              >
-                <Text style={styles.viewAllText}>View All Transactions</Text>
-                <ArrowUpRight size={getResponsiveFontSize(14)} color={COLORS.primary} />
-              </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.noDataContainer}>
               <Text style={styles.noDataText}>No transactions found</Text>
               <Text style={styles.noDataSubText}>
-                Transactions will appear here once available
+                Transactions will appear here once appointments are created
               </Text>
             </View>
           )}
+        </View>
+
+        {/* APPOINTMENT BREAKDOWN */}
+        <View style={styles.breakdownCard}>
+          <View style={styles.breakdownHeader}>
+            <Users size={20} color={COLORS.primary} />
+            <Text style={styles.breakdownTitle}>Appointment Breakdown</Text>
+          </View>
+          
+          {appointmentBreakdownData?.length > 0 ? (
+            <View style={styles.breakdownList}>
+              {appointmentBreakdownData?.map((item, index) => (
+                <View key={index} style={styles.breakdownItem}>
+                  <Text style={styles.breakdownLabel}>{item?.label}</Text>
+                  <Text style={styles.breakdownValue}>{item?.value}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.noDataContainer}>
+              <Text style={styles.noDataText}>No appointment data</Text>
+            </View>
+          )}
+        </View>
+
+        {/* FOOTER NOTE */}
+        <View style={styles.footerNote}>
+          <Text style={styles.footerText}>
+            Data updated in real-time • Last refreshed: {formatDateTime(new Date().toISOString())}
+          </Text>
         </View>
       </ScrollView>
 
@@ -1400,6 +1152,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg,
   },
+  metricCard: {
+    flex: 1,
+    minWidth: (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2,
+    backgroundColor: "#ffffff",
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.sm,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    minHeight: isSmallDevice ? 70 : 80,
+  },
+  metricContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flex: 1,
+  },
+  metricTextContainer: {
+    flex: 1,
+    marginRight: SPACING.xs,
+  },
+  metricTitle: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: COLORS.textSecondary,
+    opacity: 0.75,
+    marginBottom: moderateScale(4),
+    fontWeight: "500",
+  },
+  metricValue: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  metricIconContainer: {
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: BORDER_RADIUS.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.05)",
+  },
   loader: {
     flex: 1,
     alignItems: "center",
@@ -1409,19 +1204,17 @@ const styles = StyleSheet.create({
   },
   loaderText: {
     marginTop: SPACING.md,
-    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
+    fontSize: getResponsiveFontSize(16),
     color: COLORS.text,
     fontWeight: "600",
     textAlign: "center",
   },
   subText: {
     marginTop: SPACING.xs,
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontSize: getResponsiveFontSize(14),
     color: COLORS.subText,
     textAlign: "center",
   },
-  
-  /* HEADER */
   header: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: SPACING.lg,
@@ -1433,6 +1226,11 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+  },
+  headerRight: {
+    flex: 1,
+    alignItems: "flex-end",
+    maxWidth: wp(50),
   },
   logoContainer: {
     flexDirection: "row",
@@ -1447,31 +1245,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  appName: {
-    fontSize: getResponsiveFontSize(16),
-    fontWeight: "700",
-    color: "#ffffff",
-    maxWidth: wp(40),
-  },
-  tagline: {
-    fontSize: getResponsiveFontSize(11),
-    color: "rgba(255,255,255,0.8)",
-  },
-  headerRight: {
-    flex: 1,
-    alignItems: "flex-end",
-    maxWidth: wp(50),
-  },
-  userInfo: {
-    alignItems: "flex-end",
-    marginBottom: SPACING.sm,
-    maxWidth: "100%",
-  },
   greeting: {
     fontSize: getResponsiveFontSize(FONT_SIZE.md),
     fontWeight: "600",
     color: "#ffffff",
     marginBottom: SPACING.xs,
+    maxWidth: wp(40),
+  },
+  userInfo: {
+    alignItems: "flex-end",
+    marginBottom: SPACING.sm,
     maxWidth: "100%",
   },
   notifications: {
@@ -1480,21 +1263,6 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
     justifyContent: "flex-end",
     maxWidth: "100%",
-  },
-  notifBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.round,
-    maxWidth: wp(40),
-  },
-  notifText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    color: "#ffffff",
-    fontWeight: "500",
   },
   notifLink: {
     flexDirection: "row",
@@ -1526,202 +1294,252 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     flexShrink: 1,
   },
-
-  /* PERIOD SELECTOR */
-  periodSelector: {
-    backgroundColor: COLORS.card,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  periodTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  periodDropdown: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
-  },
-  periodText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
-    fontWeight: "600",
-    color: COLORS.text,
-    flexShrink: 1,
-    maxWidth: wp(70),
-  },
-  periodDates: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    color: COLORS.subText,
-  },
-
-  /* CONTENT */
   content: {
     padding: SPACING.lg,
-    paddingBottom: SPACING.xxl,
+    paddingTop: SPACING.md,
   },
-
-  /* ALERT PANEL */
-  alertPanel: {
-    backgroundColor: COLORS.card,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.shadowColor,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  alertHeader: {
+  filterRowTop: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
+    justifyContent: "flex-end",
     marginBottom: SPACING.md,
   },
-  alertTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
-    fontWeight: "600",
-    color: COLORS.text,
-  },
-  alertItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    padding: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    marginBottom: SPACING.xs,
-  },
-  alertIconContainer: {
-    marginRight: SPACING.sm,
-    marginTop: 2,
-  },
-  alertContent: {
-    flex: 1,
-  },
-  alertText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  alertSubtext: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    color: COLORS.subText,
-  },
-
-  /* METRICS GRID */
   metricsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: SPACING.md,
+    gap: SPACING.xs,
+    justifyContent: "space-between",
     marginBottom: SPACING.lg,
-  },
-  metricCard: {
-    width: (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2,
-    backgroundColor: COLORS.card,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.shadowColor,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
   },
   metricHeader: {
-    marginBottom: SPACING.sm,
-  },
-  metricIconContainer: {
-    width: moderateScale(36),
-    height: moderateScale(36),
-    borderRadius: BORDER_RADIUS.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.xs,
-  },
-  metricTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    color: COLORS.subText,
-    fontWeight: "500",
-  },
-  metricValue: {
-    fontSize: getResponsiveFontSize(22),
-    fontWeight: "700",
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  metricChange: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: SPACING.xs / 2,
-    borderRadius: BORDER_RADIUS.xs,
-    alignSelf: "flex-start",
+    marginBottom: SPACING.sm,
   },
-  metricChangeText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    fontWeight: "600",
+  sectionTitle: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+    marginTop: SPACING.sm,
   },
-
-  /* CHARTS */
-  chartsRow: {
-    flexDirection: isTablet ? "row" : "column",
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  chartHalf: {
-    flex: 1,
-    minHeight: getDeviceSpecificValue(300, 350, 280),
+  revenueOverview: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.md,
+    marginTop: SPACING.lg, 
   },
   chartCard: {
     backgroundColor: COLORS.card,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.md,
+    marginBottom: SPACING.md,
     ...Platform.select({
       ios: {
-        shadowColor: COLORS.shadowColor,
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 1,
+        shadowOpacity: 0.05,
         shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 2,
       },
     }),
   },
   chartCardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: SPACING.xs,
     marginBottom: SPACING.md,
   },
   chartCardTitle: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontWeight: "600",
+    color: COLORS.text,
     flex: 1,
+    marginLeft: SPACING.xs,
+  },
+  metricRow: {
+    marginBottom: SPACING.md,
+  },
+  metricRowTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: moderateScale(6),
+  },
+  metricLabel: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    color: COLORS.text,
+    fontWeight: "500",
+  },
+  metricNumber: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  metricBarTrack: {
+    height: moderateScale(10),
+    backgroundColor: COLORS.borderLight,
+    borderRadius: BORDER_RADIUS.sm,
+    overflow: "hidden",
+  },
+  metricBarFill: {
+    height: "100%",
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  horizontalBarContainer: {
+    marginTop: SPACING.sm,
+  },
+  horizontalBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  horizontalBarLabel: {
+    width: moderateScale(100),
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    color: COLORS.text,
+  },
+  horizontalBarWrapper: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  horizontalBarTrack: {
+    flex: 1,
+    height: moderateScale(20),
+    backgroundColor: COLORS.border,
+    borderRadius: BORDER_RADIUS.round,
+    overflow: "hidden",
+    marginRight: SPACING.sm,
+  },
+  horizontalBarFill: {
+    height: "100%",
+    borderRadius: BORDER_RADIUS.round,
+  },
+  horizontalBarValue: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontWeight: "600",
+    color: COLORS.text,
+    minWidth: moderateScale(40),
+    textAlign: "right",
+  },
+  legendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: moderateScale(14),
+  },
+  legendDot: {
+    width: moderateScale(14),
+    height: moderateScale(14),
+    borderRadius: moderateScale(7),
+  },
+  legendLabel: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  legendValue: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: COLORS.subText,
+    marginTop: moderateScale(2),
+  },
+  transactionCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  transactionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  transactionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  transactionTitle: {
     fontSize: getResponsiveFontSize(FONT_SIZE.md),
     fontWeight: "600",
     color: COLORS.text,
   },
-  chartRevenueTotal: {
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: moderateScale(4),
+  },
+  viewAllText: {
     fontSize: getResponsiveFontSize(FONT_SIZE.sm),
     fontWeight: "600",
     color: COLORS.primary,
   },
-
-  /* NO DATA */
+  transactionList: {
+    gap: SPACING.sm,
+  },
+  transactionItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  transactionItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  transactionStatusBadge: {
+    paddingHorizontal: moderateScale(8),
+    paddingVertical: moderateScale(3),
+    borderRadius: BORDER_RADIUS.xs,
+    marginRight: SPACING.sm,
+  },
+  transactionStatusText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontWeight: "700",
+  },
+  transactionInfo: {
+    flex: 1,
+  },
+  transactionPatient: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: moderateScale(2),
+  },
+  transactionDate: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: COLORS.subText,
+  },
+  transactionItemRight: {
+    alignItems: "flex-end",
+  },
+  transactionAmount: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: moderateScale(2),
+  },
+  transactionFee: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: COLORS.subText,
+  },
   noDataContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -1738,221 +1556,62 @@ const styles = StyleSheet.create({
     color: COLORS.placeholder,
     textAlign: "center",
   },
-
-  /* BAR CHART */
-  barChartContainer: {
-    marginTop: SPACING.sm,
+  breakdownCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
-
-  /* DONUT CHART */
-  donutChartContainer: {
-    flexDirection: isTablet ? "row" : "column",
-    gap: SPACING.md,
-    alignItems: "center",
-  },
-  donutChartLeft: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  donutLegend: {
-    flex: 1,
-    width: isTablet ? "auto" : "100%",
-  },
-  donutLegendItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-    paddingHorizontal: SPACING.xs,
-  },
-  donutLegendLeft: {
+  breakdownHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACING.xs,
-    flex: 1,
-  },
-  donutLegendColor: {
-    width: getResponsiveFontSize(12),
-    height: getResponsiveFontSize(12),
-    borderRadius: getResponsiveFontSize(6),
-  },
-  donutLegendLabel: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    color: COLORS.text,
-    flex: 1,
-  },
-  donutLegendValue: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    fontWeight: "600",
-    color: COLORS.text,
-  },
-
-  /* LINE CHART */
-  lineChartContainer: {
-    marginTop: SPACING.sm,
-  },
-  lineChartLegend: {
-    marginTop: SPACING.md,
-  },
-  lineChartLegendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    marginBottom: SPACING.xs,
-  },
-  legendDot: {
-    width: getResponsiveFontSize(10),
-    height: getResponsiveFontSize(10),
-    borderRadius: getResponsiveFontSize(5),
-  },
-  legendLabel: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    color: COLORS.subText,
-  },
-
-  /* HORIZONTAL BAR CHART */
-  horizontalBarContainer: {
-    marginTop: SPACING.sm,
-  },
-  horizontalBarRow: {
-    flexDirection: "row",
-    alignItems: "center",
     marginBottom: SPACING.md,
   },
-  horizontalBarLabel: {
-    width: wp(25),
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    color: COLORS.text,
-  },
-  horizontalBarTrack: {
-    flex: 1,
-    height: moderateVerticalScale(20),
-    backgroundColor: COLORS.bg,
-    borderRadius: BORDER_RADIUS.round,
-    overflow: "hidden",
-    marginHorizontal: SPACING.sm,
-  },
-  horizontalBarFill: {
-    height: "100%",
-    borderRadius: BORDER_RADIUS.round,
-  },
-  horizontalBarValue: {
-    width: wp(10),
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+  breakdownTitle: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.md),
     fontWeight: "600",
     color: COLORS.text,
-    textAlign: "right",
   },
-
-  /* INQUIRY BREAKDOWN */
-  inquiryHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  inquiryTotal: {
-    fontSize: getResponsiveFontSize(28),
-    fontWeight: "700",
-    color: COLORS.text,
-  },
-  inquiryChange: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  inquiryChangeText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    fontWeight: "600",
-  },
-  inquiryList: {
+  breakdownList: {
     gap: SPACING.sm,
   },
-  inquiryItem: {
+  breakdownItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: SPACING.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
   },
-  inquiryLabel: {
+  breakdownLabel: {
     fontSize: getResponsiveFontSize(FONT_SIZE.sm),
     color: COLORS.text,
-    flex: 1,
   },
-  inquiryValue: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+  breakdownValue: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
     fontWeight: "600",
     color: COLORS.text,
-    marginLeft: SPACING.sm,
   },
-
-  /* TRANSACTION HISTORY */
-  transactionList: {
-    marginTop: SPACING.sm,
-  },
-  transactionItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  footerNote: {
     alignItems: "center",
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    paddingVertical: SPACING.lg,
+    paddingBottom: SPACING.xl,
   },
-  transactionLeft: {
-    flex: 1,
-    marginRight: SPACING.sm,
-  },
-  transactionPatient: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    fontWeight: "600",
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  transactionDate: {
+  footerText: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs),
     color: COLORS.subText,
+    textAlign: "center",
   },
-  transactionRight: {
-    alignItems: "flex-end",
-    minWidth: wp(30),
-  },
-  transactionAmount: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
-    fontWeight: "700",
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-    textAlign: "right",
-  },
-  transactionStatus: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs / 2,
-    borderRadius: BORDER_RADIUS.xs,
-    alignSelf: "flex-end",
-  },
-  transactionStatusText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    fontWeight: "600",
-  },
-  viewAllButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACING.xs,
-    paddingVertical: SPACING.md,
-    marginTop: SPACING.sm,
-  },
-  viewAllText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
-    color: COLORS.primary,
-    fontWeight: "600",
-  },
-
-  /* MODAL */
   modalOverlay: {
     flex: 1,
     backgroundColor: COLORS.modalOverlay,
@@ -1989,6 +1648,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
+  filterRowContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    flex: 1,
+  },
   filterRowActive: {
     backgroundColor: COLORS.primaryLight,
     borderRadius: BORDER_RADIUS.sm,
@@ -2000,6 +1665,6 @@ const styles = StyleSheet.create({
   },
   filterTextActive: {
     color: COLORS.primary,
-    fontWeight: "700",
+    fontWeight: "600",
   },
 });

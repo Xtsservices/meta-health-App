@@ -81,32 +81,6 @@ const StatusPill = ({ status }: { status?: string }) => {
     }
   };
 
-  const getStatusBgColor = (status?: string) => {
-    switch (status?.toLowerCase()) {
-      case 'paid': return COLORS.successBg;
-      case 'pending': return COLORS.warningBg;
-      case 'cancelled': return COLORS.dangerBg;
-      default: return COLORS.bg;
-    }
-  };
-
-  const getStatusIcon = (status?: string) => {
-    switch (status?.toLowerCase()) {
-      case 'paid': return <CheckCircle size={14} color={COLORS.success} />;
-      case 'pending': return <Clock size={14} color={COLORS.warning} />;
-      case 'cancelled': return <X size={14} color={COLORS.danger} />;
-      default: return <AlertCircle size={14} color={COLORS.sub} />;
-    }
-  };
-
-  return (
-    <View style={[styles.statusPill, { backgroundColor: getStatusBgColor(status) }]}>
-      {getStatusIcon(status)}
-      <Text style={[styles.statusText, { color: getStatusColor(status) }]}>
-        {status?.toUpperCase() || 'UNKNOWN'}
-      </Text>
-    </View>
-  );
 };
 
 /* ======================= ALL TRANSACTIONS SCREEN ======================= */
@@ -403,13 +377,6 @@ const AllTransactionsScreen = () => {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerActionBtn}
-            onPress={() => setShowFilters(!showFilters)}
-          >
-            <Filter size={20} color={hasActiveFilters ? COLORS.brand : COLORS.text} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.headerActionBtn}
             onPress={() => dispatch(showSuccess("Export coming soon"))}
           >
             <Download size={20} color={COLORS.text} />
@@ -491,23 +458,7 @@ const AllTransactionsScreen = () => {
         showsHorizontalScrollIndicator={false} 
         contentContainerStyle={styles.filtersContent}
       >
-        {/* Status Filter */}
-        <View style={[styles.filterWrap, { borderColor: COLORS.border }]}>
-          <Text style={[styles.filterLabel, { color: COLORS.text }]}>Status</Text>
-          <View style={[styles.pickerWrap, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
-            <Picker
-              selectedValue={statusFilter}
-              onValueChange={handleStatusFilterChange}
-              style={[styles.picker, { color: COLORS.text }]}
-              dropdownIconColor={COLORS.brand}
-            >
-              <Picker.Item label="Pending" value="pending" />
-              <Picker.Item label="Paid" value="paid" />
-              <Picker.Item label="Cancelled" value="cancelled" />
-              <Picker.Item label="All Status" value="all" />
-            </Picker>
-          </View>
-        </View>
+       
 
         {/* Time Period Filter */}
         <View style={[styles.filterWrap, { borderColor: COLORS.border }]}>
@@ -728,14 +679,20 @@ const AllTransactionsScreen = () => {
               Department: {department}
             </Text>
 
-            <View style={styles.amountRow}>
-              <View style={styles.amountSection}>
-                <Text style={styles.amountLabel}></Text>
-              </View>
-              <View style={styles.feeSection}>
-                <Text style={styles.feeLabel}>Fee: {formatCurrency(consultationFee)}</Text>
-              </View>
-            </View>
+<View style={styles.amountRow}>
+  <View style={styles.amountSection}>
+    <Text style={styles.amountLabel}>Your Revenue</Text>
+    <Text style={[styles.amountValue, { color: COLORS.success }]}>
+      {formatCurrency(doctorRevenue)}
+    </Text>
+  </View>
+  <View style={styles.feeSection}>
+    <Text style={styles.feeLabel}>Fee: {formatCurrency(consultationFee)}</Text>
+    <Text style={[styles.sub, { color: COLORS.sub, fontSize: 10, marginTop: 2 }]}>
+      Commission: {commission}%
+    </Text>
+  </View>
+</View>
           </View>
         </View>
       </TouchableOpacity>
@@ -796,7 +753,6 @@ const AllTransactionsScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
       
       {renderHeader()}
-      {showFilters && renderFilters()}
 
       {loading && transactions.length === 0 ? (
         <View style={styles.loadingWrap}>
@@ -1255,7 +1211,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   amountValue: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: "700",
     color: COLORS.text,
   },
