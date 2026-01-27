@@ -45,6 +45,9 @@ import { showError, showSuccess } from "../store/toast.slice";
 import { formatDate } from "../utils/dateTime";
 import { COLORS } from "../utils/colour";
 import { debounce, DEBOUNCE_DELAY } from "../utils/debounce";
+import RNFS from "react-native-fs";
+import Share from "react-native-share";
+import { Alert } from "react-native";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAGE_SIZE = 10;
@@ -120,7 +123,14 @@ const AllTransactionsScreen = () => {
     if (!amount) return "₹0";
     return `₹${amount.toLocaleString("en-IN")}`;
   };
-
+  const formatDateForExport = (d?: string) => {
+    if (!d) return "";
+    try {
+      return new Date(d).toLocaleDateString("en-GB");
+    } catch {
+      return d;
+    }
+  };
   const getFilterLabel = (type: string) => {
     const labels: Record<string, string> = {
       "today": "Today",
@@ -317,6 +327,67 @@ const AllTransactionsScreen = () => {
     if (!date) return "";
     return date.toLocaleDateString("en-GB"); // DD/MM/YYYY format
   };
+const handleExport = async () => {
+  if (!transactions.length) {
+    Alert.alert("No data", "There is no transaction data to export");
+    return;
+  }
+
+  try {
+    const headers = [
+      "Transaction ID",
+      "Patient Name",
+      "Phone",
+      "Department",
+      "Date",
+      "Consultation Fee",
+      "Commission %",
+      "Doctor Revenue",
+      "Hospital Revenue",
+      "Status",
+    ];
+
+    const rows = transactions.map((t) => [
+      t.id ?? "",
+      t.patientName ?? "",
+      t.patientPhone ?? "",
+      t.departmentName ?? "",
+      formatDateForExport(t.date),
+      t.consultationFee ?? 0,
+      t.commissionPercentage ?? 0,
+      t.doctorRevenue ?? 0,
+      t.hospitalRevenue ?? 0,
+      t.status ?? "",
+    ]);
+
+    const csvContent =
+      [headers, ...rows]
+        .map(row =>
+          row.map(cell =>
+            `"${String(cell).replace(/"/g, '""')}"`
+          ).join(",")
+        )
+        .join("\n");
+
+    const fileName = `doctor_transactions_${Date.now()}.csv`;
+    const filePath =
+      Platform.OS === "android"
+        ? `${RNFS.DownloadDirectoryPath}/${fileName}`
+        : `${RNFS.DocumentDirectoryPath}/${fileName}`;
+
+    await RNFS.writeFile(filePath, csvContent, "utf8");
+
+    await Share.open({
+      url: Platform.OS === "android" ? `file://${filePath}` : filePath,
+      type: "text/csv",
+      filename: fileName,
+      failOnCancel: false,
+    });
+
+  } catch (err) {
+    Alert.alert("Export failed", "Could not export transactions");
+  }
+  };
 
   const clearAllFilters = () => {
     setSearch("");
@@ -377,7 +448,7 @@ const AllTransactionsScreen = () => {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.headerActionBtn}
-            onPress={() => dispatch(showSuccess("Export coming soon"))}
+            onPress={handleExport}
           >
             <Download size={20} color={COLORS.text} />
           </TouchableOpacity>
