@@ -1,35 +1,34 @@
-// screens/CommissionAndFeeScreen.tsx
-import React, { useState, useRef } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  Text, 
+import React, { useState, useRef } from "react";
+import {
+  View,
+  StyleSheet,
+  Text,
   TouchableOpacity,
   Animated,
+  ScrollView,
   Dimensions,
-  ScrollView
-} from 'react-native';
-import { ArrowLeft, ArrowRight } from 'lucide-react-native';
-import { 
-  moderateScale, 
-  responsiveWidth,
+  StatusBar,
+} from "react-native";
+import {
   SCREEN_WIDTH,
   SPACING,
   BORDER_RADIUS,
   FONT_SIZE,
   getResponsiveFontSize,
-  getDeviceSpecificValue
-} from '../../utils/responsive';
-import CommissionScreen from '../CommissionAndFeeScreen/CommissionScreen';
-import ConsultationFeeScreen from '../CommissionAndFeeScreen/ConsultationFeeScreen';
+  moderateScale,
+  responsiveWidth,
+  getDeviceSpecificValue,
+} from "../../utils/responsive";
+import RevenueScreen from "./RevenueScreen";
+import CentralRevenueScreen from "./CentralRevenueScreen";
 
 const TABS = [
-  { key: 'commission', label: 'Commission' },
-  { key: 'fee', label: 'Consultation Fee' },
+  { key: "doctor", label: "Doctor Revenue" },
+  { key: "central", label: "Central Revenue" },
 ];
 
-const CommissionAndFeeScreen = () => {
-  const [activeTab, setActiveTab] = useState<string>('commission');
+const RevenueTabNavigator = () => {
+  const [activeTab, setActiveTab] = useState<string>("doctor");
   const scrollViewRef = useRef<ScrollView>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -93,55 +92,62 @@ const CommissionAndFeeScreen = () => {
     </TouchableOpacity>
   );
 
-    return (
-      <>
-        {/* Tab Navigation with Slider */}
-        <View style={styles.tabContainer}>
-          <View style={styles.tabRow}>
-            {TABS.map((tab, index) => (
-              <TabButton
-                key={tab.key}
-                label={tab.label}
-                isActive={activeTab === tab.key}
-                onPress={() => handleTabPress(tab.key, index)}
-                index={index}
-              />
-            ))}
-          </View>
-          
-          {/* Animated Slider */}
-          <Animated.View 
-            style={[
-              styles.slider,
-              {
-                transform: [{
-                  translateX: slideAnim
-                }],
-                width: responsiveWidth(100) / TABS.length - moderateScale(16),
-              }
-            ]}
-          />
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Revenue Dashboard</Text>
+      </View>
+
+      {/* Tab Navigation with Slider */}
+      <View style={styles.tabContainer}>
+        <View style={styles.tabRow}>
+          {TABS.map((tab, index) => (
+            <TabButton
+              key={tab.key}
+              label={tab.label}
+              isActive={activeTab === tab.key}
+              onPress={() => handleTabPress(tab.key, index)}
+              index={index}
+            />
+          ))}
         </View>
         
-        {/* Swipeable Content Area */}
-        <ScrollView
-          ref={scrollViewRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          style={styles.contentScrollView}
-        >
-          <View style={[styles.page, { width: SCREEN_WIDTH }]}>
-            <CommissionScreen />
-          </View>
-          <View style={[styles.page, { width: SCREEN_WIDTH }]}>
-            <ConsultationFeeScreen />
-          </View>
-        </ScrollView>
-      </>
-    );
-  };
-
+        {/* Animated Slider */}
+        <Animated.View 
+          style={[
+            styles.slider,
+            {
+              transform: [{
+                translateX: slideAnim
+              }],
+              width: responsiveWidth(100) / TABS.length - moderateScale(16),
+            }
+          ]}
+        />
+      </View>
+      
+      {/* Swipeable Content Area */}
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        style={styles.contentScrollView}
+        contentContainerStyle={styles.contentContainer}
+      >
+        <View style={[styles.page, { width: SCREEN_WIDTH }]}>
+          <RevenueScreen />
+        </View>
+        <View style={[styles.page, { width: SCREEN_WIDTH }]}>
+          <CentralRevenueScreen />
+        </View>
+      </ScrollView>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -155,23 +161,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
   headerTitle: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xl),
     fontWeight: '800',
     color: '#0f172a',
-  },
-  unauthorizedContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: SPACING.xl,
-  },
-  unauthorizedText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
-    color: '#64748b',
     textAlign: 'center',
-    lineHeight: getResponsiveFontSize(FONT_SIZE.md) * 1.5,
   },
   tabContainer: {
     backgroundColor: '#ffffff',
@@ -180,6 +180,11 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   tabRow: {
     flexDirection: 'row',
@@ -189,9 +194,11 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: getDeviceSpecificValue(SPACING.xs, SPACING.md, SPACING.sm),
+    // paddingVertical: getDeviceSpecificValue(SPACING.md, SPACING.lg, SPACING.sm),
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: BORDER_RADIUS.md,
+    minHeight: moderateScale(40),
   },
   activeTab: {
     backgroundColor: '#14b8a6',
@@ -206,6 +213,7 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(FONT_SIZE.sm),
     fontWeight: '600',
     color: '#64748b',
+    textAlign: 'center',
   },
   activeTabText: {
     color: '#ffffff',
@@ -222,9 +230,12 @@ const styles = StyleSheet.create({
   contentScrollView: {
     flex: 1,
   },
+  contentContainer: {
+    flexGrow: 1,
+  },
   page: {
     flex: 1,
   },
 });
 
-export default CommissionAndFeeScreen;
+export default RevenueTabNavigator;

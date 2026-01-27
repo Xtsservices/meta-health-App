@@ -608,7 +608,7 @@ const Dashboard_Outpatient: React.FC = () => {
     { key: "app", label: "Appointments List", icon: ListIcon, onPress: () => go("AppointmentsList") },
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
     { key: "addp", label: "Add Patient", icon: UserPlusIcon, onPress: () => go("AddPatient") },
-    { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueScreen") }, // Added Revenue tab
+    { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab
     { key: "mgmt", label: "Management", icon: SettingsIcon, onPress: () => go("Management") },
     { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
     { key: "help", label: "Help", icon: HelpCircleIcon, onPress: () => go("HelpScreen") },

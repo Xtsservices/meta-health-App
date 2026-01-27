@@ -197,4 +197,9 @@ DischargeSummaryDownload: undefined;
   AllTransactions:undefined;
 
   CommissionAndFee:undefined;
+  CentralRevenue:undefined;
+  CentralTransactions:undefined;
+  HospitalComparison:undefined;
+  HospitalBreakdown:undefined;
+  RevenueTabNavigator:undefined;
 };
