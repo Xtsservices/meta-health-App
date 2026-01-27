@@ -373,11 +373,15 @@ const HorizontalBarChart = ({ data, title }: { data: any[]; title: string }) => 
 };
 
 /* ---------------- 3D PIE CHART COMPONENT ---------------- */
-const Bent3DPie = ({ data, size = 220, depth = 18 }: { data: any[]; size?: number; depth?: number }) => {
+const Bent3DPie = ({ data, size = 220, depth = 18 }) => {
+  const total = data?.reduce((s, d) => s + (d?.value || 0), 0) || 1;
+
+  const isSingleFullSlice =
+    data.length === 1 && (data[0]?.value || 0) === total;
+
   const radius = size / 2;
   const cx = size / 2;
   const cy = size / 2;
-  const total = data?.reduce((s, d) => s + (d?.value || 0), 0) || 1;
 
   const polar = (a: number) => {
     const r = ((a - 90) * Math.PI) / 180;
@@ -401,32 +405,55 @@ const Bent3DPie = ({ data, size = 220, depth = 18 }: { data: any[]; size?: numbe
   };
 
   return (
-    <Svg width={size} height={size + depth}  style={{ marginTop: moderateScale(10) }}>
-      {/* DEPTH */}
-      {Array.from({ length: depth }).map((_, z) => {
-        let a = 0;
-        return data?.map((d, i) => {
-          const slice = ((d?.value || 0) / total) * 360;
-          const p = arc(a, a + slice);
-          a += slice;
+  <Svg width={size} height={size + depth} style={{ marginTop: moderateScale(10) }}>
 
-          return (
-            <Path
-              key={`d-${z}-${i}`}
-              d={p}
-              fill={darkenColor(d?.color || COLORS.primary, 0.35)}
-              transform={`translate(0 ${z}) scale(1 0.6)`}
-              origin={`${cx} ${cy}`}
-            />
-          );
-        });
-      })}
+    {/* DEPTH */}
+    {isSingleFullSlice
+      ? Array.from({ length: depth }).map((_, z) => (
+          <Circle
+            key={`d-${z}`}
+            cx={cx}
+            cy={cy + z}
+            r={radius}
+            fill={darkenColor(data[0]?.color || COLORS.primary, 0.35)}
+            transform="scale(1 0.6)"
+            origin={`${cx} ${cy}`}
+          />
+        ))
+      : Array.from({ length: depth }).map((_, z) => {
+          let a = 0;
+          return data.map((d, i) => {
+            const slice = ((d.value || 0) / total) * 360;
+            const p = arc(a, a + slice);
+            a += slice;
 
-      {/* TOP */}
-      {(() => {
+            return (
+              <Path
+                key={`d-${z}-${i}`}
+                d={p}
+                fill={darkenColor(d.color || COLORS.primary, 0.35)}
+                transform={`translate(0 ${z}) scale(1 0.6)`}
+                origin={`${cx} ${cy}`}
+              />
+            );
+          });
+        })}
+
+    {/* TOP */}
+    {isSingleFullSlice ? (
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill={data[0]?.color || COLORS.primary}
+        transform="scale(1 0.6)"
+        origin={`${cx} ${cy}`}
+      />
+    ) : (
+      (() => {
         let a = 0;
-        return data?.map((d, i) => {
-          const slice = ((d?.value || 0) / total) * 360;
+        return data.map((d, i) => {
+          const slice = ((d.value || 0) / total) * 360;
           const p = arc(a, a + slice);
           a += slice;
 
@@ -434,13 +461,14 @@ const Bent3DPie = ({ data, size = 220, depth = 18 }: { data: any[]; size?: numbe
             <Path
               key={`t-${i}`}
               d={p}
-              fill={d?.color || COLORS.primary}
+              fill={d.color || COLORS.primary}
               transform="scale(1 0.6)"
               origin={`${cx} ${cy}`}
             />
           );
         });
-      })()}
+      })()
+    )}
     </Svg>
   );
 };
@@ -927,6 +955,7 @@ const RevenueScreen = () => {
   const appointmentBreakdownData = getAppointmentBreakdownData();
   const safeArea = getSafeAreaInsets();
   const footerPadding = safeArea.bottom + SPACING.lg;
+  const revenueBreakdownData = getRevenueBreakdownData();
 
   /* ======================= MAIN UI ======================= */
   return (
@@ -1023,17 +1052,26 @@ const RevenueScreen = () => {
         />
 
         <Text style={styles.sectionTitle}>Revenue Overview</Text>
+      {revenueBreakdownData.length > 0 ? (
         <View style={styles.revenueOverview}>
-          <View style={{ marginTop: moderateScale(12) }}>
+          <View style={{ width: isTablet ? 300 : 240 }}>
             <Bent3DPie
-              data={getRevenueBreakdownData()}
+              data={revenueBreakdownData}
               size={isTablet ? 280 : moderateScale(220)}
             />
           </View>
           <RevenueLegendRight
-            data={getRevenueBreakdownData()}
+            data={revenueBreakdownData} 
           />
         </View>
+        ) : (
+          <View style={styles.noDataContainer}>
+            <Text style={styles.noDataText}>No revenue data available</Text>
+            <Text style={styles.noDataSubText}>
+              Revenue breakdown will appear once transactions are recorded
+            </Text>
+          </View>
+        )}
 
         {/* Performance Metrics */}
         <HorizontalBarChart
