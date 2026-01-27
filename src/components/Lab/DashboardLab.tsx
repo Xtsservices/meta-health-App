@@ -38,7 +38,8 @@ import {
   XIcon,
   BellIcon,
   ReceiptIcon,
-  DollarSignIcon
+  DollarSignIcon,
+  CommissionIcon
 } from "../../utils/SvgIcons";
 
 import { RootState } from "../../store/store";
@@ -297,7 +298,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Operations Section  
   const operationsItems = items?.filter(item => 
-    ["management", "pricing"].includes(item?.key)
+    ["management", "pricing","commission"].includes(item?.key)
   );
 
   // Support Section
@@ -820,6 +821,8 @@ const DashboardLab: React.FC = () => {
         icon: SettingsIcon,
         onPress: () => go("Management")
       },
+          { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
+      
       {
         key: "pricing",
         label: "Test Price",

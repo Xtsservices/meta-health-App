@@ -63,6 +63,7 @@ import {
 import { COLORS } from "../../utils/colour";
 import { MONTH_OPTIONS } from '../../utils/yearMonth';
 import Svg, { Circle, Line, Polygon, Text as SvgText, TSpan } from "react-native-svg";
+import { CommissionIcon } from '../../utils/SvgIcons';
 
 interface DeptCount {
   department: string;
@@ -930,7 +931,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Patient Management Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Patient Management</Text>
-            {items?.filter(item => ["patients", "records", "appointments"].includes(item.key)).map((item) => (
+            {items?.filter(item => ["patients", "records", "appointments","commission"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -1246,6 +1247,8 @@ const DashboardReception: React.FC = () => {
       icon: Stethoscope, 
       onPress: () => go("DoctorManagement") 
     },
+                  { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
+    
   ];
 
   const bottomItems: SidebarItem[] = [

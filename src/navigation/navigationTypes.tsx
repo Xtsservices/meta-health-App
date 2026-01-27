@@ -193,4 +193,6 @@ DischargeSummaryDownload: undefined;
   ApprovedRejectedList:undefined;
   NursePatientListScreen:undefined;
   PatientListScreen:undefined;
+
+  CommissionAndFee:undefined;
 };
