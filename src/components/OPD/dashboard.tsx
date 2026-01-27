@@ -50,6 +50,7 @@ import {
   BellIcon,
   MenuIcon,
   XIcon,
+  CommissionIcon,
 } from "../../utils/SvgIcons";
 
 // Import responsive utilities
@@ -237,7 +238,7 @@ const Sidebar: React.FC<{
   ) ?? [];
   
   const operationsItems = items?.filter(item => 
-    item.key === "mgmt" || item.key === "revenue"
+    item.key === "mgmt" || item.key === "revenue" || item.key === "commission"
   ) ?? [];
   
   const supportItems = items?.filter(item => 
@@ -609,6 +610,7 @@ const Dashboard_Outpatient: React.FC = () => {
     { key: "addp", label: "Add Patient", icon: UserPlusIcon, onPress: () => go("AddPatient") },
     { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueScreen") }, // Added Revenue tab
     { key: "mgmt", label: "Management", icon: SettingsIcon, onPress: () => go("Management") },
+    { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
     { key: "help", label: "Help", icon: HelpCircleIcon, onPress: () => go("HelpScreen") },
   ];
 

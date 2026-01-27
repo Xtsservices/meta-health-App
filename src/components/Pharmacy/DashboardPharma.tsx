@@ -64,7 +64,8 @@ import {
   UsersIcon,
   ReceiptIcon,
   TrendingUpIcon,
-  Package2Icon
+  Package2Icon,
+  CommissionIcon
 } from "../../utils/SvgIcons";
 
 // Types
@@ -389,7 +390,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Pharmacy Management Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Pharmacy Management</Text>
-            {items?.filter(item => ["sale", "orders", "tax", "stock", "add", "orderplacement"].includes(item.key)).map((item) => (
+            {items?.filter(item => ["sale", "orders", "tax", "stock", "add", "orderplacement","commission"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -810,8 +811,11 @@ const DashboardPharma: React.FC = () => {
       icon: ShoppingCartIcon,
       onPress: () => go("PharmacyExpenses")
     },
+
     
     // Support Section
+              { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
+    
     {
       key: "help",
       label: "Help",

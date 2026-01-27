@@ -177,6 +177,7 @@ import OPDTriagePatientListScreen from '../components/cardList/PatientListScreen
 import AddDoctorLeave from '../components/Management/LeaveManagement/AddDoctorLeave';
 import RevenueScreen from '../components/RevenueScreen';
 import AllTransactionsScreen from '../components/AllTransactionsScreen';
+import CommissionAndFeeScreen from '../components/CommissionAndFeeScreen/CommissionAndFeeScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -1627,7 +1628,16 @@ const Routing = () => {
   name="AllTransactions" 
   component={AllTransactionsScreen} 
   options={{ title: 'All Transactions' }}
+/><Stack.Screen 
+  name="CommissionAndFee" 
+  component={CommissionAndFeeScreen} 
+  options={{ 
+        headerTitleAlign: 'center',
+        headerShown: true,
+    title: 'Commission & Fee'
+  }} 
 />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

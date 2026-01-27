@@ -195,4 +195,6 @@ DischargeSummaryDownload: undefined;
   PatientListScreen:undefined;
   RevenueScreen:undefined;
   AllTransactions:undefined;
+
+  CommissionAndFee:undefined;
 };
