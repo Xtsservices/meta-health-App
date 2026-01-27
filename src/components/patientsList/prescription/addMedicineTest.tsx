@@ -625,7 +625,7 @@ export default function AddMedicineScreen() {
       createEmptyRow({
         medicineName: p.medicine ?? "",
         medicineType: Number(p.medicineType) ?? 0,
-        doseCount: Number(p.meddose) ?? null,
+        doseCount: Number(p.meddosage) ?? null,
         doseUnit: p.dosageUnit ?? "",
         Frequency: Number(p.medicineFrequency) ?? 1,
         medicationTime: p.medicineTime ?? "",
@@ -910,11 +910,9 @@ export default function AddMedicineScreen() {
               value={row.daysCount?.toString() ?? ""}
               onChangeText={(t) => {
                 const clean = t.replace(/[^0-9]/g, "");
-                if (clean.length > 1) return;
                 const n = clean === "" ? null : Number(clean);
                 updateRowField(rowId, "daysCount", n);
               }}
-              maxLength={1}
             />
           </View>
         </View>

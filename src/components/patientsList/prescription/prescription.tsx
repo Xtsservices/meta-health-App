@@ -25,7 +25,7 @@ type Prescription = {
   id: number;
   medicine?: string;
   medicineDuration?: string | number;
-  meddosage?: number;
+  meddosage?:  string | number;
   dosageUnit?: string;
   medicineFrequency?: string | number;
   medicineTime?: string; // "Morning,Afternoon" OR "05:00 AM - 07:00 AM (Before Breakfast)"

@@ -164,14 +164,19 @@ const { timeLineID, testID, walkinID, loincCode, patientData, tab, uploadedAttac
       const completedResponse = await AuthFetch(completedEndpoint, token) as any;
       
       if (completedResponse?.data?.message === "success") {
-        setCompletedPatientDetails(completedResponse?.data?.patientList ?? []);
+        const patientList = completedResponse?.data?.patientList ?? [];
+        setCompletedPatientDetails(patientList);
         
-        // Extract attachments from completed patient details
-        const filteredAttachments = (completedResponse?.data?.patientList ?? [])
-          .flatMap((patient: PatientDetails) => patient?.attachments?.filter(attachment => attachment.testID === testID) ?? []);
+        let allFilteredAttachments: Attachment[] = [];
         
-        // Sort by date
-        const sortedAttachments = filteredAttachments.sort(
+        patientList.forEach((patient: PatientDetails) => {
+          const patientAttachments = patient?.attachments ?? [];
+        const filtered = patientAttachments.filter(attachment => 
+          attachment.testID === testID || attachment.loincCode === loincCode
+        );
+        allFilteredAttachments = [...allFilteredAttachments, ...filtered];
+      });
+              const sortedAttachments = allFilteredAttachments.sort(
           (a: Attachment, b: Attachment) => 
             new Date(b.addedOn).valueOf() - new Date(a.addedOn).valueOf()
         );
@@ -435,14 +440,13 @@ const getAllReports = () => {
   let reports: Attachment[] = [];
   
   if (tab === "completed") {
-    // For completed tab: attachments are inside patientList[0].attachments
-    if (completedPatientDetails?.length > 0) {
-      // Get the first patient (since there's only one in the array based on your response)
-      const patient = completedPatientDetails[0];
-      reports = patient?.attachments?.filter(attachment => 
+    // For completed tab: attachments are inside patientList array
+    completedPatientDetails.forEach((patient: PatientDetails) => {
+      const patientReports = patient?.attachments?.filter(attachment => 
         attachment.testID === testID || attachment.loincCode === loincCode
       ) ?? [];
-    }
+      reports = [...reports, ...patientReports];
+    });
   } else {
     // For normal tab: use the attachments state
     reports = attachments.filter(attachment => 
@@ -455,7 +459,16 @@ const getAllReports = () => {
     const filteredUploaded = uploadedAttachments.filter(attachment => 
       attachment.testID === testID || attachment.loincCode === loincCode
     );
-    reports = combineAttachments(filteredUploaded, reports);
+    
+    // Combine and remove duplicates based on id
+    const combined = [...reports];
+    filteredUploaded.forEach(uploadedAtt => {
+      if (!combined.some(existingAtt => existingAtt.id === uploadedAtt.id)) {
+        combined.push(uploadedAtt);
+      }
+    });
+    
+    reports = combined;
   }
   
   // Sort by date (newest first)

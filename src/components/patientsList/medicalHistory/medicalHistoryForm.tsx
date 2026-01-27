@@ -56,7 +56,7 @@ const chestConditionList = [
     "Pleural Effusion",
     "Pneumothorax",
     "Lung Cancer",
-    "Chest Pain (unspecified)",
+    "Chest Pain",
     "Cough",
     "Shortness of breath",
     "Wheezing",
@@ -219,24 +219,24 @@ const parseMedList = (raw?: string | null): { istrue: boolean; items: MedItem[] 
     .filter(Boolean);
 
   const items: MedItem[] = chunks.map((chunk) => {
-    // New rich format: name|dosage|dosageUnit|frequency|duration|durationUnit|date
+    // Format: "sindhu 400 (Dosage: 5 mg | Frequency: 10 | Duration: 15 days) (26 Jan 2026)"
     const parenMatch = chunk.match(/^(.+?)\s*\(Dosage:\s*([^)]+)\)\s*(?:\(([^)]+)\))?$/);
     
     if (parenMatch) {
       const [, name, details, dateStr] = parenMatch;
       
-      // Parse dosage, frequency, duration from details
-      const dosageMatch = details.match(/Dosage:\s*([\d.]+)\s*([a-zA-Z]+)/);
-      const frequencyMatch = details.match(/Frequency:\s*(\d+)/);
-      const durationMatch = details.match(/Duration:\s*([\d.]+)\s*([a-zA-Z]+)/);
+      // Parse details: "5 mg | Frequency: 10 | Duration: 15 days"
+      const dosageMatch = details.match(/(\d+(?:\.\d+)?)\s*(mg|ml|g)/i);
+      const frequencyMatch = details.match(/Frequency:\s*(\d+)/i);
+      const durationMatch = details.match(/Duration:\s*(\d+(?:\.\d+)?)\s*(days|weeks|months|years)/i);
       
       return {
         name: name.trim(),
         dosage: dosageMatch ? dosageMatch[1] : "",
-        dosageUnit: dosageMatch ? dosageMatch[2] : "mg",
+        dosageUnit: dosageMatch ? dosageMatch[2].toLowerCase() : "mg",
         frequency: frequencyMatch ? frequencyMatch[1] : "",
         duration: durationMatch ? durationMatch[1] : "",
-        durationUnit: durationMatch ? durationMatch[2] : "days",
+        durationUnit: durationMatch ? durationMatch[2].toLowerCase() : "days",
         startDate: parseDateString(dateStr),
       };
     }
@@ -677,6 +677,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
     istrue: boolean;
     items: MedItem[];
   }>(() => parseMedList(medicalHistoryData?.meds));
+  console.log("prescribedMeds",medicalHistoryData,"123",prescribedMeds)
 
   const [newPrescribedMed, setNewPrescribedMed] = useState<MedItem>({
     name: "",
@@ -765,24 +766,27 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
     useState<Date | null>(null);
   const [selectedChestConditionOption, setSelectedChestConditionOption] =
     useState("");
-
+  const [chestModalVisible, setChestModalVisible] = useState(false);
   const [newNeurologicalCondition, setNewNeurologicalCondition] = useState("");
   const [newNeurologicalDate, setNewNeurologicalDate] =
     useState<Date | null>(null);
   const [selectedNeurologicalOption, setSelectedNeurologicalOption] =
     useState("");
+  const [neurologicalModalVisible, setNeurologicalModalVisible] = useState(false);
 
   const [newHeartProblem, setNewHeartProblem] = useState("");
   const [newHeartProblemDate, setNewHeartProblemDate] =
     useState<Date | null>(null);
   const [selectedHeartProblemOption, setSelectedHeartProblemOption] =
     useState("");
+  const [heartProblemModalVisible, setHeartProblemModalVisible] = useState(false);
 
   const [newMentalHealth, setNewMentalHealth] = useState("");
   const [newMentalHealthDate, setNewMentalHealthDate] =
     useState<Date | null>(null);
   const [selectedMentalHealthOption, setSelectedMentalHealthOption] =
     useState("");
+  const [mentalHealthModalVisible, setMentalHealthModalVisible] = useState(false);
 
   // Infectious Diseases State
   const [infections, setInfections] = useState<{
@@ -851,11 +855,15 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const [lumps, setLumps] = useState<{ istrue: boolean; details: any }>(
     parseLumpsField(medicalHistoryData?.lumps)
   );
+  const [lumpsLocationModalVisible, setLumpsLocationModalVisible] = useState(false);
+  const [lumpsSizeModalVisible, setLumpsSizeModalVisible] = useState(false);
+  const [lumpsConsistencyModalVisible, setLumpsConsistencyModalVisible] = useState(false);
 
   // Cancer History State
   const [cancer, setCancer] = useState<{ istrue: boolean; details: any }>(
     parseCancerField(medicalHistoryData?.cancer)
   );
+  const [cancerTypeModalVisible, setCancerTypeModalVisible] = useState(false);
 
   // API Data
   const [BloodList, setBloodList] = useState<string[]>([]);
@@ -886,8 +894,9 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
   // Disable form if basic mandatory fields not filled
   useEffect(() => {
-    setFormDisabled(!(giveBy && phoneNumber && relation));
-  }, [giveBy, phoneNumber, relation]);
+    const isValidMobile = isValidIndianMobile(phoneNumber);
+    setFormDisabled(!(giveBy && isValidMobile && relation && bloodGrp));
+  }, [giveBy, phoneNumber, relation, bloodGrp]);
 
   // Fetch master data (food allergy list, heart problems, blood groups, medicines)
   const getAllData = useCallback(async () => {
@@ -1140,13 +1149,23 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
   // 🔹 Build final data ONLY when needed (no auto-save)
   const buildUpdatedData = useCallback((): medicalHistoryFormType => {
-    const medsString = prescribedMeds.items
-      .map((item) => {
-        const formattedDate = item.startDate ? formatDate(item.startDate) : "";
-        const datePart = formattedDate ? ` (${formattedDate})` : "";
-        return `${item.name} (Dosage: ${item.dosage} ${item.dosageUnit} | Frequency: ${item.frequency} | Duration: ${item.duration} ${displayDurationUnit(item.duration, item.durationUnit)})${datePart}`;
-      })
-      .join(", ");
+const medsString = prescribedMeds.items
+  .map((item) => {
+    const formattedDate = item.startDate ? formatDate(item.startDate) : "";
+    const datePart = formattedDate ? ` (${formattedDate})` : "";
+
+    // Ensure all parts are included even if some are empty
+    const parts = [
+      item.dosage ? `Dosage: ${item.dosage} ${item.dosageUnit}` : "",
+      item.frequency ? `Frequency: ${item.frequency}` : "",
+      item.duration ? `Duration: ${item.duration} ${displayDurationUnit(item.duration, item.durationUnit)}` : "",
+    ].filter(Boolean);
+
+    const details = parts.length > 0 ? ` (${parts.join(" | ")})` : "";
+
+    return `${item.name}${details}${datePart}`;
+  })
+  .join(", ");
 
     const selfMedsString = selfMeds.items
       .map((item) => {
@@ -1381,7 +1400,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
               key={bg}
               label={bg}
               selected={bloodGrp === bg}
-              disabled={formDisabled}
               onPress={() => setBloodGrp(bg)}
             />
           ))}
@@ -2099,6 +2117,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
       )}
     </View>
   );
+  console.log("pushhh",prescribedMeds)
 
   const renderSelfMedsSection = () => (
     <View style={styles.section}>
@@ -2365,24 +2384,19 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         </View>
         {chestCondition.istrue && (
           <>
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>Chest Condition</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={newChestCondition}
-                  onValueChange={(value) => {
-                    setNewChestCondition(value);
-                  }}
-                  style={styles.picker}
-                  dropdownIconColor="#6b7280"
-                >
-                  <Picker.Item label="Select condition" value="" />
-                  {chestConditionList.map((item) => (
-                    <Picker.Item key={item} label={item} value={item} />
-                  ))}
-                </Picker>
-              </View>
-            </View>
+<View style={styles.fieldBlock}>
+  <Text style={styles.label}>Chest Condition</Text>
+
+  <TouchableOpacity
+    style={styles.input}
+    onPress={() => setChestModalVisible(true)}
+  >
+    <Text style={styles.inputText}>
+      {newChestCondition || "Select condition"}
+    </Text>
+  </TouchableOpacity>
+</View>
+
 
             <DateField
               label="Condition Since"
@@ -2466,6 +2480,32 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
           </>
         )}
       </View>
+<Modal visible={chestModalVisible} animationType="slide">
+  <View style={{ flex: 1, backgroundColor: "#fff" }}>
+    <View style={styles.modalHeader}>
+      <TouchableOpacity style={styles.closeButton} onPress={() => setChestModalVisible(false)}>
+        <X size={24} color="#0f172a" />
+      </TouchableOpacity>
+      <Text style={styles.modalTitle}>Select condition</Text>
+      <View style={styles.headerPlaceholder} />
+    </View>
+
+    <ScrollView>
+      {chestConditionList.map(item => (
+        <TouchableOpacity
+          key={item}
+          style={styles.modalItem}
+          onPress={() => {
+            setNewChestCondition(item);
+            setChestModalVisible(false);
+          }}
+        >
+          <Text style={styles.modalItemText}>{item}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  </View>
+</Modal>
 
       {/* Neurological */}
       <View style={styles.fieldBlock}>
@@ -2498,21 +2538,14 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
           <>
             <View style={styles.fieldBlock}>
               <Text style={styles.label}>Neurological Disorder</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={newNeurologicalCondition}
-                  onValueChange={(value) => {
-                    setNewNeurologicalCondition(value);
-                  }}
-                  style={styles.picker}
-                  dropdownIconColor="#6b7280"
-                >
-                  <Picker.Item label="Select disorder" value="" />
-                  {neurologicalDisorderList.map((item) => (
-                    <Picker.Item key={item} label={item} value={item} />
-                  ))}
-                </Picker>
-              </View>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setNeurologicalModalVisible(true)}
+              >
+                <Text style={styles.inputText}>
+                  {newNeurologicalCondition || "Select disorder"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <DateField
@@ -2598,6 +2631,33 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         )}
       </View>
 
+      <Modal visible={neurologicalModalVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setNeurologicalModalVisible(false)}>
+              <X size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Select neurological disorder</Text>
+            <View style={styles.headerPlaceholder} />
+          </View>
+
+          <ScrollView>
+            {neurologicalDisorderList.map(item => (
+              <TouchableOpacity
+                key={item}
+                style={styles.modalItem}
+                onPress={() => {
+                  setNewNeurologicalCondition(item);
+                  setNeurologicalModalVisible(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Heart Problems from API list */}
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Any Heart Problems?</Text>
@@ -2627,21 +2687,14 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
           <>
             <View style={styles.fieldBlock}>
               <Text style={styles.label}>Heart Problem</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={newHeartProblem}
-                  onValueChange={(value) => {
-                    setNewHeartProblem(value);
-                  }}
-                  style={styles.picker}
-                  dropdownIconColor="#6b7280"
-                >
-                  <Picker.Item label="Select problem" value="" />
-                  {heartProblemList.map((item) => (
-                    <Picker.Item key={item} label={item} value={item} />
-                  ))}
-                </Picker>
-              </View>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setHeartProblemModalVisible(true)}
+              >
+                <Text style={styles.inputText}>
+                  {newHeartProblem || "Select problem"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <DateField
@@ -2727,6 +2780,33 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         )}
       </View>
 
+      <Modal visible={heartProblemModalVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setHeartProblemModalVisible(false)}>
+              <X size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Select heart problem</Text>
+            <View style={styles.headerPlaceholder} />
+          </View>
+
+          <ScrollView>
+            {heartProblemList.map(item => (
+              <TouchableOpacity
+                key={item}
+                style={styles.modalItem}
+                onPress={() => {
+                  setNewHeartProblem(item);
+                  setHeartProblemModalVisible(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Mental Health from master list */}
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>Any Mental Health Problems?</Text>
@@ -2756,21 +2836,14 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
           <>
             <View style={styles.fieldBlock}>
               <Text style={styles.label}>Mental Health Problem</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={newMentalHealth}
-                  onValueChange={(value) => {
-                    setNewMentalHealth(value);
-                  }}
-                  style={styles.picker}
-                  dropdownIconColor="#6b7280"
-                >
-                  <Picker.Item label="Select problem" value="" />
-                  {mentalProblemList.map((item) => (
-                    <Picker.Item key={item} label={item} value={item} />
-                  ))}
-                </Picker>
-              </View>
+              <TouchableOpacity
+                style={styles.input}
+                onPress={() => setMentalHealthModalVisible(true)}
+              >
+                <Text style={styles.inputText}>
+                  {newMentalHealth || "Select problem"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <DateField
@@ -2855,6 +2928,33 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
           </>
         )}
       </View>
+
+      <Modal visible={mentalHealthModalVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setMentalHealthModalVisible(false)}>
+              <X size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Select mental health problem</Text>
+            <View style={styles.headerPlaceholder} />
+          </View>
+
+          <ScrollView>
+            {mentalProblemList.map(item => (
+              <TouchableOpacity
+                key={item}
+                style={styles.modalItem}
+                onPress={() => {
+                  setNewMentalHealth(item);
+                  setMentalHealthModalVisible(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 
@@ -3243,93 +3343,145 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>Location</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={lumps.details.location}
-                onValueChange={(value) =>
-                  setLumps((prev) => ({
-                    ...prev,
-                    details: { ...prev.details, location: value },
-                  }))
-                }
-                style={styles.picker}
-              >
-                <Picker.Item label="Select Location" value="" />
-                <Picker.Item label="Thyroid" value="Thyroid" />
-                <Picker.Item
-                  label="Lymph nodes - neck"
-                  value="Lymph nodes - neck"
-                />
-                <Picker.Item
-                  label="Lymph nodes - jaw"
-                  value="Lymph nodes - jaw"
-                />
-                <Picker.Item
-                  label="Lymph nodes - ear"
-                  value="Lymph nodes - ear"
-                />
-                <Picker.Item label="Salivary glands" value="Salivary glands" />
-                <Picker.Item label="Breast" value="Breast" />
-                <Picker.Item label="Lung" value="Lung" />
-                <Picker.Item label="Liver" value="Liver" />
-                <Picker.Item label="Spleen" value="Spleen" />
-                <Picker.Item label="Kidneys" value="Kidneys" />
-                <Picker.Item label="Ovaries" value="Ovaries" />
-                <Picker.Item
-                  label="Lymph nodes - abdominal"
-                  value="Lymph nodes - abdominal"
-                />
-                <Picker.Item
-                  label="Lymph nodes - axillary"
-                  value="Lymph nodes - axillary"
-                />
-                <Picker.Item label="Arms" value="Arms" />
-                <Picker.Item label="Legs" value="Legs" />
-              </Picker>
-            </View>
+            <TouchableOpacity
+              style={styles.input}
+              onPress={() => setLumpsLocationModalVisible(true)}
+            >
+              <Text style={styles.inputText}>
+                {lumps.details.location || "Select Location"}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          <Modal visible={lumpsLocationModalVisible} animationType="slide">
+            <View style={{ flex: 1, backgroundColor: "#fff" }}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setLumpsLocationModalVisible(false)}>
+                  <X size={24} color="#0f172a" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Select Location</Text>
+                <View style={styles.headerPlaceholder} />
+              </View>
+
+              <ScrollView>
+                {[
+                  "Thyroid",
+                  "Lymph nodes - neck",
+                  "Lymph nodes - jaw",
+                  "Lymph nodes - ear",
+                  "Salivary glands",
+                  "Breast",
+                  "Lung",
+                  "Liver",
+                  "Spleen",
+                  "Kidneys",
+                  "Ovaries",
+                  "Lymph nodes - abdominal",
+                  "Lymph nodes - axillary",
+                  "Arms",
+                  "Legs",
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setLumps((prev) => ({
+                        ...prev,
+                        details: { ...prev.details, location: item },
+                      }));
+                      setLumpsLocationModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Modal>
 
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>Size</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={lumps.details.size}
-                onValueChange={(value) =>
-                  setLumps((prev) => ({
-                    ...prev,
-                    details: { ...prev.details, size: value },
-                  }))
-                }
-                style={styles.picker}
-              >
-                <Picker.Item label="Select Size" value="" />
-                <Picker.Item label="Small" value="Small" />
-                <Picker.Item label="Medium" value="Medium" />
-                <Picker.Item label="Large" value="Large" />
-              </Picker>
-            </View>
+            <TouchableOpacity
+              style={styles.input}
+              onPress={() => setLumpsSizeModalVisible(true)}
+            >
+              <Text style={styles.inputText}>
+                {lumps.details.size || "Select Size"}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          <Modal visible={lumpsSizeModalVisible} animationType="slide">
+            <View style={{ flex: 1, backgroundColor: "#fff" }}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setLumpsSizeModalVisible(false)}>
+                  <X size={24} color="#0f172a" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Select Size</Text>
+                <View style={styles.headerPlaceholder} />
+              </View>
+
+              <ScrollView>
+                {["Small", "Medium", "Large"].map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setLumps((prev) => ({
+                        ...prev,
+                        details: { ...prev.details, size: item },
+                      }));
+                      setLumpsSizeModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Modal>
 
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>Consistency</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={lumps.details.consistency}
-                onValueChange={(value) =>
-                  setLumps((prev) => ({
-                    ...prev,
-                    details: { ...prev.details, consistency: value },
-                  }))
-                }
-                style={styles.picker}
-              >
-                <Picker.Item label="Select Consistency" value="" />
-                <Picker.Item label="Soft" value="Soft" />
-                <Picker.Item label="Firm" value="Firm" />
-                <Picker.Item label="Hard" value="Hard" />
-              </Picker>
-            </View>
+            <TouchableOpacity
+              style={styles.input}
+              onPress={() => setLumpsConsistencyModalVisible(true)}
+            >
+              <Text style={styles.inputText}>
+                {lumps.details.consistency || "Select Consistency"}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          <Modal visible={lumpsConsistencyModalVisible} animationType="slide">
+            <View style={{ flex: 1, backgroundColor: "#fff" }}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setLumpsConsistencyModalVisible(false)}>
+                  <X size={24} color="#0f172a" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Select Consistency</Text>
+                <View style={styles.headerPlaceholder} />
+              </View>
+
+              <ScrollView>
+                {["Soft", "Firm", "Hard"].map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setLumps((prev) => ({
+                        ...prev,
+                        details: { ...prev.details, consistency: item },
+                      }));
+                      setLumpsConsistencyModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Modal>
         </>
       )}
     </View>
@@ -3377,34 +3529,53 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>Type of Cancer</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={cancer.details.type}
-                onValueChange={(value) =>
-                  setCancer((prev) => ({
-                    ...prev,
-                    details: { ...prev.details, type: value },
-                  }))
-                }
-                style={styles.picker}
-              >
-                <Picker.Item label="Select Type" value="" />
-                <Picker.Item label="Breast Cancer" value="Breast Cancer" />
-                <Picker.Item label="Lung Cancer" value="Lung Cancer" />
-                <Picker.Item
-                  label="Prostate Cancer"
-                  value="Prostate Cancer"
-                />
-                <Picker.Item
-                  label="Colorectal Cancer"
-                  value="Colorectal Cancer"
-                />
-                <Picker.Item label="Leukemia" value="Leukemia" />
-                <Picker.Item label="Lymphoma" value="Lymphoma" />
-                <Picker.Item label="Other" value="Other" />
-              </Picker>
-            </View>
+            <TouchableOpacity
+              style={styles.input}
+              onPress={() => setCancerTypeModalVisible(true)}
+            >
+              <Text style={styles.inputText}>
+                {cancer.details.type || "Select Type"}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          <Modal visible={cancerTypeModalVisible} animationType="slide">
+            <View style={{ flex: 1, backgroundColor: "#fff" }}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setCancerTypeModalVisible(false)}>
+                  <X size={24} color="#0f172a" />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>Select Type</Text>
+                <View style={styles.headerPlaceholder} />
+              </View>
+
+              <ScrollView>
+                {[
+                  "Breast Cancer",
+                  "Lung Cancer",
+                  "Prostate Cancer",
+                  "Colorectal Cancer",
+                  "Leukemia",
+                  "Lymphoma",
+                  "Other",
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setCancer((prev) => ({
+                        ...prev,
+                        details: { ...prev.details, type: item },
+                      }));
+                      setCancerTypeModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Modal>
 
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>Stage of Cancer</Text>
@@ -3755,10 +3926,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   picker: {
-    height: 60,
+
     color: "#111827",
     width: "100%",
   },
+  modalItemText: {
+    fontSize: 16,
+    color: "#111827",
+    flexWrap: "wrap",     // ✅ works
+    lineHeight: 22,
+  },
+modalItem: {
+  padding: 16,
+  borderBottomWidth: 1,
+  borderBottomColor: "#e5e7eb",
+},
+
   subTitle: {
     fontSize: 16,
     fontWeight: "600",

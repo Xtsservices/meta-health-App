@@ -568,7 +568,7 @@ const AlertsLab: React.FC = () => {
     }
   } else {
     if (filter === "OPD") {
-      filtered = allAlerts?.filter((order) => order?.ptype === 1 || order?.departmemtType === 1) ?? [];
+      filtered = allAlerts?.filter((order) => order?.ptype === 1 || order?.departmemtType === 1 || order?.ptype === 21 || order?.departmemtType === 21) ?? [];
     } else if (filter === "IPD") {
       filtered = allAlerts?.filter((order) => order?.ptype === 2 || order?.departmemtType === 2) ?? [];
     } else if (filter === "Emergency") {

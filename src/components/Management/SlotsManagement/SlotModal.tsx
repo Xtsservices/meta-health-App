@@ -7,7 +7,6 @@ import {
   StyleSheet,
   TextInput,
   Modal,
-  Alert,
   Dimensions,
 } from "react-native";
 import { 
@@ -20,11 +19,13 @@ import {
 import { XIcon, ClockIcon, SaveIcon, UserIcon, CalendarIcon,ChevronDownIcon,ChevronUpIcon,} from "../../../utils/SvgIcons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Platform } from "react-native";
+import { useDispatch } from "react-redux";
+import { showSuccess, showError } from "../../../store/toast.slice";
 
 const { height: screenHeight } = Dimensions.get('window');
 
-/* ------------------ CONSTANT HOURS (9 AM – 5 PM) ------------------ */
-const HOURS = Array.from({ length: 9 }, (_, i) => i + 9); // 09 → 17
+/* ------------------ CONSTANT HOURS (24 HOURS) ------------------ */
+const HOURS = Array.from({ length: 24 }, (_, i) => i); // 0 → 23
 
 interface SlotModalProps {
   visible: boolean;
@@ -39,6 +40,7 @@ const SlotModal: React.FC<SlotModalProps> = ({
   onSave, 
   creating 
 }) => {
+  const dispatch = useDispatch();
   const [formData, setFormData] = useState({
     date: getCurrentDateFormatted(),
     shiftFromTime: "09:00",
@@ -53,13 +55,13 @@ const SlotModal: React.FC<SlotModalProps> = ({
   const handleSave = () => {
     // Validate all fields
     if (!formData.date || !formData.shiftFromTime || !formData.shiftToTime || !formData.availableSlots) {
-      Alert.alert("Error", "Please fill all fields");
+      dispatch(showError("Please fill all fields"));
       return;
     }
 
     // Validate date format
     if (!isValidDate(formData.date)) {
-      Alert.alert("Error", "Invalid date");
+      dispatch(showError("Invalid date"));
       return;
     }
 
@@ -67,13 +69,13 @@ const SlotModal: React.FC<SlotModalProps> = ({
     const endHour = Number(formData.shiftToTime.split(":")[0]);
 
     if (startHour >= endHour) {
-      Alert.alert("Error", "End time must be after start time");
+      dispatch(showError("End time must be after start time"));
       return;
     }
 
     const slots = Number(formData.availableSlots);
     if (isNaN(slots) || slots <= 0) {
-      Alert.alert("Error", "Slots must be greater than 0");
+      dispatch(showError("Slots must be greater than 0"));
       return;
     }
 
@@ -118,9 +120,13 @@ const SlotModal: React.FC<SlotModalProps> = ({
     if (!visible) return null;
 
     const currentHour = parseInt(selectedHour.split(":")[0]);
+    const fromHour = parseInt(formData.shiftFromTime.split(":")[0]);
+    const toHour = parseInt(formData.shiftToTime.split(":")[0]);
+    
+    // Filter available hours
     const availableHours = type === "to" 
-      ? HOURS.filter(h => h > parseInt(formData.shiftFromTime.split(":")[0]))
-      : HOURS.filter(h => h < parseInt(formData.shiftToTime.split(":")[0]));
+      ? HOURS.filter(h => h > fromHour)
+      : HOURS.filter(h => h < toHour);
 
     return (
       <View style={styles.hourDropdownContainer}>
@@ -463,12 +469,5 @@ const styles = StyleSheet.create({
   hourOptionTextSelected: {
     color: "#14b8a6",
     fontWeight: "600",
-  },
-  /* Old modal styles (for date picker) */
-  hourOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
   },
 });
