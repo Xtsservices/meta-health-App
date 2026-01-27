@@ -469,8 +469,8 @@ const Bent3DPie = ({ data, size = 220, depth = 18 }) => {
         });
       })()
     )}
-    </Svg>
-  );
+  </Svg>
+);
 };
 
 /* ---------------- REVENUE LEGEND COMPONENT ---------------- */
@@ -1112,7 +1112,7 @@ const RevenueScreen = () => {
                         styles.transactionStatusText,
                         { color: transaction?.status === 'paid' ? COLORS.success : COLORS.warning }
                       ]}>
-                        {transaction?.status?.toUpperCase()}
+                        {"Active"}
                       </Text>
                     </View>
                     <View style={styles.transactionInfo}>
