@@ -373,87 +373,7 @@ const SimpleBarChart = ({ data, title }: { data: any[]; title: string }) => {
   );
 };
 
-/* ---------------- HOSPITAL PERFORMANCE CHART ---------------- */
-const HospitalPerformanceChart = ({ data }: { data: HospitalBreakdown[] }) => {
-  const maxRevenue = Math.max(...data?.map(h => h.doctorRevenue || 0), 1);
 
-  return (
-    <View style={styles.chartCard}>
-      <View style={styles.chartCardHeader}>
-        <Building size={20} color={COLORS.primary} />
-        <Text style={styles.chartCardTitle}>Hospital Performance</Text>
-      </View>
-
-      {data?.length > 0 ? (
-        <View style={styles.hospitalChartContainer}>
-          {data?.map((hospital, index) => {
-            const revenuePercent = ((hospital.doctorRevenue || 0) / maxRevenue) * 100;
-            const colorIndex = index % 6;
-            const colors = [
-              COLORS.chartTeal,
-              COLORS.chartBlue,
-              COLORS.chartPurple,
-              COLORS.chartGreen,
-              COLORS.chartOrange,
-              COLORS.chartPink,
-            ];
-
-            return (
-              <View key={hospital.hospitalID} style={styles.hospitalRow}>
-                <View style={styles.hospitalInfo}>
-                  <Text style={styles.hospitalName} numberOfLines={1}>
-                    {hospital.hospitalName}
-                  </Text>
-                  <Text style={styles.hospitalCity} numberOfLines={1}>
-                    {hospital.city}
-                  </Text>
-                </View>
-                
-                <View style={styles.hospitalStats}>
-                  <View style={styles.revenueBarContainer}>
-                    <View style={styles.revenueBarTrack}>
-                      <View
-                        style={[
-                          styles.revenueBarFill,
-                          {
-                            width: `${revenuePercent}%`,
-                            backgroundColor: colors[colorIndex],
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.revenueValue}>
-                      ₹{(hospital.doctorRevenue || 0)?.toLocaleString()}
-                    </Text>
-                  </View>
-                  
-                  <View style={styles.hospitalMetrics}>
-                    <View style={styles.metricBadge}>
-                      <Users size={12} color={COLORS.subText} />
-                      <Text style={styles.metricBadgeText}>
-                        {hospital.appointments}
-                      </Text>
-                    </View>
-                    <View style={styles.metricBadge}>
-                      <Percent size={12} color={COLORS.subText} />
-                      <Text style={styles.metricBadgeText}>
-                        {hospital.avgCommission?.toFixed(1)}%
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      ) : (
-        <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>No hospital data available</Text>
-        </View>
-      )}
-    </View>
-  );
-};
 
 /* ---------------- 3D PIE CHART COMPONENT ---------------- */
 const RevenuePieChart = ({ data, size = 220, depth = 18 }) => {
@@ -616,6 +536,7 @@ const CentralRevenueScreen = () => {
         `revenue/central/dashboard/${user.id}?filterType=${filterType}&groupBy=${groupBy}`,
         token
       ) as any;
+      console.log("111",response)
 
       if (response?.data?.success || response?.success) {
         const data = response?.data?.data || response?.data;
@@ -638,6 +559,7 @@ const CentralRevenueScreen = () => {
         `revenue/central/comparison/${user.id}?filterType=${filterType}`,
         token
       ) as any;
+      console.log("222",response)
 
       if (response?.data?.success || response?.success) {
         const data = response?.data?.data || response?.data;
@@ -989,10 +911,7 @@ const CentralRevenueScreen = () => {
             </View>
             <View>
               <Text style={styles.greeting} numberOfLines={1}>
-                Central Revenue Dashboard
-              </Text>
-              <Text style={styles.role} numberOfLines={1}>
-                Admin
+                Central Revenue
               </Text>
             </View>
           </View>
@@ -1092,25 +1011,6 @@ const CentralRevenueScreen = () => {
           </View>
         )}
 
-        {/* HOSPITAL PERFORMANCE */}
-        {dashboardData?.breakdown && dashboardData.breakdown.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Hospital Performance</Text>
-              <TouchableOpacity 
-                style={styles.viewAllLink}
-                onPress={() => navigation.navigate("HospitalBreakdown" as never, {
-                  breakdown: dashboardData.breakdown,
-                  filterType,
-                })}
-              >
-                <Text style={styles.viewAllLinkText}>View Details</Text>
-                <ArrowUpRight size={14} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-            <HospitalPerformanceChart data={dashboardData.breakdown} />
-          </>
-        )}
 
         {/* HOSPITAL COMPARISON */}
         {hospitalComparisonData.length > 0 && (
@@ -1193,26 +1093,6 @@ const CentralRevenueScreen = () => {
                       </View>
                     </View>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          </>
-        )}
-
-        {/* STATUS BREAKDOWN */}
-        {statusBreakdownData.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Appointment Status</Text>
-            <View style={styles.chartCard}>
-              <View style={styles.statusContainer}>
-                {statusBreakdownData.map((item, index) => (
-                  <View key={index} style={styles.statusItem}>
-                    <View style={[styles.statusDot, { backgroundColor: item.color }]} />
-                    <View style={styles.statusContent}>
-                      <Text style={styles.statusLabel}>{item.label}</Text>
-                      <Text style={styles.statusValue}>{item.value}</Text>
-                    </View>
-                  </View>
                 ))}
               </View>
             </View>

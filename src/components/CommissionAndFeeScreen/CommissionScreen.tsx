@@ -133,6 +133,7 @@ const CommissionScreen = () => {
   const [pageLoading, setPageLoading] = useState(false);
   
   const user = useSelector((state: RootState) => state.currentUser);
+  console.log("555",user)
   const dispatch = useDispatch();
 
 
@@ -203,6 +204,7 @@ const CommissionScreen = () => {
         `user/doctorAssociation/active/${user.id}/${user.hospitalID}`,
         token
       ) as any;
+      console.log("666",response)
       
       if (response?.data?.success) {
         setActiveCommission(response?.data?.data || null);
@@ -499,7 +501,6 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
           
           <View style={styles.dateRow}>
             <Text style={styles.dateText}>Start Date: {formatDate(activeCommission?.startDate)}</Text>
-            <Text style={styles.dateText}>End Date: {activeCommission?.endDate ? formatDate(activeCommission?.endDate) : ' -- '}</Text>
           </View>
           
           {activeCommission?.workingTimings && Object.keys(activeCommission.workingTimings).length > 0 && (
@@ -524,6 +525,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
   };
 
   const renderHistoryCommissionCard = ({ item }: { item: CommissionItem }) => {
+    console.log("5656",item)
     const commissionRate = parseFloat(item?.commissionPercentage || '0');
     const consultationFee = parseFloat(item?.consultationFee || '0');
     const isActive = item?.active === 1;
@@ -570,7 +572,6 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
           
           <View style={styles.dateRow}>
             <Text style={styles.dateText}>From: {formatDate(item?.startDate)}</Text>
-            <Text style={styles.dateText}>End Date: {item?.endDate ? formatDate(item?.endDate) : ' -- '}</Text>
           </View>
           
           <Text style={styles.updatedText}>
@@ -703,7 +704,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
               
               {selectedCommission?.doctorApproval === 0 && (
                 <>
-                  <Text style={styles.editTitle}>Edit Commission Rate</Text>
+                  <Text style={styles.editTitle}>Edit Commission Rate (%)</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="Enter new commission rate (%)"
@@ -718,15 +719,9 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
                       style={[styles.modalActionButton, styles.editActionButton]}
                       onPress={() => handleCommissionEdit(selectedCommission?.id || 0)}
                     >
-                      <Text style={styles.modalActionButtonText}>Update Commission</Text>
+                      <Text style={styles.modalActionButtonText}>Update</Text>
                     </TouchableOpacity>
-                    
-                    <TouchableOpacity
-                      style={[styles.modalActionButton, styles.approveActionButton]}
-                      onPress={() => handleCommissionApprove(selectedCommission?.id || 0)}
-                    >
-                      <Text style={styles.modalActionButtonText}>Approve As Is</Text>
-                    </TouchableOpacity>
+                  
                   </View>
                 </>
               )}
@@ -1303,16 +1298,17 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: SPACING.sm,
-    marginTop: SPACING.lg,
+    marginTop: SPACING.xs,
   },
   modalActionButton: {
     flex: 1,
-    padding: SPACING.md,
+    padding: SPACING.xs+2,
     borderRadius: BORDER_RADIUS.lg,
     alignItems: 'center',
   },
   editActionButton: {
     backgroundColor: COLORS.warning,
+
   },
   approveActionButton: {
     backgroundColor: COLORS.success,

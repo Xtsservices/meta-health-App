@@ -1668,9 +1668,11 @@ const Routing = () => {
 <Stack.Screen
   name="RevenueTabNavigator"
   component={RevenueTabNavigator}
-  options={{
-    headerShown: false,
-  }}
+  options={{ 
+        headerTitleAlign: 'center',
+        headerShown: true,
+    title: 'Revenue'
+  }} 
 />
       </Stack.Navigator>
     </NavigationContainer>

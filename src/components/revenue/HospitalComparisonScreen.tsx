@@ -64,10 +64,8 @@ interface RouteParams {
   filterType?: string;
   data?: any;
 }
-
-/* ---------------- PIE CHART COMPONENT ---------------- */
-const ComparisonPieChart = ({ data, size = 200 }) => {
-  const total = data?.reduce((s, d) => s + (d?.value || 0), 0) || 1;
+const RevenuePieChart = ({ data, size = 200, depth = 18 }) => {
+  const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const radius = size / 2;
   const cx = size / 2;
   const cy = size / 2;
@@ -88,7 +86,79 @@ const ComparisonPieChart = ({ data, size = 200 }) => {
     return `
       M ${cx} ${cy}
       L ${s.x} ${s.y}
-      A ${radius} ${radius} 0 ${large} 0 ${e.x} ${e.y}
+      A ${radius} ${radius} 0 ${large} 1 ${e.x} ${e.y}
+      Z
+    `;
+  };
+
+  return (
+    <Svg width={size} height={size + depth}>
+      {/* DEPTH */}
+      {Array.from({ length: depth }).map((_, z) => (
+        <Circle
+          key={z}
+          cx={cx}
+          cy={cy + z}
+          r={radius}
+          fill={COLORS.chartTeal}
+          transform="scale(1 0.6)"
+          origin={`${cx} ${cy}`}
+        />
+      ))}
+
+      {/* TOP */}
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill={COLORS.chartTeal}
+        transform="scale(1 0.6)"
+        origin={`${cx} ${cy}`}
+      />
+    </Svg>
+  );
+};
+
+const ComparisonPieChart = ({ data, size = 200 }) => {
+  const validData = data?.filter(d => d.value > 0) || [];
+  const total = validData.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return null;
+
+  const radius = size / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // ✅ SINGLE SLICE = FULL CIRCLE (SVG ARC CANNOT DO THIS)
+  if (validData.length === 1) {
+    return (
+      <Svg width={size} height={size}>
+        <Circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill={COLORS.chartTeal}
+        />
+      </Svg>
+    );
+  }
+
+  const polar = (a: number) => {
+    const r = ((a - 90) * Math.PI) / 180;
+    return {
+      x: cx + radius * Math.cos(r),
+      y: cy + radius * Math.sin(r),
+    };
+  };
+
+  const arc = (start: number, end: number) => {
+    const s = polar(end);
+    const e = polar(start);
+    const large = end - start > 180 ? 1 : 0;
+
+    return `
+      M ${cx} ${cy}
+      L ${s.x} ${s.y}
+      A ${radius} ${radius} 0 ${large} 1 ${e.x} ${e.y}
       Z
     `;
   };
@@ -103,27 +173,28 @@ const ComparisonPieChart = ({ data, size = 200 }) => {
     COLORS.chartIndigo,
   ];
 
+  let angle = 0;
+
   return (
     <Svg width={size} height={size}>
-      {(() => {
-        let a = 0;
-        return data?.map((d, i) => {
-          const slice = ((d.value || 0) / total) * 360;
-          const p = arc(a, a + slice);
-          a += slice;
+      {validData.map((d, i) => {
+        const slice = (d.value / total) * 360;
+        const path = arc(angle, angle + slice);
+        angle += slice;
 
-          return (
-            <Path
-              key={i}
-              d={p}
-              fill={colors[i % colors.length]}
-            />
-          );
-        });
-      })()}
+        return (
+          <Path
+            key={i}
+            d={path}
+            fill={colors[i % colors.length]}
+          />
+        );
+      })}
     </Svg>
   );
 };
+
+
 
 /* ======================= HOSPITAL COMPARISON SCREEN ======================= */
 const HospitalComparisonScreen = () => {
@@ -169,7 +240,7 @@ const HospitalComparisonScreen = () => {
         `revenue/central/comparison/${user.id}?filterType=${filterType}`,
         token
       ) as any;
-
+      console.log("444",response)
       if (response?.data?.success || response?.success) {
         const data = response?.data?.data || response?.data;
         setComparisonData(data);
@@ -252,10 +323,30 @@ const HospitalComparisonScreen = () => {
     const hospitals = comparisonData?.hospitals || [];
     if (hospitals.length === 0) return null;
 
-    const pieData = hospitals.map((h: HospitalComparison) => ({
-      label: h.hospitalName,
-      value: h.totalDoctorRevenue || 0,
-    }));
+const pieData = hospitals.map((h: HospitalComparison) => ({
+  label: h.hospitalName,
+  value: Number(h.totalDoctorRevenue) || 0,
+}));
+
+const totalRevenue = pieData.reduce((s, d) => s + d.value, 0);
+
+if (totalRevenue === 0) {
+  return (
+    <View style={styles.chartContainer}>
+      <View style={styles.chartHeader}>
+        <BarChart3 size={20} color={COLORS.brand} />
+        <Text style={styles.chartTitle}>Revenue Distribution</Text>
+      </View>
+
+      <View style={{ alignItems: "center", paddingVertical: 40 }}>
+        <Text style={{ color: COLORS.sub, fontSize: 13 }}>
+          No revenue data available for this period
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 
     const topHospitals = hospitals.slice(0, 3);
 
@@ -268,7 +359,12 @@ const HospitalComparisonScreen = () => {
         
         <View style={styles.chartContent}>
           <View style={styles.pieContainer}>
-            <ComparisonPieChart data={pieData} size={180} />
+      <RevenuePieChart
+  data={pieData}
+  size={180}
+  depth={16}
+/>
+
           </View>
           
           <View style={styles.chartLegend}>

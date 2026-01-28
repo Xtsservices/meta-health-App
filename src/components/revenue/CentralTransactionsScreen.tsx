@@ -299,7 +299,7 @@ const CentralTransactionsScreen = () => {
       }
 
       const response = await AuthFetch(url, token) as any;
-
+      console.log("333",response)
       if (response?.data?.success || response?.success) {
         const data = response?.data?.data || response?.data || {};
         if (page === 1) {

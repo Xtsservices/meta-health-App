@@ -95,11 +95,6 @@ const RevenueTabNavigator = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Revenue Dashboard</Text>
-      </View>
 
       {/* Tab Navigation with Slider */}
       <View style={styles.tabContainer}>

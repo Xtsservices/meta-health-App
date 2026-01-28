@@ -388,7 +388,12 @@ const ConsultationFeeScreen = () => {
     }
   };
 
-  const getStatusColor = (doctorApproval?: number, adminApproval?: number, status?: string) => {
+  const getStatusColor = (doctorApproval?: number, adminApproval?: number, status?: string, rejectedBy?: string, rejectionReason?: string) => {
+    // If there's a rejection reason and it was rejected by admin, show error color
+    if (rejectionReason && rejectedBy === 'ADMIN') {
+      return COLORS.error;
+    }
+    
     if (status === 'active') return COLORS.activeGreen;
     if (doctorApproval === 1 && adminApproval === 1) return COLORS.success;
     if (doctorApproval === 0 && adminApproval === 0) return COLORS.warning;
@@ -396,13 +401,19 @@ const ConsultationFeeScreen = () => {
     return COLORS.subText;
   };
 
-  const getStatusText = (doctorApproval?: number, adminApproval?: number, status?: string) => {
+  const getStatusText = (doctorApproval?: number, adminApproval?: number, status?: string, rejectedBy?: string, rejectionReason?: string) => {
+    // If there's a rejection reason and it was rejected by admin, show REJECTED
+    if (rejectionReason && rejectedBy === 'ADMIN') {
+      return 'REJECTED';
+    }
+    
     if (status === 'active') return 'ACTIVE';
     if (doctorApproval === 1 && adminApproval === 1) return 'APPROVED';
     if (doctorApproval === 0 && adminApproval === 0) return 'PENDING';
     if (doctorApproval === 1 && adminApproval === 0) return 'DOCTOR APPROVED';
     return 'UNKNOWN';
   };
+
 
   // Active Fee Card Component
   const ActiveFeeCard = () => {
@@ -452,8 +463,25 @@ const ConsultationFeeScreen = () => {
   };
 
   const FeeCard = ({ item }: { item: ConsultationFee }) => {
-    const statusColor = getStatusColor(item?.doctorApproval, item?.adminApproval);
-    const statusText = getStatusText(item?.doctorApproval, item?.adminApproval);
+    console.log("666777",item)
+    const statusColor = getStatusColor(item?.doctorApproval, item?.adminApproval, item?.status, item?.rejectedBy, item?.rejectionReason);
+    const statusText = getStatusText(item?.doctorApproval, item?.adminApproval, item?.status, item?.rejectedBy, item?.rejectionReason);
+    
+    // Determine admin status text based on rejection
+    const getAdminStatusText = () => {
+      if (item?.rejectionReason && item?.rejectedBy === 'ADMIN') {
+        return 'Rejected';
+      }
+      return item?.adminApproval === 1 ? 'Approved' : 'Pending';
+    };
+    
+    // Determine admin status color based on rejection
+    const getAdminStatusColor = () => {
+      if (item?.rejectionReason && item?.rejectedBy === 'ADMIN') {
+        return COLORS.error;
+      }
+      return item?.adminApproval === 1 ? COLORS.success : COLORS.warning;
+    };
     
     return (
       <TouchableOpacity
@@ -466,7 +494,7 @@ const ConsultationFeeScreen = () => {
       >
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Fee Proposal</Text>
-          <View style={[styles.tagBadge, { backgroundColor: COLORS.tagFee }]}>
+          <View style={[styles.tagBadge]}>
             <Text style={styles.tagText}>CONSULTATION FEE</Text>
           </View>
         </View>
@@ -486,6 +514,32 @@ const ConsultationFeeScreen = () => {
             </View>
           </View>
           
+          <View style={styles.approvalStatusRow}>
+            <View style={styles.approvalStatusItem}>
+              <Text style={styles.approvalStatusLabel}>Doctor:</Text>
+              <View style={[
+                styles.approvalBadge, 
+                { backgroundColor: item?.doctorApproval === 1 ? COLORS.success : COLORS.warning }
+              ]}>
+                <Text style={styles.approvalBadgeText}>
+                  {item?.doctorApproval === 1 ? 'Approved' : 'Pending'}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.approvalStatusItem}>
+              <Text style={styles.approvalStatusLabel}>Admin:</Text>
+              <View style={[
+                styles.approvalBadge, 
+                { backgroundColor: getAdminStatusColor() }
+              ]}>
+                <Text style={styles.approvalBadgeText}>
+                  {getAdminStatusText()}
+                </Text>
+              </View>
+            </View>
+          </View>
+          
           <View style={styles.dateRow}>
             <Text style={styles.dateText}>Proposed On: {formatDate(item?.createdAt)}</Text>
             <Text style={styles.dateText}>Start Date: {formatDate(item?.startDate)}</Text>
@@ -493,7 +547,7 @@ const ConsultationFeeScreen = () => {
           
           {item?.rejectionReason && (
             <View style={styles.rejectionBox}>
-              <Text style={styles.rejectionLabel}>Rejection Reason</Text>
+              <Text style={styles.rejectionLabel}>Rejection Reason - </Text>
               <Text style={styles.rejectionText}>{item?.rejectionReason}</Text>
             </View>
           )}
@@ -997,7 +1051,8 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 8 }),
     fontWeight: '800',
-    color: COLORS.card,
+    color: "#000000",
+    fontStyle:'italic'
   },
   
   // Info Grid
@@ -1021,6 +1076,35 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   
+  // Approval Status Row
+  approvalStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: SPACING.sm,
+    marginTop: SPACING.xs,
+  },
+  approvalStatusItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(6),
+  },
+  approvalStatusLabel: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
+    fontWeight: '700',
+    color: COLORS.subText,
+  },
+  approvalBadge: {
+    paddingHorizontal: moderateScale(8),
+    paddingVertical: moderateScale(3),
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  approvalBadgeText: {
+    color: COLORS.card,
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 8 }),
+    fontWeight: '800',
+  },
+  
   // Status Badge
   statusBadge: {
     paddingHorizontal: moderateScale(8),
@@ -1039,6 +1123,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: SPACING.sm,
+    marginTop: SPACING.xs,
   },
   dateText: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
@@ -1053,12 +1138,14 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
     borderColor: '#fee2e2',
+    marginTop: SPACING.xs,
   },
   rejectionLabel: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
     color: COLORS.error,
     fontWeight: '700',
     marginBottom: moderateScale(2),
+    fontStyle:'italic'
   },
   rejectionText: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
