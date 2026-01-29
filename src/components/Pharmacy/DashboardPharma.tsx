@@ -67,6 +67,7 @@ import {
   Package2Icon,
   CommissionIcon
 } from "../../utils/SvgIcons";
+import { DollarSign } from "lucide-react-native";
 
 // Types
 interface DashboardCounts {
@@ -390,7 +391,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Pharmacy Management Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Pharmacy Management</Text>
-            {items?.filter(item => ["sale", "orders", "tax", "stock", "add", "orderplacement","commission"].includes(item.key)).map((item) => (
+            {items?.filter(item => ["sale", "orders", "tax", "stock", "add", "orderplacement","commission","revenue"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -812,7 +813,8 @@ const DashboardPharma: React.FC = () => {
       onPress: () => go("PharmacyExpenses")
     },
 
-    
+     { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab      
+   
     // Support Section
               { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
     

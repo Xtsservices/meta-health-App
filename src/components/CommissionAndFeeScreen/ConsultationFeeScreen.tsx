@@ -824,7 +824,7 @@ const ConsultationFeeScreen = () => {
           {/* Pending Proposals Section */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              Pending Fee Proposals {fees.length > 0 && `(${fees.length})`}
+               Fee Proposals {fees.length > 0 && `(${fees.length})`}
             </Text>
           </View>
           

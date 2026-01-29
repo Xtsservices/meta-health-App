@@ -204,7 +204,7 @@ const HospitalComparisonScreen = () => {
   const insets = useSafeAreaInsets();
   const params = route.params as RouteParams;
   const user = useSelector((s: RootState) => s.currentUser);
-  
+  console.log("user",user)
   const [loading, setLoading] = useState(!params?.data);
   const [comparisonData, setComparisonData] = useState<any>(params?.data);
   const [filterType, setFilterType] = useState<string>(params?.filterType || "this_month");
@@ -621,13 +621,13 @@ if (totalRevenue === 0) {
             ]}
             onPress={() => setFilterType(filter)}
           >
-            <Text style={[
+            {/* <Text style={[
               styles.filterButtonText,
               { color: COLORS.text },
               filterType === filter && { color: "#fff" }
             ]}>
               {getFilterLabel(filter)}
-            </Text>
+            </Text> */}
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -659,7 +659,7 @@ if (totalRevenue === 0) {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {renderFilters()}
+        {/* {renderFilters()} */}
         {renderSummary()}
         {renderPieChart()}
         {renderPerformanceMetrics()}

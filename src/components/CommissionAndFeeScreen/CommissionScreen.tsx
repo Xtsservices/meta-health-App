@@ -17,13 +17,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { X } from 'lucide-react-native';
 import { AuthFetch, AuthPatch } from '../../auth/auth';
 import { RootState } from '../../store/store';
-import { 
-  formatDate, 
+import {
+  formatDate,
   formatDateTime,
-  convertTo12Hour 
+  convertTo12Hour
 } from '../../utils/dateTime';
-import { 
-  moderateScale, 
+import {
+  moderateScale,
   responsiveWidth,
   responsiveHeight,
   SPACING,
@@ -131,9 +131,9 @@ const CommissionScreen = () => {
   const [showCommissionModal, setShowCommissionModal] = useState(false);
   const [editCommission, setEditCommission] = useState('');
   const [pageLoading, setPageLoading] = useState(false);
-  
+
   const user = useSelector((state: RootState) => state.currentUser);
-  console.log("555",user)
+  console.log("555", user)
   const dispatch = useDispatch();
 
 
@@ -180,7 +180,8 @@ const CommissionScreen = () => {
         `user/doctorAssociation/doctorPending`,
         token
       ) as any;
-      
+      console.log("123", response)
+
       if (response?.status === 'success') {
         const commissionsData = response?.data?.data || [];
         setPendingCommissions(Array.isArray(commissionsData) ? commissionsData : []);
@@ -195,6 +196,7 @@ const CommissionScreen = () => {
   const loadActiveCommission = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
+      console.log("token111", token)
       if (!token || !user?.id || !user?.hospitalID) {
         setActiveCommission(null);
         return;
@@ -204,8 +206,8 @@ const CommissionScreen = () => {
         `user/doctorAssociation/active/${user.id}/${user.hospitalID}`,
         token
       ) as any;
-      console.log("666",response)
-      
+      console.log("666", response)
+
       if (response?.data?.success) {
         setActiveCommission(response?.data?.data || null);
       } else {
@@ -232,7 +234,7 @@ const CommissionScreen = () => {
         `user/doctorAssociation/history/${user.id}/${user.hospitalID}?page=${page}&limit=10&includeInactive=true`,
         token
       ) as any;
-      
+      console.log("yyyyyyyyyyy", response)
       if (response?.data?.success) {
         const historyData = response?.data?.data?.associations || [];
         if (page === 1) {
@@ -276,7 +278,7 @@ const CommissionScreen = () => {
         {},
         token
       ) as any;
-      
+
       if (response?.status === 'success') {
         showSuccess('Commission approved successfully');
         loadData(false);
@@ -307,8 +309,8 @@ const CommissionScreen = () => {
         { commissionPercentage: parseFloat(editCommission) },
         token
       ) as any;
-      console.log("555",response)
-      
+      console.log("555", response)
+
       if (response?.status === 'success') {
         showSuccess('Commission updated successfully');
         loadData(false);
@@ -322,29 +324,29 @@ const CommissionScreen = () => {
     }
   };
 
-const getDoctorStatusColor = (doctorApproval?: number) => {
-  return doctorApproval === 1 ? COLORS.success : COLORS.warning;
-};
+  const getDoctorStatusColor = (doctorApproval?: number) => {
+    return doctorApproval === 1 ? COLORS.success : COLORS.warning;
+  };
 
-const getAdminStatusColor = (adminApproval?: number) => {
-  return adminApproval === 1 ? COLORS.success : COLORS.warning;
-};
+  const getAdminStatusColor = (adminApproval?: number) => {
+    return adminApproval === 1 ? COLORS.success : COLORS.warning;
+  };
 
-const getDoctorStatusText = (doctorApproval?: number) => {
-  return doctorApproval === 1 ? 'APPROVED' : 'PENDING';
-};
+  const getDoctorStatusText = (doctorApproval?: number) => {
+    return doctorApproval === 1 ? 'APPROVED' : 'PENDING';
+  };
 
-const getAdminStatusText = (adminApproval?: number) => {
-  return adminApproval === 1 ? 'APPROVED' : 'PENDING';
-};
+  const getAdminStatusText = (adminApproval?: number) => {
+    return adminApproval === 1 ? 'APPROVED' : 'PENDING';
+  };
 
   const parseHistory = (history: any): any[] => {
     if (!history) return [];
-    
+
     if (Array.isArray(history)) {
       return history;
     }
-    
+
     if (typeof history === 'string') {
       try {
         const parsed = JSON.parse(history);
@@ -353,106 +355,106 @@ const getAdminStatusText = (adminApproval?: number) => {
         return [];
       }
     }
-    
+
     return [];
   };
 
-const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
-  console.log("999",item)
-  const commissionRate = parseFloat(item?.commissionPercentage || '0');
-  const consultationFee = parseFloat(item?.consultationFee || '0');
-  const doctorStatusColor = getDoctorStatusColor(item?.doctorApproval);
-  const doctorStatusText = getDoctorStatusText(item?.doctorApproval);
-  const adminStatusColor = getAdminStatusColor(item?.adminApproval);
-  const adminStatusText = getAdminStatusText(item?.adminApproval);
-  
-  return (
-    <View style={[styles.card, { borderColor: COLORS.border }]}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>Commission Proposal</Text>
-        <View style={[styles.tagBadge, { backgroundColor: COLORS.tagCommission }]}>
-          <Text style={styles.tagText}>PENDING</Text>
-        </View>
-      </View>
-      
-      <View style={styles.cardBody}>
-        <View style={styles.infoRow}>
-          <View style={styles.infoSection}>
-            <Text style={styles.fieldLabel}>Commission Rate</Text>
-            <Text style={styles.infoValue}>{commissionRate}%</Text>
-          </View>
-          
-          <View style={styles.infoSection}>
-            <Text style={styles.fieldLabel}>Consultation Fee</Text>
-            <Text style={styles.infoValue}>₹{consultationFee}</Text>
+  const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
+    console.log("999", item)
+    const commissionRate = parseFloat(item?.commissionPercentage || '0');
+    const consultationFee = parseFloat(item?.consultationFee || '0');
+    const doctorStatusColor = getDoctorStatusColor(item?.doctorApproval);
+    const doctorStatusText = getDoctorStatusText(item?.doctorApproval);
+    const adminStatusColor = getAdminStatusColor(item?.adminApproval);
+    const adminStatusText = getAdminStatusText(item?.adminApproval);
+
+    return (
+      <View style={[styles.card, { borderColor: COLORS.border }]}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Commission Proposal</Text>
+          <View style={[styles.tagBadge, { backgroundColor: COLORS.tagCommission }]}>
+            <Text style={styles.tagText}>PENDING</Text>
           </View>
         </View>
-        
-        {/* Doctor Approval Status */}
-        <View style={styles.statusRow}>
-          <View style={styles.infoSection}>
-            <Text style={styles.fieldLabel}>Doctor Approval</Text>
-            <View style={[styles.statusBadge, { backgroundColor: doctorStatusColor }]}>
-              <Text style={styles.statusText}>{doctorStatusText}</Text>
+
+        <View style={styles.cardBody}>
+          <View style={styles.infoRow}>
+            <View style={styles.infoSection}>
+              <Text style={styles.fieldLabel}>Commission Rate</Text>
+              <Text style={styles.infoValue}>{commissionRate}%</Text>
+            </View>
+
+            <View style={styles.infoSection}>
+              <Text style={styles.fieldLabel}>Consultation Fee</Text>
+              <Text style={styles.infoValue}>₹{consultationFee}</Text>
             </View>
           </View>
-          
-          {/* Admin Approval Status */}
-          <View style={styles.infoSection}>
-            <Text style={styles.fieldLabel}>Admin Approval</Text>
-            <View style={[styles.statusBadge, { backgroundColor: adminStatusColor }]}>
-              <Text style={styles.statusText}>{adminStatusText}</Text>
+
+          {/* Doctor Approval Status */}
+          <View style={styles.statusRow}>
+            <View style={styles.infoSection}>
+              <Text style={styles.fieldLabel}>Doctor Approval</Text>
+              <View style={[styles.statusBadge, { backgroundColor: doctorStatusColor }]}>
+                <Text style={styles.statusText}>{doctorStatusText}</Text>
+              </View>
+            </View>
+
+            {/* Admin Approval Status */}
+            <View style={styles.infoSection}>
+              <Text style={styles.fieldLabel}>Admin Approval</Text>
+              <View style={[styles.statusBadge, { backgroundColor: adminStatusColor }]}>
+                <Text style={styles.statusText}>{adminStatusText}</Text>
+              </View>
             </View>
           </View>
-        </View>
-        
-        <View style={styles.infoRow}>
-          <View style={styles.infoSection}>
-            <Text style={styles.fieldLabel}>Employment Type</Text>
-            <Text style={styles.infoValue}>{item?.employmentType || 'Not specified'}</Text>
+
+          <View style={styles.infoRow}>
+            <View style={styles.infoSection}>
+              <Text style={styles.fieldLabel}>Employment Type</Text>
+              <Text style={styles.infoValue}>{item?.employmentType || 'Not specified'}</Text>
+            </View>
+
           </View>
-        
-        </View>
-        
-        <View style={styles.dateRow}>
-          <Text style={styles.dateText}>Start Date: {formatDate(item?.startDate)}</Text>
-          {item?.endDate && (
-            <Text style={styles.dateText}>End Date: {formatDate(item?.endDate)}</Text>
+
+          <View style={styles.dateRow}>
+            <Text style={styles.dateText}>Start Date: {formatDate(item?.startDate)}</Text>
+            {item?.endDate && (
+              <Text style={styles.dateText}>End Date: {formatDate(item?.endDate)}</Text>
+            )}
+          </View>
+
+          {item?.doctorApproval === 0 && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.editButton]}
+                onPress={() => {
+                  setSelectedCommission(item);
+                  setEditCommission(commissionRate.toString());
+                  setShowCommissionModal(true);
+                }}
+              >
+                <Text style={styles.actionButtonText}>Edit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionButton, styles.approveButton]}
+                onPress={() => handleCommissionApprove(item?.id || 0)}
+              >
+                <Text style={styles.actionButtonText}>Approve</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
-        
-        {item?.doctorApproval === 0 && (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.editButton]}
-              onPress={() => {
-                setSelectedCommission(item);
-                setEditCommission(commissionRate.toString());
-                setShowCommissionModal(true);
-              }}
-            >
-              <Text style={styles.actionButtonText}>Edit</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.actionButton, styles.approveButton]}
-              onPress={() => handleCommissionApprove(item?.id || 0)}
-            >
-              <Text style={styles.actionButtonText}>Approve</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
-    </View>
-  );
-};
+    );
+  };
 
   const renderActiveCommissionCard = () => {
     if (!activeCommission) return null;
-    
+
     const commissionRate = parseFloat(activeCommission?.commissionPercentage || '0');
     const consultationFee = parseFloat(activeCommission?.consultationFee || '0');
-    
+
     return (
       <View style={[styles.card, { borderColor: COLORS.tagActive }]}>
         <View style={styles.cardHeader}>
@@ -461,48 +463,48 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
             <Text style={styles.tagText}>ACTIVE</Text>
           </View>
         </View>
-        
+
         <View style={styles.cardBody}>
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Commission Rate</Text>
               <Text style={styles.infoValue}>{commissionRate}%</Text>
             </View>
-            
+
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Consultation Fee</Text>
               <Text style={styles.infoValue}>₹{consultationFee}</Text>
             </View>
           </View>
-          
+
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Employment Type</Text>
               <Text style={styles.infoValue}>{activeCommission?.employmentType}</Text>
             </View>
-            
+
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Department</Text>
               <Text style={styles.infoValue}>{activeCommission?.departmentName}</Text>
             </View>
           </View>
-          
+
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Hospital</Text>
               <Text style={styles.infoValue}>{activeCommission?.hospitalName}</Text>
             </View>
-            
+
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Doctor</Text>
               <Text style={styles.infoValue}>{activeCommission?.firstName} {activeCommission?.lastName}</Text>
             </View>
           </View>
-          
+
           <View style={styles.dateRow}>
             <Text style={styles.dateText}>Start Date: {formatDate(activeCommission?.startDate)}</Text>
           </View>
-          
+
           {activeCommission?.workingTimings && Object.keys(activeCommission.workingTimings).length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Working Timings</Text>
@@ -510,7 +512,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
                 <View key={day} style={styles.timingRow}>
                   <Text style={styles.dayText}>{day.charAt(0).toUpperCase() + day.slice(1)}:</Text>
                   <Text style={styles.timingText}>
-                    {Array.isArray(timings) 
+                    {Array.isArray(timings)
                       ? timings.map(time => convertTo12Hour(time)).join(', ')
                       : 'Not specified'
                     }
@@ -525,57 +527,197 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
   };
 
   const renderHistoryCommissionCard = ({ item }: { item: CommissionItem }) => {
-    console.log("5656",item)
+    console.log("5656", item)
     const commissionRate = parseFloat(item?.commissionPercentage || '0');
     const consultationFee = parseFloat(item?.consultationFee || '0');
     const isActive = item?.active === 1;
     const tagColor = isActive ? COLORS.tagActive : COLORS.tagInactive;
     const tagText = isActive ? 'ACTIVE' : 'INACTIVE';
-    
+
+    // Get the latest edit action from commissionHistory
+    const commissionHistory = parseHistory(item?.commissionHistory);
+    const latestEdit = commissionHistory.length > 0
+      ? commissionHistory.find(h => h.action === 'edit') || commissionHistory[0]
+      : null;
+
+    // Get the editor name based on role
+    const getEditorName = (role: number) => {
+      switch (role) {
+        case 4001: return 'Doctor';
+        case 4002: return 'Nurse';
+        case 4003: return 'Pharmacist';
+        case 4004: return 'Lab Technician';
+        case 5001: return 'Hospital Admin';
+        case 5002: return 'Hospital Staff';
+        case 5003: return 'Super Admin';
+        default: return 'System';
+      }
+    };
+
+    // Format timestamp
+    const formatEditTime = (timestamp: string) => {
+      if (!timestamp) return '';
+      const date = new Date(timestamp);
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      }) + ' at ' + date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    };
+
+    // Get action icon/color
+    const getActionColor = (action: string) => {
+      switch (action) {
+        case 'edit': return COLORS.info;
+        case 'approve': return COLORS.success;
+        case 'reject': return COLORS.error;
+        case 'create': return COLORS.primary;
+        default: return COLORS.subText;
+      }
+    };
+
     return (
       <View style={[styles.card, { borderColor: COLORS.border }]}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Commission</Text>
+          <Text style={styles.cardTitle}>Commission Agreement</Text>
           <View style={[styles.tagBadge, { backgroundColor: tagColor }]}>
             <Text style={styles.tagText}>{tagText}</Text>
           </View>
         </View>
-        
+
         <View style={styles.cardBody}>
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Commission Rate</Text>
-              <Text style={styles.infoValue}>{commissionRate}%</Text>
+              <View style={styles.valueWithIcon}>
+                <Text style={styles.infoValue}>{commissionRate}%</Text>
+                {latestEdit && latestEdit.action === 'edit' && (
+                  <View style={[styles.changeIndicator, { backgroundColor: getActionColor('edit') }]}>
+                    <Text style={styles.changeIndicatorText}>
+                      {latestEdit.commissionPercentage}%
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
-            
+
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Consultation Fee</Text>
-              <Text style={styles.infoValue}>₹{consultationFee}</Text>
+              <Text style={styles.infoValue}>₹{consultationFee || '0'}</Text>
             </View>
           </View>
-          
+
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Employment Type</Text>
               <Text style={styles.infoValue}>{item?.employmentType}</Text>
             </View>
-            
+
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Status</Text>
-              <View style={[styles.statusBadge, { 
-                backgroundColor: item?.approvalStatus === 'approved' ? COLORS.success : COLORS.warning 
+              <View style={[styles.statusBadge, {
+                backgroundColor: item?.approvalStatus === 'approved' ? COLORS.success :
+                  item?.approvalStatus === 'pending' ? COLORS.warning :
+                    COLORS.error
               }]}>
-                <Text style={styles.statusText}>{item?.approvalStatus?.toUpperCase() || 'UNKNOWN'}</Text>
+                <Text style={styles.statusText}>
+                  {item?.approvalStatus?.toUpperCase() || 'UNKNOWN'}
+                </Text>
               </View>
             </View>
           </View>
-          
+
+          {/* Show edit details if available */}
+          {latestEdit && (
+            <View style={styles.editDetailsSection}>
+              <View style={styles.editHeader}>
+                <View style={[styles.actionBadge, { backgroundColor: getActionColor(latestEdit.action) }]}>
+                  <Text style={styles.actionBadgeText}>
+                    {latestEdit.action?.toUpperCase() || 'UPDATED'}
+                  </Text>
+                </View>
+                <Text style={styles.editTimestamp}>
+                  {formatEditTime(latestEdit.timestamp)}
+                </Text>
+              </View>
+
+              <View style={styles.editorInfo}>
+                <View style={styles.editorAvatar}>
+                  <Text style={styles.editorAvatarText}>
+                    {getEditorName(latestEdit.role)?.charAt(0)}
+                  </Text>
+                </View>
+                <View style={styles.editorDetails}>
+                  <Text style={styles.editorName}>
+                    {getEditorName(latestEdit.role)}
+                  </Text>
+                  <Text style={styles.editorRole}>
+                    {latestEdit.action === 'edit' ? 'Modified commission rate' : 'Processed request'}
+                  </Text>
+                </View>
+              </View>
+
+              {latestEdit.commissionPercentage && (
+                <View style={styles.changeDetails}>
+                  <Text style={styles.changeLabel}>Changed to:</Text>
+                  <View style={styles.changeValueContainer}>
+                    <Text style={styles.changeValue}>
+                      {latestEdit.commissionPercentage}%
+                    </Text>
+                    {item?.commissionPercentage && latestEdit.commissionPercentage !== parseFloat(item.commissionPercentage) && (
+                      <View style={styles.differenceIndicator}>
+                        <Text style={styles.differenceText}>
+                          {latestEdit.commissionPercentage > parseFloat(item.commissionPercentage) ? '↑' : '↓'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {latestEdit.reason && (
+                <View style={styles.reasonSection}>
+                  <Text style={styles.reasonLabel}>Reason:</Text>
+                  <Text style={styles.reasonText}>{latestEdit.reason}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
           <View style={styles.dateRow}>
-            <Text style={styles.dateText}>From: {formatDate(item?.startDate)}</Text>
+            <View style={styles.dateItem}>
+              <Text style={styles.dateLabel}>Effective Date</Text>
+              <Text style={styles.dateValue}>{formatDate(item?.startDate)}</Text>
+            </View>
+            {item?.endDate && (
+              <View style={styles.dateItem}>
+                <Text style={styles.dateLabel}>End Date</Text>
+                <Text style={styles.dateValue}>{formatDate(item?.endDate)}</Text>
+              </View>
+            )}
           </View>
-          
+
+          {/* Show all actions if more than one */}
+          {commissionHistory.length > 1 && (
+            <TouchableOpacity
+              style={styles.viewAllActionsButton}
+              onPress={() => {
+                setSelectedCommission(item);
+                setShowCommissionModal(true);
+              }}
+            >
+              <Text style={styles.viewAllActionsText}>
+                View all {commissionHistory.length} actions
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <Text style={styles.updatedText}>
-            Updated: {formatDateTime(item?.updatedOn)}
+            Last updated: {formatDateTime(item?.updatedOn)}
           </Text>
         </View>
       </View>
@@ -596,7 +738,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
         ]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Commission Details</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setShowCommissionModal(false)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -604,9 +746,9 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
               <X size={moderateScale(20)} color={COLORS.subText} />
             </TouchableOpacity>
           </View>
-          
+
           {selectedCommission && (
-            <ScrollView 
+            <ScrollView
               style={styles.modalBody}
               showsVerticalScrollIndicator={false}
             >
@@ -615,52 +757,52 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
                   <Text style={styles.detailLabel}>Commission ID</Text>
                   <Text style={styles.detailValue}>#{selectedCommission?.id}</Text>
                 </View>
-                
+
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Commission Rate</Text>
                   <Text style={styles.detailValue}>{parseFloat(selectedCommission?.commissionPercentage || '0')}%</Text>
                 </View>
-                
+
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Consultation Fee</Text>
                   <Text style={styles.detailValue}>₹{parseFloat(selectedCommission?.consultationFee || '0')}</Text>
                 </View>
-                
+
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Employment Type</Text>
                   <Text style={styles.detailValue}>{selectedCommission?.employmentType || 'Not specified'}</Text>
                 </View>
               </View>
-              
-<View style={styles.statusSection}>
-  <Text style={styles.sectionTitle}>Approval Status</Text>
-  <View style={styles.statusGrid}>
-    <View style={styles.statusItem}>
-      <Text style={styles.statusLabel}>Doctor Approval</Text>
-      <View style={[
-        styles.statusIndicator,
-        { backgroundColor: selectedCommission?.doctorApproval === 1 ? COLORS.success : COLORS.warning }
-      ]}>
-        <Text style={styles.statusIndicatorText}>
-          {selectedCommission?.doctorApproval === 1 ? 'Approved' : 'Pending'}
-        </Text>
-      </View>
-    </View>
-    
-    <View style={styles.statusItem}>
-      <Text style={styles.statusLabel}>Admin Approval</Text>
-      <View style={[
-        styles.statusIndicator,
-        { backgroundColor: selectedCommission?.adminApproval === 1 ? COLORS.success : COLORS.warning }
-      ]}>
-        <Text style={styles.statusIndicatorText}>
-          {selectedCommission?.adminApproval === 1 ? 'Approved' : 'Pending'}
-        </Text>
-      </View>
-    </View>
-  </View>
-</View>
-              
+
+              <View style={styles.statusSection}>
+                <Text style={styles.sectionTitle}>Approval Status</Text>
+                <View style={styles.statusGrid}>
+                  <View style={styles.statusItem}>
+                    <Text style={styles.statusLabel}>Doctor Approval</Text>
+                    <View style={[
+                      styles.statusIndicator,
+                      { backgroundColor: selectedCommission?.doctorApproval === 1 ? COLORS.success : COLORS.warning }
+                    ]}>
+                      <Text style={styles.statusIndicatorText}>
+                        {selectedCommission?.doctorApproval === 1 ? 'Approved' : 'Pending'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.statusItem}>
+                    <Text style={styles.statusLabel}>Admin Approval</Text>
+                    <View style={[
+                      styles.statusIndicator,
+                      { backgroundColor: selectedCommission?.adminApproval === 1 ? COLORS.success : COLORS.warning }
+                    ]}>
+                      <Text style={styles.statusIndicatorText}>
+                        {selectedCommission?.adminApproval === 1 ? 'Approved' : 'Pending'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
               <View style={styles.dateSection}>
                 <Text style={styles.sectionTitle}>Dates</Text>
                 <View style={styles.dateGrid}>
@@ -668,7 +810,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
                     <Text style={styles.dateLabel}>Start Date</Text>
                     <Text style={styles.dateValue}>{formatDate(selectedCommission?.startDate)}</Text>
                   </View>
-                  
+
                   {selectedCommission?.endDate && (
                     <View style={styles.dateItem}>
                       <Text style={styles.dateLabel}>End Date</Text>
@@ -677,7 +819,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
                   )}
                 </View>
               </View>
-              
+
               <View style={styles.historySection}>
                 <Text style={styles.sectionTitle}>Commission History</Text>
                 {parseHistory(selectedCommission?.commissionHistory)?.length > 0 ? (
@@ -701,7 +843,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
                   <Text style={styles.noHistoryText}>No history available</Text>
                 )}
               </View>
-              
+
               {selectedCommission?.doctorApproval === 0 && (
                 <>
                   <Text style={styles.editTitle}>Edit Commission Rate (%)</Text>
@@ -713,7 +855,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
                     onChangeText={setEditCommission}
                     keyboardType="numeric"
                   />
-                  
+
                   <View style={styles.modalActions}>
                     <TouchableOpacity
                       style={[styles.modalActionButton, styles.editActionButton]}
@@ -721,7 +863,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
                     >
                       <Text style={styles.modalActionButtonText}>Update</Text>
                     </TouchableOpacity>
-                  
+
                   </View>
                 </>
               )}
@@ -754,7 +896,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
             activeOpacity={0.7}
           >
             <Text style={[
-              styles.commissionTabText, 
+              styles.commissionTabText,
               activeCommissionTab === tab && styles.activeCommissionTabText
             ]}>
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -762,7 +904,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
           </TouchableOpacity>
         ))}
       </View>
-      
+
       {/* Content Area with Footer Space */}
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -772,13 +914,13 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
       ) : (
         <ScrollView
           style={styles.content}
-          contentContainerStyle={{ 
+          contentContainerStyle={{
             flexGrow: 1,
             paddingBottom: bottomPadding + responsiveHeight(10) // Space for footer
           }}
           refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
+            <RefreshControl
+              refreshing={refreshing}
               onRefresh={onRefresh}
               colors={[COLORS.primary]}
             />
@@ -839,7 +981,7 @@ const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
           )}
         </ScrollView>
       )}
-      
+
       {/* Modals */}
       {renderCommissionModal()}
     </View>
@@ -851,7 +993,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  
+
   // Commission Tab Styles
   commissionTabContainer: {
     flexDirection: 'row',
@@ -880,13 +1022,13 @@ const styles = StyleSheet.create({
   activeCommissionTabText: {
     color: COLORS.card,
   },
-  
+
   // Content Styles
   content: {
     flex: 1,
     padding: SPACING.md,
   },
-  
+
   // Loading Styles
   loadingContainer: {
     flex: 1,
@@ -899,12 +1041,12 @@ const styles = StyleSheet.create({
     color: COLORS.subText,
     fontWeight: '600',
   },
-  
+
   pageLoadingContainer: {
     padding: SPACING.lg,
     alignItems: 'center',
   },
-  
+
   // Card Styles
   card: {
     backgroundColor: COLORS.card,
@@ -941,7 +1083,7 @@ const styles = StyleSheet.create({
   cardBody: {
     gap: SPACING.sm,
   },
-  
+
   // Tag Badge
   tagBadge: {
     paddingHorizontal: moderateScale(10),
@@ -953,7 +1095,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.card,
   },
-  
+
   // Info Grid
   infoRow: {
     flexDirection: 'row',
@@ -974,7 +1116,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.text,
   },
-  
+
   // Status
   statusRow: {
     flexDirection: 'row',
@@ -992,7 +1134,7 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 8 }),
     fontWeight: '800',
   },
-  
+
   // Date Row
   dateRow: {
     flexDirection: 'row',
@@ -1004,15 +1146,210 @@ const styles = StyleSheet.create({
     color: COLORS.subText,
     fontWeight: '600',
   },
-  
-  // Updated Text
+  // Add these to your styles object
+  editActionSection: {
+    marginVertical: SPACING.xs,
+  },
+  editActionBadge: {
+    backgroundColor: COLORS.tagCommission,
+    paddingHorizontal: moderateScale(8),
+    paddingVertical: moderateScale(4),
+    borderRadius: BORDER_RADIUS.sm,
+    alignSelf: 'flex-start',
+    marginTop: moderateScale(2),
+  },
+  editActionText: {
+    color: COLORS.card,
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 8 }),
+    fontWeight: '800',
+  },
+  editedByText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    color: COLORS.subText,
+    fontStyle: 'italic',
+    marginBottom: moderateScale(4),
+  },
+  // Add these styles to your existing StyleSheet object
+
+  // Value with icon
+  valueWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(6),
+  },
+  changeIndicator: {
+    paddingHorizontal: moderateScale(6),
+    paddingVertical: moderateScale(2),
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  changeIndicatorText: {
+    color: COLORS.card,
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 8 }),
+    fontWeight: '800',
+  },
+
+  // Edit Details Section
+  editDetailsSection: {
+    backgroundColor: COLORS.chip,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginVertical: SPACING.xs,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  editHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  actionBadge: {
+    paddingHorizontal: moderateScale(10),
+    paddingVertical: moderateScale(4),
+    borderRadius: BORDER_RADIUS.round,
+  },
+  actionBadgeText: {
+    color: COLORS.card,
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 8 }),
+    fontWeight: '800',
+  },
+  editTimestamp: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    color: COLORS.subText,
+    fontWeight: '600',
+  },
+
+  // Editor Info
+  editorInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  editorAvatar: {
+    width: moderateScale(32),
+    height: moderateScale(32),
+    borderRadius: moderateScale(16),
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editorAvatarText: {
+    color: COLORS.card,
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontWeight: '800',
+  },
+  editorDetails: {
+    flex: 1,
+  },
+  editorName: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: moderateScale(2),
+  },
+  editorRole: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    color: COLORS.subText,
+    fontWeight: '600',
+  },
+
+  // Change Details
+  changeDetails: {
+    marginBottom: SPACING.sm,
+  },
+  changeLabel: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    color: COLORS.subText,
+    fontWeight: '600',
+    marginBottom: moderateScale(2),
+  },
+  changeValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  changeValue: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  differenceIndicator: {
+    backgroundColor: COLORS.success,
+    width: moderateScale(20),
+    height: moderateScale(20),
+    borderRadius: moderateScale(10),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  differenceText: {
+    color: COLORS.card,
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 8 }),
+    fontWeight: '800',
+  },
+
+  // Reason Section
+  reasonSection: {
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  reasonLabel: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    color: COLORS.subText,
+    fontWeight: '700',
+    marginBottom: moderateScale(2),
+  },
+  reasonText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    color: COLORS.text,
+    fontWeight: '600',
+    lineHeight: getResponsiveFontSize(FONT_SIZE.xs) * 1.4,
+  },
+
+  // Date Item
+  dateItem: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    color: COLORS.subText,
+    fontWeight: '600',
+    marginBottom: moderateScale(2),
+  },
+  dateValue: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+
+  // View All Actions Button
+  viewAllActionsButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    paddingVertical: moderateScale(8),
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  viewAllActionsText: {
+    color: COLORS.primary,
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontWeight: '700',
+  },
+
+  // Updated text with icon
   updatedText: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
     color: COLORS.subText,
     fontStyle: 'italic',
     textAlign: 'right',
+    marginTop: SPACING.xs,
   },
-  
   // Section
   section: {
     marginTop: SPACING.xs,
@@ -1040,7 +1377,7 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
   },
-  
+
   // Action Row
   actionRow: {
     flexDirection: 'row',
@@ -1065,7 +1402,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: getResponsiveFontSize(FONT_SIZE.xs),
   },
-  
+
   // Empty State
   emptyState: {
     flex: 1,
@@ -1088,7 +1425,7 @@ const styles = StyleSheet.create({
     lineHeight: getResponsiveFontSize(FONT_SIZE.sm) * 1.5,
     marginBottom: SPACING.lg,
   },
-  
+
   // Load More Button
   loadMoreButton: {
     backgroundColor: COLORS.chip,
@@ -1103,7 +1440,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: getResponsiveFontSize(FONT_SIZE.sm),
   },
-  
+
   // Modal Styles
   modalOverlay: {
     flex: 1,
@@ -1149,7 +1486,7 @@ const styles = StyleSheet.create({
   modalBody: {
     padding: SPACING.lg,
   },
-  
+
   // Modal Detail Sections
   detailGrid: {
     flexDirection: 'row',
@@ -1172,7 +1509,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.text,
   },
-  
+
   // Status Section in Modal
   statusSection: {
     marginBottom: SPACING.lg,
@@ -1201,7 +1538,7 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
     fontWeight: '800',
   },
-  
+
   // Date Section
   dateSection: {
     marginBottom: SPACING.lg,
@@ -1224,7 +1561,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
   },
-  
+
   // History Section
   historySection: {
     marginBottom: SPACING.lg,
@@ -1272,7 +1609,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     padding: SPACING.lg,
   },
-  
+
   // Edit Section
   editTitle: {
     fontSize: getResponsiveFontSize(FONT_SIZE.sm),
@@ -1280,7 +1617,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: SPACING.xs,
   },
-  
+
   // Input Styles
   input: {
     borderWidth: 1.5,
@@ -1293,7 +1630,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: SPACING.lg,
   },
-  
+
   // Modal Actions
   modalActions: {
     flexDirection: 'row',
@@ -1302,7 +1639,7 @@ const styles = StyleSheet.create({
   },
   modalActionButton: {
     flex: 1,
-    padding: SPACING.xs+2,
+    padding: SPACING.xs + 2,
     borderRadius: BORDER_RADIUS.lg,
     alignItems: 'center',
   },

@@ -16,6 +16,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Svg, { Circle, Path } from "react-native-svg";
+import LinearGradient from "react-native-linear-gradient";
 
 import {
   SCREEN_WIDTH,
@@ -64,6 +65,8 @@ import {
   PieChart,
   TrendingDown,
   DollarSign,
+  Clock,
+  Circle as CircleIcon,
 } from "lucide-react-native";
 
 /* ---------------- FILTER TYPES ---------------- */
@@ -80,24 +83,23 @@ const FILTER_TYPES = {
   ALL: "all",
 };
 
+const FILTER_LABELS = {
+  [FILTER_TYPES.TODAY]: "Today",
+  [FILTER_TYPES.THIS_WEEK]: " Week",
+  [FILTER_TYPES.LAST_MONTH]: "Month",
+  [FILTER_TYPES.THIS_YEAR]: " Year",
+  [FILTER_TYPES.LAST_WEEK]: "Last Week",
+  [FILTER_TYPES.THIS_MONTH]: "This Month",
+  [FILTER_TYPES.LAST_YEAR]: "Last Year",
+  [FILTER_TYPES.CUSTOM]: "Custom Date",
+  [FILTER_TYPES.ALL]: "All Time",
+};
+
 const GROUP_BY_OPTIONS = {
   HOSPITAL: "hospital",
   MONTH: "month",
   DATE: "date",
   SOURCE: "source",
-};
-
-const FILTER_LABELS = {
-  [FILTER_TYPES.TODAY]: "Today",
-  [FILTER_TYPES.YESTERDAY]: "Yesterday",
-  [FILTER_TYPES.THIS_WEEK]: "This Week",
-  [FILTER_TYPES.LAST_WEEK]: "Last Week",
-  [FILTER_TYPES.THIS_MONTH]: "This Month",
-  [FILTER_TYPES.LAST_MONTH]: "Last Month",
-  [FILTER_TYPES.THIS_YEAR]: "This Year",
-  [FILTER_TYPES.LAST_YEAR]: "Last Year",
-  [FILTER_TYPES.CUSTOM]: "Custom Date",
-  [FILTER_TYPES.ALL]: "All Time",
 };
 
 const GROUP_BY_LABELS = {
@@ -107,13 +109,23 @@ const GROUP_BY_LABELS = {
   [GROUP_BY_OPTIONS.SOURCE]: "By Source",
 };
 
-const darkenColor = (hex: string, amount: number = 0.2): string => {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const r = Math.max(0, (num >> 16) - 255 * amount);
-  const g = Math.max(0, ((num >> 8) & 0x00ff) - 255 * amount);
-  const b = Math.max(0, (num & 0x0000ff) - 255 * amount);
+/* ---------------- REVENUE STATUS ---------------- */
+const REVENUE_STATUS = {
+  PENDING: "pending",
+  PAID: "paid",
+  CANCELLED: "cancelled",
+};
 
-  return `rgb(${r},${g},${b})`;
+const REVENUE_STATUS_LABELS = {
+  [REVENUE_STATUS.PENDING]: "Pending",
+  [REVENUE_STATUS.PAID]: "Paid",
+  [REVENUE_STATUS.CANCELLED]: "Cancelled",
+};
+
+const STATUS_COLORS = {
+  pending: "#f59e0b",
+  paid: "#10b981",
+  cancelled: "#ef4444",
 };
 
 /* ---------------- COLORS ---------------- */
@@ -240,47 +252,15 @@ interface ComparisonData {
   };
 }
 
-interface Transaction {
-  id: number;
-  hospital: {
-    id: number;
-    name: string;
-    city: string;
-  };
-  patient: {
-    id: number;
-    name: string;
-    mobile: string;
-  };
-  consultationFee: number;
-  commissionPercentage: number;
-  doctorRevenue: number;
-  hospitalRevenue: number;
-  status: string;
-  source: string;
-  revenueType: string;
-  date: string;
-  createdAt: string;
-}
+/* ---------------- HELPER FUNCTIONS ---------------- */
+const darkenColor = (hex: string, amount: number = 0.35): string => {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.max(0, (num >> 16) - 255 * amount);
+  const g = Math.max(0, ((num >> 8) & 0x00ff) - 255 * amount);
+  const b = Math.max(0, (num & 0x0000ff) - 255 * amount);
 
-interface TransactionHistory {
-  transactions: Transaction[];
-  pagination: {
-    currentPage: number;
-    totalPages: number;
-    totalRecords: number;
-    limit: number;
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-  };
-  filters: {
-    filterType: string;
-    status: string;
-    source: string;
-    sortBy: string;
-    sortOrder: string;
-  };
-}
+  return `rgb(${r},${g},${b})`;
+};
 
 /* ---------------- METRIC CARD COMPONENT ---------------- */
 const MetricCard = ({
@@ -373,10 +353,18 @@ const SimpleBarChart = ({ data, title }: { data: any[]; title: string }) => {
   );
 };
 
-
-
-/* ---------------- 3D PIE CHART COMPONENT ---------------- */
-const RevenuePieChart = ({ data, size = 220, depth = 18 }) => {
+/* ---------------- STATUS PIE CHART COMPONENT ---------------- */
+const StatusPieChart = ({
+  data,
+  size = 220,
+  depth = 18,
+  showLegend = true
+}: {
+  data: any[];
+  size?: number;
+  depth?: number;
+  showLegend?: boolean;
+}) => {
   const total = data?.reduce((s, d) => s + (d?.value || 0), 0) || 1;
 
   const isSingleFullSlice =
@@ -406,12 +394,18 @@ const RevenuePieChart = ({ data, size = 220, depth = 18 }) => {
       Z
     `;
   };
+  const svgHeight = size * 0.75 + depth + 20;
 
   return (
-    <Svg width={size} height={size + depth} style={{ marginTop: moderateScale(10) }}>
-      {/* DEPTH */}
-      {isSingleFullSlice
-        ? Array.from({ length: depth }).map((_, z) => (
+    <View style={styles.pieChartContainer}>
+      <Svg
+        width={size}
+        height={svgHeight}
+        viewBox={`0 0 ${size} ${size}`}
+      >
+        {/* DEPTH */}
+        {isSingleFullSlice
+          ? Array.from({ length: depth }).map((_, z) => (
             <Circle
               key={`d-${z}`}
               cx={cx}
@@ -422,7 +416,7 @@ const RevenuePieChart = ({ data, size = 220, depth = 18 }) => {
               origin={`${cx} ${cy}`}
             />
           ))
-        : Array.from({ length: depth }).map((_, z) => {
+          : Array.from({ length: depth }).map((_, z) => {
             let a = 0;
             return data.map((d, i) => {
               const slice = ((d.value || 0) / total) * 360;
@@ -441,37 +435,61 @@ const RevenuePieChart = ({ data, size = 220, depth = 18 }) => {
             });
           })}
 
-      {/* TOP */}
-      {isSingleFullSlice ? (
-        <Circle
-          cx={cx}
-          cy={cy}
-          r={radius}
-          fill={data[0]?.color || COLORS.primary}
-          transform="scale(1 0.6)"
-          origin={`${cx} ${cy}`}
-        />
-      ) : (
-        (() => {
-          let a = 0;
-          return data.map((d, i) => {
-            const slice = ((d.value || 0) / total) * 360;
-            const p = arc(a, a + slice);
-            a += slice;
+        {/* TOP */}
+        {isSingleFullSlice ? (
+          <Circle
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill={data[0]?.color || COLORS.primary}
+            transform="scale(1 0.6)"
+            origin={`${cx} ${cy}`}
+          />
+        ) : (
+          (() => {
+            let a = 0;
+            return data.map((d, i) => {
+              const slice = ((d.value || 0) / total) * 360;
+              const p = arc(a, a + slice);
+              a += slice;
 
-            return (
-              <Path
-                key={`t-${i}`}
-                d={p}
-                fill={d.color || COLORS.primary}
-                transform="scale(1 0.6)"
-                origin={`${cx} ${cy}`}
+              return (
+                <Path
+                  key={`t-${i}`}
+                  d={p}
+                  fill={d.color || COLORS.primary}
+                  transform="scale(1 0.6)"
+                  origin={`${cx} ${cy}`}
+                />
+              );
+            });
+          })()
+        )}
+      </Svg>
+
+      {showLegend && (
+        <View style={styles.statusLegendContainer}>
+          {data?.map((item, index) => (
+            <View key={index} style={styles.statusLegendRow}>
+              <View
+                style={[
+                  styles.statusLegendDot,
+                  { backgroundColor: item?.color },
+                ]}
               />
-            );
-          });
-        })()
+              <View style={styles.statusLegendTextContainer}>
+                <Text style={styles.statusLegendLabel}>
+                  {item?.label}
+                </Text>
+                <Text style={styles.statusLegendValue}>
+                  {item?.value} ({((item?.value / total) * 100).toFixed(1)}%)
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
       )}
-    </Svg>
+    </View>
   );
 };
 
@@ -515,6 +533,8 @@ const CentralRevenueScreen = () => {
   const [filterType, setFilterType] = useState<string>(FILTER_TYPES.THIS_MONTH);
   const [groupBy, setGroupBy] = useState<string>(GROUP_BY_OPTIONS.HOSPITAL);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showStatsFilterModal, setShowStatsFilterModal] = useState(false);
+  const [statsFilterType, setStatsFilterType] = useState<string>(FILTER_TYPES.THIS_MONTH);
   const [authError, setAuthError] = useState(false);
 
   /* ---------------- HELPER FUNCTIONS ---------------- */
@@ -536,7 +556,6 @@ const CentralRevenueScreen = () => {
         `revenue/central/dashboard/${user.id}?filterType=${filterType}&groupBy=${groupBy}`,
         token
       ) as any;
-      console.log("111",response)
 
       if (response?.data?.success || response?.success) {
         const data = response?.data?.data || response?.data;
@@ -559,7 +578,7 @@ const CentralRevenueScreen = () => {
         `revenue/central/comparison/${user.id}?filterType=${filterType}`,
         token
       ) as any;
-      console.log("222",response)
+      console.log("56765####",response)
 
       if (response?.data?.success || response?.success) {
         const data = response?.data?.data || response?.data;
@@ -732,22 +751,41 @@ const CentralRevenueScreen = () => {
   const getStatusBreakdownData = () => {
     const breakdown = dashboardData?.summary?.statusBreakdown;
     
+    const pendingCount = breakdown?.pending?.count || 0;
+    const paidCount = breakdown?.paid?.count || 0;
+    const cancelledCount = breakdown?.cancelled?.count || 0;
+
     return [
       {
-        label: "Paid Appointments",
-        value: breakdown?.paid?.count || 0,
-        color: COLORS.success,
+        label: "Pending",
+        value: pendingCount,
+        color: STATUS_COLORS.pending,
       },
       {
-        label: "Pending Appointments",
-        value: breakdown?.pending?.count || 0,
-        color: COLORS.warning,
+        label: "Paid",
+        value: paidCount,
+        color: STATUS_COLORS.paid,
       },
       {
-        label: "Cancelled Appointments",
-        value: breakdown?.cancelled?.count || 0,
-        color: COLORS.error,
+        label: "Cancelled",
+        value: cancelledCount,
+        color: STATUS_COLORS.cancelled,
       },
+    ].filter(item => item.value > 0);
+  };
+
+  const getPerformanceMetricsData = () => {
+    const summary = dashboardData?.summary || {};
+    const avgConsultationFee = summary?.avgConsultationFee || 0;
+    const commissionPercentage = summary?.avgCommissionPercentage || 0;
+    const maxConsultationFee = summary?.maxConsultationFee || 0;
+    const minConsultationFee = summary?.minConsultationFee || 0;
+    
+    return [
+      { label: "Avg Consultation Fee", value: Math.round(avgConsultationFee), color: COLORS.chartBlue, prefix: "₹" },
+      { label: "Avg Commission %", value: commissionPercentage, color: COLORS.chartPurple },
+      { label: "Max Consultation Fee", value: maxConsultationFee, color: COLORS.primary, prefix: "₹" },
+      { label: "Min Consultation Fee", value: minConsultationFee, color: COLORS.chartPurple, prefix: "₹" },
     ]?.filter(item => (item?.value || 0) > 0);
   };
 
@@ -854,6 +892,91 @@ const CentralRevenueScreen = () => {
     </Modal>
   );
 
+  /* ---------------- STATS FILTER MODAL ---------------- */
+  const StatsFilterModal = () => {
+    const handleApplyFilters = () => {
+      setShowStatsFilterModal(false);
+      // If you want to filter stats separately, you can implement that here
+      // For now, we're just using the same filterType for everything
+    };
+
+    const handleResetFilters = () => {
+      setStatsFilterType(FILTER_TYPES.THIS_MONTH);
+    };
+
+    return (
+      <Modal
+        visible={showStatsFilterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowStatsFilterModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowStatsFilterModal(false)}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Stats Filter</Text>
+              <TouchableOpacity onPress={() => setShowStatsFilterModal(false)}>
+                <X size={22} color={COLORS.subText} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.filterScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* TIME PERIOD FILTER */}
+              <View style={styles.plainFilterList}>
+                {Object.entries(FILTER_LABELS).map(([key, label]) => {
+                  const selected = statsFilterType === key;
+
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={styles.plainFilterItem}
+                      onPress={() => setStatsFilterType(key)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.plainFilterText,
+                          selected && styles.plainFilterTextSelected,
+                        ]}
+                      >
+                        {label.trim()}
+                      </Text>
+
+                      {selected && <View style={styles.plainDot} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* APPLY BUTTON */}
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={handleApplyFilters}
+              >
+                <Text style={styles.applyButtonText}>Apply Filters</Text>
+              </TouchableOpacity>
+
+              {/* RESET BUTTON */}
+              <TouchableOpacity
+                style={styles.resetButton}
+                onPress={handleResetFilters}
+              >
+                <Text style={styles.resetButtonText}>Reset Filters</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
+
   /* ---------------- HANDLE NAVIGATION ---------------- */
   const handleViewAllTransactions = () => {
     navigation.navigate("CentralTransactions" as never, { 
@@ -894,6 +1017,7 @@ const CentralRevenueScreen = () => {
   const revenueBreakdownData = getRevenueBreakdownData();
   const hospitalComparisonData = getHospitalComparisonData();
   const statusBreakdownData = getStatusBreakdownData();
+  const performanceMetricsData = getPerformanceMetricsData();
   const safeArea = getSafeAreaInsets();
   const footerPadding = safeArea.bottom + SPACING.lg;
 
@@ -948,7 +1072,7 @@ const CentralRevenueScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* FILTER ROW */}
-        <View style={styles.filterRowTop}>
+        {/* <View style={styles.filterRowTop}>
           <TouchableOpacity 
             style={styles.settingsBtn}
             onPress={() => setShowFilterModal(true)}
@@ -960,7 +1084,33 @@ const CentralRevenueScreen = () => {
             </Text>
             <ChevronDown size={getResponsiveFontSize(14)} color="#ffffff" />
           </TouchableOpacity>
-        </View>
+        </View> */}
+
+        {/* STATS FILTER SELECTION */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.filtersContainer}
+          contentContainerStyle={styles.filtersContent}
+        >
+          {Object.entries(FILTER_LABELS).map(([key, label]) => (
+            <TouchableOpacity
+              key={key}
+              style={[
+                styles.filterButton,
+                filterType === key && styles.filterButtonActive
+              ]}
+              onPress={() => setFilterType(key)}
+            >
+              <Text style={[
+                styles.filterButtonText,
+                filterType === key && styles.filterButtonTextActive
+              ]}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         {/* METRICS GRID */}
         <View style={styles.metricsGrid}>
@@ -984,31 +1134,35 @@ const CentralRevenueScreen = () => {
           ))}
         </View>
 
-        {/* SUMMARY SECTION */}
-        <Text style={styles.sectionTitle}>Revenue Summary</Text>
-        <SimpleBarChart
-          title="Key Metrics"
-          data={summaryBarData}
-        />
+        {/* STATUS BREAKDOWN PIE CHART */}
+        <View style={styles.revenueOverviewHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Appointment Status</Text>
+            <Text style={styles.filterSubtitle}>
+              {FILTER_LABELS[filterType]}
+            </Text>
+          </View>
+        </View>
 
-        {/* REVENUE BREAKDOWN */}
-        <Text style={styles.sectionTitle}>Revenue Distribution</Text>
-        {revenueBreakdownData.length > 0 ? (
-          <View style={styles.revenueOverview}>
-            <View style={{ width: isTablet ? 300 : 240 }}>
-              <RevenuePieChart
-                data={revenueBreakdownData}
-                size={isTablet ? 280 : moderateScale(220)}
-              />
-            </View>
-            <RevenueLegend
-              data={revenueBreakdownData} 
+        {statusBreakdownData.length > 0 ? (
+          <View style={styles.statusPieChartContainer}>
+            <StatusPieChart
+              data={statusBreakdownData}
+              size={isTablet ? 280 : moderateScale(220)}
             />
           </View>
         ) : (
           <View style={styles.noDataContainer}>
-            <Text style={styles.noDataText}>No revenue data available</Text>
+            <Text style={styles.noDataText}>No appointment status data available</Text>
           </View>
+        )}
+
+        {/* PERFORMANCE METRICS */}
+        {performanceMetricsData.length > 0 && (
+          <SimpleBarChart
+            data={performanceMetricsData}
+            title="Performance Metrics"
+          />
         )}
 
 
@@ -1138,6 +1292,7 @@ const CentralRevenueScreen = () => {
 
       {/* MODALS */}
       <FilterModal />
+      <StatsFilterModal />
     </View>
   );
 };
@@ -1250,11 +1405,6 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
     maxWidth: wp(40),
   },
-  role: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    color: "rgba(255,255,255,0.8)",
-    fontWeight: "500",
-  },
   userInfo: {
     alignItems: "flex-end",
     marginBottom: SPACING.sm,
@@ -1306,12 +1456,58 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     marginBottom: SPACING.md,
   },
+  filtersContainer: {
+    marginBottom: SPACING.md,
+  },
+  filtersContent: {
+    gap: SPACING.xs,
+    paddingRight: SPACING.lg,
+  },
+  filterButton: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  filterButtonOne: {
+    paddingHorizontal: SPACING.xxl,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterButtonText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  filterButtonTextActive: {
+    color: "#ffffff",
+  },
   metricsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: SPACING.xs,
     justifyContent: "space-between",
     marginBottom: SPACING.lg,
+  },
+  revenueOverviewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: SPACING.md,
+    marginTop: SPACING.lg,
+  },
+  filterSubtitle: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: COLORS.subText,
+    marginTop: SPACING.xs,
   },
   sectionTitle: {
     fontSize: getResponsiveFontSize(FONT_SIZE.lg),
@@ -1401,72 +1597,58 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: BORDER_RADIUS.sm,
   },
-  hospitalChartContainer: {
-    marginTop: SPACING.sm,
+  pieChartContainer: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.md,
   },
-  hospitalRow: {
+  statusPieChartContainer: {
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  statusLegendContainer: {
+    width: wp(30),
+    marginLeft: SPACING.md,
+    marginTop: SPACING.md,
+  },
+  statusLegendRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: SPACING.md,
-    gap: SPACING.sm,
+    marginBottom: moderateScale(16),
   },
-  hospitalInfo: {
-    width: moderateScale(100),
+  statusLegendDot: {
+    width: moderateScale(12),
+    height: moderateScale(12),
+    borderRadius: moderateScale(6),
+    marginRight: SPACING.sm,
   },
-  hospitalName: {
+  statusLegendTextContainer: {
+    flex: 1,
+  },
+  statusLegendLabel: {
     fontSize: getResponsiveFontSize(FONT_SIZE.sm),
     fontWeight: "600",
     color: COLORS.text,
     marginBottom: moderateScale(2),
   },
-  hospitalCity: {
+  statusLegendValue: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs),
     color: COLORS.subText,
-  },
-  hospitalStats: {
-    flex: 1,
-  },
-  revenueBarContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: moderateScale(6),
-  },
-  revenueBarTrack: {
-    flex: 1,
-    height: moderateScale(12),
-    backgroundColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.sm,
-    overflow: "hidden",
-    marginRight: SPACING.sm,
-  },
-  revenueBarFill: {
-    height: "100%",
-    borderRadius: BORDER_RADIUS.sm,
-  },
-  revenueValue: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    fontWeight: "600",
-    color: COLORS.text,
-    minWidth: moderateScale(70),
-    textAlign: "right",
-  },
-  hospitalMetrics: {
-    flexDirection: "row",
-    gap: SPACING.xs,
-  },
-  metricBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: moderateScale(4),
-    backgroundColor: COLORS.borderLight,
-    paddingHorizontal: moderateScale(8),
-    paddingVertical: moderateScale(4),
-    borderRadius: BORDER_RADIUS.xs,
-  },
-  metricBadgeText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    color: COLORS.subText,
-    fontWeight: "500",
   },
   legendRow: {
     flexDirection: "row",
@@ -1559,36 +1741,6 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(FONT_SIZE.xs),
     fontWeight: "600",
   },
-  statusContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACING.md,
-  },
-  statusItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    minWidth: moderateScale(120),
-  },
-  statusDot: {
-    width: moderateScale(12),
-    height: moderateScale(12),
-    borderRadius: moderateScale(6),
-    marginRight: SPACING.sm,
-  },
-  statusContent: {
-    flex: 1,
-  },
-  statusLabel: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    color: COLORS.text,
-    marginBottom: moderateScale(2),
-  },
-  statusValue: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
-    fontWeight: "700",
-    color: COLORS.text,
-  },
   actionsGrid: {
     flexDirection: "row",
     gap: SPACING.md,
@@ -1638,6 +1790,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xl,
     backgroundColor: COLORS.card,
     borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.md,
   },
   noDataText: {
     fontSize: getResponsiveFontSize(FONT_SIZE.md),
@@ -1729,5 +1882,40 @@ const styles = StyleSheet.create({
     fontSize: getResponsiveFontSize(FONT_SIZE.md),
     color: "#ffffff",
     fontWeight: "600",
+  },
+  resetButton: {
+    backgroundColor: COLORS.border,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: "center",
+    marginTop: SPACING.md,
+  },
+  resetButtonText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    color: COLORS.text,
+    fontWeight: "600",
+  },
+  plainFilterList: {
+    marginTop: SPACING.md,
+  },
+  plainFilterItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: moderateScale(14),
+  },
+  plainFilterText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    color: COLORS.text,
+    fontWeight: "400",
+  },
+  plainFilterTextSelected: {
+    fontWeight: "700",
+  },
+  plainDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.text,
   },
 });

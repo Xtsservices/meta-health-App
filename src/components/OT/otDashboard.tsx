@@ -219,7 +219,7 @@ const Sidebar: React.FC<{
   ) ?? [];
   
   const operationsItems = items?.filter(item => 
-    ["slist", "emer", "ele", "mgmt"].includes(item.key)
+    ["slist", "emer", "ele", "mgmt","revenue"].includes(item.key)
   ) ?? [];
   
   const supportItems = items?.filter(item => 
@@ -732,6 +732,7 @@ const { setScreenType } = useOTConfig();
       setScreenType(OTScreenType.ELECTIVE); 
       go("PatientList");
     },},
+    { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") },    
     { key: "mgmt", label: "Management", icon: Settings, onPress: () => go("Management") },
     { key: "help", label: "Help", icon: HelpCircle, onPress: () => go("HelpScreen") },
   ];

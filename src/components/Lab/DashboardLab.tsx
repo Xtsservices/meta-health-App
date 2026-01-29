@@ -60,6 +60,7 @@ import {
   responsiveHeight 
 } from "../../utils/responsive";
 import { COLORS } from "../../utils/colour";
+import { DollarSign } from "lucide-react-native";
 
 // Types
 type XY = { x: number | string; y: number };
@@ -298,7 +299,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Operations Section  
   const operationsItems = items?.filter(item => 
-    ["management", "pricing","commission"].includes(item?.key)
+    ["revenue","management", "pricing","commission"].includes(item?.key)
   );
 
   // Support Section
@@ -813,7 +814,7 @@ const DashboardLab: React.FC = () => {
           department: departmentType 
         }),
       },
-      
+    { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab      
       // Operations Section
       {
         key: "management",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   TextInput,
   FlatList,
   Dimensions,
+  Alert,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
@@ -33,8 +34,10 @@ import {
   User,
   CreditCard,
   FileText,
+  Clock,
+  ArrowUpDown,
+  Tag,
 } from "lucide-react-native";
-import { Picker } from "@react-native-picker/picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -43,13 +46,36 @@ import { RootState } from "../../store/store";
 import { showError, showSuccess } from "../../store/toast.slice";
 import { formatDate, formatDateTime } from "../../utils/dateTime";
 import { COLORS } from "../../utils/colour";
-import { debounce, DEBOUNCE_DELAY } from "../../utils/debounce";
+import { debounce } from "../../utils/debounce";
 import RNFS from "react-native-fs";
 import Share from "react-native-share";
-import { Alert } from "react-native";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PAGE_SIZE = 20;
+
+/* ---------------- CONSTANTS ---------------- */
+const FILTER_TYPES = {
+  TODAY: "today",
+  YESTERDAY: "yesterday",
+  THIS_WEEK: "this_week",
+  LAST_WEEK: "last_week",
+  THIS_MONTH: "this_month",
+  LAST_MONTH: "last_month",
+  THIS_YEAR: "this_year",
+  ALL: "all",
+};
+
+const REVENUE_STATUS = {
+  PENDING: "pending",
+  PAID: "paid",
+  CANCELLED: "cancelled",
+};
+
+const REVENUE_SOURCE = {
+  CONSULTATION: "consultation",
+  SURGERY: "surgery",
+  MEDICINE: "medicine",
+};
 
 /* ---------------- TYPES ---------------- */
 interface Transaction {
@@ -80,6 +106,17 @@ interface RouteParams {
   groupBy?: string;
 }
 
+interface Filters {
+  filterType: string;
+  status: string;
+  source: string;
+  sortBy: "date" | "consultationFee" | "doctorRevenue" | "hospitalRevenue" | "hospitalName";
+  sortOrder: "ASC" | "DESC";
+  startDate: Date | null;
+  endDate: Date | null;
+  hospitalIDs: string;
+}
+
 /* ---------------- STATUS PILL COMPONENT ---------------- */
 const StatusPill = ({ status }: { status?: string }) => {
   const getStatusColor = () => {
@@ -100,15 +137,21 @@ const StatusPill = ({ status }: { status?: string }) => {
     }
   };
 
+  const getStatusIcon = (status?: string) => {
+    switch (status?.toLowerCase()) {
+      case 'paid': return <CheckCircle size={10} color="#fff" />;
+      case 'pending': return <Clock size={10} color="#fff" />;
+      case 'cancelled': return <XCircle size={10} color="#fff" />;
+      default: return <Clock size={10} color="#fff" />;
+    }
+  };
+
   return (
     <View style={[
       styles.statusPill,
       { backgroundColor: getStatusBgColor() }
     ]}>
-      <View style={[
-        styles.statusDot,
-        { backgroundColor: getStatusColor() }
-      ]} />
+      {getStatusIcon(status)}
       <Text style={[
         styles.statusText,
         { color: getStatusColor() }
@@ -154,6 +197,450 @@ const SourceBadge = ({ source }: { source?: string }) => {
   );
 };
 
+/* ---------------- FILTER OPTION COMPONENT ---------------- */
+const FilterOption = ({ 
+  label, 
+  value, 
+  isActive, 
+  onPress,
+  icon: Icon,
+  iconColor
+}: { 
+  label: string; 
+  value: string; 
+  isActive: boolean; 
+  onPress: (value: string) => void;
+  icon?: React.ComponentType<any>;
+  iconColor?: string;
+}) => (
+  <TouchableOpacity
+    style={[
+      styles.filterOption,
+      { backgroundColor: COLORS.card, borderColor: COLORS.border },
+      isActive && styles.filterOptionActive,
+    ]}
+    onPress={() => onPress(value)}
+    activeOpacity={0.7}
+  >
+    {Icon && <Icon size={14} color={isActive ? '#fff' : iconColor || COLORS.sub} style={styles.filterOptionIcon} />}
+    <Text style={[
+      styles.filterOptionText,
+      { color: isActive ? '#fff' : COLORS.text },
+    ]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+/* ---------------- FILTER MODAL COMPONENT ---------------- */
+const FilterModal = ({ 
+  visible, 
+  onClose, 
+  filters,
+  onApplyFilters,
+  onResetFilters 
+}: { 
+  visible: boolean;
+  onClose: () => void;
+  filters: Filters;
+  onApplyFilters: (filters: Filters) => void;
+  onResetFilters: () => void;
+}) => {
+  const [localFilters, setLocalFilters] = useState(filters);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  
+  // Update local filters when modal opens
+  useEffect(() => {
+    if (visible) {
+      setLocalFilters(filters);
+    }
+  }, [visible, filters]);
+
+  const handleApply = () => {
+    onApplyFilters(localFilters);
+  };
+
+  const handleReset = () => {
+    const resetFilters = {
+      filterType: FILTER_TYPES.THIS_MONTH,
+      status: "",
+      source: "",
+      sortBy: "date" as const,
+      sortOrder: "DESC" as const,
+      startDate: null,
+      endDate: null,
+      hospitalIDs: "",
+    };
+    setLocalFilters(resetFilters);
+    onResetFilters();
+  };
+
+  const getFilterLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      [FILTER_TYPES.TODAY]: "Today",
+      [FILTER_TYPES.YESTERDAY]: "Yesterday",
+      [FILTER_TYPES.THIS_WEEK]: "This Week",
+      [FILTER_TYPES.LAST_WEEK]: "Last Week",
+      [FILTER_TYPES.THIS_MONTH]: "This Month",
+      [FILTER_TYPES.LAST_MONTH]: "Last Month",
+      [FILTER_TYPES.THIS_YEAR]: "This Year",
+      [FILTER_TYPES.ALL]: "All Time",
+    };
+    return labels[type] || type.replace("_", " ").toUpperCase();
+  };
+
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case REVENUE_STATUS.PENDING: return "Pending";
+      case REVENUE_STATUS.PAID: return "Paid";
+      case REVENUE_STATUS.CANCELLED: return "Cancelled";
+      default: return "All";
+    }
+  };
+
+  const getSourceLabel = (source?: string) => {
+    switch (source) {
+      case REVENUE_SOURCE.CONSULTATION: return "Consultation";
+      case REVENUE_SOURCE.SURGERY: return "Surgery";
+      case REVENUE_SOURCE.MEDICINE: return "Medicine";
+      default: return "All";
+    }
+  };
+
+  const formatDisplayDate = (date: Date | null) => {
+    if (!date) return "";
+    return date.toLocaleDateString("en-GB");
+  };
+
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      setLocalFilters(prev => ({ ...prev, startDate: selectedDate }));
+    }
+  };
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setLocalFilters(prev => ({ ...prev, endDate: selectedDate }));
+    }
+  };
+
+  const clearDateFilters = () => {
+    setLocalFilters(prev => ({ ...prev, startDate: null, endDate: null }));
+  };
+
+  const hasDateFilters = localFilters.startDate || localFilters.endDate;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.filterModalOverlay}>
+        <View style={[styles.filterModalContent, { backgroundColor: COLORS.card }]}>
+          <View style={styles.filterModalHeader}>
+            <Text style={[styles.filterModalTitle, { color: COLORS.text }]}>
+              🔍 Advanced Filters
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <X size={24} color={COLORS.sub} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView 
+            style={styles.filterScroll}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.filterScrollContent}
+          >
+            {/* Time Period */}
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>
+                Time Period
+              </Text>
+              <View style={styles.filterOptions}>
+                {[
+                  FILTER_TYPES.TODAY,
+                  FILTER_TYPES.YESTERDAY,
+                  FILTER_TYPES.THIS_WEEK,
+                  FILTER_TYPES.LAST_WEEK,
+                  FILTER_TYPES.THIS_MONTH,
+                  FILTER_TYPES.LAST_MONTH,
+                  FILTER_TYPES.THIS_YEAR,
+                  FILTER_TYPES.ALL
+                ].map((period) => (
+                  <FilterOption
+                    key={period}
+                    label={getFilterLabel(period)}
+                    value={period}
+                    isActive={localFilters.filterType === period}
+                    onPress={(value) => setLocalFilters(prev => ({ ...prev, filterType: value }))}
+                    icon={Calendar}
+                    iconColor={COLORS.brand}
+                  />
+                ))}
+              </View>
+            </View>
+
+            {/* Status Filter */}
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>
+                Status
+              </Text>
+              <View style={styles.filterOptions}>
+                <FilterOption
+                  label="All Status"
+                  value=""
+                  isActive={localFilters.status === ""}
+                  onPress={(value) => setLocalFilters(prev => ({ ...prev, status: value }))}
+                  icon={CheckCircle}
+                  iconColor={COLORS.brand}
+                />
+                <FilterOption
+                  label="Pending"
+                  value={REVENUE_STATUS.PENDING}
+                  isActive={localFilters.status === REVENUE_STATUS.PENDING}
+                  onPress={(value) => setLocalFilters(prev => ({ ...prev, status: value }))}
+                  icon={Clock}
+                  iconColor={COLORS.warning}
+                />
+                <FilterOption
+                  label="Paid"
+                  value={REVENUE_STATUS.PAID}
+                  isActive={localFilters.status === REVENUE_STATUS.PAID}
+                  onPress={(value) => setLocalFilters(prev => ({ ...prev, status: value }))}
+                  icon={CheckCircle}
+                  iconColor={COLORS.success}
+                />
+                <FilterOption
+                  label="Cancelled"
+                  value={REVENUE_STATUS.CANCELLED}
+                  isActive={localFilters.status === REVENUE_STATUS.CANCELLED}
+                  onPress={(value) => setLocalFilters(prev => ({ ...prev, status: value }))}
+                  icon={XCircle}
+                  iconColor={COLORS.danger}
+                />
+              </View>
+            </View>
+
+            {/* Source Filter */}
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>
+                Source
+              </Text>
+              <View style={styles.filterOptions}>
+                <FilterOption
+                  label="All Sources"
+                  value=""
+                  isActive={localFilters.source === ""}
+                  onPress={(value) => setLocalFilters(prev => ({ ...prev, source: value }))}
+                  icon={Tag}
+                  iconColor={COLORS.brand}
+                />
+                <FilterOption
+                  label="Consultation"
+                  value={REVENUE_SOURCE.CONSULTATION}
+                  isActive={localFilters.source === REVENUE_SOURCE.CONSULTATION}
+                  onPress={(value) => setLocalFilters(prev => ({ ...prev, source: value }))}
+                  icon={Tag}
+                  iconColor={COLORS.brand}
+                />
+                <FilterOption
+                  label="Surgery"
+                  value={REVENUE_SOURCE.SURGERY}
+                  isActive={localFilters.source === REVENUE_SOURCE.SURGERY}
+                  onPress={(value) => setLocalFilters(prev => ({ ...prev, source: value }))}
+                  icon={Tag}
+                  iconColor={COLORS.brand}
+                />
+                <FilterOption
+                  label="Medicine"
+                  value={REVENUE_SOURCE.MEDICINE}
+                  isActive={localFilters.source === REVENUE_SOURCE.MEDICINE}
+                  onPress={(value) => setLocalFilters(prev => ({ ...prev, source: value }))}
+                  icon={Tag}
+                  iconColor={COLORS.brand}
+                />
+              </View>
+            </View>
+
+            {/* Date Range Filter */}
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>
+                Date Range
+              </Text>
+              <View style={styles.dateInputsContainer}>
+                <View style={styles.dateInputGroup}>
+                  <Text style={[styles.dateLabel, { color: COLORS.text }]}>From Date</Text>
+                  <TouchableOpacity
+                    style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}
+                    onPress={() => setShowStartDatePicker(true)}
+                  >
+                    <Calendar size={16} color={COLORS.sub} style={styles.dateIcon} />
+                    <Text style={[styles.dateInputText, { color: localFilters.startDate ? COLORS.text : COLORS.placeholder }]}>
+                      {localFilters.startDate ? formatDisplayDate(localFilters.startDate) : "Select start date"}
+                    </Text>
+                    {localFilters.startDate && (
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setLocalFilters(prev => ({ ...prev, startDate: null }));
+                        }}
+                        style={styles.clearDateButton}
+                      >
+                        <X size={14} color={COLORS.sub} />
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.dateInputGroup}>
+                  <Text style={[styles.dateLabel, { color: COLORS.text }]}>To Date</Text>
+                  <TouchableOpacity
+                    style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}
+                    onPress={() => setShowEndDatePicker(true)}
+                  >
+                    <Calendar size={16} color={COLORS.sub} style={styles.dateIcon} />
+                    <Text style={[styles.dateInputText, { color: localFilters.endDate ? COLORS.text : COLORS.placeholder }]}>
+                      {localFilters.endDate ? formatDisplayDate(localFilters.endDate) : "Select end date"}
+                    </Text>
+                    {localFilters.endDate && (
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setLocalFilters(prev => ({ ...prev, endDate: null }));
+                        }}
+                        style={styles.clearDateButton}
+                      >
+                        <X size={14} color={COLORS.sub} />
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {hasDateFilters && (
+                <TouchableOpacity 
+                  style={[styles.clearDateRangeButton, { backgroundColor: COLORS.dangerLight }]}
+                  onPress={clearDateFilters}
+                >
+                  <Text style={[styles.clearDateRangeText, { color: COLORS.danger }]}>Clear Date Range</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Hospital IDs Filter */}
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>
+                Hospital IDs (comma separated)
+              </Text>
+              <View style={[styles.hospitalInputContainer, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+                <TextInput
+                  placeholder="e.g., 1,2,3"
+                  placeholderTextColor={COLORS.placeholder}
+                  value={localFilters.hospitalIDs}
+                  onChangeText={(text) => setLocalFilters(prev => ({ ...prev, hospitalIDs: text }))}
+                  style={[styles.hospitalInput, { color: COLORS.text }]}
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
+            </View>
+
+            {/* Sort Options */}
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>
+                Sort By
+              </Text>
+              <View style={styles.sortContainer}>
+                <Text style={[styles.sortLabel, { color: COLORS.text }]}>Field:</Text>
+                <View style={styles.sortOptions}>
+                  {[
+                    { field: "date", label: "Date" },
+                    { field: "consultationFee", label: "Fee" },
+                    { field: "doctorRevenue", label: "Doctor Revenue" },
+                    { field: "hospitalRevenue", label: "Hospital Revenue" },
+                    { field: "hospitalName", label: "Hospital Name" },
+                  ].map(({ field, label }) => (
+                    <FilterOption
+                      key={field}
+                      label={label}
+                      value={field}
+                      isActive={localFilters.sortBy === field}
+                      onPress={(value) => setLocalFilters(prev => ({ ...prev, sortBy: value as any }))}
+                      icon={ArrowUpDown}
+                      iconColor={COLORS.brand}
+                    />
+                  ))}
+                </View>
+              </View>
+              
+              <View style={[styles.sortContainer, { marginTop: 12 }]}>
+                <Text style={[styles.sortLabel, { color: COLORS.text }]}>Order:</Text>
+                <View style={styles.sortOptions}>
+                  <FilterOption
+                    label="DESCENDING"
+                    value="DESC"
+                    isActive={localFilters.sortOrder === "DESC"}
+                    onPress={(value) => setLocalFilters(prev => ({ ...prev, sortOrder: value as any }))}
+                    icon={ArrowUpDown}
+                    iconColor={COLORS.brand}
+                  />
+                  <FilterOption
+                    label="ASCENDING"
+                    value="ASC"
+                    isActive={localFilters.sortOrder === "ASC"}
+                    onPress={(value) => setLocalFilters(prev => ({ ...prev, sortOrder: value as any }))}
+                    icon={ArrowUpDown}
+                    iconColor={COLORS.brand}
+                  />
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.filterModalButtons}>
+            <TouchableOpacity
+              style={[styles.filterModalButton, styles.resetButton]}
+              onPress={handleReset}
+            >
+              <Text style={[styles.resetButtonText, { color: COLORS.danger }]}>Reset All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterModalButton, { backgroundColor: COLORS.brand }]}
+              onPress={handleApply}
+            >
+              <Text style={styles.applyButtonText}>Apply Filters</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* Date Pickers */}
+      {showStartDatePicker && (
+        <DateTimePicker
+          value={localFilters.startDate || new Date()}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={handleStartDateChange}
+        />
+      )}
+      
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={localFilters.endDate || new Date()}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={handleEndDateChange}
+          minimumDate={localFilters.startDate || undefined}
+        />
+      )}
+    </Modal>
+  );
+};
+
 /* ======================= CENTRAL TRANSACTIONS SCREEN ======================= */
 const CentralTransactionsScreen = () => {
   const navigation = useNavigation();
@@ -167,26 +654,24 @@ const CentralTransactionsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState<string>(params?.filterType || "this_month");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("date");
-  const [sortOrder, setSortOrder] = useState<string>("DESC");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
   const [authError, setAuthError] = useState(false);
   const [fetchTrigger, setFetchTrigger] = useState(0);
   
-  // Date range filter state
-  const [showDateFilter, setShowDateFilter] = useState(false);
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [dateFilterApplied, setDateFilterApplied] = useState(false);
-  const [hospitalIDs, setHospitalIDs] = useState<string>("");
+  // All filters state combined
+  const [filters, setFilters] = useState<Filters>({
+    filterType: params?.filterType || FILTER_TYPES.THIS_MONTH,
+    status: "",
+    source: "",
+    sortBy: "date",
+    sortOrder: "DESC",
+    startDate: null,
+    endDate: null,
+    hospitalIDs: "",
+  });
 
   const flatRef = useRef<FlatList<Transaction>>(null);
 
@@ -207,27 +692,34 @@ const CentralTransactionsScreen = () => {
 
   const getFilterLabel = (type: string) => {
     const labels: Record<string, string> = {
-      "today": "Today",
-      "yesterday": "Yesterday",
-      "this_week": "This Week",
-      "last_week": "Last Week",
-      "this_month": "This Month",
-      "last_month": "Last Month",
-      "this_year": "This Year",
-      "all": "All Time",
+      [FILTER_TYPES.TODAY]: "Today",
+      [FILTER_TYPES.YESTERDAY]: "Yesterday",
+      [FILTER_TYPES.THIS_WEEK]: "This Week",
+      [FILTER_TYPES.LAST_WEEK]: "Last Week",
+      [FILTER_TYPES.THIS_MONTH]: "This Month",
+      [FILTER_TYPES.LAST_MONTH]: "Last Month",
+      [FILTER_TYPES.THIS_YEAR]: "This Year",
+      [FILTER_TYPES.ALL]: "All Time",
     };
     return labels[type] || type.replace("_", " ").toUpperCase();
   };
 
-  const getSortLabel = (sort: string) => {
-    const labels: Record<string, string> = {
-      "date": "Date",
-      "consultationFee": "Fee Amount",
-      "doctorRevenue": "Doctor Revenue",
-      "hospitalRevenue": "Hospital Revenue",
-      "hospitalName": "Hospital Name",
-    };
-    return labels[sort] || sort;
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case REVENUE_STATUS.PENDING: return "Pending";
+      case REVENUE_STATUS.PAID: return "Paid";
+      case REVENUE_STATUS.CANCELLED: return "Cancelled";
+      default: return "All";
+    }
+  };
+
+  const getSourceLabel = (source?: string) => {
+    switch (source) {
+      case REVENUE_SOURCE.CONSULTATION: return "Consultation";
+      case REVENUE_SOURCE.SURGERY: return "Surgery";
+      case REVENUE_SOURCE.MEDICINE: return "Medicine";
+      default: return "All";
+    }
   };
 
   /* ---------------- TOKEN VALIDATION ---------------- */
@@ -251,36 +743,38 @@ const CentralTransactionsScreen = () => {
   /* ---------------- LOAD TRANSACTIONS ---------------- */
   const loadTransactions = async (page: number = 1) => {
     try {
+      setLoading(true);
       const token = await AsyncStorage.getItem("token");
       if (!token || !user?.id) {
         dispatch(showError("Please login to continue"));
+        setAuthError(true);
         return;
       }
 
-      // Build URL with filters
+      // Build URL with all filters
       let url = `revenue/central/history/${user.id}?page=${page}&limit=${PAGE_SIZE}`;
       
+      // Add filterType
+      if (filters.filterType) {
+        url += `&filterType=${filters.filterType}`;
+      }
+      
       // Add status filter
-      if (statusFilter !== "all") {
-        url += `&status=${statusFilter}`;
+      if (filters.status) {
+        url += `&status=${filters.status}`;
       }
       
       // Add source filter
-      if (sourceFilter !== "all") {
-        url += `&source=${sourceFilter}`;
-      }
-      
-      // Add time period filter
-      if (filterType && filterType !== "all") {
-        url += `&filterType=${filterType}`;
+      if (filters.source) {
+        url += `&source=${filters.source}`;
       }
       
       // Add date range filter
-      if (dateFilterApplied && startDate && endDate) {
+      if (filters.startDate && filters.endDate) {
         const formatDateForAPI = (date: Date) => {
           return date.toISOString().split('T')[0]; // YYYY-MM-DD format
         };
-        url += `&startDate=${formatDateForAPI(startDate)}&endDate=${formatDateForAPI(endDate)}`;
+        url += `&startDate=${formatDateForAPI(filters.startDate)}&endDate=${formatDateForAPI(filters.endDate)}`;
       }
       
       // Add search filter
@@ -288,49 +782,76 @@ const CentralTransactionsScreen = () => {
         url += `&search=${encodeURIComponent(search.trim())}`;
       }
       
-      // Add sort parameters
-      if (sortBy && sortOrder) {
-        url += `&sortBy=${sortBy}&sortOrder=${sortOrder}`;
-      }
+      // Add sorting
+      url += `&sortBy=${filters.sortBy}&sortOrder=${filters.sortOrder}`;
       
       // Add hospital IDs filter
-      if (hospitalIDs.trim()) {
-        url += `&hospitalIDs=${hospitalIDs.trim()}`;
+      if (filters.hospitalIDs.trim()) {
+        url += `&hospitalIDs=${filters.hospitalIDs.trim()}`;
       }
 
+      console.log("Loading transactions with URL:", url);
       const response = await AuthFetch(url, token) as any;
-      console.log("333",response)
+      
       if (response?.data?.success || response?.success) {
         const data = response?.data?.data || response?.data || {};
+        const transactionsData = data.transactions || [];
+        const pagination = data.pagination || {};
+        
         if (page === 1) {
-          setTransactions(data.transactions || []);
+          setTransactions(transactionsData);
         } else {
-          setTransactions(prev => [...prev, ...(data.transactions || [])]);
+          setTransactions(prev => [...prev, ...transactionsData]);
         }
         setCurrentPage(page);
-        setHasMore(data.pagination?.hasNextPage || false);
-        setTotalRecords(data.pagination?.totalRecords || 0);
+        setHasMore(pagination?.hasNextPage || false);
+        setTotalRecords(pagination?.totalRecords || 0);
+      } else {
+        setTransactions([]);
+        setTotalRecords(0);
       }
     } catch (error) {
       console.error("Load transactions error:", error);
       dispatch(showError("Failed to load transactions"));
+      setTransactions([]);
+      setTotalRecords(0);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Debounced fetch function
-  const debouncedFetchRef = useRef(
+  // Debounced fetch function for search
+  const debouncedSearchRef = useRef(
     debounce(() => {
+      console.log("Debounced search triggered");
       loadTransactions(1);
-    }, DEBOUNCE_DELAY)
+    }, 500)
   );
 
   useEffect(() => {
-    debouncedFetchRef.current();
-  }, [fetchTrigger, filterType, statusFilter, sourceFilter, sortBy, sortOrder, dateFilterApplied, hospitalIDs]);
+    // Load data when filters change
+    console.log("Filters changed, loading data:", filters);
+    loadTransactions(1);
+  }, [
+    filters.filterType, 
+    filters.status, 
+    filters.source, 
+    filters.sortBy, 
+    filters.sortOrder,
+    filters.startDate,
+    filters.endDate,
+    filters.hospitalIDs
+  ]);
+
+  useEffect(() => {
+    // Debounced search
+    debouncedSearchRef.current();
+  }, [search]);
 
   useEffect(() => {
     return () => {
-      debouncedFetchRef.current.cancel();
+      debouncedSearchRef.current.cancel();
     };
   }, []);
 
@@ -350,7 +871,6 @@ const CentralTransactionsScreen = () => {
   const onRefresh = async () => {
     setRefreshing(true);
     await loadTransactions(1);
-    setRefreshing(false);
   };
 
   const loadMore = () => {
@@ -362,81 +882,28 @@ const CentralTransactionsScreen = () => {
   /* ---------------- FILTER HANDLERS ---------------- */
   const handleSearchChange = (text: string) => {
     setSearch(text);
-    triggerFetch();
   };
 
-  const handleStatusFilterChange = (value: string) => {
-    setStatusFilter(value);
-    triggerFetch();
+  const handleApplyFilters = (newFilters: Filters) => {
+    console.log("Applying new filters:", newFilters);
+    setFilters(newFilters);
+    setShowFilterModal(false);
   };
 
-  const handleSourceFilterChange = (value: string) => {
-    setSourceFilter(value);
-    triggerFetch();
-  };
-
-  const handleSortChange = (field: string) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === "ASC" ? "DESC" : "ASC");
-    } else {
-      setSortBy(field);
-      setSortOrder("DESC");
-    }
-    triggerFetch();
-  };
-
-  const handleTimeFilterChange = (value: string) => {
-    setFilterType(value);
-    triggerFetch();
-  };
-
-  const handleHospitalIDsChange = (text: string) => {
-    setHospitalIDs(text);
-  };
-
-  const applyHospitalIDsFilter = () => {
-    triggerFetch();
-  };
-
-  // Date range filter functions
-  const handleApplyDateFilter = () => {
-    if (startDate && endDate) {
-      if (startDate > endDate) {
-        dispatch(showError("Start date cannot be after end date"));
-        return;
-      }
-      setDateFilterApplied(true);
-      triggerFetch();
-      setShowDateFilter(false);
-    } else {
-      dispatch(showError("Please select both start and end dates"));
-    }
-  };
-
-  const handleClearDateFilter = () => {
-    setStartDate(null);
-    setEndDate(null);
-    setDateFilterApplied(false);
-    triggerFetch();
-  };
-
-  const handleStartDateChange = (event: any, selectedDate?: Date) => {
-    setShowStartDatePicker(false);
-    if (selectedDate) {
-      setStartDate(selectedDate);
-    }
-  };
-
-  const handleEndDateChange = (event: any, selectedDate?: Date) => {
-    setShowEndDatePicker(false);
-    if (selectedDate) {
-      setEndDate(selectedDate);
-    }
-  };
-
-  const formatDisplayDate = (date: Date | null) => {
-    if (!date) return "";
-    return date.toLocaleDateString("en-GB"); // DD/MM/YYYY format
+  const handleResetFilters = () => {
+    console.log("Resetting all filters");
+    setFilters({
+      filterType: FILTER_TYPES.THIS_MONTH,
+      status: "",
+      source: "",
+      sortBy: "date",
+      sortOrder: "DESC",
+      startDate: null,
+      endDate: null,
+      hospitalIDs: "",
+    });
+    setSearch("");
+    setShowFilterModal(false);
   };
 
   const handleExport = async () => {
@@ -508,27 +975,20 @@ const CentralTransactionsScreen = () => {
     }
   };
 
-  const clearAllFilters = () => {
-    setSearch("");
-    setFilterType("this_month");
-    setStatusFilter("all");
-    setSourceFilter("all");
-    setSortBy("date");
-    setSortOrder("DESC");
-    setStartDate(null);
-    setEndDate(null);
-    setDateFilterApplied(false);
-    setHospitalIDs("");
-    triggerFetch();
-  };
-
   const hasActiveFilters = search !== "" || 
-    filterType !== "this_month" || 
-    statusFilter !== "all" || 
-    sourceFilter !== "all" ||
-    sortBy !== "date" ||
-    dateFilterApplied ||
-    hospitalIDs !== "";
+    filters.filterType !== FILTER_TYPES.THIS_MONTH || 
+    filters.status !== "" || 
+    filters.source !== "" ||
+    filters.sortBy !== "date" ||
+    filters.sortOrder !== "DESC" ||
+    filters.startDate !== null ||
+    filters.endDate !== null ||
+    filters.hospitalIDs !== "";
+
+  const formatDisplayDate = (date: Date | null) => {
+    if (!date) return "";
+    return date.toLocaleDateString("en-GB");
+  };
 
   /* ---------------- COMPUTED VALUES ---------------- */
   const totalPages = Math.ceil(totalRecords / PAGE_SIZE);
@@ -587,385 +1047,111 @@ const CentralTransactionsScreen = () => {
         )}
       </View>
 
-      {/* Filter Toggle Button */}
-      <TouchableOpacity
-        style={[styles.filterToggle, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}
-        onPress={() => setShowFilters(!showFilters)}
-      >
-        <Filter size={16} color={COLORS.brand} />
-        <Text style={[styles.filterToggleText, { color: COLORS.text }]}>
-          {showFilters ? "Hide Filters" : "Show Filters"}
-        </Text>
-        {hasActiveFilters && (
-          <View style={styles.filterCountBadge}>
-            <Text style={styles.filterCountText}>
-              {[
-                filterType !== "this_month" ? 1 : 0,
-                statusFilter !== "all" ? 1 : 0,
-                sourceFilter !== "all" ? 1 : 0,
-                dateFilterApplied ? 1 : 0,
-                hospitalIDs !== "" ? 1 : 0,
-              ].reduce((a, b) => a + b, 0)}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      {/* Active Filters Badges */}
-      {hasActiveFilters && (
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterBadgesContainer}
-          contentContainerStyle={styles.filterBadgesContent}
-        >
-          {filterType !== "this_month" && (
-            <View style={styles.filterBadge}>
-              <Calendar size={12} color={COLORS.brand} />
-              <Text style={styles.filterBadgeText} numberOfLines={1}>
-                {getFilterLabel(filterType)}
-              </Text>
-            </View>
-          )}
-          
-          {statusFilter !== "all" && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText} numberOfLines={1}>
-                Status: {statusFilter.toUpperCase()}
-              </Text>
-            </View>
-          )}
-          
-          {sourceFilter !== "all" && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText} numberOfLines={1}>
-                Source: {sourceFilter.toUpperCase()}
-              </Text>
-            </View>
-          )}
-          
-          {dateFilterApplied && (
-            <View style={styles.filterBadge}>
-              <Calendar size={12} color={COLORS.brand} />
-              <Text style={styles.filterBadgeText} numberOfLines={1}>
-                Date Range
-              </Text>
-            </View>
-          )}
-          
-          {hospitalIDs !== "" && (
-            <View style={styles.filterBadge}>
-              <Building size={12} color={COLORS.brand} />
-              <Text style={styles.filterBadgeText} numberOfLines={1}>
-                Hospitals: {hospitalIDs}
-              </Text>
-            </View>
-          )}
-          
-          <TouchableOpacity onPress={clearAllFilters} style={styles.clearAllButton}>
-            <Text style={styles.clearAllText}>Clear All</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      )}
-    </View>
-  );
-
-  const renderFilters = () => {
-    if (!showFilters) return null;
-
-    return (
-      <View style={[styles.filtersContainer, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
-        <ScrollView 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.filtersContent}
-        >
-          {/* Time Period Filter */}
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>Time Period</Text>
-            <View style={styles.filterOptions}>
-              {["today", "this_week", "this_month", "this_year", "all"].map((period) => (
-                <TouchableOpacity
-                  key={period}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: COLORS.card, borderColor: COLORS.border },
-                    filterType === period && { backgroundColor: COLORS.brand, borderColor: COLORS.brand }
-                  ]}
-                  onPress={() => handleTimeFilterChange(period)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    { color: COLORS.text },
-                    filterType === period && { color: "#fff" }
-                  ]}>
-                    {getFilterLabel(period)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Status Filter */}
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>Status</Text>
-            <View style={styles.filterOptions}>
-              {["all", "pending", "paid", "cancelled"].map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: COLORS.card, borderColor: COLORS.border },
-                    statusFilter === status && { backgroundColor: COLORS.brand, borderColor: COLORS.brand }
-                  ]}
-                  onPress={() => handleStatusFilterChange(status)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    { color: COLORS.text },
-                    statusFilter === status && { color: "#fff" }
-                  ]}>
-                    {status.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Source Filter */}
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>Source</Text>
-            <View style={styles.filterOptions}>
-              {["all", "consultation", "surgery", "medicine"].map((source) => (
-                <TouchableOpacity
-                  key={source}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: COLORS.card, borderColor: COLORS.border },
-                    sourceFilter === source && { backgroundColor: COLORS.brand, borderColor: COLORS.brand }
-                  ]}
-                  onPress={() => handleSourceFilterChange(source)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    { color: COLORS.text },
-                    sourceFilter === source && { color: "#fff" }
-                  ]}>
-                    {source.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Sort Options */}
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>Sort By</Text>
-            <View style={styles.sortOptions}>
-              {[
-                { field: "date", label: "Date" },
-                { field: "consultationFee", label: "Fee" },
-                { field: "doctorRevenue", label: "Doctor Revenue" },
-                { field: "hospitalRevenue", label: "Hospital Revenue" },
-                { field: "hospitalName", label: "Hospital Name" },
-              ].map(({ field, label }) => (
-                <TouchableOpacity
-                  key={field}
-                  style={[
-                    styles.sortOption,
-                    { backgroundColor: COLORS.card, borderColor: COLORS.border },
-                    sortBy === field && { backgroundColor: COLORS.brand, borderColor: COLORS.brand }
-                  ]}
-                  onPress={() => handleSortChange(field)}
-                >
-                  <Text style={[
-                    styles.sortOptionText,
-                    { color: COLORS.text },
-                    sortBy === field && { color: "#fff" }
-                  ]}>
-                    {label}
-                  </Text>
-                  {sortBy === field && (
-                    <Text style={[
-                      styles.sortOrderIndicator,
-                      { color: "#fff" }
-                    ]}>
-                      {sortOrder === "ASC" ? "↑" : "↓"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Hospital IDs Filter */}
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>Hospital IDs (comma separated)</Text>
-            <View style={[styles.hospitalInputContainer, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
-              <TextInput
-                placeholder="e.g., 1,2,3"
-                placeholderTextColor={COLORS.placeholder}
-                value={hospitalIDs}
-                onChangeText={handleHospitalIDsChange}
-                style={[styles.hospitalInput, { color: COLORS.text }]}
-                keyboardType="numbers-and-punctuation"
-              />
-              <TouchableOpacity
-                style={[styles.applyHospitalButton, { backgroundColor: COLORS.brand }]}
-                onPress={applyHospitalIDsFilter}
-              >
-                <Text style={styles.applyHospitalText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Date Range Filter */}
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: COLORS.text }]}>Date Range</Text>
-            <TouchableOpacity
-              style={[styles.dateFilterButton, { 
-                backgroundColor: dateFilterApplied ? COLORS.brand : COLORS.card,
-                borderColor: dateFilterApplied ? COLORS.brand : COLORS.border 
-              }]}
-              onPress={() => setShowDateFilter(true)}
-            >
-              <Calendar size={16} color={dateFilterApplied ? "#fff" : COLORS.sub} />
-              <Text style={[styles.dateFilterButtonText, { 
-                color: dateFilterApplied ? "#fff" : COLORS.text 
-              }]}>
-                {dateFilterApplied ? 'Date Filter Applied' : 'Select Date Range'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Clear All Button */}
-          <TouchableOpacity
-            style={[styles.clearAllFiltersButton, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}
-            onPress={clearAllFilters}
-          >
-            <Text style={[styles.clearAllFiltersText, { color: COLORS.danger }]}>Clear All Filters</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    );
-  };
-
-  const renderDateFilterModal = () => (
-    <Modal
-      visible={showDateFilter}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => setShowDateFilter(false)}
-    >
-      <TouchableOpacity
-        style={styles.dateModalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowDateFilter(false)}
+      {/* Quick Filters Bar */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.quickFiltersContainer}
+        contentContainerStyle={styles.quickFiltersContent}
       >
         <TouchableOpacity
-          style={[styles.dateModalContent, { backgroundColor: COLORS.card }]}
-          activeOpacity={1}
-          onPress={(e) => e.stopPropagation()}
+          style={[styles.quickFilterButton, { backgroundColor: COLORS.card }]}
+          onPress={() => setShowFilterModal(true)}
         >
-          <View style={styles.dateModalHeader}>
-            <Text style={[styles.dateModalTitle, { color: COLORS.text }]}>
-              📅 Filter by Date
-            </Text>
-            <TouchableOpacity onPress={() => setShowDateFilter(false)}>
-              <X size={20} color={COLORS.sub} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.dateInputsContainer}>
-            {/* Start Date Input */}
-            <View style={styles.dateInputGroup}>
-              <Text style={[styles.dateLabel, { color: COLORS.text }]}>From Date</Text>
-              <TouchableOpacity
-                style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}
-                onPress={() => setShowStartDatePicker(true)}
-              >
-                <Calendar size={16} color={COLORS.sub} style={styles.dateIcon} />
-                <Text style={[styles.dateInputText, { color: startDate ? COLORS.text : COLORS.placeholder }]}>
-                  {startDate ? formatDisplayDate(startDate) : "Select start date"}
-                </Text>
-                {startDate && (
-                  <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setStartDate(null);
-                    }}
-                    style={styles.clearDateButton}
-                  >
-                    <X size={14} color={COLORS.sub} />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* End Date Input */}
-            <View style={styles.dateInputGroup}>
-              <Text style={[styles.dateLabel, { color: COLORS.text }]}>To Date</Text>
-              <TouchableOpacity
-                style={[styles.dateInputWrapper, { borderColor: COLORS.border }]}
-                onPress={() => setShowEndDatePicker(true)}
-              >
-                <Calendar size={16} color={COLORS.sub} style={styles.dateIcon} />
-                <Text style={[styles.dateInputText, { color: endDate ? COLORS.text : COLORS.placeholder }]}>
-                  {endDate ? formatDisplayDate(endDate) : "Select end date"}
-                </Text>
-                {endDate && (
-                  <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setEndDate(null);
-                    }}
-                    style={styles.clearDateButton}
-                  >
-                    <X size={14} color={COLORS.sub} />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Date Range Summary */}
-          {(startDate || endDate) && (
-            <View style={[styles.dateRangeSummary, { backgroundColor: COLORS.bg }]}>
-              <Text style={[styles.dateRangeText, { color: COLORS.text }]}>
-                📌 Selected Range: {startDate ? formatDisplayDate(startDate) : "Start"} 
-                {" → "} 
-                {endDate ? formatDisplayDate(endDate) : "End"}
-              </Text>
-              <TouchableOpacity onPress={handleClearDateFilter} style={styles.clearRangeButton}>
-                <Text style={[styles.clearRangeText, { color: COLORS.danger }]}>Clear</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <Text style={[styles.dateFormatHint, { color: COLORS.sub }]}>
-            Select dates to filter transactions by transaction date
+          <Filter size={14} color={COLORS.brand} />
+          <Text style={[styles.quickFilterText, { color: COLORS.text }]}>
+            Filters
           </Text>
-
-          <View style={styles.dateModalButtons}>
-            <TouchableOpacity
-              style={[styles.dateModalButton, styles.cancelButton, { borderColor: COLORS.border }]}
-              onPress={() => setShowDateFilter(false)}
-            >
-              <Text style={[styles.cancelButtonText, { color: COLORS.danger }]}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.dateModalButton, { 
-                backgroundColor: (startDate && endDate) ? COLORS.brand : COLORS.sub,
-                opacity: (startDate && endDate) ? 1 : 0.5 
-              }]}
-              onPress={handleApplyDateFilter}
-              disabled={!startDate || !endDate}
-            >
-              <Text style={styles.applyButtonText}>Apply Filter</Text>
-            </TouchableOpacity>
-          </View>
         </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
+
+        {/* Time Period Quick Filter */}
+        <TouchableOpacity
+          style={[
+            styles.quickFilterButton,
+            { backgroundColor: filters.filterType !== FILTER_TYPES.THIS_MONTH ? COLORS.brandLight : COLORS.card }
+          ]}
+          onPress={() => setShowFilterModal(true)}
+        >
+          <Calendar size={14} color={filters.filterType !== FILTER_TYPES.THIS_MONTH ? COLORS.brand : COLORS.sub} />
+          <Text style={[
+            styles.quickFilterText,
+            { color: filters.filterType !== FILTER_TYPES.THIS_MONTH ? COLORS.brand : COLORS.text }
+          ]}>
+            {getFilterLabel(filters.filterType)}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Status Quick Filter */}
+        <TouchableOpacity
+          style={[
+            styles.quickFilterButton,
+            { backgroundColor: filters.status ? COLORS.brandLight : COLORS.card }
+          ]}
+          onPress={() => setShowFilterModal(true)}
+        >
+          <CheckCircle size={14} color={filters.status ? COLORS.brand : COLORS.sub} />
+          <Text style={[
+            styles.quickFilterText,
+            { color: filters.status ? COLORS.brand : COLORS.text }
+          ]}>
+            {getStatusLabel(filters.status)}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Source Quick Filter */}
+        <TouchableOpacity
+          style={[
+            styles.quickFilterButton,
+            { backgroundColor: filters.source ? COLORS.brandLight : COLORS.card }
+          ]}
+          onPress={() => setShowFilterModal(true)}
+        >
+          <Tag size={14} color={filters.source ? COLORS.brand : COLORS.sub} />
+          <Text style={[
+            styles.quickFilterText,
+            { color: filters.source ? COLORS.brand : COLORS.text }
+          ]}>
+            {getSourceLabel(filters.source)}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Date Range Quick Filter */}
+        {(filters.startDate || filters.endDate) && (
+          <TouchableOpacity
+            style={[styles.quickFilterButton, { backgroundColor: COLORS.brandLight }]}
+            onPress={() => setShowFilterModal(true)}
+          >
+            <Calendar size={14} color={COLORS.brand} />
+            <Text style={[styles.quickFilterText, { color: COLORS.brand }]}>
+              {filters.startDate && filters.endDate 
+                ? `${formatDisplayDate(filters.startDate)}-${formatDisplayDate(filters.endDate)}`
+                : 'Date Range'
+              }
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Hospital IDs Quick Filter */}
+        {filters.hospitalIDs !== "" && (
+          <TouchableOpacity
+            style={[styles.quickFilterButton, { backgroundColor: COLORS.brandLight }]}
+            onPress={() => setShowFilterModal(true)}
+          >
+            <Building size={14} color={COLORS.brand} />
+            <Text style={[styles.quickFilterText, { color: COLORS.brand }]}>
+              Hospitals Filter
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Clear All Button */}
+        {hasActiveFilters && (
+          <TouchableOpacity onPress={handleResetFilters} style={styles.clearAllButton}>
+            <Text style={styles.clearAllText}>Clear All</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </View>
   );
 
   const renderEmpty = () => (
@@ -978,7 +1164,7 @@ const CentralTransactionsScreen = () => {
           : "No transactions available for the selected period."}
       </Text>
       {hasActiveFilters && (
-        <TouchableOpacity style={[styles.clearEmptyButton, { backgroundColor: COLORS.brand }]} onPress={clearAllFilters}>
+        <TouchableOpacity style={[styles.clearEmptyButton, { backgroundColor: COLORS.brand }]} onPress={handleResetFilters}>
           <Text style={styles.clearEmptyButtonText}>Clear Filters</Text>
         </TouchableOpacity>
       )}
@@ -1146,7 +1332,6 @@ const CentralTransactionsScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
       
       {renderHeader()}
-      {renderFilters()}
 
       {loading && transactions.length === 0 ? (
         <View style={styles.loadingWrap}>
@@ -1181,27 +1366,14 @@ const CentralTransactionsScreen = () => {
         />
       )}
 
-      {renderDateFilterModal()}
-      
-      {/* Date Pickers */}
-      {showStartDatePicker && (
-        <DateTimePicker
-          value={startDate || new Date()}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={handleStartDateChange}
-        />
-      )}
-      
-      {showEndDatePicker && (
-        <DateTimePicker
-          value={endDate || new Date()}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={handleEndDateChange}
-          minimumDate={startDate || undefined}
-        />
-      )}
+      {/* Filter Modal */}
+      <FilterModal
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        filters={filters}
+        onApplyFilters={handleApplyFilters}
+        onResetFilters={handleResetFilters}
+      />
     </SafeAreaView>
   );
 };
@@ -1287,62 +1459,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     includeFontPadding: false,
   },
-  filterToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignSelf: "flex-start",
+  quickFiltersContainer: {
+    marginTop: 8,
   },
-  filterToggleText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  filterCountBadge: {
-    backgroundColor: COLORS.danger,
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 4,
-  },
-  filterCountText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  filterBadgesContainer: {
-    marginTop: 4,
-  },
-  filterBadgesContent: {
+  quickFiltersContent: {
     gap: 8,
     paddingRight: 20,
   },
-  filterBadge: {
+  quickFilterButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: COLORS.brandLight,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.brand,
+    borderColor: COLORS.border,
   },
-  filterBadgeText: {
+  quickFilterText: {
     fontSize: 12,
-    color: COLORS.brand,
     fontWeight: "600",
-    flexShrink: 1,
   },
   clearAllButton: {
     backgroundColor: COLORS.dangerLight,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.danger,
@@ -1352,215 +1493,160 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
     fontWeight: "600",
   },
-  filtersContainer: {
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    paddingVertical: 12,
-    maxHeight: 400,
-  },
-  filtersContent: {
-    paddingHorizontal: 16,
-    gap: 16,
-  },
-  filterSection: {
-    gap: 8,
-  },
-  filterSectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  filterOptions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  filterOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  filterOptionText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  sortOptions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  sortOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  sortOptionText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  sortOrderIndicator: {
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  hospitalInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  hospitalInput: {
-    flex: 1,
-    fontSize: 15,
-    includeFontPadding: false,
-  },
-  applyHospitalButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  applyHospitalText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  dateFilterButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    height: 48,
-  },
-  dateFilterButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  clearAllFiltersButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  clearAllFiltersText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  // Date Filter Modal Styles
-  dateModalOverlay: {
+  // Filter Modal Styles
+  filterModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    justifyContent: 'flex-end',
   },
-  dateModalContent: {
-    width: '90%',
-    maxWidth: 500,
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+  filterModalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
   },
-  dateModalHeader: {
+  filterModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  dateModalTitle: {
+  filterModalTitle: {
     fontSize: 18,
     fontWeight: '700',
   },
-  dateInputsContainer: {
-    gap: 16,
+  filterScroll: {
+    padding: 20,
+  },
+  filterScrollContent: {
+    paddingBottom: 20,
+  },
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
     marginBottom: 12,
+    color: COLORS.text,
+  },
+  filterOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  filterOptionActive: {
+    backgroundColor: COLORS.brand,
+    borderColor: COLORS.brand,
+  },
+  filterOptionIcon: {
+    marginRight: 6,
+  },
+  filterOptionText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  // Date Filter Styles
+  dateInputsContainer: {
+    gap: 12,
   },
   dateInputGroup: {
     gap: 6,
   },
   dateLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   dateInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    height: 48,
+    height: 44,
   },
   dateIcon: {
     marginRight: 10,
   },
   dateInputText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     includeFontPadding: false,
   },
   clearDateButton: {
     padding: 4,
     marginLeft: 8,
   },
-  dateRangeSummary: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  clearDateRangeButton: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    alignSelf: 'flex-start',
+    marginTop: 8,
   },
-  dateRangeText: {
-    fontSize: 13,
-    fontWeight: '500',
-    flex: 1,
-  },
-  clearRangeButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  clearRangeText: {
+  clearDateRangeText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  dateFormatHint: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginBottom: 20,
-  },
-  dateModalButtons: {
+  // Hospital Input Styles
+  hospitalInputContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  hospitalInput: {
+    flex: 1,
+    fontSize: 14,
+    includeFontPadding: false,
+  },
+  // Sort Options Styles
+  sortContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sortLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    width: 60,
+  },
+  sortOptions: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterModalButtons: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
     gap: 12,
   },
-  dateModalButton: {
+  filterModalButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  cancelButton: {
-    borderWidth: 1.5,
+  resetButton: {
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  cancelButtonText: {
+  resetButtonText: {
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1618,11 +1704,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 20,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   statusText: {
     fontSize: 10,

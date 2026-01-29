@@ -36,6 +36,7 @@ import {
   Receipt,
   Bed,
   X,
+  DollarSign,
 } from 'lucide-react-native';
 import { PieChart } from 'react-native-chart-kit';
 
@@ -931,7 +932,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Patient Management Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Patient Management</Text>
-            {items?.filter(item => ["patients", "records", "appointments","commission"].includes(item.key)).map((item) => (
+            {items?.filter(item => ["patients", "records", "appointments","commission","revenue"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -1247,7 +1248,9 @@ const DashboardReception: React.FC = () => {
       icon: Stethoscope, 
       onPress: () => go("DoctorManagement") 
     },
-                  { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
+        { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab      
+
+        { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
     
   ];
 

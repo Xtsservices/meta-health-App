@@ -11,6 +11,7 @@ import {
   Platform,
   StatusBar,
   Modal,
+  Dimensions,
 } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -60,42 +61,41 @@ import {
   X,
   BarChart3,
   TrendingUp,
+  Clock,
+  DollarSign,
+  PieChart,
+  TrendingDown,
+  Circle as CircleIcon,
 } from "lucide-react-native";
+import LinearGradient from "react-native-linear-gradient";
+import RevenueBarChartWithFilters from "./RevenueBarChartWithFilters";
 
-/* ---------------- FILTER TYPES ---------------- */
+/* ---------------- SIMPLIFIED FILTER TYPES ---------------- */
 const FILTER_TYPES = {
   TODAY: "today",
-  YESTERDAY: "yesterday",
   THIS_WEEK: "this_week",
-  LAST_WEEK: "last_week",
   THIS_MONTH: "this_month",
-  LAST_MONTH: "last_month",
   THIS_YEAR: "this_year",
-  LAST_YEAR: "last_year",
-  CUSTOM: "custom",
-  ALL: "all",
 };
 
 const FILTER_LABELS = {
   [FILTER_TYPES.TODAY]: "Today",
-  [FILTER_TYPES.YESTERDAY]: "Yesterday",
-  [FILTER_TYPES.THIS_WEEK]: "This Week",
-  [FILTER_TYPES.LAST_WEEK]: "Last Week",
-  [FILTER_TYPES.THIS_MONTH]: "This Month",
-  [FILTER_TYPES.LAST_MONTH]: "Last Month",
-  [FILTER_TYPES.THIS_YEAR]: "This Year",
-  [FILTER_TYPES.LAST_YEAR]: "Last Year",
-  [FILTER_TYPES.CUSTOM]: "Custom Date",
-  [FILTER_TYPES.ALL]: "All Time",
+  [FILTER_TYPES.THIS_WEEK]: " Week",
+  [FILTER_TYPES.THIS_MONTH]: " Month",
+  [FILTER_TYPES.THIS_YEAR]: " Year",
 };
 
-const darkenColor = (hex: string, amount: number = 0.2): string => {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const r = Math.max(0, (num >> 16) - 255 * amount);
-  const g = Math.max(0, ((num >> 8) & 0x00ff) - 255 * amount);
-  const b = Math.max(0, (num & 0x0000ff) - 255 * amount);
+/* ---------------- REVENUE STATUS ---------------- */
+const REVENUE_STATUS = {
+  PENDING: "pending",
+  PAID: "paid",
+  CANCELLED: "cancelled",
+};
 
-  return `rgb(${r},${g},${b})`;
+const REVENUE_STATUS_LABELS = {
+  [REVENUE_STATUS.PENDING]: "Pending",
+  [REVENUE_STATUS.PAID]: "Paid",
+  [REVENUE_STATUS.CANCELLED]: "Cancelled",
 };
 
 /* ---------------- COLORS ---------------- */
@@ -111,7 +111,7 @@ const COLORS = {
   border: "#e2e8f0",
   borderLight: "#f1f5f9",
   placeholder: "#94a3b8",
-  
+
   success: "#10b981",
   successLight: "#d1fae5",
   successBg: "#ecfdf5",
@@ -124,7 +124,7 @@ const COLORS = {
   info: "#3b82f6",
   infoLight: "#dbeafe",
   infoBg: "#eff6ff",
-  
+
   chartTeal: "#14b8a6",
   chartPurple: "#a855f7",
   chartBlue: "#3b82f6",
@@ -132,7 +132,8 @@ const COLORS = {
   chartGreen: "#10b981",
   chartYellow: "#f59e0b",
   chartPink: "#ec4899",
-  
+  chartOrange: "#f97316",
+
   metricBlue: "#3b82f6",
   metricBlueBg: "#eff6ff",
   metricGreen: "#10b981",
@@ -141,16 +142,15 @@ const COLORS = {
   metricPurpleBg: "#f5f3ff",
   metricOrange: "#f97316",
   metricOrangeBg: "#fff7ed",
-  
+
   shadowColor: "rgba(0, 0, 0, 0.05)",
   modalOverlay: "rgba(0, 0, 0, 0.3)",
 };
 
-const REVENUE_COLORS = {
-  totalFees: "#f59e0b",
-  doctorRevenue: "#14b8a6",
-  hospitalRevenue: "#8b5cf6",
-  appointments: "#22c55e",
+const STATUS_COLORS = {
+  pending: "#f59e0b",
+  paid: "#10b981",
+  cancelled: "#ef4444",
 };
 
 /* ---------------- TYPES ---------------- */
@@ -159,8 +159,6 @@ interface QuickStats {
   thisWeek?: any;
   thisMonth?: any;
   thisYear?: any;
-  lastMonth?: any;
-  lastWeek?: any;
 }
 
 interface RevenueSummary {
@@ -232,9 +230,15 @@ interface ChartData {
   chartData: ChartDataItem[];
   metadata?: {
     groupBy?: string;
-    month?: number;
     year?: number;
+    month?: number;
   };
+}
+
+/* ---------------- FILTER INTERFACE ---------------- */
+interface FilterState {
+  filterType: string;
+  status?: string;
 }
 
 /* ---------------- METRIC CARD COMPONENT ---------------- */
@@ -273,7 +277,7 @@ const MetricCard = ({
 
   if (onPress) {
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         onPress={onPress}
         activeOpacity={0.85}
         style={{ flex: 1 }}
@@ -284,6 +288,289 @@ const MetricCard = ({
   }
 
   return CardContent;
+};
+const darkenColor = (hex: string, amount: number = 0.35): string => {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.max(0, (num >> 16) - 255 * amount);
+  const g = Math.max(0, ((num >> 8) & 0x00ff) - 255 * amount);
+  const b = Math.max(0, (num & 0x0000ff) - 255 * amount);
+
+  return `rgb(${r},${g},${b})`;
+};
+
+/* ---------------- STATUS PIE CHART COMPONENT ---------------- */
+const StatusPieChart = ({
+  data,
+  size = 220,
+  depth = 18,
+  showLegend = true
+}: {
+  data: any[];
+  size?: number;
+  depth?: number;
+  showLegend?: boolean;
+}) => {
+  const total = data?.reduce((s, d) => s + (d?.value || 0), 0) || 1;
+
+  const isSingleFullSlice =
+    data.length === 1 && (data[0]?.value || 0) === total;
+
+  const radius = size / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+
+  const polar = (a: number) => {
+    const r = ((a - 90) * Math.PI) / 180;
+    return {
+      x: cx + radius * Math.cos(r),
+      y: cy + radius * Math.sin(r),
+    };
+  };
+
+  const arc = (start: number, end: number) => {
+    const s = polar(end);
+    const e = polar(start);
+    const large = end - start > 180 ? 1 : 0;
+
+    return `
+      M ${cx} ${cy}
+      L ${s.x} ${s.y}
+      A ${radius} ${radius} 0 ${large} 0 ${e.x} ${e.y}
+      Z
+    `;
+  };
+  const svgHeight = size * 0.75 + depth + 20;
+
+  return (
+    <View style={styles.pieChartContainer}>
+      <Svg
+        width={size}
+        height={svgHeight}
+        viewBox={`0 0 ${size} ${size}`}
+      >
+        {/* DEPTH */}
+        {isSingleFullSlice
+          ? Array.from({ length: depth }).map((_, z) => (
+            <Circle
+              key={`d-${z}`}
+              cx={cx}
+              cy={cy + z}
+              r={radius}
+             fill={darkenColor(data[0]?.color || COLORS.primary, 0.35)}
+
+              transform="scale(1 0.6)"
+              origin={`${cx} ${cy}`}
+            />
+          ))
+          : Array.from({ length: depth }).map((_, z) => {
+            let a = 0;
+            return data.map((d, i) => {
+              const slice = ((d.value || 0) / total) * 360;
+              const p = arc(a, a + slice);
+              a += slice;
+
+              return (
+                <Path
+                  key={`d-${z}-${i}`}
+                  d={p}
+                fill={darkenColor(data[0]?.color || COLORS.primary, 0.35)}
+
+                  transform={`translate(0 ${z}) scale(1 0.6)`}
+                  origin={`${cx} ${cy}`}
+                />
+              );
+            });
+          })}
+
+        {/* TOP */}
+        {isSingleFullSlice ? (
+          <Circle
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill={data[0]?.color || COLORS.primary}
+            transform="scale(1 0.6)"
+            origin={`${cx} ${cy}`}
+          />
+        ) : (
+          (() => {
+            let a = 0;
+            return data.map((d, i) => {
+              const slice = ((d.value || 0) / total) * 360;
+              const p = arc(a, a + slice);
+              a += slice;
+
+              return (
+                <Path
+                  key={`t-${i}`}
+                  d={p}
+                  fill={d.color || COLORS.primary}
+                  transform="scale(1 0.6)"
+                  origin={`${cx} ${cy}`}
+                />
+              );
+            });
+          })()
+        )}
+      </Svg>
+
+      {showLegend && (
+        <View style={styles.statusLegendContainer}>
+          {data?.map((item, index) => (
+            <View key={index} style={styles.statusLegendRow}>
+              <View
+                style={[
+                  styles.statusLegendDot,
+                  { backgroundColor: item?.color },
+                ]}
+              />
+              <View style={styles.statusLegendTextContainer}>
+                <Text style={styles.statusLegendLabel}>
+                  {item?.label}
+                </Text>
+                <Text style={styles.statusLegendValue}>
+                  {item?.value} ({((item?.value / total) * 100).toFixed(1)}%)
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+/* ---------------- BAR CHART COMPONENT ---------------- */
+const RevenueBarChart = ({
+  data,
+  title,
+  height = 200
+}: {
+  data: ChartDataItem[];
+  title: string;
+  height?: number;
+}) => {
+  if (!data || data.length === 0) {
+    return (
+      <View style={[styles.chartCard, { height }]}>
+        <View style={styles.chartCardHeader}>
+          <BarChart3 size={20} color={COLORS.primary} />
+          <Text style={styles.chartCardTitle}>{title}</Text>
+        </View>
+        <View style={styles.noDataContainer}>
+          <Text style={styles.noDataText}>No chart data available</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Find max value for scaling
+  const maxAppointments = Math.max(
+    ...data.map(d => d.totalAppointments || 0),
+    1
+  );
+
+  const maxFees = Math.max(
+    ...data.map(d => d.totalConsultationFees || 0),
+    1
+  );
+
+const TOP_LABEL_SPACE = 24;
+const BOTTOM_LABEL_SPACE = 30;
+
+const chartHeight = height - TOP_LABEL_SPACE - BOTTOM_LABEL_SPACE;
+
+  return (
+    <View style={[styles.chartCard, { height }]}>
+      <View style={styles.chartCardHeader}>
+        <BarChart3 size={20} color={COLORS.primary} />
+        <Text style={styles.chartCardTitle}>{title}</Text>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.barChartScrollContainer}
+      >
+        <View
+          style={{
+            height: chartHeight,
+            paddingHorizontal: SPACING.md,
+            flexDirection: "row",
+          }}
+        >
+          {/* Bars Container */}
+          <View style={styles.barChartContainer}>
+{data.map((item, index) => {
+  const appointmentHeight =
+    ((item.totalAppointments || 0) / maxAppointments) * (chartHeight - 40);
+
+  const feeHeight =
+    ((item.totalConsultationFees || 0) / maxFees) * (chartHeight - 40);
+
+  return (
+    <View
+      key={index}
+      style={styles.barGroupWrapper}
+    >
+<View style={styles.barGroupWrapper}>
+  {/* VALUES */}
+  <View style={styles.barValueRow}>
+    <Text style={styles.barValueTop}>
+      {item.totalAppointments || 0}
+    </Text>
+    <Text style={styles.barValueTop}>
+      ₹{item.totalConsultationFees || 0}
+    </Text>
+  </View>
+
+  {/* BARS */}
+  <View style={styles.barPair}>
+    {/* Appointments – Gradient */}
+    <LinearGradient
+      colors={["#14b8a6", "#3b82f6"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={[
+        styles.bar,
+        { height: appointmentHeight },
+      ]}
+    />
+
+    {/* Fees – Solid */}
+    <View
+      style={[
+        styles.bar,
+        { height: feeHeight, backgroundColor: "#14b8a6" },
+      ]}
+    />
+  </View>
+
+  <Text style={styles.periodLabelBottom}>{item.periodLabel}</Text>
+</View>
+    </View>
+  );
+})}
+          </View>
+
+          {/* X-axis */}
+          <View style={styles.xAxis} />
+        </View>
+      </ScrollView>
+
+      {/* Legend */}
+      <View style={styles.barChartLegend}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendColor, { backgroundColor: '#3b82f6' }]} />
+          <Text style={styles.legendText}>Appointments</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendColor, { backgroundColor: '#10b981' }]} />
+          <Text style={styles.legendText}>Consultation Fees</Text>
+        </View>
+      </View>
+    </View>
+  );
 };
 
 /* ---------------- SIMPLE BAR CHART COMPONENT ---------------- */
@@ -328,179 +615,6 @@ const SimpleBarChart = ({ data, title }: { data: any[]; title: string }) => {
   );
 };
 
-/* ---------------- HORIZONTAL BAR CHART COMPONENT ---------------- */
-const HorizontalBarChart = ({ data, title }: { data: any[]; title: string }) => {
-  const maxValue = Math.max(...data?.map(d => d?.value || 0), 1);
-
-  return (
-    <View style={styles.chartCard}>
-      <View style={styles.chartCardHeader}>
-        <Target size={20} color={COLORS.primary} />
-        <Text style={styles.chartCardTitle} numberOfLines={1}>{title}</Text>
-      </View>
-
-      {data?.length > 0 ? (
-        <View style={styles.horizontalBarContainer}>
-          {data?.map((item, index) => (
-            <View key={index} style={styles.horizontalBarRow}>
-              <Text style={styles.horizontalBarLabel} numberOfLines={1}>
-                {item?.label}
-              </Text>
-              <View style={styles.horizontalBarWrapper}>
-                <View style={styles.horizontalBarTrack}>
-                  <View
-                    style={[
-                      styles.horizontalBarFill,
-                      {
-                        width: `${((item?.value || 0) / maxValue) * 100}%`,
-                        backgroundColor: item?.color || COLORS.primary,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.horizontalBarValue}>{item?.value}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      ) : (
-        <View style={styles.noDataContainer}>
-          <Text style={styles.noDataText}>No data available</Text>
-        </View>
-      )}
-    </View>
-  );
-};
-
-/* ---------------- 3D PIE CHART COMPONENT ---------------- */
-const Bent3DPie = ({ data, size = 220, depth = 18 }) => {
-  const total = data?.reduce((s, d) => s + (d?.value || 0), 0) || 1;
-
-  const isSingleFullSlice =
-    data.length === 1 && (data[0]?.value || 0) === total;
-
-  const radius = size / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-
-  const polar = (a: number) => {
-    const r = ((a - 90) * Math.PI) / 180;
-    return {
-      x: cx + radius * Math.cos(r),
-      y: cy + radius * Math.sin(r),
-    };
-  };
-
-  const arc = (start: number, end: number) => {
-    const s = polar(end);
-    const e = polar(start);
-    const large = end - start > 180 ? 1 : 0;
-
-    return `
-      M ${cx} ${cy}
-      L ${s.x} ${s.y}
-      A ${radius} ${radius} 0 ${large} 0 ${e.x} ${e.y}
-      Z
-    `;
-  };
-
-  return (
-  <Svg width={size} height={size + depth} style={{ marginTop: moderateScale(10) }}>
-
-    {/* DEPTH */}
-    {isSingleFullSlice
-      ? Array.from({ length: depth }).map((_, z) => (
-          <Circle
-            key={`d-${z}`}
-            cx={cx}
-            cy={cy + z}
-            r={radius}
-            fill={darkenColor(data[0]?.color || COLORS.primary, 0.35)}
-            transform="scale(1 0.6)"
-            origin={`${cx} ${cy}`}
-          />
-        ))
-      : Array.from({ length: depth }).map((_, z) => {
-          let a = 0;
-          return data.map((d, i) => {
-            const slice = ((d.value || 0) / total) * 360;
-            const p = arc(a, a + slice);
-            a += slice;
-
-            return (
-              <Path
-                key={`d-${z}-${i}`}
-                d={p}
-                fill={darkenColor(d.color || COLORS.primary, 0.35)}
-                transform={`translate(0 ${z}) scale(1 0.6)`}
-                origin={`${cx} ${cy}`}
-              />
-            );
-          });
-        })}
-
-    {/* TOP */}
-    {isSingleFullSlice ? (
-      <Circle
-        cx={cx}
-        cy={cy}
-        r={radius}
-        fill={data[0]?.color || COLORS.primary}
-        transform="scale(1 0.6)"
-        origin={`${cx} ${cy}`}
-      />
-    ) : (
-      (() => {
-        let a = 0;
-        return data.map((d, i) => {
-          const slice = ((d.value || 0) / total) * 360;
-          const p = arc(a, a + slice);
-          a += slice;
-
-          return (
-            <Path
-              key={`t-${i}`}
-              d={p}
-              fill={d.color || COLORS.primary}
-              transform="scale(1 0.6)"
-              origin={`${cx} ${cy}`}
-            />
-          );
-        });
-      })()
-    )}
-  </Svg>
-);
-};
-
-/* ---------------- REVENUE LEGEND COMPONENT ---------------- */
-const RevenueLegendRight = ({ data }: { data: any[] }) => {
-  return (
-    <View style={{ marginLeft: moderateScale(20) }}>
-      {data?.map((item, index) => (
-        <View key={index} style={styles.legendRow}>
-          <View
-            style={[
-              styles.legendDot,
-              { backgroundColor: item?.color },
-            ]}
-          />
-          <View style={{ marginLeft: moderateScale(10) }}>
-            <Text style={styles.legendLabel}>
-              {item?.label}
-            </Text>
-            <Text style={styles.legendValue}>
-              {item?.label === "Appointments"
-                ? item?.value
-                : `₹${(item?.value || 0)?.toLocaleString("en-IN")}`}
-            </Text>
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-};
-
 /* ======================= MAIN SCREEN ======================= */
 const RevenueScreen = () => {
   const navigation = useNavigation();
@@ -513,49 +627,36 @@ const RevenueScreen = () => {
   const [summary, setSummary] = useState<RevenueSummary>({});
   const [history, setHistory] = useState<RevenueHistory>({});
   const [chartData, setChartData] = useState<ChartData>({ chartData: [] });
-  const [filterType, setFilterType] = useState<string>(FILTER_TYPES.THIS_MONTH);
-  const [statusFilter, setStatusFilter] = useState<string>("");
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [authError, setAuthError] = useState(false);
 
+  // Filter state
+  const [filters, setFilters] = useState<FilterState>({
+    filterType: FILTER_TYPES.THIS_MONTH,
+  });
+
   /* ---------------- HELPER FUNCTIONS ---------------- */
-  const getChartGroupBy = (filter: string) => {
-    switch (filter) {
+  const getChartGroupBy = (filterType: string) => {
+    switch (filterType) {
       case FILTER_TYPES.TODAY:
-      case FILTER_TYPES.YESTERDAY:
-        return "hour";
-      case FILTER_TYPES.THIS_WEEK:
-      case FILTER_TYPES.LAST_WEEK:
         return "day";
+      case FILTER_TYPES.THIS_WEEK:
+        return "week";
       case FILTER_TYPES.THIS_MONTH:
-      case FILTER_TYPES.LAST_MONTH:
         return "week";
       case FILTER_TYPES.THIS_YEAR:
-      case FILTER_TYPES.LAST_YEAR:
         return "month";
       default:
-        return "month";
+        return "week";
     }
   };
 
-  const getChartYear = (filter: string) => {
-    const now = new Date();
-    switch (filter) {
-      case FILTER_TYPES.LAST_YEAR:
-        return now.getFullYear() - 1;
-      default:
-        return now.getFullYear();
-    }
+  const getChartYear = () => {
+    return new Date().getFullYear();
   };
 
-  const getChartMonth = (filter: string) => {
-    const now = new Date();
-    switch (filter) {
-      case FILTER_TYPES.LAST_MONTH:
-        return now.getMonth(); // Previous month
-      default:
-        return now.getMonth() + 1; // Current month
-    }
+  const getChartMonth = () => {
+    return new Date().getMonth() + 1;
   };
 
   /* ---------------- LOAD DATA FUNCTIONS ---------------- */
@@ -565,7 +666,7 @@ const RevenueScreen = () => {
       if (!token || !user?.id || !user?.hospitalID) return;
 
       const response = await AuthFetch(
-        `revenue/doctor/${user?.id}/quick-stats?hospitalID=${user?.hospitalID}&filterType=${filterType}`,
+        `revenue/doctor/${user?.id}/quick-stats?hospitalID=${user?.hospitalID}`,
         token
       ) as any;
 
@@ -584,11 +685,12 @@ const RevenueScreen = () => {
       const token = await AsyncStorage.getItem("token");
       if (!token || !user?.id || !user?.hospitalID) return;
 
-      const response = await AuthFetch(
-        `revenue/doctor/${user?.id}/summary?hospitalID=${user?.hospitalID}&filterType=${filterType}`,
-        token
-      ) as any;
-      
+      let url = `revenue/doctor/${user?.id}/summary?hospitalID=${user?.hospitalID}&filterType=${filters.filterType}`;
+
+      if (filters.status) url += `&status=${filters.status}`;
+
+      const response = await AuthFetch(url, token) as any;
+      console.log("6^^^6",response)
       if (response?.data?.success || response?.status === 'success') {
         const data = response?.data?.data || response?.data || {};
         setSummary(data);
@@ -605,11 +707,12 @@ const RevenueScreen = () => {
       const token = await AsyncStorage.getItem("token");
       if (!token || !user?.id || !user?.hospitalID) return;
 
-      const response = await AuthFetch(
-        `revenue/doctor/${user?.id}/history?hospitalID=${user?.hospitalID}&filterType=${filterType}&page=1&limit=5`,
-        token
-      ) as any;
+      let url = `revenue/doctor/${user?.id}/history?hospitalID=${user?.hospitalID}&filterType=${filters.filterType}&page=1&limit=5`;
 
+      if (filters.status) url += `&status=${filters.status}`;
+
+      const response = await AuthFetch(url, token) as any;
+console.log("555",response)
       if (response?.data?.success || response?.status === 'success') {
         const data = response?.data?.data || response?.data || {};
         setHistory(data);
@@ -620,29 +723,26 @@ const RevenueScreen = () => {
       setHistory({});
     }
   };
+
   const loadChartData = async () => {
     try {
       const token = await AsyncStorage.getItem("token");
       if (!token || !user?.id || !user?.hospitalID) return;
 
-      const groupBy = getChartGroupBy(filterType);
-      const year = getChartYear(filterType);
-      const month = getChartMonth(filterType);
+      const groupBy = getChartGroupBy(filters.filterType);
+      const year = getChartYear();
+      const month = getChartMonth();
 
       let url = `revenue/doctor/${user?.id}/chart?hospitalID=${user?.hospitalID}&groupBy=${groupBy}`;
-      
-      // Add year and month based on filter
-      if (filterType === FILTER_TYPES.THIS_MONTH || filterType === FILTER_TYPES.LAST_MONTH) {
+
+      if (filters.filterType === FILTER_TYPES.THIS_MONTH) {
         url += `&year=${year}&month=${month}`;
-      } else if (filterType === FILTER_TYPES.THIS_YEAR || filterType === FILTER_TYPES.LAST_YEAR) {
+      } else if (filters.filterType === FILTER_TYPES.THIS_YEAR) {
         url += `&year=${year}`;
-      } else {
-        // For week/day filters, use current date range
-        url += `&filterType=${filterType}`;
       }
 
       const response = await AuthFetch(url, token) as any;
-
+      
       if (response?.data?.success || response?.status === 'success') {
         const data = response?.data?.data || response?.data || { chartData: [] };
         setChartData(data);
@@ -682,7 +782,7 @@ const RevenueScreen = () => {
     useCallback(() => {
       setLoading(true);
       loadRevenueData().finally(() => setLoading(false));
-    }, [filterType, statusFilter])
+    }, [filters])
   );
 
   const onRefresh = async () => {
@@ -696,82 +796,42 @@ const RevenueScreen = () => {
     return `₹${amount.toLocaleString("en-IN")}`;
   };
 
-  const calculatePercentageChange = (current: number, previous: number) => {
-    if (previous === 0) return current > 0 ? "+100%" : "0%";
-    const change = ((current - previous) / previous) * 100;
-    return `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`;
-  };
-
   const getMetricsData = () => {
-    // Get stats based on current filter
-    let stats = {};
-    switch (filterType) {
-      case FILTER_TYPES.TODAY:
-        stats = quickStats?.today || {};
-        break;
-      case FILTER_TYPES.THIS_WEEK:
-        stats = quickStats?.thisWeek || {};
-        break;
-      case FILTER_TYPES.THIS_MONTH:
-        stats = quickStats?.thisMonth || {};
-        break;
-      case FILTER_TYPES.THIS_YEAR:
-        stats = quickStats?.thisYear || {};
-        break;
-      case FILTER_TYPES.YESTERDAY:
-        stats = quickStats?.yesterday || {};
-        break;
-      case FILTER_TYPES.LAST_WEEK:
-        stats = quickStats?.lastWeek || {};
-        break;
-      case FILTER_TYPES.LAST_MONTH:
-        stats = quickStats?.lastMonth || {};
-        break;
-      case FILTER_TYPES.LAST_YEAR:
-        stats = quickStats?.lastYear || {};
-        break;
-      default:
-        stats = summary || {};
-    }
+    const stats = quickStats?.[filters.filterType] || {};
+    const titlePrefix = FILTER_LABELS[filters.filterType];
 
     return [
       {
-        title: filterType === FILTER_TYPES.TODAY ? "Today's Appointments" : "Appointments",
-        value: stats?.totalAppointments || summary?.totalAppointments || 0,
+        title: `${titlePrefix} Appointments`,
+        value: stats?.totalAppointments || 0,
         icon: <Users size={ICON_SIZE.md} color="#2563EB" />,
         color: "#2563EB",
         bgColor: "#eff6ff",
-        onPress: () => navigation.navigate("AppointmentsList" as never, { 
-          filter: filterType 
+        onPress: () => navigation.navigate("AppointmentsList" as never, {
+          filter: filters.filterType
         } as never),
       },
       {
-        title: filterType === FILTER_TYPES.TODAY ? "Today's Billings" : "Total Billings",
-        value: formatCurrency(stats?.totalConsultationFees || summary?.totalConsultationFees || 0),
+        title: `${titlePrefix} Billings`,
+        value: formatCurrency(stats?.totalConsultationFees || 0),
         icon: <Banknote size={ICON_SIZE.md} color="#10B981" />,
         color: "#10B981",
         bgColor: "#ecfdf5",
         onPress: () => handleViewAllTransactions(),
       },
       {
-        title: "Doctor Revenue",
-        value: formatCurrency(stats?.totalDoctorRevenue || summary?.totalDoctorRevenue || 0),
+        title: `${titlePrefix} Doctor Revenue`,
+        value: formatCurrency(stats?.totalDoctorRevenue || 0),
         icon: <Wallet size={ICON_SIZE.md} color="#7C3AED" />,
         color: "#7C3AED",
         bgColor: "#f5f3ff",
-        onPress: () => {
-          // Add specific navigation if needed
-        },
       },
       {
-        title: "Hospital Revenue",
-        value: formatCurrency(stats?.totalHospitalRevenue || summary?.totalHospitalRevenue || 0),
+        title: `${titlePrefix} Hospital Revenue`,
+        value: formatCurrency(stats?.totalHospitalRevenue || 0),
         icon: <Building size={ICON_SIZE.md} color="#F59E0B" />,
         color: "#F59E0B",
         bgColor: "#fffbeb",
-        onPress: () => {
-          // Add specific navigation if needed
-        },
       },
     ];
   };
@@ -801,51 +861,43 @@ const RevenueScreen = () => {
         prefix: "₹",
         color: COLORS.chartPurple,
       },
-      {
-        label: "Avg Fee",
-        value: Math.round(summary?.avgConsultationFee || 0),
-        prefix: "₹",
-        color: COLORS.chartOrange,
-      },
-    ];
+    ].filter(item => (item?.value || 0) > 0);
   };
 
-  const getRevenueBreakdownData = () => {
+  const getStatusBreakdownData = () => {
+    const pendingCount = summary?.statusBreakdown?.pending?.count || 0;
+    const paidCount = summary?.statusBreakdown?.paid?.count || 0;
+    const cancelledCount = summary?.statusBreakdown?.cancelled?.count || 0;
+
     return [
       {
-        label: "Total Fees",
-        value: summary?.totalConsultationFees || 0,
-        color: REVENUE_COLORS.totalFees,
+        label: "Pending",
+        value: pendingCount,
+        color: STATUS_COLORS.pending,
       },
       {
-        label: "Doctor ",
-        value: summary?.totalDoctorRevenue || 0,
-        color: REVENUE_COLORS.doctorRevenue,
+        label: "Paid",
+        value: paidCount,
+        color: STATUS_COLORS.paid,
       },
       {
-        label: "Hospital",
-        value: summary?.totalHospitalRevenue || 0,
-        color: REVENUE_COLORS.hospitalRevenue,
+        label: "Cancelled",
+        value: cancelledCount,
+        color: STATUS_COLORS.cancelled,
       },
-      {
-        label: "Appointments",
-        value: summary?.totalAppointments || 0,
-        color: REVENUE_COLORS.appointments,
-      },
-    ]?.filter(i => (i?.value || 0) > 0);
+    ].filter(item => item.value > 0);
   };
 
   const getPerformanceMetricsData = () => {
     const avgConsultationFee = summary?.avgConsultationFee || 0;
-    const maxConsultationFee = summary?.maxConsultationFee || 0;
-    const minConsultationFee = summary?.minConsultationFee || 0;
     const commissionPercentage = summary?.avgCommissionPercentage || 0;
-    
+    const maxConsultationFee = summary?.maxConsultationFee || 0
+    const minConsultationFee = summary?.minConsultationFee || 0
     return [
-      { label: "Avg Fee", value: Math.round(avgConsultationFee), color: COLORS.chartBlue },
-      { label: "Max Fee", value: maxConsultationFee, color: COLORS.chartGreen },
-      { label: "Min Fee", value: minConsultationFee, color: COLORS.chartOrange },
-      { label: "Commission %", value: commissionPercentage, color: COLORS.chartPurple }
+      { label: "Avg Consultation Fee", value: Math.round(avgConsultationFee), color: COLORS.chartBlue, prefix: "₹" },
+      { label: "Avg Commission %", value: commissionPercentage, color: COLORS.chartPurple, prefix: "" },
+      { label: "Max Consultation Fee", value: maxConsultationFee, color: COLORS.primary, prefix: "" },
+      { label: "Min Consultation Fee %", value: minConsultationFee, color: COLORS.chartPurple, prefix: "" },
     ]?.filter(item => (item?.value || 0) > 0);
   };
 
@@ -853,80 +905,109 @@ const RevenueScreen = () => {
     const pendingCount = summary?.statusBreakdown?.pending?.count || 0;
     const paidCount = summary?.statusBreakdown?.paid?.count || 0;
     const cancelledCount = summary?.statusBreakdown?.cancelled?.count || 0;
-    
+
     return [
-      { label: "Pending Appointments", value: pendingCount },
+      { label: "Scheduled Appointments", value: pendingCount },
       { label: "Paid Appointments", value: paidCount },
       { label: "Cancelled Appointments", value: cancelledCount },
-      { label: "Total Appointments", value: summary?.totalAppointments || 0 }
     ]?.filter(item => (item?.value || 0) > 0);
   };
 
   /* ---------------- FILTER MODAL ---------------- */
-  const FilterModal = () => (
-    <Modal 
-      visible={showFilterModal} 
-      transparent 
-      animationType="fade"
-      onRequestClose={() => setShowFilterModal(false)}
-    >
-      <TouchableOpacity 
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowFilterModal(false)}
-      >
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Time Period</Text>
-            <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-              <X size={22} color={COLORS.subText} />
-            </TouchableOpacity>
-          </View>
+  const FilterModal = () => {
+    const [localFilters, setLocalFilters] = useState(filters);
 
-          <ScrollView 
-            style={styles.filterScroll}
-            showsVerticalScrollIndicator={false}
-          >
-            {Object.entries(FILTER_LABELS).map(([key, label]) => (
-              <TouchableOpacity
-                key={key}
-                style={[
-                  styles.filterRow,
-                  filterType === key && styles.filterRowActive,
-                ]}
-                onPress={() => {
-                  setFilterType(key);
-                  setShowFilterModal(false);
-                }}
-              >
-                <View style={styles.filterRowContent}>
-                  <Calendar size={18} color={filterType === key ? COLORS.primary : COLORS.subText} />
-                  <Text
-                    style={[
-                      styles.filterText,
-                      filterType === key && styles.filterTextActive,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {label}
-                  </Text>
-                </View>
-                {filterType === key && (
-                  <CheckCircle size={18} color={COLORS.primary} />
-                )}
+    const handleApplyFilters = () => {
+      setFilters(localFilters);
+      setShowFilterModal(false);
+    };
+
+    const handleResetFilters = () => {
+      setLocalFilters({
+        filterType: FILTER_TYPES.THIS_MONTH,
+      });
+    };
+
+    return (
+      <Modal
+        visible={showFilterModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFilterModal(false)}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter Revenue Data</Text>
+              <TouchableOpacity onPress={() => setShowFilterModal(false)}>
+                <X size={22} color={COLORS.subText} />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+            </View>
+
+            <ScrollView
+              style={styles.filterScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* TIME PERIOD FILTER */}
+<View style={styles.plainFilterList}>
+  {Object.entries(FILTER_LABELS).map(([key, label]) => {
+    const selected = localFilters.filterType === key;
+
+    return (
+      <TouchableOpacity
+        key={key}
+        style={styles.plainFilterItem}
+        onPress={() =>
+          setLocalFilters(prev => ({ ...prev, filterType: key }))
+        }
+        activeOpacity={0.7}
+      >
+        <Text
+          style={[
+            styles.plainFilterText,
+            selected && styles.plainFilterTextSelected,
+          ]}
+        >
+          {label.trim()}
+        </Text>
+
+        {selected && <View style={styles.plainDot} />}
       </TouchableOpacity>
-    </Modal>
-  );
+    );
+  })}
+</View>
+
+
+              {/* APPLY BUTTON */}
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={handleApplyFilters}
+              >
+                <Text style={styles.applyButtonText}>Apply Filters</Text>
+              </TouchableOpacity>
+
+              {/* RESET BUTTON */}
+              <TouchableOpacity
+                style={styles.resetButton}
+                onPress={handleResetFilters}
+              >
+                <Text style={styles.resetButtonText}>Reset Filters</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
 
   /* ---------------- HANDLE NAVIGATION ---------------- */
   const handleViewAllTransactions = () => {
-    navigation.navigate("AllTransactions" as never, { 
-      filterType, 
-      statusFilter 
+    navigation.navigate("AllTransactions" as never, {
+      filters
     } as never);
   };
 
@@ -955,7 +1036,7 @@ const RevenueScreen = () => {
   const appointmentBreakdownData = getAppointmentBreakdownData();
   const safeArea = getSafeAreaInsets();
   const footerPadding = safeArea.bottom + SPACING.lg;
-  const revenueBreakdownData = getRevenueBreakdownData();
+  const statusBreakdownData = getStatusBreakdownData();
 
   /* ======================= MAIN UI ======================= */
   return (
@@ -976,11 +1057,11 @@ const RevenueScreen = () => {
             </View>
           </View>
         </View>
-        
+
         <View style={styles.headerRight}>
           <View style={styles.userInfo}>
             <View style={styles.notifications}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.notifLink}
                 onPress={handleViewAllTransactions}
               >
@@ -1007,28 +1088,47 @@ const RevenueScreen = () => {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* FILTER ROW */}
-        <View style={styles.filterRowTop}>
-          <TouchableOpacity 
-            style={styles.settingsBtn}
-            onPress={() => setShowFilterModal(true)}
-            activeOpacity={0.85}
-          >
-            <Filter size={getResponsiveFontSize(16)} color="#ffffff" />
-            <Text style={styles.settingsBtnText} numberOfLines={1}>
-              Filter: {FILTER_LABELS[filterType]}
-            </Text>
-            <ChevronDown size={getResponsiveFontSize(14)} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
+{/* FILTER SELECTION - Made Responsive */}
+<ScrollView 
+  horizontal 
+  showsHorizontalScrollIndicator={false}
+  style={styles.filtersContainer}
+  contentContainerStyle={styles.filtersContent}
+>
+  {Object.entries(FILTER_LABELS).map(([key, label]) => (
+    <TouchableOpacity
+      key={key}
+      style={[
+        styles.filterButton,
+        filters.filterType === key && styles.filterButtonActive,
+        {
+          minHeight: moderateScale(34),
+          paddingHorizontal: moderateScale(16),
+          paddingVertical: moderateScale(6),
+        }
+      ]}
+      onPress={() => setFilters(prev => ({ ...prev, filterType: key }))}
+    >
+      <Text style={[
+        styles.filterButtonText,
+        filters.filterType === key && styles.filterButtonTextActive,
+        {
+          fontSize: moderateScale(12),
+        }
+      ]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  ))}
+</ScrollView>
 
         {/* METRICS GRID */}
         <View style={styles.metricsGrid}>
           {metrics?.map((metric, index) => (
-            <View key={index} style={{ 
-              width: (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2 
+            <View key={index} style={{
+              width: (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2
             }}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={metric.onPress}
                 activeOpacity={0.85}
               >
@@ -1044,40 +1144,73 @@ const RevenueScreen = () => {
           ))}
         </View>
 
-        {/* CHARTS SECTION */}
-        <Text style={styles.sectionTitle}>Revenue Analytics</Text>
-        <SimpleBarChart
-          title="Summary Metrics"
-          data={getSummaryBarData()}
-        />
+        {/* REVENUE OVERVIEW */}
+        <View style={styles.revenueOverviewHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Appointment Status</Text>
+            <Text style={styles.filterSubtitle}>
+              {FILTER_LABELS[filters.filterType]}
+              {filters.status && ` • ${REVENUE_STATUS_LABELS[filters.status]}`}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.filterButtonOne, {
+              minHeight: moderateScale(34),
+              paddingHorizontal: moderateScale(16),
+              paddingVertical: moderateScale(6),
+            }]}
+            onPress={() => setShowFilterModal(true)}
+            activeOpacity={0.85}
+          >
+            <Filter size={getResponsiveFontSize(14)} color="#ffffff" />
+            <Text style={[styles.filterButtonText, {
+              fontSize: moderateScale(12),
+            }]} numberOfLines={1}>
+              Filter
+            </Text>
+            <ChevronDown size={getResponsiveFontSize(12)} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
 
-        <Text style={styles.sectionTitle}>Revenue Overview</Text>
-      {revenueBreakdownData.length > 0 ? (
-        <View style={styles.revenueOverview}>
-          <View style={{ width: isTablet ? 300 : 240 }}>
-            <Bent3DPie
-              data={revenueBreakdownData}
+        {/* STATUS BREAKDOWN PIE CHART */}
+        {statusBreakdownData.length > 0 ? (
+          <View style={styles.statusPieChartContainer}>
+            <StatusPieChart
+              data={statusBreakdownData}
               size={isTablet ? 280 : moderateScale(220)}
             />
           </View>
-          <RevenueLegendRight
-            data={revenueBreakdownData} 
-          />
-        </View>
         ) : (
           <View style={styles.noDataContainer}>
-            <Text style={styles.noDataText}>No revenue data available</Text>
+            <Text style={styles.noDataText}>No appointment status data available</Text>
             <Text style={styles.noDataSubText}>
-              Revenue breakdown will appear once transactions are recorded
+              Try adjusting your filters or check back later
             </Text>
           </View>
         )}
 
+
+{/* REVENUE TREND BAR CHART WITH SEPARATE FILTERS */}
+<View style={styles.revenueOverviewHeader}>
+  <View>
+    <Text style={styles.sectionTitle}>Revenue Trend Analysis</Text>
+    <Text style={styles.filterSubtitle}>
+      Detailed breakdown with separate filters
+    </Text>
+  </View>
+</View>
+
+{/* Use the new component */}
+<RevenueBarChartWithFilters />
+
+
         {/* Performance Metrics */}
-        <HorizontalBarChart
-          data={performanceMetricsData}
-          title="Performance Metrics"
-        />
+        {performanceMetricsData.length > 0 && (
+          <SimpleBarChart
+            data={performanceMetricsData}
+            title="Performance Metrics"
+          />
+        )}
 
         {/* RECENT TRANSACTIONS */}
         <View style={styles.transactionCard}>
@@ -1086,7 +1219,7 @@ const RevenueScreen = () => {
               <CreditCard size={20} color={COLORS.primary} />
               <Text style={styles.transactionTitle}>Recent Transactions</Text>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.viewAllButton}
               onPress={handleViewAllTransactions}
             >
@@ -1094,12 +1227,12 @@ const RevenueScreen = () => {
               <ArrowUpRight size={16} color={COLORS.primary} />
             </TouchableOpacity>
           </View>
-          
+
           {history?.transactions && history?.transactions?.length > 0 ? (
             <View style={styles.transactionList}>
               {history?.transactions?.slice(0, 5)?.map((transaction, index) => (
-                <TouchableOpacity 
-                  key={index} 
+                <TouchableOpacity
+                  key={index}
                   style={styles.transactionItem}
                   activeOpacity={0.7}
                 >
@@ -1112,7 +1245,7 @@ const RevenueScreen = () => {
                         styles.transactionStatusText,
                         { color: transaction?.status === 'paid' ? COLORS.success : COLORS.warning }
                       ]}>
-                        {"Active"}
+                        {transaction?.revenueType == "appointment"?"Apt":""}
                       </Text>
                     </View>
                     <View style={styles.transactionInfo}>
@@ -1151,7 +1284,7 @@ const RevenueScreen = () => {
             <Users size={20} color={COLORS.primary} />
             <Text style={styles.breakdownTitle}>Appointment Breakdown</Text>
           </View>
-          
+
           {appointmentBreakdownData?.length > 0 ? (
             <View style={styles.breakdownList}>
               {appointmentBreakdownData?.map((item, index) => (
@@ -1173,6 +1306,9 @@ const RevenueScreen = () => {
           <Text style={styles.footerText}>
             Data updated in real-time • Last refreshed: {formatDateTime(new Date().toISOString())}
           </Text>
+          <Text style={styles.footerSubText}>
+            Using filter: {FILTER_LABELS[filters.filterType]}
+          </Text>
         </View>
       </ScrollView>
 
@@ -1190,6 +1326,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg,
   },
+barChartContainer: {
+  flexDirection: "row",
+  alignItems: "flex-end",
+  height: 200,
+  paddingBottom: moderateScale(30),
+  gap: moderateScale(10), // Gap between week groups
+},
+barGroupTight: {
+  flexDirection: "row",
+  alignItems: "flex-end",
+  gap: 0, // NO GAP - green and black touch each other
+  marginBottom: moderateScale(8),
+},
+barWrapperTight: {
+  alignItems: "flex-end",
+},
+barValueTop: {
+  fontSize: 12,
+  fontWeight: "600",
+  color: COLORS.text,
+  marginBottom: 4,
+  textAlign: "center",
+},
+thickLine: {
+  width: 12, // Thinner lines (was 18)
+  borderRadius: 0, // Straight lines
+  minHeight: 20,
+    marginHorizontal: 0, // 🔥 CRITICAL
+
+},
+periodLabelBottom: {
+  fontSize: 12,
+  color: COLORS.text,
+  fontWeight: "600",
+  marginTop: 18,
+  textAlign: "center",
+},
+barChartScrollContainer: {
+  paddingRight: SPACING.xl,
+  paddingLeft: SPACING.sm,
+},
   metricCard: {
     flex: 1,
     minWidth: (SCREEN_WIDTH - SPACING.lg * 2 - SPACING.md) / 2,
@@ -1214,20 +1391,38 @@ const styles = StyleSheet.create({
     marginRight: SPACING.xs,
   },
   metricTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontSize: 12,
     color: COLORS.textSecondary,
     opacity: 0.75,
-    marginBottom: moderateScale(4),
+    marginBottom: 4,
     fontWeight: "500",
   },
+  barGradient: {
+  width: 30,
+  borderTopLeftRadius: 4,
+  borderTopRightRadius: 4,
+  // Gradient effect simulation with multiple backgrounds
+  backgroundColor: '#7cb342', // Light green top
+  borderBottomWidth: 0,
+  shadowColor: '#4a90e2',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+},
+barGradientDark: {
+  width: 30,
+  borderTopLeftRadius: 4,
+  borderTopRightRadius: 4,
+  backgroundColor: '#424242', // Dark gray
+},
   metricValue: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.text,
   },
   metricIconContainer: {
-    width: moderateScale(40),
-    height: moderateScale(40),
+    width: 40,
+    height: 40,
     borderRadius: BORDER_RADIUS.sm,
     alignItems: "center",
     justifyContent: "center",
@@ -1242,14 +1437,14 @@ const styles = StyleSheet.create({
   },
   loaderText: {
     marginTop: SPACING.md,
-    fontSize: getResponsiveFontSize(16),
+    fontSize: 16,
     color: COLORS.text,
     fontWeight: "600",
     textAlign: "center",
   },
   subText: {
     marginTop: SPACING.xs,
-    fontSize: getResponsiveFontSize(14),
+    fontSize: 14,
     color: COLORS.subText,
     textAlign: "center",
   },
@@ -1260,7 +1455,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    minHeight: getDeviceSpecificValue(100, 120, 90),
+    minHeight: 100,
   },
   headerLeft: {
     flex: 1,
@@ -1268,7 +1463,7 @@ const styles = StyleSheet.create({
   headerRight: {
     flex: 1,
     alignItems: "flex-end",
-    maxWidth: wp(50),
+    maxWidth: 200,
   },
   logoContainer: {
     flexDirection: "row",
@@ -1276,19 +1471,19 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   logo: {
-    width: moderateScale(40),
-    height: moderateScale(40),
+    width: 40,
+    height: 40,
     borderRadius: BORDER_RADIUS.sm,
     backgroundColor: COLORS.primaryDark,
     alignItems: "center",
     justifyContent: "center",
   },
   greeting: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
     marginBottom: SPACING.xs,
-    maxWidth: wp(40),
+    maxWidth: 150,
   },
   userInfo: {
     alignItems: "flex-end",
@@ -1312,34 +1507,57 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.round,
   },
   notifLinkText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontSize: 12,
     color: COLORS.primary,
     fontWeight: "600",
   },
-  settingsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    backgroundColor: COLORS.primaryDark,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
-    maxWidth: wp(60),
-  },
-  settingsBtnText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
-    color: "#ffffff",
-    fontWeight: "600",
-    flexShrink: 1,
-  },
+
+  // Filter styles (matching reference code)
+filtersContainer: {
+  marginBottom: SPACING.md,
+},
+filtersContent: {
+  gap: SPACING.xs,
+  paddingRight: SPACING.lg,
+},
+filterButton: {
+  borderRadius: BORDER_RADIUS.round,
+  backgroundColor: COLORS.card,
+  borderWidth: 1,
+  borderColor: COLORS.border,
+},
+filterButtonOne: {
+  borderRadius: BORDER_RADIUS.round,
+  backgroundColor: COLORS.card,
+  borderWidth: 1,
+  borderColor: COLORS.border,
+},
+filterButtonActive: {
+  backgroundColor: COLORS.primary,
+  borderColor: COLORS.primary,
+},
+filterButtonText: {
+  fontWeight: "600",
+  color: COLORS.text,
+},
+filterButtonTextActive: {
+  color: "#ffffff",
+},
   content: {
     padding: SPACING.lg,
     paddingTop: SPACING.md,
   },
-  filterRowTop: {
+  revenueOverviewHeader: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: SPACING.md,
+    marginTop: SPACING.lg,
+  },
+  filterSubtitle: {
+    fontSize: 12,
+    color: COLORS.subText,
+    marginTop: SPACING.xs,
   },
   metricsGrid: {
     flexDirection: "row",
@@ -1348,24 +1566,31 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: SPACING.lg,
   },
-  metricHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-  },
+  barGroupWrapper: {
+  alignItems: "center",
+},
+
+barValueRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  width: 28, // 14 + 14
+  marginBottom: 6,
+},
+
+barPair: {
+  flexDirection: "row",
+  alignItems: "flex-end",
+},
+
+bar: {
+  width: 14,
+  minHeight: 20,
+},
+
   sectionTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
+    fontSize: 18,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: SPACING.md,
-    marginTop: SPACING.sm,
-  },
-  revenueOverview: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: SPACING.md,
-    marginTop: SPACING.lg, 
   },
   chartCard: {
     backgroundColor: COLORS.card,
@@ -1390,7 +1615,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   chartCardTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.text,
     flex: 1,
@@ -1403,20 +1628,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: moderateScale(6),
+    marginBottom: 6,
   },
   metricLabel: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontSize: 14,
     color: COLORS.text,
     fontWeight: "500",
   },
   metricNumber: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.text,
   },
   metricBarTrack: {
-    height: moderateScale(10),
+    height: 10,
     backgroundColor: COLORS.borderLight,
     borderRadius: BORDER_RADIUS.sm,
     overflow: "hidden",
@@ -1425,62 +1650,141 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: BORDER_RADIUS.sm,
   },
-  horizontalBarContainer: {
-    marginTop: SPACING.sm,
-  },
-  horizontalBarRow: {
-    flexDirection: "row",
+  pieChartContainer: {
+    flexDirection: "column",
     alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.md,
+  },
+  plainFilterList: {
+  marginTop: SPACING.md,
+},
+
+plainFilterItem: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingVertical: 14,
+},
+
+plainFilterText: {
+  fontSize: 16,
+  color: COLORS.text,
+  fontWeight: "400",
+},
+
+plainFilterTextSelected: {
+  fontWeight: "700",
+},
+
+plainDot: {
+  width: 6,
+  height: 6,
+  borderRadius: 3,
+  backgroundColor: COLORS.text,
+},
+
+  statusPieChartContainer: {
+    backgroundColor: COLORS.card,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
     marginBottom: SPACING.md,
+    alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
-  horizontalBarLabel: {
-    width: moderateScale(100),
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    color: COLORS.text,
+  statusLegendContainer: {
+    width: 120,
+    marginLeft: SPACING.md,
   },
-  horizontalBarWrapper: {
-    flex: 1,
+  statusLegendRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 16,
   },
-  horizontalBarTrack: {
-    flex: 1,
-    height: moderateScale(20),
-    backgroundColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.round,
-    overflow: "hidden",
+barTight: {
+  width: 24, // Narrower bars (was 30)
+  borderTopLeftRadius: 3,
+  borderTopRightRadius: 3,
+  minHeight: 20, // Minimum visible height
+},
+  statusLegendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     marginRight: SPACING.sm,
   },
-  horizontalBarFill: {
-    height: "100%",
-    borderRadius: BORDER_RADIUS.round,
+  statusLegendTextContainer: {
+    flex: 1,
   },
-  horizontalBarValue: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+  statusLegendLabel: {
+    fontSize: 14,
     fontWeight: "600",
     color: COLORS.text,
-    minWidth: moderateScale(40),
-    textAlign: "right",
+    marginBottom: 2,
   },
-  legendRow: {
+  statusLegendValue: {
+    fontSize: 12,
+    color: COLORS.subText,
+  },
+  
+  barGroup: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginRight: 40,
+    gap: 12,
+  },
+  barWrapper: {
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  barValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.text,
+    textAlign: "center",
+  },
+  periodLabel: {
+    fontSize: 12,
+    color: COLORS.text,
+    fontWeight: "600",
+    marginTop: 8,
+    textAlign: "center",
+    maxWidth: 80,
+  },
+  xAxis: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginTop: 8,
+  },
+  barChartLegend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: SPACING.md,
+    gap: SPACING.lg,
+  },
+  legendItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: moderateScale(14),
   },
-  legendDot: {
-    width: moderateScale(14),
-    height: moderateScale(14),
-    borderRadius: moderateScale(7),
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+    marginRight: SPACING.xs,
   },
-  legendLabel: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
-    fontWeight: "600",
-    color: COLORS.text,
-  },
-  legendValue: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+  legendText: {
+    fontSize: 12,
     color: COLORS.subText,
-    marginTop: moderateScale(2),
   },
   transactionCard: {
     backgroundColor: COLORS.card,
@@ -1511,17 +1815,17 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   transactionTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.text,
   },
   viewAllButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: moderateScale(4),
+    gap: 4,
   },
   viewAllText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontSize: 14,
     fontWeight: "600",
     color: COLORS.primary,
   },
@@ -1543,56 +1847,60 @@ const styles = StyleSheet.create({
     marginRight: SPACING.sm,
   },
   transactionStatusBadge: {
-    paddingHorizontal: moderateScale(8),
-    paddingVertical: moderateScale(3),
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: BORDER_RADIUS.xs,
     marginRight: SPACING.sm,
   },
   transactionStatusText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontSize: 12,
     fontWeight: "700",
   },
   transactionInfo: {
     flex: 1,
   },
   transactionPatient: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontSize: 14,
     fontWeight: "600",
     color: COLORS.text,
-    marginBottom: moderateScale(2),
+    marginBottom: 2,
   },
   transactionDate: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontSize: 12,
     color: COLORS.subText,
   },
   transactionItemRight: {
     alignItems: "flex-end",
   },
   transactionAmount: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontSize: 16,
     fontWeight: "700",
     color: COLORS.text,
-    marginBottom: moderateScale(2),
+    marginBottom: 2,
   },
   transactionFee: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontSize: 12,
     color: COLORS.subText,
   },
   noDataContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: SPACING.xl,
+    backgroundColor: COLORS.bg,
+    borderRadius: BORDER_RADIUS.md,
+    marginVertical: SPACING.sm,
   },
   noDataText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontSize: 16,
     color: COLORS.subText,
     textAlign: "center",
     marginBottom: SPACING.xs,
   },
   noDataSubText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontSize: 14,
     color: COLORS.placeholder,
     textAlign: "center",
+    maxWidth: 300,
   },
   breakdownCard: {
     backgroundColor: COLORS.card,
@@ -1618,7 +1926,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   breakdownTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontSize: 16,
     fontWeight: "600",
     color: COLORS.text,
   },
@@ -1632,11 +1940,11 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.xs,
   },
   breakdownLabel: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontSize: 14,
     color: COLORS.text,
   },
   breakdownValue: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
+    fontSize: 14,
     fontWeight: "600",
     color: COLORS.text,
   },
@@ -1646,9 +1954,15 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xl,
   },
   footerText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontSize: 12,
     color: COLORS.subText,
     textAlign: "center",
+  },
+  footerSubText: {
+    fontSize: 12,
+    color: COLORS.placeholder,
+    textAlign: "center",
+    marginTop: SPACING.xs,
   },
   modalOverlay: {
     flex: 1,
@@ -1659,7 +1973,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderTopLeftRadius: BORDER_RADIUS.lg,
     borderTopRightRadius: BORDER_RADIUS.lg,
-    maxHeight: SCREEN_HEIGHT * 0.7,
+    maxHeight: SCREEN_HEIGHT * 0.8,
   },
   modalHeader: {
     flexDirection: "row",
@@ -1670,18 +1984,25 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
   },
   modalTitle: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.lg),
+    fontSize: 18,
     fontWeight: "700",
     color: COLORS.text,
   },
   filterScroll: {
     padding: SPACING.lg,
   },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
+  },
   filterRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
@@ -1692,12 +2013,8 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     flex: 1,
   },
-  filterRowActive: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: BORDER_RADIUS.sm,
-  },
   filterText: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.md),
+    fontSize: 16,
     color: COLORS.text,
     flex: 1,
   },
@@ -1705,4 +2022,56 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: "600",
   },
+  applyButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: "center",
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.md,
+  },
+  applyButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  resetButton: {
+    backgroundColor: COLORS.border,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: "center",
+    marginBottom: SPACING.xl,
+  },
+  resetButtonText: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  // Filter Selection Styles
+  filterSelection: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  filterPill: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.round,
+    backgroundColor: COLORS.borderLight,
+  },
+  filterPillActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterPillText: {
+    fontSize: 14,
+    color: COLORS.subText,
+    fontWeight: "600",
+  },
+  filterPillTextActive: {
+    color: "#ffffff",
+  },
+  
 });

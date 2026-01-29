@@ -59,6 +59,7 @@ import { getCurrentDateFormatted } from "../../utils/dateTime";
 
 // Import Sidebar component
 import Sidebar, { SidebarItem } from "../Sidebar/sidebarIpd";
+import { DollarSign } from "lucide-react-native";
 
 // ---- Types ----
 type XY = { x: number | string; y: number };
@@ -337,13 +338,14 @@ const DashboardIpd: React.FC = () => {
       icon: FileMinusIcon, 
       onPress: () => go("DischargedPatientsIPD") 
     },
+    { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab
     { 
       key: "mgmt", 
       label: "Management", 
       icon: SettingsIcon, 
       onPress: () => go("Management") 
     },
-        { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
+    { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
 
     { 
       key: "help", 

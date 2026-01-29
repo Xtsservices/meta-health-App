@@ -203,7 +203,7 @@ const Sidebar: React.FC<Props> = ({
   ) ?? [];
   
   const operationsItems = items?.filter(item => 
-    item.key === "mgmt"  || item.key === "commission"
+    item.key === "revenue" || item.key === "mgmt"  || item.key === "commission"
   ) ?? [];
   
   const supportItems = items?.filter(item => 
