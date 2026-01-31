@@ -175,11 +175,16 @@ import OtPatientList from '../components/cardList/OtPatientList';
 import ApprovedRejectedList from '../components/cardList/ApprovedRejectedList';
 import OPDTriagePatientListScreen from '../components/cardList/PatientListScreen';
 import AddDoctorLeave from '../components/Management/LeaveManagement/AddDoctorLeave';
-import RevenueScreen from '../components/RevenueScreen';
-import AllTransactionsScreen from '../components/AllTransactionsScreen';
+import RevenueScreen from '../components/revenue/RevenueScreen';
+import AllTransactionsScreen from '../components/revenue/AllTransactionsScreen';
 import CommissionAndFeeScreen from '../components/CommissionAndFeeScreen/CommissionAndFeeScreen';
 import ExpenseManagementScreen from '../components/expense/ExpenseManagement';
 import CreateExpense from '../components/expense/CreateExpense';
+import CentralRevenueScreen from '../components/revenue/CentralRevenueScreen';
+import CentralTransactionsScreen from '../components/revenue/CentralTransactionsScreen';
+import HospitalComparisonScreen from '../components/revenue/HospitalComparisonScreen';
+import HospitalBreakdownScreen from '../components/revenue/HospitalBreakdownScreen';
+import RevenueTabNavigator from '../components/revenue/RevenueTabNavigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -1656,7 +1661,38 @@ const Routing = () => {
               headerShown: true,
           title: 'Create Expense'
         }} 
-      />
+      /><Stack.Screen 
+  name="CentralRevenue" 
+  component={CentralRevenueScreen} 
+  options={{ title: "Central Revenue" }}
+/>
+
+<Stack.Screen 
+  name="CentralTransactions" 
+  component={CentralTransactionsScreen} 
+  options={{ title: "All Transactions" }}
+/>
+
+<Stack.Screen 
+  name="HospitalComparison" 
+  component={HospitalComparisonScreen} 
+  options={{ title: "Hospital Comparison" }}
+/>
+
+<Stack.Screen 
+  name="HospitalBreakdown" 
+  component={HospitalBreakdownScreen} 
+  options={{ title: "Hospital Breakdown" }}
+/>
+<Stack.Screen
+  name="RevenueTabNavigator"
+  component={RevenueTabNavigator}
+  options={{ 
+        headerTitleAlign: 'center',
+        headerShown: true,
+    title: 'Revenue'
+  }} 
+/>
       </Stack.Navigator>
     </NavigationContainer>
   );

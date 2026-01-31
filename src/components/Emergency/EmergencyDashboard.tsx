@@ -53,6 +53,7 @@ import {
   CommissionIcon,
 } from "../../utils/SvgIcons";
 import { showError } from "../../store/toast.slice";
+import { DollarSign } from "lucide-react-native";
 
 // ---- Types ----
 type XY = { x: number | string; y: number };
@@ -345,6 +346,7 @@ const EmergencyDashboard: React.FC = () => {
       icon: FileMinusIcon,
       onPress: () => go("DischargedPatientsIPD")
     },
+    { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab
     {
       key: "mgmt",
       label: "Management",

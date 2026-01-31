@@ -83,4 +83,13 @@ export const COLORS = {
   warningLight: "#fef3c7",  // light yellow bg
   warningDark: "#92400e", 
   errorLight:"#fee2e2",
+   chartTeal: "#14b8a6",
+  chartPurple: "#a855f7",
+  chartBlue: "#3b82f6",
+  chartRed: "#ef4444",
+  chartGreen: "#10b981",
+  chartYellow: "#f59e0b",
+  chartPink: "#ec4899",
+  chartOrange: "#f97316",
+  chartIndigo: "#6366f1",
 };
