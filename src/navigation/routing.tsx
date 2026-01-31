@@ -178,6 +178,8 @@ import AddDoctorLeave from '../components/Management/LeaveManagement/AddDoctorLe
 import RevenueScreen from '../components/RevenueScreen';
 import AllTransactionsScreen from '../components/AllTransactionsScreen';
 import CommissionAndFeeScreen from '../components/CommissionAndFeeScreen/CommissionAndFeeScreen';
+import ExpenseManagementScreen from '../components/expense/ExpenseManagement';
+import CreateExpense from '../components/expense/CreateExpense';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -1637,7 +1639,24 @@ const Routing = () => {
     title: 'Commission & Fee'
   }} 
 />
-
+      <Stack.Screen 
+        name="ExpenseManagement" 
+        component={ExpenseManagementScreen}
+        options={{ 
+              headerTitleAlign: 'center',
+              headerShown: true,
+          title: 'Expense'
+        }} 
+      />
+      <Stack.Screen 
+        name="CreateExpense" 
+        component={CreateExpense}
+        options={{ 
+              headerTitleAlign: 'center',
+              headerShown: true,
+          title: 'Create Expense'
+        }} 
+      />
       </Stack.Navigator>
     </NavigationContainer>
   );

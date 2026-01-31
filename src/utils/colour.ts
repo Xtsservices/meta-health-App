@@ -82,4 +82,5 @@ export const COLORS = {
 
   warningLight: "#fef3c7",  // light yellow bg
   warningDark: "#92400e", 
+  errorLight:"#fee2e2",
 };
