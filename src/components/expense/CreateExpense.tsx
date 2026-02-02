@@ -56,7 +56,7 @@ import {
 } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { RootState } from '../../store/store';
-import { AuthFetch, UploadFiles, AuthPatch } from '../../auth/auth';
+import { AuthFetch, UploadFiles, UpdateFiles } from '../../auth/auth';
 import { showError, showSuccess } from '../../store/toast.slice';
 import { 
   moderateScale, 
@@ -260,13 +260,13 @@ const expenseFormValidationRules: ValidationRules = {
   ],
   billingDate: [
     {
-      custom: (value) => {
+      custom: (value, expenseDate) => {
         if (!value) return true; // Optional field
         const billingDate = new Date(value);
-        const expenseDate = new Date(formData.expenseDate);
-        expenseDate.setHours(0, 0, 0, 0);
+        const expDate = new Date(expenseDate);
+        expDate.setHours(0, 0, 0, 0);
         billingDate.setHours(0, 0, 0, 0);
-        return billingDate <= expenseDate;
+        return billingDate <= expDate;
       },
       message: "Billing date cannot be after expense date"
     }
@@ -299,6 +299,13 @@ interface Attachment {
   name: string;
   size?: number;
   id: string;
+}
+interface CreateExpenseScreenProps {
+  categories?: Category[];
+  userPermissions?: any;
+  mode?: 'create' | 'edit';
+  expenseData?: any;
+  onExpenseCreated?: () => void;
 }
 
 interface Entity {
@@ -362,6 +369,7 @@ interface InputFieldProps {
   editable?: boolean;
   error?: string;
   onBlur?: () => void;
+  maxLength?: number;
 }
 
 const InputField = memo(({ 
@@ -374,6 +382,7 @@ const InputField = memo(({
   editable = true,
   error,
   onBlur,
+  maxLength,
 }: InputFieldProps) => {
   const inputRef = useRef<TextInput>(null);
   
@@ -397,6 +406,7 @@ const InputField = memo(({
         keyboardType={keyboardType}
         editable={editable}
         onBlur={onBlur}
+        maxLength={maxLength}
       />
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
@@ -636,21 +646,33 @@ const PaymentMethodModal = memo(({
 
 // ========== MAIN COMPONENT ==========
 
-const CreateExpenseScreen = () => {
+const CreateExpenseScreen = ({ 
+  categories: propCategories = [], 
+  userPermissions = {},
+  mode = 'create',
+  expenseData: propExpenseData,
+  onExpenseCreated 
+}: CreateExpenseScreenProps) => {
   const navigation = useNavigation();
   const route = useRoute();
   const params = route.params as RouteParams;
   const dispatch = useDispatch();
   
-  const isEditMode = params?.mode === 'edit';
+  // Use mode from props if available, otherwise from params
+  const isEditMode = mode === 'edit' || params?.mode === 'edit';
   const expenseId = params?.expenseId;
   const existingExpenseData = params?.expenseData;
+
+  // Use categories from props
+  const [categories, setCategories] = useState<Category[]>(propCategories || []);
+  
+  // Determine which data source to use
+  const expenseDataToUse = propExpenseData || existingExpenseData;
   
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
   const [loadingEntities, setLoadingEntities] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState({
     categoryID: '',
     entityType: '',
@@ -699,11 +721,10 @@ const CreateExpenseScreen = () => {
 
   const selectedFileNames = useRef<Set<string>>(new Set());
   const user = useSelector((state: RootState) => state.currentUser);
-  console.log("Current User:", user)
 
   // Helper function to validate a specific field
   const validateField = useCallback((fieldName: string, value: any): string | null => {
-    const fieldRules = expenseFormValidationRules[fieldName];
+    const fieldRules = expenseFormValidationRules[fieldName as keyof ValidationRules];
     if (!fieldRules) return null;
 
     for (const rule of fieldRules) {
@@ -724,10 +745,9 @@ const CreateExpenseScreen = () => {
       }
 
       if (value && rule.custom) {
-        // Special handling for billing date validation which needs formData
         if (fieldName === 'billingDate') {
-          const expenseDate = formData.expenseDate;
-          if (!rule.custom(value, expenseDate)) {
+          // For billing date, pass expenseDate as second parameter
+          if (!rule.custom(value, formData.expenseDate)) {
             return rule.message;
           }
         } else if (!rule.custom(value)) {
@@ -744,7 +764,8 @@ const CreateExpenseScreen = () => {
     
     // Validate all fields
     Object.keys(expenseFormValidationRules).forEach(field => {
-      const error = validateField(field, formData[field as keyof typeof formData]);
+      const value = formData[field as keyof typeof formData];
+      const error = validateField(field, value);
       if (error) {
         newErrors[field] = error;
       }
@@ -766,7 +787,8 @@ const CreateExpenseScreen = () => {
   // Validate a field when it loses focus (onBlur)
   const handleFieldBlur = useCallback((fieldName: string) => {
     setTouched(prev => ({ ...prev, [fieldName]: true }));
-    const error = validateField(fieldName, formData[fieldName as keyof typeof formData]);
+    const value = formData[fieldName as keyof typeof formData];
+    const error = validateField(fieldName, value);
     setErrors(prev => ({ ...prev, [fieldName]: error || '' }));
   }, [formData, validateField]);
 
@@ -886,34 +908,55 @@ const CreateExpenseScreen = () => {
     // Update billing date validation dynamically
     if (expenseFormValidationRules.billingDate) {
       const billingRules = expenseFormValidationRules.billingDate;
-      // Update the custom validator to use current expenseDate
-      const customRule = billingRules.find(rule => rule.custom);
-      if (customRule) {
-        customRule.custom = (value: any) => {
-          if (!value) return true;
-          const billingDate = new Date(value);
-          const expenseDate = new Date(formData.expenseDate);
-          expenseDate.setHours(0, 0, 0, 0);
-          billingDate.setHours(0, 0, 0, 0);
-          return billingDate <= expenseDate;
-        };
-      }
+      // The custom validator is already defined to use expenseDate
+      // No need to update it dynamically
     }
   }, [formData.expenseDate]);
 
-  // Prefill form data with existing expense data
-  const prefillFormData = useCallback((expenseData: any) => {
-    console.log('Prefilling form with data:', expenseData);
-    
-    setFormData({
-      categoryID: expenseData.categoryID?.toString() || '',
+// Add this useEffect to handle incoming expense data
+useEffect(() => {
+  // If we have expense data from props (when editing from list)
+  if (propExpenseData) {
+    console.log('Received expense data from props:', propExpenseData);
+    prefillFormData(propExpenseData);
+  }
+  // If we have expense data from route params (when navigating directly)
+  else if (isEditMode && existingExpenseData) {
+    console.log('Received expense data from route:', existingExpenseData);
+    prefillFormData(existingExpenseData);
+  }
+}, [propExpenseData, isEditMode, existingExpenseData]);
+
+// Update the prefillFormData function
+const prefillFormData = useCallback((expenseData: any) => {
+  if (!expenseData) return;
+  
+  // Reset form first
+  setFormData({
+    categoryID: '',
+    entityType: '',
+    entityID: '',
+    expenseDate: new Date(),
+    billingDate: null,
+    amount: '',
+    paymentMethod: 'cash',
+    transactionID: '',
+    payeeName: '',
+    payeeContact: '',
+    description: '',
+    remarks: '',
+  });
+  
+  // Then set the new data
+  setFormData({
+    categoryID: expenseData.categoryID?.toString() || expenseData.categoryId?.toString() || '',
       entityType: expenseData.entityType || '',
-      entityID: expenseData.entityID?.toString() || '',
+      entityID: expenseData.entityID?.toString() || expenseData.entityId?.toString() || '',
       expenseDate: expenseData.expenseDate ? new Date(expenseData.expenseDate) : new Date(),
       billingDate: expenseData.billingDate ? new Date(expenseData.billingDate) : null,
       amount: expenseData.amount?.toString() || '',
       paymentMethod: expenseData.paymentMethod || 'cash',
-      transactionID: expenseData.transactionID || '',
+      transactionID: expenseData.transactionID || expenseData.transactionId || '',
       payeeName: expenseData.payeeName || '',
       payeeContact: expenseData.payeeContact || '',
       description: expenseData.description || '',
@@ -926,41 +969,59 @@ const CreateExpenseScreen = () => {
     }
 
     // Load selected category
-    if (expenseData.categoryID && categories.length > 0) {
-      const category = categories.find(cat => cat.id.toString() === expenseData.categoryID.toString());
-      if (category) {
-        setSelectedCategory(category);
+  const categoryId = expenseData.categoryID || expenseData.categoryId;
+  if (categoryId) {
+    // First check in the current categories state
+    const existingCategory = categories.find(cat => cat.id.toString() === categoryId.toString());
+    if (existingCategory) {
+      setSelectedCategory(existingCategory);
+    } else {
+      // If not found, try to find it in the propCategories
+      const propCategory = propCategories?.find(cat => cat.id.toString() === categoryId.toString());
+      if (propCategory) {
+        setSelectedCategory(propCategory);
+      } else {
+        // If still not found, create a temporary category object
+        setSelectedCategory({
+          id: Number(categoryId),
+          categoryName: expenseData.categoryName || `Category ${categoryId}`,
+          categoryType: expenseData.categoryType || 'general',
+          description: '',
+          hospitalID: user?.hospitalID || 0,
+          isActive: 1,
+          createdBy: user?.id || 0,
+          createdAt: '',
+          updatedAt: ''
+        });
       }
     }
+  }
 
     // Load selected entity
-    if (expenseData.entityType && expenseData.entityID) {
+    const entityType = expenseData.entityType;
+    const entityId = expenseData.entityID || expenseData.entityId;
+    
+    if (entityType && entityId) {
       // Check if it's an auto-selected entity type
-      if (isAutoSelectedEntity(expenseData.entityType)) {
-        const entityName = getAutoSelectedEntityName(expenseData.entityType);
-        const entity = {
-          id: expenseData.entityID,
+      if (isAutoSelectedEntity(entityType)) {
+        const entityName = getAutoSelectedEntityName(entityType);
+        setSelectedEntity({
+          id: entityId,
           name: entityName,
-        };
-        setSelectedEntity(entity);
+        });
       } else {
-        // For non-auto-selected entities, load them normally
-        setTimeout(() => {
-          loadEntities(expenseData.entityType);
-          
-          // Set selected entity after a delay to ensure entities are loaded
-          setTimeout(() => {
+          // For non-auto-selected entities
             const entity = {
-              id: expenseData.entityID,
-              name: expenseData.entityName || `Entity ${expenseData.entityID}`,
+              id: entityId,
+              name: expenseData.entityName || expenseData.departmentName || expenseData.wardName || `Entity ${entityId}`,
               ...expenseData
             };
             setSelectedEntity(entity);
-          }, 500);
-        }, 100);
+          
+          loadEntities(entityType);
       }
     }
-  }, [categories, isAutoSelectedEntity, getAutoSelectedEntityName]);
+  }, [categories, propCategories, user, isAutoSelectedEntity, getAutoSelectedEntityName]);
 
   const loadCategories = async () => {
     try {
@@ -968,7 +1029,7 @@ const CreateExpenseScreen = () => {
       if (!token || !user?.hospitalID) return;
 
       const response = await AuthFetch(`expense/categories/hospital/${user.hospitalID}`, token) as any;
-      console.log("ooooo",response)
+      
       if ((response?.status === 'success' || response?.message === 'success') && response?.data?.categories) {
         setCategories(response.data.categories);
       } else {
@@ -1019,10 +1080,6 @@ const CreateExpenseScreen = () => {
           break;
         case 'ward':
           await loadWards();
-          setLoadingEntities(false);
-          return;
-        case 'operation_theatre':
-          await loadOperationTheatres();
           setLoadingEntities(false);
           return;
         case 'hospital':
@@ -1114,28 +1171,6 @@ const CreateExpenseScreen = () => {
       setWards([]);
     } finally {
       setWardsLoading(false);
-    }
-  };
-
-  const loadOperationTheatres = async () => {
-    try {
-      setOtLoading(true);
-      const token = await AsyncStorage.getItem('token');
-      if (!token || !user?.hospitalID) return;
-
-      const response = await AuthFetch(`operation-theatre/hospital/${user.hospitalID}`, token) as any;
-      
-      if (response?.status === 'success' && response?.data?.operationTheatres) {
-        setOperationTheatres(response.data.operationTheatres);
-      } else {
-        setOperationTheatres([]);
-      }
-    } catch (error) {
-      console.error('Failed to load operation theatres:', error);
-      dispatch(showError('Failed to load operation theatres'));
-      setOperationTheatres([]);
-    } finally {
-      setOtLoading(false);
     }
   };
 
@@ -1251,7 +1286,7 @@ const CreateExpenseScreen = () => {
       }
     } else {
       // Load entities for types that need selection
-      const needsSelection = ['ward', 'operation_theatre'].includes(entityType);
+      const needsSelection = ['ward'].includes(entityType);
       const isDepartmentWithNoID = entityType === 'department' && !user?.departmentID;
       
       if (needsSelection || isDepartmentWithNoID) {
@@ -1595,18 +1630,12 @@ const CreateExpenseScreen = () => {
         token
       ) as any;
 
-      console.log('Create Expense Response:', response);
 if (response?.status === 'success' || response?.message === 'success') {
   dispatch(showSuccess('Expense created successfully'));
   resetForm();
-  
-  // Navigate back to ExpenseManagementScreen and switch to list tab
-  navigation.navigate('ExpenseManagement', { 
-    screen: 'ExpenseManagement',
-    params: { activeTab: 'list' }
-  });
-}
-else {
+
+  onExpenseCreated?.(); // ✅ THIS IS THE KEY
+}else {
         dispatch(showError(response?.message || 'Failed to create expense'));
       }
 
@@ -1645,34 +1674,45 @@ else {
 
       console.log('Updating expense with data:', updateData);
 
-const form = new FormData();
+      const form = new FormData();
 
-// append normal fields
-Object.entries(updateData).forEach(([key, value]) => {
-  if (value !== null && value !== undefined) {
-    form.append(key, String(value));
-  }
-});
+      // append normal fields
+      Object.entries(updateData).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) {
+          form.append(key, String(value));
+        }
+      });
 
-// ✅ send existing attachment IDs
-existingAttachments.forEach(att => {
-  form.append('existingAttachmentIds[]', att.id);
-});
+      // ✅ send existing attachment IDs
+      existingAttachments.forEach(att => {
+        form.append('existingAttachmentIds[]', att.id);
+      });
 
-// ✅ append new files if any
-attachments.forEach(file => {
-  form.append('attachments', {
-    uri: file.uri,
-    type: file.type,
-    name: file.name,
-  } as any);
-});
+      // ✅ append new files if any
+      attachments.forEach(file => {
+        form.append('attachments', {
+          uri: file.uri,
+          type: file.type,
+          name: file.name,
+        } as any);
+      });
 
-const response = await UploadFiles(
-  `expense/${expenseId}/hospital/${user.hospitalID}`,
-  form,
-  token
-);
+      // Use UpdateFiles for updating existing expense
+      const response = await UpdateFiles(
+        `expense/${expenseId}/hospital/${user.hospitalID}`,
+        form,
+        token
+      ) as any;
+
+      console.log('Update Expense Response:', response);
+      
+if (response?.status === 'success' || response?.message === 'success') {
+  dispatch(showSuccess('Expense updated successfully'));
+
+  onExpenseCreated?.(); // ✅ SAME FOR EDIT
+} else {
+        dispatch(showError(response?.message || 'Failed to update expense'));
+      }
 
     } catch (err: any) {
       console.error('Update Expense Error:', err);
@@ -1726,8 +1766,8 @@ const response = await UploadFiles(
         return selectedEntity.name || `Doctor ${selectedEntity.id}`;
       case 'ward':
         return selectedEntity.wardName || selectedEntity.name || `Ward ${selectedEntity.id}`;
-      case 'operation_theatre':
-        return selectedEntity.operationTheatreName || selectedEntity.name || `OT ${selectedEntity.id}`;
+      case 'department':
+        return selectedEntity.departmentName || selectedEntity.name || `Department ${selectedEntity.id}`;
       default:
         return selectedEntity.name || selectedEntity.departmentName || selectedEntity.pharmacyName || selectedEntity.labName || `Entity ${selectedEntity.id}`;
     }
@@ -1793,76 +1833,6 @@ const response = await UploadFiles(
                             formData.entityID === ward.id.toString() && styles.modalOptionTextSelected
                           ]}>
                             {ward.name}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))
-                  }
-                </ScrollView>
-              </>
-            )}
-          </>
-        );
-      }
-
-      if (formData.entityType === 'operation_theatre') {
-        return (
-          <>
-            {otLoading ? (
-              <View style={styles.modalLoading}>
-                <ActivityIndicator size="small" color={COLORS.brand} />
-                <Text style={styles.modalLoadingText}>Loading operation theatres...</Text>
-              </View>
-            ) : (
-              <>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search operation theatres..."
-                  placeholderTextColor={COLORS.placeholder}
-                  value={otSearch}
-                  onChangeText={setOtSearch}
-                />
-                <ScrollView 
-                  style={styles.modalScroll}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {operationTheatres
-                    .filter(ot => 
-                      ot.name.toLowerCase().includes(otSearch.toLowerCase())
-                    )
-                    .map((ot) => (
-                      <TouchableOpacity
-                        key={ot.id}
-                        style={[
-                          styles.modalOption,
-                          formData.entityID === ot.id.toString() && styles.modalOptionSelected
-                        ]}
-                        onPress={() => {
-                          const entityId = ot.id.toString();
-                          setFormData(prev => ({ 
-                            ...prev, 
-                            entityID: entityId 
-                          }));
-                          setSelectedEntity({
-                            id: ot.id,
-                            operationTheatreName: ot.name,
-                            name: ot.name
-                          });
-                          setShowEntitySelectionModal(false);
-                          // Clear entityID error
-                          setErrors(prev => ({ ...prev, entityID: '' }));
-                          if (!isEditMode) {
-                            fetchEntityAnalytics(entityId, 'operation_theatre');
-                          }
-                        }}
-                      >
-                        <View style={styles.wardOption}>
-                          <Scissors size={20} color={formData.entityID === ot.id.toString() ? COLORS.brand : COLORS.text} />
-                          <Text style={[
-                            styles.modalOptionText,
-                            formData.entityID === ot.id.toString() && styles.modalOptionTextSelected
-                          ]}>
-                            {ot.name}
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -2112,7 +2082,7 @@ const response = await UploadFiles(
             {/* Category Selection */}
             <SelectField
               label="Expense Category *"
-              value={selectedCategory?.categoryName}
+              value={selectedCategory?.categoryName || ''}
               placeholder="Select category"
               onPress={() => setShowCategoryModal(true)}
               icon={FileText}
@@ -2122,7 +2092,7 @@ const response = await UploadFiles(
             {/* Step 1: What is this expense for? */}
             <SelectField
               label="What is this expense for? *"
-              value={ENTITY_TYPES.find(e => e.id === formData.entityType)?.label}
+              value={ENTITY_TYPES.find(e => e.id === formData.entityType)?.label || ''}
               placeholder="Select expense type"
               onPress={() => setShowEntityModal(true)}
               icon={getEntityIcon(formData.entityType)}
@@ -2136,8 +2106,17 @@ const response = await UploadFiles(
                 <Text style={styles.label}>
                   {ENTITY_TYPES.find(e => e.id === formData.entityType)?.label} *
                 </Text>
+                <View style={styles.autoSelectedInfo}>
+                  <User size={20} color={COLORS.brand} style={styles.autoSelectedIcon} />
+                  <Text style={styles.autoSelectedText}>
+                    {getAutoSelectedEntityName(formData.entityType)}
+                  </Text>
+                </View>
+                <Text style={styles.autoSelectedNote}>
+                  Auto-selected based on your profile
+                </Text>
               </View>
-            ) : formData.entityType && ['ward', 'operation_theatre'].includes(formData.entityType) ? (
+            ) : formData.entityType && ['ward'].includes(formData.entityType) ? (
               <SelectField
                 label={`Select ${ENTITY_TYPES.find(e => e.id === formData.entityType)?.label || 'Entity'} *`}
                 value={getEntityDisplayName()}
@@ -2234,12 +2213,13 @@ const response = await UploadFiles(
                   keyboardType="numeric"
                   error={errors.amount}
                   onBlur={() => handleFieldBlur('amount')}
+                  maxLength={15}
                 />
               </View>
               <View style={styles.col}>
                 <SelectField
                   label="Payment Method *"
-                  value={PAYMENT_METHODS.find(p => p.id === formData.paymentMethod)?.label}
+                  value={PAYMENT_METHODS.find(p => p.id === formData.paymentMethod)?.label || ''}
                   placeholder="Select method"
                   onPress={() => setShowPaymentModal(true)}
                   icon={CreditCard}
@@ -2255,6 +2235,7 @@ const response = await UploadFiles(
               onChangeText={handleTransactionIDChange}
               error={errors.transactionID}
               onBlur={() => handleFieldBlur('transactionID')}
+              maxLength={50}
             />
 
             {/* Payee Details */}
@@ -2265,6 +2246,7 @@ const response = await UploadFiles(
               onChangeText={handlePayeeNameChange}
               error={errors.payeeName}
               onBlur={() => handleFieldBlur('payeeName')}
+              maxLength={100}
             />
 
             <InputField
@@ -2275,6 +2257,7 @@ const response = await UploadFiles(
               keyboardType="phone-pad"
               error={errors.payeeContact}
               onBlur={() => handleFieldBlur('payeeContact')}
+              maxLength={10}
             />
 
             {/* Description & Remarks */}
@@ -2286,6 +2269,7 @@ const response = await UploadFiles(
               multiline
               error={errors.description}
               onBlur={() => handleFieldBlur('description')}
+              maxLength={500}
             />
 
             <InputField
@@ -2296,6 +2280,7 @@ const response = await UploadFiles(
               multiline
               error={errors.remarks}
               onBlur={() => handleFieldBlur('remarks')}
+              maxLength={500}
             />
 
             {/* Attachments Section */}

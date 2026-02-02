@@ -52,7 +52,7 @@ const ExpenseManagementScreen = () => {
     canEdit: false,
     canDelete: false,
   });
-  
+  const [editingExpense, setEditingExpense] = useState<any | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const navigation = useNavigation();
@@ -163,6 +163,11 @@ const userRole =
       slideAnim.setValue(currentIndex * tabWidth);
     }
   };
+  const handleEditExpense = (expense: any) => {
+    setEditingExpense(expense);   // MUST be new object
+    setActiveTab('create');
+    scrollToTab(0);
+  };
 
   const TabButton = ({ 
     label, 
@@ -244,10 +249,13 @@ const userRole =
       >
         <View style={[styles.page, { width: SCREEN_WIDTH }]}>
           <CreateExpenseScreen 
+            key={editingExpense ? `edit-${editingExpense.id}` : 'create'}
             categories={categories}
             userPermissions={userPermissions}
+            mode={editingExpense ? 'edit' : 'create'}
+            expenseData={editingExpense}
             onExpenseCreated={() => {
-              // Refresh list when expense is created
+              setEditingExpense(null); // ✅ clear edit state
               setActiveTab('list');
               scrollToTab(1);
             }}
@@ -257,6 +265,11 @@ const userRole =
           <ExpensesListScreen 
             categories={categories}
             userPermissions={userPermissions}
+            onEditExpense={(expense) => {
+              setEditingExpense(expense);   // store expense
+              setActiveTab('create');       // switch tab
+              scrollToTab(0);               // animate slider + swipe
+            }}
           />
         </View>
         <View style={[styles.page, { width: SCREEN_WIDTH }]}>

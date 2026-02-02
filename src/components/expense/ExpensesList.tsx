@@ -20,7 +20,7 @@ import {
   Linking,
   ActionSheetIOS,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { 
@@ -64,10 +64,11 @@ import {
 import { COLORS } from '../../utils/colour';
 import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
+import { showSuccess } from '../../store/toast.slice';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGE_SIZE = 20;
-
+const dispatch = useDispatch
 
 
 const STATUS_OPTIONS = [
@@ -700,10 +701,12 @@ const FilterModal = ({
 /* ======================= EXPENSES LIST SCREEN ======================= */
 const ExpensesListScreen = ({ 
   categories, 
-  userPermissions 
+  userPermissions,
+  onEditExpense, 
 }: { 
   categories: any[];
   userPermissions: any;
+  onEditExpense: (expense: any) => void;
 }) => {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
@@ -748,12 +751,27 @@ const ExpensesListScreen = ({
 
 // In ExpensesListScreen.tsx, update the handleEditExpense function:
 const handleEditExpense = (expense: any) => {
-  // Navigate to CreateExpenseScreen with edit mode and expense data
-  navigation.navigate('CreateExpense' as never, { 
-    mode: 'edit',
-    expenseId: expense.id,
-    expenseData: expense 
-  });
+  const expenseToEdit = {
+    ...expense,
+    id: expense.id,
+    expenseId: expense.id, // Some components expect expenseId
+    categoryID: expense.categoryID || expense.categoryId,
+    entityType: expense.entityType,
+    entityID: expense.entityID || expense.entityId,
+    expenseDate: expense.expenseDate,
+    billingDate: expense.billingDate,
+    amount: expense.amount,
+    paymentMethod: expense.paymentMethod,
+    transactionID: expense.transactionID,
+    payeeName: expense.payeeName,
+    payeeContact: expense.payeeContact,
+    description: expense.description,
+    remarks: expense.remarks,
+    attachments: expense.attachments || [],
+  };
+  
+  console.log('Editing expense:', expenseToEdit);
+  onEditExpense(expenseToEdit); // ✅ Pass the complete expense object
 };
 
   /* ---------------- DELETE EXPENSE FUNCTION ---------------- */
@@ -775,7 +793,7 @@ const handleEditExpense = (expense: any) => {
       console.log('Delete response:', response);
 
       if (response?.status === 'success' || response?.message === 'success') {
-        Alert.alert('Success', 'Expense deleted successfully');
+         dispatch(showSuccess('Expense deleted successfully'));
         
         // Remove deleted expense from local state
         setExpenses(prev => prev.filter(exp => exp.id !== expenseId));

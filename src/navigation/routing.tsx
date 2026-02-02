@@ -1653,15 +1653,7 @@ const Routing = () => {
           title: 'Expense'
         }} 
       />
-      <Stack.Screen 
-        name="CreateExpense" 
-        component={CreateExpense}
-        options={{ 
-              headerTitleAlign: 'center',
-              headerShown: true,
-          title: 'Create Expense'
-        }} 
-      /><Stack.Screen 
+<Stack.Screen 
   name="CentralRevenue" 
   component={CentralRevenueScreen} 
   options={{ title: "Central Revenue" }}
