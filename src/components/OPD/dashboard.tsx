@@ -238,7 +238,7 @@ const Sidebar: React.FC<{
   ) ?? [];
   
   const operationsItems = items?.filter(item => 
-    item.key === "mgmt" || item.key === "revenue" || item.key === "commission"
+    item.key === "mgmt" || item.key === "revenue" || item.key === "commission" || item.key === "expense"
   ) ?? [];
   
   const supportItems = items?.filter(item => 
@@ -608,6 +608,12 @@ const Dashboard_Outpatient: React.FC = () => {
     { key: "app", label: "Appointments List", icon: ListIcon, onPress: () => go("AppointmentsList") },
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
     { key: "addp", label: "Add Patient", icon: UserPlusIcon, onPress: () => go("AddPatient") },
+      { 
+      key: "expense", 
+      label: "Expenditure", 
+      icon: ActivityIcon, // You can create a custom ExpenseIcon if needed
+      onPress: () => go("ExpenseManagement") 
+    },
     { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab
     { key: "mgmt", label: "Management", icon: SettingsIcon, onPress: () => go("Management") },
     { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},

@@ -197,6 +197,8 @@ DischargeSummaryDownload: undefined;
   AllTransactions:undefined;
 
   CommissionAndFee:undefined;
+  ExpenseManagement:undefined;
+  CreateExpense:undefined;
   CentralRevenue:undefined;
   CentralTransactions:undefined;
   HospitalComparison:undefined;

@@ -178,6 +178,8 @@ import AddDoctorLeave from '../components/Management/LeaveManagement/AddDoctorLe
 import RevenueScreen from '../components/revenue/RevenueScreen';
 import AllTransactionsScreen from '../components/revenue/AllTransactionsScreen';
 import CommissionAndFeeScreen from '../components/CommissionAndFeeScreen/CommissionAndFeeScreen';
+import ExpenseManagementScreen from '../components/expense/ExpenseManagement';
+import CreateExpense from '../components/expense/CreateExpense';
 import CentralRevenueScreen from '../components/revenue/CentralRevenueScreen';
 import CentralTransactionsScreen from '../components/revenue/CentralTransactionsScreen';
 import HospitalComparisonScreen from '../components/revenue/HospitalComparisonScreen';
@@ -1642,6 +1644,15 @@ const Routing = () => {
     title: 'Commission & Fee'
   }} 
 />
+      <Stack.Screen 
+        name="ExpenseManagement" 
+        component={ExpenseManagementScreen}
+        options={{ 
+              headerTitleAlign: 'center',
+              headerShown: true,
+          title: 'Expense'
+        }} 
+      />
 <Stack.Screen 
   name="CentralRevenue" 
   component={CentralRevenueScreen} 
