@@ -248,18 +248,20 @@ const userRole =
         style={styles.contentScrollView}
       >
         <View style={[styles.page, { width: SCREEN_WIDTH }]}>
-          <CreateExpenseScreen 
-            key={editingExpense ? `edit-${editingExpense.id}` : 'create'}
-            categories={categories}
-            userPermissions={userPermissions}
-            mode={editingExpense ? 'edit' : 'create'}
-            expenseData={editingExpense}
-            onExpenseCreated={() => {
-              setEditingExpense(null); // ✅ clear edit state
-              setActiveTab('list');
-              scrollToTab(1);
-            }}
-          />
+        <CreateExpenseScreen 
+          key={editingExpense ? `edit-${editingExpense.id}` : 'create'}
+          categories={categories}
+          userPermissions={userPermissions}
+          mode={editingExpense ? 'edit' : 'create'}
+          expenseData={editingExpense}
+          onExpenseCreated={() => {
+            setEditingExpense(null); // Clear edit state
+            
+            // Just switch to list tab - useFocusEffect will handle refresh
+            setActiveTab('list');
+            scrollToTab(1);
+          }}
+        />
         </View>
         <View style={[styles.page, { width: SCREEN_WIDTH }]}>
           <ExpensesListScreen 

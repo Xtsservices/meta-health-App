@@ -49,10 +49,12 @@ import {
   File,
   Image as ImageIcon,
   Paperclip,
+  Edit3,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { RootState } from '../../store/store';
-import { AuthFetch, AuthPatch, AuthDelete,  } from '../../auth/auth';
+import { AuthFetch, AuthPatch, AuthDelete } from '../../auth/auth';
 import { 
   moderateScale, 
   SPACING,
@@ -68,7 +70,6 @@ import { showSuccess } from '../../store/toast.slice';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PAGE_SIZE = 20;
-const dispatch = useDispatch
 
 
 const STATUS_OPTIONS = [
@@ -93,58 +94,204 @@ interface Filters {
   expenseNumber: string;
 }
 
-/* ---------------- ACTION SHEET FOR EDIT/DELETE ---------------- */
-const showActionSheet = (
-  expense: any,
-  onEdit: () => void,
-  onDelete: () => void,
-  userPermissions: any
-) => {
-  if (Platform.OS === 'ios') {
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        options: ['Cancel', 'Edit', 'Delete'],
-        destructiveButtonIndex: 2,
-        cancelButtonIndex: 0,
-      },
-      (buttonIndex) => {
-        if (buttonIndex === 1) {
-          onEdit();
-        } else if (buttonIndex === 2) {
-          onDelete();
-        }
-      }
-    );
-  } else {
-    Alert.alert(
-      'Expense Options',
-      'Choose an action',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Edit', onPress: onEdit },
-        { text: 'Delete', style: 'destructive', onPress: onDelete },
-      ]
-    );
-  }
+/* ---------------- ACTION MODAL COMPONENT ---------------- */
+interface ActionModalProps {
+  visible: boolean;
+  onClose: () => void;
+  expense: any;
+  onEdit: () => void;
+  onDelete: () => void;
+  isProcessingDelete?: boolean;
+}
+
+const ActionModal: React.FC<ActionModalProps> = ({
+  visible,
+  onClose,
+  expense,
+  onEdit,
+  onDelete,
+  isProcessingDelete = false,
+}) => {
+  const expenseNumber = expense?.expenseNumber || `EXP-${String(expense?.id).padStart(4, '0')}`;
+  
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity 
+        style={styles.actionModalOverlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <View style={styles.actionModalContent}>
+          <View style={styles.actionModalHeader}>
+            <Text style={styles.actionModalTitle}>Expense Options</Text>
+            <TouchableOpacity onPress={onClose} style={styles.actionModalCloseBtn}>
+              <X size={20} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.actionModalInfo}>
+            <FileText size={24} color={COLORS.primary} />
+            <Text style={styles.actionModalExpenseNumber}>{expenseNumber}</Text>
+            <Text style={styles.actionModalInfoText}>
+              {expense?.categoryName || 'Uncategorized'}
+            </Text>
+            <Text style={styles.actionModalInfoText}>
+              {expense?.payeeName || 'Unknown Payee'}
+            </Text>
+          </View>
+          
+          <View style={styles.actionModalDivider} />
+          
+          <TouchableOpacity
+            style={styles.actionModalOption}
+            onPress={() => {
+              onClose();
+              setTimeout(() => onEdit(), 300);
+            }}
+            disabled={isProcessingDelete}
+          >
+            <View style={[styles.actionModalIcon, { backgroundColor: COLORS.infoLight }]}>
+              <Edit3 size={18} color={COLORS.info} />
+            </View>
+            <View style={styles.actionModalOptionTexts}>
+              <Text style={styles.actionModalOptionTitle}>Edit Expense</Text>
+              <Text style={styles.actionModalOptionSubtitle}>Update expense details</Text>
+            </View>
+            <ChevronRight size={18} color={COLORS.sub} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.actionModalOption, styles.actionModalDeleteOption]}
+            onPress={() => {
+              onClose();
+              setTimeout(() => onDelete(), 300);
+            }}
+            disabled={isProcessingDelete}
+          >
+            <View style={[styles.actionModalIcon, { backgroundColor: COLORS.errorLight }]}>
+              <Trash2 size={18} color={COLORS.error} />
+            </View>
+            <View style={styles.actionModalOptionTexts}>
+              <Text style={styles.actionModalOptionTitle}>Delete Expense</Text>
+              <Text style={styles.actionModalOptionSubtitle}>Permanently remove expense</Text>
+            </View>
+            {isProcessingDelete ? (
+              <ActivityIndicator size="small" color={COLORS.error} />
+            ) : (
+              <ChevronRight size={18} color={COLORS.sub} />
+            )}
+          </TouchableOpacity>
+          
+          <View style={styles.actionModalDivider} />
+          
+          <TouchableOpacity
+            style={styles.actionModalCancelBtn}
+            onPress={onClose}
+            disabled={isProcessingDelete}
+          >
+            <Text style={styles.actionModalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 };
 
-/* ---------------- DELETE CONFIRMATION DIALOG ---------------- */
-const showDeleteConfirmation = (
-  expenseId: number,
-  expenseNumber: string,
-  onConfirm: () => void
-) => {
-  Alert.alert(
-    'Delete Expense',
-    `Are you sure you want to delete expense ${expenseNumber}? This action cannot be undone.`,
-    [
-      { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Delete', 
-        style: 'destructive',
-        onPress: onConfirm
-      },
-    ]
+/* ---------------- DELETE CONFIRMATION MODAL ---------------- */
+interface DeleteConfirmationModalProps {
+  visible: boolean;
+  onClose: () => void;
+  expense: any;
+  onConfirm: () => void;
+  isProcessingDelete?: boolean;
+}
+
+const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
+  visible,
+  onClose,
+  expense,
+  onConfirm,
+  isProcessingDelete = false,
+}) => {
+  const expenseNumber = expense?.expenseNumber || `EXP-${String(expense?.id).padStart(4, '0')}`;
+  
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity 
+        style={styles.deleteModalOverlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <View style={styles.deleteModalContent}>
+          <View style={styles.deleteModalIcon}>
+            <AlertTriangle size={40} color={COLORS.error} />
+          </View>
+          
+          <Text style={styles.deleteModalTitle}>Delete Expense?</Text>
+          
+          <Text style={styles.deleteModalMessage}>
+            Are you sure you want to delete expense <Text style={styles.deleteModalHighlight}>{expenseNumber}</Text>? 
+            This action cannot be undone.
+          </Text>
+          
+          <View style={styles.deleteModalDetails}>
+            <View style={styles.deleteModalDetailItem}>
+              <Text style={styles.deleteModalDetailLabel}>Category:</Text>
+              <Text style={styles.deleteModalDetailValue}>
+                {expense?.categoryName || 'Uncategorized'}
+              </Text>
+            </View>
+            <View style={styles.deleteModalDetailItem}>
+              <Text style={styles.deleteModalDetailLabel}>Payee:</Text>
+              <Text style={styles.deleteModalDetailValue}>
+                {expense?.payeeName || 'Unknown Payee'}
+              </Text>
+            </View>
+            <View style={styles.deleteModalDetailItem}>
+              <Text style={styles.deleteModalDetailLabel}>Amount:</Text>
+              <Text style={styles.deleteModalDetailValue}>
+                ₹{expense?.amount?.toLocaleString('en-IN') || '0'}
+              </Text>
+            </View>
+          </View>
+          
+          <View style={styles.deleteModalButtons}>
+            <TouchableOpacity
+              style={[styles.deleteModalButton, styles.deleteModalCancelButton]}
+              onPress={onClose}
+              disabled={isProcessingDelete}
+            >
+              <Text style={styles.deleteModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.deleteModalButton, styles.deleteModalConfirmButton]}
+              onPress={onConfirm}
+              disabled={isProcessingDelete}
+            >
+              {isProcessingDelete ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Trash2 size={16} color="#fff" style={styles.deleteModalButtonIcon} />
+                  <Text style={styles.deleteModalConfirmText}>Delete</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
   );
 };
 
@@ -264,7 +411,7 @@ const AttachmentItem = ({ attachment }: { attachment: any }) => {
     }
   };
 
-  const isImage = isImageFile(attachment?.fileName);
+  const isImage = isImageFile();
   const fileName = getFileName(attachment?.fileName);
 
   return (
@@ -479,7 +626,7 @@ const FilterModal = ({
                     styles.categoryOptionText,
                     { color: localFilters.categoryId === category.id.toString() ? '#fff' : COLORS.text }
                   ]}>
-                    {category.categoryName}
+                    {category.name}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -713,11 +860,14 @@ const ExpensesListScreen = ({
   const [refreshing, setRefreshing] = useState(false);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
   const [processingDelete, setProcessingDelete] = useState<number | null>(null);
-  
+  const dispatch = useDispatch(); // ✅ HERE
   const [filters, setFilters] = useState<Filters>({
     filterType: 'all',
     filterValue: '',
@@ -749,35 +899,60 @@ const ExpensesListScreen = ({
     return `${day}/${month}/${year}`;
   };
 
-// In ExpensesListScreen.tsx, update the handleEditExpense function:
-const handleEditExpense = (expense: any) => {
-  const expenseToEdit = {
-    ...expense,
-    id: expense.id,
-    expenseId: expense.id, // Some components expect expenseId
-    categoryID: expense.categoryID || expense.categoryId,
-    entityType: expense.entityType,
-    entityID: expense.entityID || expense.entityId,
-    expenseDate: expense.expenseDate,
-    billingDate: expense.billingDate,
-    amount: expense.amount,
-    paymentMethod: expense.paymentMethod,
-    transactionID: expense.transactionID,
-    payeeName: expense.payeeName,
-    payeeContact: expense.payeeContact,
-    description: expense.description,
-    remarks: expense.remarks,
-    attachments: expense.attachments || [],
+  const handleEditExpense = (expense: any) => {
+    const expenseToEdit = {
+      ...expense,
+      id: expense.id,
+      expenseId: expense.id,
+      categoryID: expense.categoryID || expense.categoryId,
+      entityType: expense.entityType,
+      entityID: expense.entityID || expense.entityId,
+      expenseDate: expense.expenseDate,
+      billingDate: expense.billingDate,
+      amount: expense.amount,
+      paymentMethod: expense.paymentMethod,
+      transactionID: expense.transactionID,
+      payeeName: expense.payeeName,
+      payeeContact: expense.payeeContact,
+      description: expense.description,
+      remarks: expense.remarks,
+      attachments: expense.attachments || [],
+    };
+    
+    console.log('Editing expense:', expenseToEdit);
+    onEditExpense(expenseToEdit);
   };
-  
-  console.log('Editing expense:', expenseToEdit);
-  onEditExpense(expenseToEdit); // ✅ Pass the complete expense object
-};
 
-  /* ---------------- DELETE EXPENSE FUNCTION ---------------- */
-  const handleDeleteExpense = async (expenseId: number, expenseNumber: string) => {
+  /* ---------------- HANDLE MENU BUTTON CLICK ---------------- */
+  const handleMenuPress = (expense: any) => {
+    setSelectedExpense(expense);
+    setShowActionModal(true);
+  };
+
+  /* ---------------- HANDLE EDIT FROM MODAL ---------------- */
+  const handleEditFromModal = () => {
+    if (selectedExpense) {
+      handleEditExpense(selectedExpense);
+      setShowActionModal(false);
+    }
+  };
+
+  /* ---------------- HANDLE DELETE FROM MODAL ---------------- */
+  const handleDeleteFromModal = () => {
+    if (selectedExpense) {
+      setShowActionModal(false);
+      setTimeout(() => {
+        setShowDeleteModal(true);
+      }, 300);
+    }
+  };
+
+  /* ---------------- CONFIRM DELETE ---------------- */
+  const handleConfirmDelete = async () => {
+    if (!selectedExpense) return;
+    
     try {
-      setProcessingDelete(expenseId);
+      setProcessingDelete(selectedExpense.id);
       const token = await AsyncStorage.getItem('token');
       
       if (!token || !user?.hospitalID) {
@@ -786,23 +961,26 @@ const handleEditExpense = (expense: any) => {
         return;
       }
 
-      const url = `expense/${expenseId}/hospital/${user.hospitalID}`;
+      const url = `expense/${selectedExpense.id}/hospital/${user.hospitalID}`;
       console.log('Deleting expense URL:', url);
       
       const response = await AuthDelete(url, token) as any;
       console.log('Delete response:', response);
 
       if (response?.status === 'success' || response?.message === 'success') {
-         dispatch(showSuccess('Expense deleted successfully'));
+        dispatch(showSuccess('Expense deleted successfully'));
         
         // Remove deleted expense from local state
-        setExpenses(prev => prev.filter(exp => exp.id !== expenseId));
+        setExpenses(prev => prev.filter(exp => exp.id !== selectedExpense.id));
         setTotalRecords(prev => prev - 1);
         
         // If this was the only expense, refresh the list
         if (expenses.length === 1) {
           loadExpenses(1);
         }
+        
+        setShowDeleteModal(false);
+        setSelectedExpense(null);
       } else {
         Alert.alert('Error', response?.message || 'Failed to delete expense');
       }
@@ -923,72 +1101,76 @@ const handleEditExpense = (expense: any) => {
     return `${baseUrl}${queryParams}`;
   };
 
-  const loadExpenses = async (page: number = 1) => {
-    try {
-      setLoading(true);
-      const token = await AsyncStorage.getItem('token');
-      if (!token || !user?.hospitalID) {
-        setLoading(false);
-        return;
-      }
+const loadExpenses = async (page: number = 1) => {
+  try {
+    setLoading(true);
+    const token = await AsyncStorage.getItem('token');
+    if (!token || !user?.hospitalID) {
+      setLoading(false);
+      return;
+    }
 
-      const url = buildApiUrl(page);
-      if (!url) {
-        setExpenses([]);
-        setTotalRecords(0);
-        setHasMore(false);
-        setLoading(false);
-        return;
-      }
-
-      console.log('Loading expenses from URL:', url);
-      const response = await AuthFetch(url, token) as any;
-      console.log('API Response:', response);
-      
-      if (response?.data?.expenses) {
-        // LIST response (default / filters)
-        const expensesData = response.data.expenses;
-        const totalCount = response.data.count ?? expensesData.length;
-
-        setExpenses(page === 1 ? expensesData : prev => [...prev, ...expensesData]);
-        setTotalRecords(totalCount);
-        setHasMore(page < Math.ceil(totalCount / PAGE_SIZE));
-        setCurrentPage(page);
-
-      } else if (response?.data?.expense) {
-        // SINGLE expense (ID / Number filter)
-        setExpenses([response.data.expense]);
-        setTotalRecords(1);
-        setHasMore(false);
-        setCurrentPage(1);
-
-      } else {
-        setExpenses([]);
-        setTotalRecords(0);
-        setHasMore(false);
-      }
-
-    } catch (error) {
-      console.error('Failed to load expenses:', error);
-      Alert.alert('Error', 'Failed to load expenses');
+    const url = buildApiUrl(page);
+    if (!url) {
       setExpenses([]);
       setTotalRecords(0);
       setHasMore(false);
-    } finally {
       setLoading(false);
-      setRefreshing(false);
+      return;
     }
-  };
+
+    console.log('📡 Loading expenses from URL:', url);
+    const response = await AuthFetch(url, token) as any;
+    console.log('✅ API Response:', response);
+    
+    // ... rest of your loading logic
+    
+  } catch (error) {
+    console.error('❌ Failed to load expenses:', error);
+    setExpenses([]);
+    setTotalRecords(0);
+    setHasMore(false);
+  } finally {
+    setLoading(false);
+    setRefreshing(false); // IMPORTANT: Always reset refreshing
+  }
+};
 
   useEffect(() => {
     loadExpenses(1);
   }, [filters]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadExpenses(1);
-    }, [])
-  );
+useFocusEffect(
+  useCallback(() => {
+    console.log('🔄 ExpensesListScreen focused - refreshing data');
+    
+    let isActive = true;
+    
+    const refreshData = async () => {
+      if (isActive) {
+        try {
+          setRefreshing(true);
+          await loadExpenses(1);
+        } catch (error) {
+          console.error('Refresh error:', error);
+        } finally {
+          if (isActive) {
+            setRefreshing(false);
+          }
+        }
+      }
+    };
+    
+    // Trigger refresh immediately
+    refreshData();
+    
+    return () => {
+      isActive = false;
+      console.log('📱 ExpensesListScreen unfocused');
+    };
+  }, [filters]) // Include filters as dependency
+);
+
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -1021,68 +1203,69 @@ const handleEditExpense = (expense: any) => {
     });
     setShowFilterModal(false);
   };
-const handleExportExpenses = async () => {
-  if (!expenses.length) {
-    Alert.alert('No data', 'There are no expenses to export');
-    return;
-  }
 
-  try {
-    const headers = [
-      'Expense Number',
-      'Expense Date',
-      'Category',
-      'Entity Type',
-      'Entity Name',
-      'Payee',
-      'Amount',
-      'Payment Method',
-      'Status',
-      'Description',
-    ];
+  const handleExportExpenses = async () => {
+    if (!expenses.length) {
+      Alert.alert('No data', 'There are no expenses to export');
+      return;
+    }
 
-    const rows = expenses.map((e) => [
-      e.expenseNumber || `EXP-${String(e.id).padStart(4, '0')}`,
-      e.expenseDate ? formatDateSimple(e.expenseDate) : '',
-      e.categoryName || '',
-      e.entityType || '',
-      e.entityName || '',
-      e.payeeName || '',
-      e.amount || 0,
-      e.paymentMethod || '',
-      e.status || '',
-      e.description || '',
-    ]);
+    try {
+      const headers = [
+        'Expense Number',
+        'Expense Date',
+        'Category',
+        'Entity Type',
+        'Entity Name',
+        'Payee',
+        'Amount',
+        'Payment Method',
+        'Status',
+        'Description',
+      ];
 
-    const csvContent =
-      [headers, ...rows]
-        .map(row =>
-          row.map(cell =>
-            `"${String(cell).replace(/"/g, '""')}"`
-          ).join(',')
-        )
-        .join('\n');
+      const rows = expenses.map((e) => [
+        e.expenseNumber || `EXP-${String(e.id).padStart(4, '0')}`,
+        e.expenseDate ? formatDateSimple(e.expenseDate) : '',
+        e.categoryName || '',
+        e.entityType || '',
+        e.entityName || '',
+        e.payeeName || '',
+        e.amount || 0,
+        e.paymentMethod || '',
+        e.status || '',
+        e.description || '',
+      ]);
 
-    const fileName = `expenses_${Date.now()}.csv`;
-    const filePath =
-      Platform.OS === 'android'
-        ? `${RNFS.DownloadDirectoryPath}/${fileName}`
-        : `${RNFS.DocumentDirectoryPath}/${fileName}`;
+      const csvContent =
+        [headers, ...rows]
+          .map(row =>
+            row.map(cell =>
+              `"${String(cell).replace(/"/g, '""')}"`
+            ).join(',')
+          )
+          .join('\n');
 
-    await RNFS.writeFile(filePath, csvContent, 'utf8');
+      const fileName = `expenses_${Date.now()}.csv`;
+      const filePath =
+        Platform.OS === 'android'
+          ? `${RNFS.DownloadDirectoryPath}/${fileName}`
+          : `${RNFS.DocumentDirectoryPath}/${fileName}`;
 
-    await Share.open({
-      url: Platform.OS === 'android' ? `file://${filePath}` : filePath,
-      type: 'text/csv',
-      filename: fileName,
-      failOnCancel: false,
-    });
+      await RNFS.writeFile(filePath, csvContent, 'utf8');
 
-  } catch (error) {
-    console.error('Export error:', error);
-    Alert.alert('Export failed', 'Could not export expenses');
-  }
-};
+      await Share.open({
+        url: Platform.OS === 'android' ? `file://${filePath}` : filePath,
+        type: 'text/csv',
+        filename: fileName,
+        failOnCancel: false,
+      });
+
+    } catch (error) {
+      console.error('Export error:', error);
+      Alert.alert('Export failed', 'Could not export expenses');
+    }
+  };
 
   const handleApprove = async (expenseId: number) => {
     if (!userPermissions.canApprove) {
@@ -1192,72 +1375,71 @@ const handleExportExpenses = async () => {
     }
   };
 
-const renderHeader = () => (
-  <View style={styles.header}>
-    <View style={styles.headerRow}>
-      
-      {/* LEFT: Scrollable Filters */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.quickFiltersContainer}
-        contentContainerStyle={styles.quickFiltersContent}
-      >
-        <TouchableOpacity
-          style={[styles.quickFilterButton, { backgroundColor: COLORS.card }]}
-          onPress={() => setShowFilterModal(true)}
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <View style={styles.headerRow}>
+        
+        {/* LEFT: Scrollable Filters */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.quickFiltersContainer}
+          contentContainerStyle={styles.quickFiltersContent}
         >
-          <Filter size={14} color={COLORS.brand} />
-          <Text style={[styles.quickFilterText, { color: COLORS.text }]}>
-            Filter By
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.quickFilterButton, { backgroundColor: COLORS.card }]}
+            onPress={() => setShowFilterModal(true)}
+          >
+            <Filter size={14} color={COLORS.brand} />
+            <Text style={[styles.quickFilterText, { color: COLORS.text }]}>
+              Filter By
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.quickFilterButton,
-            {
-              backgroundColor: hasActiveFilters ? COLORS.brandLight : COLORS.card,
-            },
-          ]}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <Text
+          <TouchableOpacity
             style={[
-              styles.quickFilterText,
+              styles.quickFilterButton,
               {
-                color: hasActiveFilters ? COLORS.brand : COLORS.text,
+                backgroundColor: hasActiveFilters ? COLORS.brandLight : COLORS.card,
               },
             ]}
-            numberOfLines={1}
+            onPress={() => setShowFilterModal(true)}
           >
-            {getFilterDescription()}
-          </Text>
+            <Text
+              style={[
+                styles.quickFilterText,
+                {
+                  color: hasActiveFilters ? COLORS.brand : COLORS.text,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {getFilterDescription()}
+            </Text>
+          </TouchableOpacity>
+
+          {hasActiveFilters && (
+            <TouchableOpacity
+              onPress={handleResetFilters}
+              style={styles.clearAllButton}
+            >
+              <Text style={styles.clearAllText}>Clear Filter</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+
+        {/* RIGHT: Export Button (fixed) */}
+        <TouchableOpacity
+          style={styles.exportButton}
+          onPress={handleExportExpenses}
+        >
+          <Download size={16} color={COLORS.brand} />
+          <Text style={styles.exportText}>Export</Text>
         </TouchableOpacity>
 
-        {hasActiveFilters && (
-          <TouchableOpacity
-            onPress={handleResetFilters}
-            style={styles.clearAllButton}
-          >
-            <Text style={styles.clearAllText}>Clear Filter</Text>
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-
-      {/* RIGHT: Export Button (fixed) */}
-      <TouchableOpacity
-        style={styles.exportButton}
-        onPress={handleExportExpenses}
-      >
-        <Download size={16} color={COLORS.brand} />
-        <Text style={styles.exportText}>Export</Text>
-      </TouchableOpacity>
-
+      </View>
     </View>
-  </View>
-);
-
+  );
 
   const renderEmpty = () => (
     <View style={styles.emptyWrap}>
@@ -1277,7 +1459,6 @@ const renderHeader = () => (
   );
 
   const renderExpenseItem = ({ item }: { item: any }) => {
-    console.log("765456546youuu",item)
     const paddedId = String(item?.id ?? '').padStart(4, '0');
     const payeeName = item?.payeeName || 'Unknown Payee';
     const categoryName = item?.categoryName || 'Uncategorized';
@@ -1325,16 +1506,7 @@ const renderHeader = () => (
               style={styles.menuButton}
               onPress={(e) => {
                 e.stopPropagation();
-                showActionSheet(
-                  item,
-                  () => handleEditExpense(item),
-                  () => showDeleteConfirmation(
-                    item.id,
-                    expenseNumber,
-                    () => handleDeleteExpense(item.id, expenseNumber)
-                  ),
-                  userPermissions
-                );
+                handleMenuPress(item);
               }}
               disabled={isProcessingDelete}
             >
@@ -1553,6 +1725,25 @@ const renderHeader = () => (
         onResetFilters={handleResetFilters}
         categories={categories}
       />
+
+      {/* Action Modal */}
+      <ActionModal
+        visible={showActionModal}
+        onClose={() => setShowActionModal(false)}
+        expense={selectedExpense}
+        onEdit={handleEditFromModal}
+        onDelete={handleDeleteFromModal}
+        isProcessingDelete={processingDelete === selectedExpense?.id}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        expense={selectedExpense}
+        onConfirm={handleConfirmDelete}
+        isProcessingDelete={processingDelete === selectedExpense?.id}
+      />
     </SafeAreaView>
   );
 };
@@ -1721,29 +1912,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   headerRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-},
-
-exportButton: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 6,
-  paddingHorizontal: 12,
-  paddingVertical: 8,
-  marginLeft: 8,
-  borderRadius: 8,
-  borderWidth: 1,
-  borderColor: COLORS.border,
-  backgroundColor: COLORS.card,
-},
-
-exportText: {
-  fontSize: 12,
-  fontWeight: '600',
-  color: COLORS.brand,
-},
-
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginLeft: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  exportText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.brand,
+  },
   dateInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2084,6 +2272,205 @@ exportText: {
   },
   pageBtnDisabled: {
     opacity: 0.4,
+  },
+  
+  // Action Modal Styles
+  actionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  actionModalContent: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  actionModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  actionModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  actionModalCloseBtn: {
+    padding: 4,
+  },
+  actionModalInfo: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 8,
+  },
+  actionModalExpenseNumber: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  actionModalInfoText: {
+    fontSize: 14,
+    color: COLORS.sub,
+    textAlign: 'center',
+  },
+  actionModalDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  actionModalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  actionModalDeleteOption: {
+    backgroundColor: COLORS.errorLight + '20',
+  },
+  actionModalIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionModalOptionTexts: {
+    flex: 1,
+  },
+  actionModalOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  actionModalOptionSubtitle: {
+    fontSize: 13,
+    color: COLORS.sub,
+  },
+  actionModalCancelBtn: {
+    padding: 16,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  actionModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  
+  // Delete Confirmation Modal Styles
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  deleteModalContent: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.errorLight,
+  },
+  deleteModalIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.errorLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  deleteModalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.error,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  deleteModalMessage: {
+    fontSize: 15,
+    color: COLORS.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  deleteModalHighlight: {
+    fontWeight: '700',
+    color: COLORS.error,
+  },
+  deleteModalDetails: {
+    width: '100%',
+    backgroundColor: COLORS.bg,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  deleteModalDetailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  deleteModalDetailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.sub,
+  },
+  deleteModalDetailValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+  },
+  deleteModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  deleteModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  deleteModalCancelButton: {
+    backgroundColor: COLORS.bg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  deleteModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  deleteModalConfirmButton: {
+    backgroundColor: COLORS.error,
+  },
+  deleteModalButtonIcon: {
+    marginRight: 4,
+  },
+  deleteModalConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
 

@@ -109,7 +109,7 @@ const ENTITY_TYPES = [
   },
   { 
     id: 'department', 
-    label: 'OPD/IPD Department', 
+    label: 'Department', 
     icon: Building,
     description: 'Expense for OPD/IPD department'
   },
@@ -125,6 +125,14 @@ const ENTITY_TYPES = [
     icon: Hospital,
     description: 'General hospital expense'
   },
+];
+
+// OPD/IPD Department Sub-types
+const DEPARTMENT_SUB_TYPES = [
+  { id: 'ipd', label: 'IPD (Inpatient Department)' },
+  { id: 'opd', label: 'OPD (Outpatient Department)' },
+  { id: 'emergency', label: 'Emergency Department' },
+  { id: 'triage', label: 'Triage Area' },
 ];
 
 // Expense form validation rules
@@ -531,7 +539,8 @@ const EntityModal = memo(({
   visible, 
   onClose, 
   formData, 
-  handleEntityTypeSelect 
+  handleEntityTypeSelect,
+  isEditMode
 }: any) => (
   <Modal
     visible={visible}
@@ -561,12 +570,15 @@ const EntityModal = memo(({
                 key={entity.id}
                 style={[
                   styles.entityOption,
-                  formData.entityType === entity.id && styles.entityOptionSelected
+                  formData.entityType === entity.id && styles.entityOptionSelected,
+                  isEditMode && styles.optionDisabled
                 ]}
                 onPress={() => {
+                  if (isEditMode) return;
                   handleEntityTypeSelect(entity.id);
                   onClose();
                 }}
+                disabled={isEditMode}
               >
                 <View style={styles.entityOptionIcon}>
                   <Icon size={24} color={formData.entityType === entity.id ? COLORS.brand : COLORS.sub} />
@@ -574,11 +586,13 @@ const EntityModal = memo(({
                 <View style={styles.entityOptionContent}>
                   <Text style={[
                     styles.entityOptionTitle,
-                    formData.entityType === entity.id && styles.entityOptionTitleSelected
+                    formData.entityType === entity.id && styles.entityOptionTitleSelected,
+                    isEditMode && styles.optionTextDisabled
                   ]}>
                     {entity.label}
+                    {isEditMode && formData.entityType === entity.id && ' (Cannot be changed)'}
                   </Text>
-                  <Text style={styles.entityOptionDescription}>
+                  <Text style={[styles.entityOptionDescription, isEditMode && styles.optionTextDisabled]}>
                     {entity.description}
                   </Text>
                 </View>
@@ -644,6 +658,69 @@ const PaymentMethodModal = memo(({
   </Modal>
 ));
 
+const DepartmentSubTypeModal = memo(({ 
+  visible, 
+  onClose, 
+  formData, 
+  setFormData,
+  isEditMode
+}: any) => (
+  <Modal
+    visible={visible}
+    transparent
+    animationType="slide"
+    onRequestClose={onClose}
+  >
+    <View 
+      style={styles.modalOverlay}
+      pointerEvents={visible ? 'auto' : 'none'}
+    >
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Select Department Type</Text>
+          <TouchableOpacity onPress={onClose}>
+            <X size={24} color={COLORS.sub} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView 
+          style={styles.modalScroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {DEPARTMENT_SUB_TYPES.map((subType) => (
+            <TouchableOpacity
+              key={subType.id}
+              style={[
+                styles.modalOption,
+                formData.departmentSubType === subType.id && styles.modalOptionSelected,
+                isEditMode && styles.optionDisabled
+              ]}
+              onPress={() => {
+                if (isEditMode) return;
+                setFormData((prev: any) => ({ 
+                  ...prev, 
+                  departmentSubType: subType.id,
+                  entityID: `${prev.entityID}_${subType.id}` // Combine department ID with sub-type
+                }));
+                onClose();
+              }}
+              disabled={isEditMode}
+            >
+              <Text style={[
+                styles.modalOptionText,
+                formData.departmentSubType === subType.id && styles.modalOptionTextSelected,
+                isEditMode && styles.optionTextDisabled
+              ]}>
+                {subType.label}
+                {isEditMode && formData.departmentSubType === subType.id && ' (Cannot be changed)'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>
+));
+
 // ========== MAIN COMPONENT ==========
 
 const CreateExpenseScreen = ({ 
@@ -686,6 +763,7 @@ const CreateExpenseScreen = ({
     payeeContact: '',
     description: '',
     remarks: '',
+    departmentSubType: '', 
   });
 
   // Validation errors state
@@ -699,6 +777,7 @@ const CreateExpenseScreen = ({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showEntitySelectionModal, setShowEntitySelectionModal] = useState(false);
+  const [showDepartmentSubTypeModal, setShowDepartmentSubTypeModal] = useState(false);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
@@ -778,6 +857,9 @@ const CreateExpenseScreen = ({
     
     if (!formData.entityID) {
       newErrors.entityID = "Please select the specific entity";
+    }
+    if (formData.entityType === 'department' && formData.departmentSubType && !formData.entityID.includes('_')) {
+      newErrors.entityID = "Please select department sub-type";
     }
     
     setErrors(newErrors);
@@ -877,7 +959,7 @@ const CreateExpenseScreen = ({
   }, [user?.id, user?.hospitalID, user?.departmentID]);
 
   // Helper function to get auto-selected entity name
-  const getAutoSelectedEntityName = useCallback((entityType: string): string => {
+  const getAutoSelectedEntityName = useCallback((entityType: string, departmentSubType?: string): string => {
     switch (entityType) {
       case 'doctor':
         return user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || `Doctor (ID: ${user?.id})`;
@@ -886,7 +968,12 @@ const CreateExpenseScreen = ({
       case 'lab':
         return 'Lab Department';
       case 'department':
-        return user?.departmentName || 'Department';
+        const baseName = user?.departmentName || 'Department';
+        if (departmentSubType) {
+          const subType = DEPARTMENT_SUB_TYPES.find(st => st.id === departmentSubType);
+          return `${baseName} - ${subType?.label || departmentSubType}`;
+        }
+        return baseName;
       case 'hospital':
         return 'Hospital General';
       default:
@@ -945,7 +1032,18 @@ const prefillFormData = useCallback((expenseData: any) => {
     payeeContact: '',
     description: '',
     remarks: '',
+    departmentSubType: '',
   });
+  let departmentSubType = '';
+  let entityId = expenseData.entityID?.toString() || expenseData.entityId?.toString() || '';
+  
+  if (expenseData.entityType === 'department' && entityId.includes('_')) {
+    const parts = entityId.split('_');
+    if (parts.length > 1) {
+      entityId = parts[0]; // Get the base department ID
+      departmentSubType = parts.slice(1).join('_'); // Get the sub-type
+    }
+  }
   
   // Then set the new data
   setFormData({
@@ -961,6 +1059,7 @@ const prefillFormData = useCallback((expenseData: any) => {
       payeeContact: expenseData.payeeContact || '',
       description: expenseData.description || '',
       remarks: expenseData.remarks || '',
+      departmentSubType: departmentSubType || expenseData.departmentSubType || '',
     });
 
     // Load existing attachments
@@ -999,12 +1098,11 @@ const prefillFormData = useCallback((expenseData: any) => {
 
     // Load selected entity
     const entityType = expenseData.entityType;
-    const entityId = expenseData.entityID || expenseData.entityId;
     
     if (entityType && entityId) {
       // Check if it's an auto-selected entity type
       if (isAutoSelectedEntity(entityType)) {
-        const entityName = getAutoSelectedEntityName(entityType);
+        const entityName = getAutoSelectedEntityName(entityType, departmentSubType);
         setSelectedEntity({
           id: entityId,
           name: entityName,
@@ -1073,6 +1171,7 @@ const prefillFormData = useCallback((expenseData: any) => {
           if (user?.departmentID) {
             autoSelectEntityId = user.departmentID.toString();
             autoSelectEntityName = user.departmentName || 'Department';
+            setShowDepartmentSubTypeModal(true);
           } else {
             // Fallback to loading departments for selection
             endpoint = `department/hospital/${user.hospitalID}`;
@@ -1107,7 +1206,7 @@ const prefillFormData = useCallback((expenseData: any) => {
         setErrors(prev => ({ ...prev, entityID: '' }));
         
         // Fetch analytics for auto-selected entities in create mode
-        if (!isEditMode) {
+        if (!isEditMode && entityType !== 'department') {
           fetchEntityAnalytics(autoSelectEntityId, entityType);
         }
         
@@ -1253,8 +1352,9 @@ const prefillFormData = useCallback((expenseData: any) => {
     // Clear previous selections
     setFormData(prev => ({ 
       ...prev, 
-      entityType: entityType, 
+      entityType,
       entityID: '',
+      departmentSubType: '',
     }));
     setSelectedEntity(null);
     setEntityAnalytics([]);
@@ -1276,25 +1376,24 @@ const prefillFormData = useCallback((expenseData: any) => {
         id: autoSelectEntityId,
         name: getAutoSelectedEntityName(entityType),
       });
-      
-      // Clear entityID error
-      setErrors(prev => ({ ...prev, entityID: '' }));
-      
-      // Fetch analytics for auto-selected entities in create mode
-      if (!isEditMode) {
+
+    // For department type with auto-select, show sub-type modal
+    if (entityType === 'department' && autoSelectEntityId) {
+      setShowDepartmentSubTypeModal(true);
+    } else if (!isEditMode && entityType !== 'department') {
         fetchEntityAnalytics(autoSelectEntityId, entityType);
       }
     } else {
       // Load entities for types that need selection
-      const needsSelection = ['ward'].includes(entityType);
-      const isDepartmentWithNoID = entityType === 'department' && !user?.departmentID;
+    if (entityType === 'ward') {
+      loadWards();
+    }
       
-      if (needsSelection || isDepartmentWithNoID) {
+      if (entityType === 'department' && !user?.departmentID) {
         loadEntities(entityType);
-        setShowEntitySelectionModal(true);
       }
     }
-  }, [getAutoSelectedEntityId, getAutoSelectedEntityName, isEditMode, user?.departmentID]);
+  }, []);
 
   const generateFileId = useCallback((name: string, size?: number): string => {
     return `${name}_${size || 0}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1602,6 +1701,11 @@ const prefillFormData = useCallback((expenseData: any) => {
       if (formData.billingDate) {
         form.append('billingDate', formatDateSimple(formData.billingDate, 'YYYY-MM-DD'));
       }
+      
+      // Add department sub-type if exists
+      if (formData.departmentSubType) {
+        form.append('departmentSubType', formData.departmentSubType);
+      }
 
       // Append attachments
       attachments.forEach(file => {
@@ -1616,6 +1720,7 @@ const prefillFormData = useCallback((expenseData: any) => {
         categoryID: formData.categoryID,
         entityType: formData.entityType,
         entityID: formData.entityID,
+        departmentSubType: formData.departmentSubType,
         expenseDate: formatDateSimple(formData.expenseDate, 'YYYY-MM-DD'),
         amount: formData.amount,
         paymentMethod: formData.paymentMethod,
@@ -1688,14 +1793,14 @@ if (response?.status === 'success' || response?.message === 'success') {
         form.append('existingAttachmentIds[]', att.id);
       });
 
-      // ✅ append new files if any
-      attachments.forEach(file => {
-        form.append('attachments', {
-          uri: file.uri,
-          type: file.type,
-          name: file.name,
-        } as any);
-      });
+      // ✅ DO NOT append new files in edit mode (attachments cannot be edited)
+      // attachments.forEach(file => {
+      //   form.append('attachments', {
+      //     uri: file.uri,
+      //     type: file.type,
+      //     name: file.name,
+      //   } as any);
+      // });
 
       // Use UpdateFiles for updating existing expense
       const response = await UpdateFiles(
@@ -1736,6 +1841,7 @@ if (response?.status === 'success' || response?.message === 'success') {
       payeeContact: '',
       description: '',
       remarks: '',
+      departmentSubType: '',
     });
     setSelectedCategory(null);
     setSelectedEntity(null);
@@ -1767,11 +1873,16 @@ if (response?.status === 'success' || response?.message === 'success') {
       case 'ward':
         return selectedEntity.wardName || selectedEntity.name || `Ward ${selectedEntity.id}`;
       case 'department':
-        return selectedEntity.departmentName || selectedEntity.name || `Department ${selectedEntity.id}`;
+        const baseName = selectedEntity.departmentName || selectedEntity.name || `Department ${selectedEntity.id}`;
+        if (formData.departmentSubType) {
+          const subType = DEPARTMENT_SUB_TYPES.find(st => st.id === formData.departmentSubType);
+          return `${baseName} - ${subType?.label || formData.departmentSubType}`;
+        }
+        return baseName;
       default:
         return selectedEntity.name || selectedEntity.departmentName || selectedEntity.pharmacyName || selectedEntity.labName || `Entity ${selectedEntity.id}`;
     }
-  }, [selectedEntity, formData.entityType]);
+  }, [selectedEntity, formData.entityType, formData.departmentSubType]);
 
   // EntitySelectionModal Component (needs to stay inside due to local state dependencies)
   const EntitySelectionModal = memo(() => {
@@ -1806,9 +1917,11 @@ if (response?.status === 'success' || response?.message === 'success') {
                         key={ward.id}
                         style={[
                           styles.modalOption,
-                          formData.entityID === ward.id.toString() && styles.modalOptionSelected
+                          formData.entityID === ward.id.toString() && styles.modalOptionSelected,
+                          isEditMode && styles.optionDisabled
                         ]}
                         onPress={() => {
+                          if (isEditMode) return;
                           const entityId = ward.id.toString();
                           setFormData(prev => ({ 
                             ...prev, 
@@ -1826,13 +1939,16 @@ if (response?.status === 'success' || response?.message === 'success') {
                             fetchEntityAnalytics(entityId, 'ward');
                           }
                         }}
+                        disabled={isEditMode}
                       >
                         <View style={styles.wardOption}>
                           <Text style={[
                             styles.modalOptionText,
-                            formData.entityID === ward.id.toString() && styles.modalOptionTextSelected
+                            formData.entityID === ward.id.toString() && styles.modalOptionTextSelected,
+                            isEditMode && styles.optionTextDisabled
                           ]}>
                             {ward.name}
+                            {isEditMode && formData.entityID === ward.id.toString() && ' (Cannot be changed)'}
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -1885,31 +2001,34 @@ if (response?.status === 'success' || response?.message === 'success') {
                         key={entity.id}
                         style={[
                           styles.modalOption,
-                          formData.entityID === entity.id.toString() && styles.modalOptionSelected
+                          formData.entityID === entity.id.toString() && styles.modalOptionSelected,
+                          isEditMode && styles.optionDisabled
                         ]}
                         onPress={() => {
-                          const entityId = entity.id.toString();
+                          if (isEditMode) return;
                           setFormData(prev => ({ 
                             ...prev, 
-                            entityID: entityId 
+                            entityID: entity.id.toString() 
                           }));
                           setSelectedEntity(entity);
                           setShowEntitySelectionModal(false);
+                          // Show department sub-type modal after selecting department
+                          setShowDepartmentSubTypeModal(true);
                           // Clear entityID error
                           setErrors(prev => ({ ...prev, entityID: '' }));
-                          if (!isEditMode) {
-                            fetchEntityAnalytics(entityId, formData.entityType);
-                          }
                         }}
+                        disabled={isEditMode}
                       >
                         <View style={styles.wardOption}>
                           <EntityIcon size={20} color={formData.entityID === entity.id.toString() ? COLORS.brand : COLORS.text} />
                           <View style={styles.entityDetails}>
                             <Text style={[
                               styles.modalOptionText,
-                              formData.entityID === entity.id.toString() && styles.modalOptionTextSelected
+                              formData.entityID === entity.id.toString() && styles.modalOptionTextSelected,
+                              isEditMode && styles.optionTextDisabled
                             ]}>
                               {entity.name || `Entity ${entity.id}`}
+                              {isEditMode && formData.entityID === entity.id.toString() && ' (Cannot be changed)'}
                             </Text>
                           </View>
                         </View>
@@ -2037,28 +2156,50 @@ if (response?.status === 'success' || response?.message === 'success') {
               <View style={styles.fileDetails}>
                 <Text style={styles.fileName} numberOfLines={1}>
                   {file.name}
+                  {isEditMode && file.isExisting && ' (Existing - Cannot be removed)'}
+                  {isEditMode && !file.isExisting && ' (New - Will be added)'}
                 </Text>
                 <Text style={styles.fileSize}>
                   {file.size ? `(${Math.round(file.size / 1024)} KB)` : ''}
-                  {file.isExisting && <Text style={styles.existingTag}> • Existing</Text>}
+                  {!isEditMode && file.isExisting && <Text style={styles.existingTag}> • Existing</Text>}
                 </Text>
               </View>
             </View>
-            <TouchableOpacity 
-              onPress={() => {
-                if (file.isExisting) {
-                  removeExistingAttachment(file.id);
-                } else {
-                  removeAttachment(file.id);
-                }
-              }}
-              style={styles.deleteButton}
-            >
-              <Trash2 size={16} color={COLORS.error}/>
-            </TouchableOpacity>
+            {(!isEditMode || !file.isExisting) && (
+              <TouchableOpacity 
+                onPress={() => {
+                  if (file.isExisting) {
+                    removeExistingAttachment(file.id);
+                  } else {
+                    removeAttachment(file.id);
+                  }
+                }}
+                style={styles.deleteButton}
+              >
+                <Trash2 size={16} color={COLORS.error}/>
+              </TouchableOpacity>
+            )}
           </View>
         ))}
       </View>
+    );
+  };
+
+  const renderDepartmentSubTypeField = () => {
+    if (formData.entityType !== 'department') return null;
+    
+    const selectedSubType = DEPARTMENT_SUB_TYPES.find(st => st.id === formData.departmentSubType);
+    
+    return (
+      <SelectField
+        label="Department Type *"
+        value={selectedSubType?.label || ''}
+        placeholder="Select department type (IPD/OPD/Emergency/Triage)"
+        onPress={() => setShowDepartmentSubTypeModal(true)}
+        icon={Building}
+        editable={!isEditMode}
+        error={formData.entityType === 'department' && !formData.departmentSubType ? "Please select department type" : ''}
+      />
     );
   };
 
@@ -2109,11 +2250,12 @@ if (response?.status === 'success' || response?.message === 'success') {
                 <View style={styles.autoSelectedInfo}>
                   <User size={20} color={COLORS.brand} style={styles.autoSelectedIcon} />
                   <Text style={styles.autoSelectedText}>
-                    {getAutoSelectedEntityName(formData.entityType)}
+                    {getAutoSelectedEntityName(formData.entityType, formData.departmentSubType)}
                   </Text>
                 </View>
                 <Text style={styles.autoSelectedNote}>
                   Auto-selected based on your profile
+                  {isEditMode && ' (Cannot be changed)'}
                 </Text>
               </View>
             ) : formData.entityType && ['ward'].includes(formData.entityType) ? (
@@ -2128,19 +2270,12 @@ if (response?.status === 'success' || response?.message === 'success') {
                 editable={!isEditMode}
                 error={errors.entityID}
               />
-            ) : formData.entityType === 'department' && !user?.departmentID ? (
-              <SelectField
-                label="Select Department *"
-                value={getEntityDisplayName()}
-                placeholder="Select department"
-                onPress={() => setShowEntitySelectionModal(true)}
-                showId={true}
-                idValue={formData.entityID || ''}
-                icon={getEntityIcon(formData.entityType)}
-                editable={!isEditMode}
-                error={errors.entityID}
-              />
             ) : null}
+
+            {/* For department type with auto-select, show sub-type field */}
+            {formData.entityType === 'department' && user?.departmentID && (
+              renderDepartmentSubTypeField()
+            )}
 
             {/* ANALYTICS SECTION - Shows previous expenses (only in create mode) */}
             {renderAnalyticsSection()}
@@ -2286,27 +2421,40 @@ if (response?.status === 'success' || response?.message === 'success') {
             {/* Attachments Section */}
             <View style={styles.block}>
               <View style={styles.attachmentHeader}>
-                <Text style={styles.label}>Attachments (Optional)</Text>
-                {(attachments.length > 0 || existingAttachments.length > 0) && (
+                <Text style={styles.label}>
+                  Attachments {isEditMode ? '(Cannot be edited)' : '(Optional)'}
+                </Text>
+                {(!isEditMode && (attachments.length > 0 || existingAttachments.length > 0)) && (
                   <TouchableOpacity onPress={clearAllAttachments}>
                     <Text style={styles.clearAllText}>Clear All</Text>
                   </TouchableOpacity>
                 )}
               </View>
               
-              {/* Single Upload Button (Changed from three separate buttons) */}
-              <TouchableOpacity style={styles.uploadButton} onPress={showUploadOptions}>
-                <Upload size={20} color="#fff" />
-                <Text style={styles.uploadButtonText}>Select Files</Text>
-              </TouchableOpacity>
+              {/* Single Upload Button - Disabled in edit mode */}
+              {!isEditMode ? (
+                <TouchableOpacity style={styles.uploadButton} onPress={showUploadOptions}>
+                  <Upload size={20} color="#fff" />
+                  <Text style={styles.uploadButtonText}>Select Files</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={[styles.uploadButton, styles.uploadButtonDisabled]}>
+                  <Upload size={20} color={COLORS.sub} />
+                  <Text style={[styles.uploadButtonText, styles.uploadButtonTextDisabled]}>
+                    Attachments cannot be edited
+                  </Text>
+                </View>
+              )}
 
               {/* Selected Files List */}
               {(attachments.length === 0 && existingAttachments.length === 0) ? (
                 <View style={styles.emptyState}>
                   <Upload size={48} color={COLORS.sub} />
-                  <Text style={styles.emptyStateText}>No files selected</Text>
+                  <Text style={styles.emptyStateText}>
+                    {isEditMode ? 'Existing attachments (if any) are shown above' : 'No files selected'}
+                  </Text>
                   <Text style={styles.emptyStateSubText}>
-                    Tap "Select Files" to choose files to upload
+                    {isEditMode ? 'Attachments cannot be modified in edit mode' : 'Tap "Select Files" to choose files to upload'}
                   </Text>
                 </View>
               ) : (
@@ -2315,12 +2463,14 @@ if (response?.status === 'success' || response?.message === 'success') {
                   <Text style={styles.selectedCountText}>
                     {attachments.length + existingAttachments.length} file{(attachments.length + existingAttachments.length) !== 1 ? 's' : ''} selected
                     {existingAttachments.length > 0 && ` (${existingAttachments.length} existing)`}
+                    {isEditMode && ' - Existing attachments cannot be removed'}
                   </Text>
                 </>
               )}
               
               <Text style={styles.attachmentHint}>
                 Supports PDF, JPG, PNG (Max 5MB each)
+                {isEditMode && ' - Attachments are read-only in edit mode'}
               </Text>
             </View>
 
@@ -2348,7 +2498,7 @@ if (response?.status === 'success' || response?.message === 'success') {
 
             <Text style={styles.formNote}>
               * Required fields. Expense will be submitted for admin approval.
-              {isEditMode && '\nNote: Entity type and entity cannot be changed after creation.'}
+              {isEditMode && '\nNote: Entity type, entity, and attachments cannot be changed after creation.'}
             </Text>
           </View>
         </ScrollView>
@@ -2367,6 +2517,7 @@ if (response?.status === 'success' || response?.message === 'success') {
           onClose={() => setShowEntityModal(false)}
           formData={formData}
           handleEntityTypeSelect={handleEntityTypeSelect}
+          isEditMode={isEditMode}
         />
         <EntitySelectionModal />
         <PaymentMethodModal 
@@ -2374,6 +2525,13 @@ if (response?.status === 'success' || response?.message === 'success') {
           onClose={() => setShowPaymentModal(false)}
           formData={formData}
           setFormData={setFormData}
+        />
+        <DepartmentSubTypeModal
+          visible={showDepartmentSubTypeModal}
+          onClose={() => setShowDepartmentSubTypeModal(false)}
+          formData={formData}
+          setFormData={setFormData}
+          isEditMode={isEditMode}
         />
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -2696,11 +2854,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: SPACING.lg,
   },
+  uploadButtonDisabled: {
+    backgroundColor: '#e5e7eb',
+    borderColor: COLORS.border,
+    borderWidth: 1,
+  },
   uploadButtonText: {
     color: '#fff',
     marginLeft: SPACING.sm,
     fontWeight: '600',
     fontSize: getResponsiveFontSize(FONT_SIZE.md),
+  },
+  uploadButtonTextDisabled: {
+    color: COLORS.sub,
   },
   emptyState: {
     alignItems: 'center',
@@ -2900,6 +3066,12 @@ const styles = StyleSheet.create({
   },
   entityOptionDescription: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    color: COLORS.sub,
+  },
+  optionDisabled: {
+    opacity: 0.5,
+  },
+  optionTextDisabled: {
     color: COLORS.sub,
   },
   wardOption: {
