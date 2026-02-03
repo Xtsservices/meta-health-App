@@ -616,6 +616,7 @@ const handleSalesPayment = useCallback(
       const url = `medicineInventoryPatientsOrder/${user.hospitalID}/payment/${patientTimeLineID}/updatePatientOrderStatus`;
 
       const response = await AuthPost(url, payload, token);
+      console.log("111",payload)
       return response;
     }
 
@@ -751,6 +752,7 @@ const handleSalesPayment = useCallback(
 
       try {
         const response = await AuthPost(endpointPath, formDataToSend, token);
+         console.log("2222",formDataToSend)
         return response;
       } catch (error: any) {
         throw error;
@@ -956,6 +958,7 @@ const handleSalesPayment = useCallback(
       // Endpoint: /reception/{hospitalID}/{patientId}/{timelineId}/payFromReception
       const url = `reception/${user.hospitalID}/${patientId}/${timelineId}/payFromReception`;
       const response = await AuthPost(url, payload, token);
+      console.log("33333",payload)
       return response;
     },
     [

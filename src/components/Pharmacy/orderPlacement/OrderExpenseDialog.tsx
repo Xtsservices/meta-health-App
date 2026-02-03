@@ -464,8 +464,11 @@ const AddOrderScreen: React.FC = () => {
       <FlatList
         data={medicineTypes}
         keyExtractor={(item) => item}
-        keyboardShouldPersistTaps="handled"
-        scrollEnabled={medicineTypes.length > 6}
+        keyboardShouldPersistTaps="always"
+        nestedScrollEnabled={true}  
+        scrollEnabled={true}
+
+        showsVerticalScrollIndicator={true}
         style={{ maxHeight: 200 }}
         renderItem={({ item }) => (
                         <Pressable
@@ -478,10 +481,13 @@ const AddOrderScreen: React.FC = () => {
                             setShowCategorySuggestions(false);
                           }}
                         >
-                          <Text style={[
+            <Text
+              style={[
                             styles.dropdownItemText,
-                            selectedMedicineData.category === item && styles.dropdownItemTextSelected
-                          ]}>
+                            selectedMedicineData.category === item &&
+                  styles.dropdownItemTextSelected
+              ]}
+            >
                             {item}
                           </Text>
                         </Pressable>

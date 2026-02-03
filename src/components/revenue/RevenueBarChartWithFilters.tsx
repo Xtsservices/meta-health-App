@@ -833,7 +833,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: COLORS.error,
     textAlign: "center",
     marginTop: SPACING.sm,
     marginBottom: SPACING.xs,

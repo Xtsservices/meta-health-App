@@ -1,5 +1,5 @@
 // screens/CommissionAndFeeScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -10,6 +10,7 @@ import {
   ScrollView
 } from 'react-native';
 import { ArrowLeft, ArrowRight } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { 
   moderateScale, 
   responsiveWidth,
@@ -30,8 +31,27 @@ const TABS = [
 
 const CommissionAndFeeScreen = () => {
   const [activeTab, setActiveTab] = useState<string>('commission');
+  const [screenFocused, setScreenFocused] = useState<boolean>(false);
+  const [forceReloadKey, setForceReloadKey] = useState<number>(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // Use focus effect to track when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      console.log('CommissionAndFeeScreen focused');
+      setScreenFocused(true);
+      
+      // Trigger a reload when screen comes into focus
+      setForceReloadKey(prev => prev + 1);
+      
+      // Cleanup when screen loses focus
+      return () => {
+        console.log('CommissionAndFeeScreen unfocused');
+        setScreenFocused(false);
+      };
+    }, [])
+  );
 
   const scrollToTab = (tabIndex: number) => {
     const tabWidth = responsiveWidth(100) / TABS.length;
@@ -129,13 +149,15 @@ const CommissionAndFeeScreen = () => {
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          onScrollEndDrag={handleSwipe}
+          onMomentumScrollEnd={handleSwipe}
           style={styles.contentScrollView}
         >
           <View style={[styles.page, { width: SCREEN_WIDTH }]}>
-            <CommissionScreen />
+            <CommissionScreen key={`commission-${forceReloadKey}`} />
           </View>
           <View style={[styles.page, { width: SCREEN_WIDTH }]}>
-            <ConsultationFeeScreen />
+            <ConsultationFeeScreen key={`fee-${forceReloadKey}`} />
           </View>
         </ScrollView>
       </>

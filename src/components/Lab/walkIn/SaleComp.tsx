@@ -593,6 +593,8 @@ const SaleComp: React.FC = () => {
         token
       ) as any;
 
+      console.log("med",response)
+
       if (response?.data?.status === 200) {
         const data = response?.data?.medicines;
         const filteredMedicineStock = data
@@ -1115,12 +1117,12 @@ const SaleComp: React.FC = () => {
               />
               
               {/* Suggestions dropdown */}
-              {(isLoading || filteredMedicines.length > 0) && searchQuery && searchQuery.trim().length >= 1 && (
+              {searchQuery.trim().length >= 1 && (
                 <View style={[
                   styles.suggBox, 
                   { 
                     borderColor: COLORS.border, 
-                    backgroundColor: COLORS.card 
+                    backgroundColor: COLORS.card
                   }
                 ]}>
                   {isLoading ? (
@@ -1130,33 +1132,33 @@ const SaleComp: React.FC = () => {
                   ) : (
                     <FlatList
                       data={filteredMedicines}
-                      keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                      keyExtractor={(item) => item.id?.toString()}
                       keyboardShouldPersistTaps="handled"
                       renderItem={({ item }) => (
-                        <Pressable 
+                        <Pressable
                           style={[
                             styles.suggRow,
-                            selectedMedicine?.id === item.id && { backgroundColor: COLORS.brand + '20' }
-                          ]} 
+                            selectedMedicine?.id === item.id && {
+                            backgroundColor: COLORS.brand + "20",
+                          },
+                          ]}
                           onPress={() => {
                             setSelectedMedicine(item);
                             setSearchQuery(item.name);
-                            // Clear suggestions when item is selected
-                            setSuggestions([]);
                           }}
                         >
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.suggestionText, { color: COLORS.text }]}>{item.name}</Text>
-                            <View style={styles.suggDetails}>
-                              <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
-                                Qty: {item.quantity} | HSN: {item.hsn}
+                            <Text style={[styles.suggestionText, { color: COLORS.text }]}>
+                              {item.name}
                               </Text>
                               <Text style={{ color: COLORS.sub, fontSize: FONT_SIZE.xs }}>
-                                Expiry: {new Date(item.expiryDate).toLocaleDateString()}
+                              Qty: {item.quantity} | Exp:{" "}
+                              {new Date(item.expiryDate).toLocaleDateString()}
                               </Text>
                             </View>
-                          </View>
-                          <Text style={[styles.suggestionPrice, { color: COLORS.text }]}>₹{item.sellingPrice}</Text>
+                         <Text style={{ fontWeight: "700", color: COLORS.text }}>
+                  ₹{item.sellingPrice}
+                </Text>
                         </Pressable>
                       )}
                       ListEmptyComponent={
@@ -1830,8 +1832,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    top: "100%",
-    marginTop: SPACING.xs,
+    bottom: "100%",
+    marginBottom: SPACING.xs,
     borderWidth: 1,
     borderRadius: SPACING.sm,
     maxHeight: 200,
@@ -1841,7 +1843,7 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -2 },
   },
   suggRow: {
     paddingHorizontal: SPACING.sm,

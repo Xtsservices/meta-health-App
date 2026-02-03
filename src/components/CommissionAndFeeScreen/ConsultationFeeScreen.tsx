@@ -15,6 +15,7 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { X, Plus, History, CheckCircle } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { AuthFetch, AuthPatch, AuthPost } from '../../auth/auth';
 import { RootState } from '../../store/store';
 import { 
@@ -197,11 +198,23 @@ const ConsultationFeeScreen = () => {
         setLoading(false);
       }
     }
-  }, [dispatch]);
+  }, [dispatch, user?.id, user?.hospitalID]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Load data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+      
+      // Cleanup function if needed
+      return () => {
+        console.log('Consultation fee screen unfocused');
+      };
+    }, [loadData])
+  );
 
   const loadActiveFee = async () => {
     try {
@@ -330,6 +343,7 @@ const ConsultationFeeScreen = () => {
       dispatch(showError(errorMessage));
     } finally {
       setSubmitting(false);
+     setShowFeeModal(false);
     }
   };
 

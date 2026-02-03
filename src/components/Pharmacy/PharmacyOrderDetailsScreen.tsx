@@ -36,7 +36,7 @@ interface MedicineItem {
   id: string | number;
   name?: string;
   medicineName?: string;
-  medicineType?: string;
+  medicineType?: number;
   hsn?: string;
   price?: number;
   sellingPrice?: number;
@@ -78,12 +78,16 @@ interface NurseType {
 }
 
 const medicineCategoryReverse: Record<number, string> = {
-  1: "Tablet",
-  2: "Capsule", 
-  3: "Syrup",
-  4: "Injection",
-  5: "Ointment",
-  6: "Drops"
+  1: "Capsule",
+  2: "Syrups", 
+  3: "Tablets",
+  4: "Injections",
+  5: "IvLine",
+  6: "Tubing",
+  7: "Topical",
+  8: "Drops",
+  9: "Spray",
+  10:"Ventilator",
 };
 
 const PharmacyOrderDetailsScreen: React.FC = () => {
@@ -524,7 +528,7 @@ const handleConfirmDecrement = () => {
                         {medicine.medicineName || medicine.name || "Unnamed Medicine"}
                       </Text>
                       <Text style={styles.tdSub}>
-                        Type: {medicineCategoryReverse[Number(medicine.medicineType)] || medicine.category || "N/A"}
+                        Type: {medicineCategoryReverse[medicine.medicineType ?? 0] || "N/A"}
                       </Text>
                       {medicine.hsn ? (
                         <Text style={styles.tdSub}>HSN: {medicine.hsn}</Text>

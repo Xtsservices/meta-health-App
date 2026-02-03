@@ -353,7 +353,7 @@ const PharmacyExpenses: React.FC = () => {
 
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search supplier, contact, manufacturer"
+                  placeholder="Search contact or manufacturer"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholderTextColor={COLORS.sub}
