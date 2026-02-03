@@ -26,6 +26,7 @@ import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
 import { debounce } from "../../../utils/debounce";
+import { ageFromDOB, ageFromDOBList } from "../../../utils/age";
 
 // 🔹 Mental problem master list (same as web)
 const mentalProblemList = [
@@ -3038,10 +3039,32 @@ const medsString = prescribedMeds.items
       )}
     </View>
   );
+  const ageInfo = currentPatient?.dob
+  ? ageFromDOBList(currentPatient.dob)
+  : null;
+const getAgeInDays = (ageInfo: string | null) => {
+  if (!ageInfo) return null;
 
+  if (ageInfo.includes("day")) {
+    return parseInt(ageInfo);
+  }
+
+  if (ageInfo.includes("month")) {
+    return parseInt(ageInfo) * 30;
+  }
+
+  if (ageInfo.includes("year")) {
+    return parseInt(ageInfo) * 365;
+  }
+
+  return null;
+};
+const ageInDays = getAgeInDays(ageInfo);
+
+console.log("currentPatient",ageInfo)
   const renderAddictionSection = () => (
     <View style={styles.section}>
-      {currentPatient?.category === 1 ? (
+      {ageInDays !== null && ageInDays <= 28 ? (
         <Text style={styles.notApplicable}>Not applicable for neonates.</Text>
       ) : (
         <>

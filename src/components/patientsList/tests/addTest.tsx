@@ -196,6 +196,12 @@ async (val: string) => {
     setSuggestions([]);
   };
 
+  const clearSelection = () => {
+    setSelectedItem(null);
+    setSuggestions([]);
+    setTestList([]);
+  };
+
   const addToList = () => {
     if (!selectedItem?.name) {
       Alert.alert("Missing", "Please enter a test name.");
@@ -424,21 +430,34 @@ async (val: string) => {
             <View style={styles.fieldBlock}>
               <Text style={[styles.label, { color: COLORS.sub }]}>Test *</Text>
               <View style={{ position: "relative" }}>
+                <View style={[styles.inputContainer, {
+                  borderColor: COLORS.border,
+                  backgroundColor: COLORS.field,
+                  height: isTablet ? 50 : 44,
+                }]}>
                 <TextInput
                   placeholder="Enter 1 letter for search"
                   placeholderTextColor={COLORS.placeholder}
                   style={[
                     styles.input,
                     {
-                      borderColor: COLORS.border,
                       color: COLORS.text,
-                      backgroundColor: COLORS.field,
-                      height: isTablet ? 50 : 44,
+                        flex: 1,
                     },
                   ]}
                   value={selectedItem?.name || ""}
                   onChangeText={handleInputChange}
                 />
+                  {selectedItem?.name && selectedItem?.name?.length > 0 && (
+                    <Pressable
+                      onPress={clearSelection}
+                      style={styles.clearButton}
+                      hitSlop={SPACING.xs}
+                    >
+                      <XIcon size={ICON_SIZE.sm} color={COLORS.sub} />
+                    </Pressable>
+                  )}
+                </View>
 
                 {/* Suggestions dropdown */}
                 {(loadingSugg || suggestions?.length > 0) &&
@@ -650,11 +669,22 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
 
-  input: {
+  inputContainer: {
     borderWidth: 1.5,
     borderRadius: SPACING.sm,
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: SPACING.sm,
+  },
+
+  input: {
     fontSize: FONT_SIZE.sm,
+    paddingVertical: 0,
+  },
+
+  clearButton: {
+    padding: 4,
+    marginLeft: SPACING.xs,
   },
 
   // Note container

@@ -125,7 +125,7 @@ const InStock: React.FC = () => {
     try {
       const token = await AsyncStorage.getItem("token");
       const resp = await AuthFetch(`pharmacy/${user?.hospitalID}/getMedicineInventory`, token) as any;
-      
+
 let medicines: any[] = [];
 try {
   if (!resp) {
@@ -451,7 +451,7 @@ const IconComponent = getMedicineIcon(item.category);
             <View style={{ flex: 1 }}>
               <Text style={styles.medicationName} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.medicationId}>ID: MED{String(item.id).padStart(3, "0")}</Text>
-              <Text style={styles.manufacturer}>{item.manufacturer || "Generic"}</Text>
+              {/* <Text style={styles.manufacturer}>{item.manufacturer || "Generic"}</Text> */}
             </View>
           </View>
         </View>
@@ -1227,8 +1227,10 @@ medicationIcon: {
   // Pagination
   paginationContainer: { 
     flexDirection: "row", 
-    justifyContent: "space-between", 
     alignItems: "center", 
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: SPACING.sm,   
     marginTop: SPACING.md,
     paddingTop: SPACING.sm,
     borderTopWidth: 1,

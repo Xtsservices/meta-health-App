@@ -34,6 +34,7 @@ type Ward = { id: number; name: string; availableBeds: number | null };
 type Staff = { id: number; firstName?: string; lastName?: string; departmentID?: number };
 type Vitals = { oxygen?: number; pulse?: number; temperature?: number; bp?: string };
 type Timeline = { id: number; patientID: number , wardID?: number; };
+type Hospital = { id: number; name: string; city?: string; state?: string };
 
 type TransferRouteParams = {
   hospitalID?: number;
@@ -67,6 +68,7 @@ const initialForm = {
   bpL: "",
   hospitalName: "",
   relativeName: "",
+  hospitalID: 0,
 };
 
 export default function TransferPatientSheet() {
@@ -92,12 +94,14 @@ export default function TransferPatientSheet() {
 
   const [wards, setWards] = useState<Ward[]>([]);
   const [doctors, setDoctors] = useState<Staff[]>([]);
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [form, setForm] = useState({ ...initialForm });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // dropdown modal toggles
   const [openWard, setOpenWard] = useState(false);
   const [openDoctor, setOpenDoctor] = useState(false);
+  const [openHospital, setOpenHospital] = useState(false);
 
   // --- Keyboard & Smooth Scroll management ---
   const scrollRef = useRef<ScrollView | null>(null);
@@ -249,13 +253,26 @@ export default function TransferPatientSheet() {
     }
   }, [hospitalID, patientID, ensureToken]);
 
+  const fetchHospitals = useCallback(async () => {
+    const token = await ensureToken();
+    const res = await authFetch(`hospital/getHospitalsList`, token) as any;
+    if (res?.status === "success" && "data" in res) {
+      const hospitalsData = res.data?.hospitals || [];
+      setHospitals(hospitalsData);
+    } else if (res?.message === "success" && res.hospitals) {
+      setHospitals(res.hospitals);
+    } else {
+      setHospitals([]);
+    }
+  }, [ensureToken]);
+
   // load data on screen mount
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchWards(), fetchDoctors(), fetchVitals()]).finally(() =>
+    Promise.all([fetchWards(), fetchDoctors(), fetchVitals(), fetchHospitals()]).finally(() =>
       setLoading(false)
     );
-  }, [fetchWards, fetchDoctors, fetchVitals]);
+  }, [fetchWards, fetchDoctors, fetchVitals, fetchHospitals]);
 
   // form helpers
   const setField = (name: keyof typeof initialForm, value: any) => {
@@ -386,6 +403,13 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
     setField("departmentID", d?.departmentID || 0);
   };
 
+  const onPickHospital = (id: number) => {
+    const hospital = hospitals.find((h) => h.id === id);
+    if (hospital) {
+      setField("hospitalID", id);
+      setField("hospitalName", hospital.name);
+    }
+  };
 
   const showExtendedForm = user?.patientStatus !== 1;
   const calculateBottomPadding = () => {
@@ -526,13 +550,8 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
                 <>
                   <View>
                     <Field label="Hospital Name *" error={errors.hospitalName}>
-                      <TextInput
-                        value={form.hospitalName}
-                        onFocus={handleFocus("hospitalName")}
-                        onBlur={handleBlur}
-                        onChangeText={(t) => setField("hospitalName", t)}
-                        placeholder="Enter hospital name"
-                        placeholderTextColor={COLORS.sub}
+                      <Pressable
+                        onPress={() => setOpenHospital(true)}
                         style={[
                           styles.input,
                           {
@@ -541,8 +560,11 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
                               : COLORS.border,
                           },
                         ]}
-                        returnKeyType="next"
-                      />
+                      >
+                        <Text style={styles.inputText}>
+                          {form.hospitalName || "Select Hospital"}
+                        </Text>
+                      </Pressable>
                     </Field>
                   </View>
                 </>
@@ -728,7 +750,7 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
 
               {/* Relative Name */}
               <View>
-                <Field label="Relative Name" error={errors.relativeName}>
+                <Field label="Relative Name *" error={errors.relativeName}>
                 <TextInput
                   value={form.relativeName}
                   onFocus={handleFocus("relativeName")}
@@ -827,6 +849,19 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
           value: d.id,
         }))}
         onPick={(id) => onPickDoctor(id)}
+      />
+
+      {/* Hospital Picker Modal */}
+      <PickerSheet
+        visible={openHospital}
+        title="Select Hospital"
+        onClose={() => setOpenHospital(false)}
+        items={hospitals.map((h) => ({
+          key: String(h.id),
+          label: `${h.name}${h.city ? `, ${h.city}` : ""}${h.state ? `, ${h.state}` : ""}`,
+          value: h.id,
+        }))}
+        onPick={(id) => onPickHospital(id)}
       />
     </View>
   );

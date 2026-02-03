@@ -437,12 +437,12 @@ const handleStatusUpdate = async (newStatus: number) => {
             {getMedicineTypeLabel()}
           </Text>
         </View>
-        <View style={styles.medicineInfoRow}>
+        {/* <View style={styles.medicineInfoRow}>
           <Text style={styles.medicineInfoText}>
               Dosage:{" "}
               <Text style={styles.medicineInfoStrong}>{renderDosage()}</Text>
           </Text>
-      </View>
+      </View> */}
 
           <View style={styles.medicineInfoRow}>
         <Text style={styles.medicineInfoText}>

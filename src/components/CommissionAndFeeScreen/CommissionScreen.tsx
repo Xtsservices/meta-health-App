@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { X } from 'lucide-react-native';
+import { Italic, X } from 'lucide-react-native';
 import { AuthFetch, AuthPatch } from '../../auth/auth';
 import { RootState } from '../../store/store';
 import {
@@ -37,6 +37,7 @@ import {
   SCREEN_HEIGHT
 } from '../../utils/responsive';
 import { showError, showSuccess } from '../../store/toast.slice';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Types
 interface CommissionItem {
@@ -99,6 +100,19 @@ interface Pagination {
   hasPreviousPage?: boolean;
 }
 
+interface CommissionHistoryItem {
+  role: number;
+  action: string;
+  userID: number;
+  timestamp: string;
+  commissionPercentage?: string;
+  newValue?: number;
+  oldValue?: string;
+  reason?: string;
+  doctorName?: string;
+  by?: string;
+}
+
 // Design Constants
 const COLORS = {
   primary: '#14b8a6',
@@ -131,6 +145,7 @@ const CommissionScreen = () => {
   const [showCommissionModal, setShowCommissionModal] = useState(false);
   const [editCommission, setEditCommission] = useState('');
   const [pageLoading, setPageLoading] = useState(false);
+  const [showAllHospitals, setShowAllHospitals] = useState(false); // NEW: Toggle state
 
   const user = useSelector((state: RootState) => state.currentUser);
   console.log("555", user)
@@ -156,7 +171,7 @@ const CommissionScreen = () => {
           break;
       }
     } catch (error) {
-      showError('Failed to load commission data');
+      dispatch(showError('Failed to load commission data'));
     } finally {
       if (showLoader) {
         setLoading(false);
@@ -164,54 +179,94 @@ const CommissionScreen = () => {
     }
   }, [activeCommissionTab, showError]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
 
-  const loadPendingCommissions = async () => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      if (!token) {
-        setPendingCommissions([]);
-        return;
-      }
+      return () => {
+        // optional cleanup (not required now)
+      };
+  }, [loadData])
+  );
 
-      const response = await AuthFetch(
-        `user/doctorAssociation/doctorPending`,
-        token
-      ) as any;
-      console.log("123", response)
+const loadPendingCommissions = async () => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      setPendingCommissions([]);
+      return;
+    }
 
-      if (response?.status === 'success') {
-        const commissionsData = response?.data?.data || [];
-        setPendingCommissions(Array.isArray(commissionsData) ? commissionsData : []);
-      } else {
-        setPendingCommissions([]);
-      }
-    } catch (error) {
+    let endpoint = 'user/doctorAssociation/doctorPending';
+
+    // ✅ hospitalID ONLY when viewing current hospital
+    if (showAllHospitals === false && user?.hospitalID) {
+      endpoint += `?hospitalID=${user.hospitalID}`;
+    }
+
+    console.log('showAllHospitals:', showAllHospitals);
+    console.log('FINAL URL:', endpoint);
+
+    const response = await AuthFetch(endpoint, token) as any;
+
+    if (response?.status === 'success') {
+      setPendingCommissions(response?.data?.data || []);
+    } else {
       setPendingCommissions([]);
     }
-  };
+  } catch (err) {
+    console.error(err);
+    setPendingCommissions([]);
+  }
+};
+
+
 
   const loadActiveCommission = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
       console.log("token111", token)
-      if (!token || !user?.id || !user?.hospitalID) {
+      if (!token || !user?.id) {
         setActiveCommission(null);
         return;
       }
 
-      const response = await AuthFetch(
-        `user/doctorAssociation/active/${user.id}/${user.hospitalID}`,
-        token
-      ) as any;
-      console.log("666", response)
+      // If showing all hospitals, we might need to handle multiple active commissions
+      if (showAllHospitals) {
+        // For now, we'll show the active commission for the current hospital
+        // or you could modify this to show all active commissions
+        if (user.hospitalID) {
+          const response = await AuthFetch(
+            `user/doctorAssociation/active/${user.id}/${user.hospitalID}`,
+            token
+          ) as any;
+          console.log("666", response)
 
-      if (response?.data?.success) {
-        setActiveCommission(response?.data?.data || null);
+          if (response?.data?.success) {
+            setActiveCommission(response?.data?.data || null);
+          } else {
+            setActiveCommission(null);
+          }
+        } else {
+          setActiveCommission(null);
+        }
       } else {
-        setActiveCommission(null);
+        // Original logic - show active commission for current hospital
+        if (user?.hospitalID) {
+          const response = await AuthFetch(
+            `user/doctorAssociation/active/${user.id}/${user.hospitalID}`,
+            token
+          ) as any;
+          console.log("666", response)
+
+          if (response?.data?.success) {
+            setActiveCommission(response?.data?.data || null);
+          } else {
+            setActiveCommission(null);
+          }
+        } else {
+          setActiveCommission(null);
+        }
       }
     } catch (error) {
       setActiveCommission(null);
@@ -225,15 +280,21 @@ const CommissionScreen = () => {
       }
 
       const token = await AsyncStorage.getItem('token');
-      if (!token || !user?.id || !user?.hospitalID) {
+      if (!token || !user?.id) {
         setCommissionHistory([]);
         return;
       }
 
-      const response = await AuthFetch(
-        `user/doctorAssociation/history/${user.id}/${user.hospitalID}?page=${page}&limit=10&includeInactive=true`,
-        token
-      ) as any;
+      let endpoint = `user/doctorAssociation/history/${user.id}`;
+      
+      // Add hospitalID if we're NOT showing all hospitals
+      if (user?.hospitalID && !showAllHospitals) {
+        endpoint += `/${user.hospitalID}`;
+      }
+      
+      endpoint += `?page=${page}&limit=10&includeInactive=true`;
+
+      const response = await AuthFetch(endpoint, token) as any;
       console.log("yyyyyyyyyyy", response)
       if (response?.data?.success) {
         const historyData = response?.data?.data?.associations || [];
@@ -269,7 +330,7 @@ const CommissionScreen = () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        showError('Please login to continue');
+        dispatch(showError('Please login to continue'));
         return;
       }
 
@@ -280,27 +341,27 @@ const CommissionScreen = () => {
       ) as any;
 
       if (response?.status === 'success') {
-        showSuccess('Commission approved successfully');
+        dispatch(showSuccess('Commission approved successfully'));
         loadData(false);
         setShowCommissionModal(false);
       } else {
-        showError(response?.message || 'Failed to approve commission');
+       dispatch(showError(response?.message || 'Failed to approve commission'));
       }
     } catch (error) {
-      showError('Failed to approve commission');
+      dispatch(showError('Failed to approve commission'));
     }
   };
 
   const handleCommissionEdit = async (commissionId: number) => {
     if (!editCommission || isNaN(Number(editCommission))) {
-      showError('Please enter a valid commission rate');
+      dispatch(showError('Please enter a valid commission rate'));
       return;
     }
 
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        showError('Please login to continue');
+        dispatch(showError('Please login to continue'));
         return;
       }
 
@@ -309,20 +370,53 @@ const CommissionScreen = () => {
         { commissionPercentage: parseFloat(editCommission) },
         token
       ) as any;
-      console.log("555", response)
-
+  console.log("676546dddd",response)
       if (response?.status === 'success') {
-        showSuccess('Commission updated successfully');
+      setShowCommissionModal(false);
+
+      setTimeout(() => {
+        dispatch(showSuccess('Commission updated successfully'));
         loadData(false);
-        setShowCommissionModal(false);
         setEditCommission('');
-      } else {
-        showError(response?.message || 'Failed to update commission');
-      }
-    } catch (error) {
-      showError('Failed to update commission');
+      }, 200);
+
+    } else {
+      setShowCommissionModal(false);
+
+      setTimeout(() => {
+        dispatch(showError(response?.message || 'Failed to update commission'));
+      }, 200);
     }
+
+  } catch (error: any) {
+    const apiMessage =
+      error?.response?.data?.message ||
+      error?.message ||
+      'Failed to update commission';
+
+    setShowCommissionModal(false);
+
+    setTimeout(() => {
+      dispatch(showError(apiMessage));
+    }, 200);
+  }
+};
+
+  // NEW: Toggle function
+  const toggleShowAllHospitals = async () => {
+    setShowAllHospitals(!showAllHospitals);
+    // We'll reload data in useEffect dependency
   };
+
+  // Reload data when showAllHospitals changes
+  useEffect(() => {
+    if (!loading) {
+      loadData(true);
+    }
+  }, [showAllHospitals]);
+useEffect(() => {
+  loadPendingCommissions();
+}, [showAllHospitals]);
 
   const getDoctorStatusColor = (doctorApproval?: number) => {
     return doctorApproval === 1 ? COLORS.success : COLORS.warning;
@@ -340,7 +434,7 @@ const CommissionScreen = () => {
     return adminApproval === 1 ? 'APPROVED' : 'PENDING';
   };
 
-  const parseHistory = (history: any): any[] => {
+  const parseHistory = (history: any): CommissionHistoryItem[] => {
     if (!history) return [];
 
     if (Array.isArray(history)) {
@@ -357,6 +451,66 @@ const CommissionScreen = () => {
     }
 
     return [];
+  };
+
+  // Helper function to get editor name based on role
+  const getEditorName = (role: number): string => {
+    switch (role) {
+      case 4001: return 'Doctor';
+      case 4002: return 'Nurse';
+      case 4003: return 'Pharmacist';
+      case 4004: return 'Lab Technician';
+      case 5001: return 'Hospital Admin';
+      case 5002: return 'Hospital Staff';
+      case 5003: return 'Super Admin';
+      case 9999: return 'Admin';
+      default: return 'System';
+    }
+  };
+
+  // Helper function to get commission value from history item
+  const getCommissionValue = (history: CommissionHistoryItem): string => {
+    // Check for newValue first (from edit actions)
+    if (history.newValue !== undefined) {
+      return `${history.newValue}%`;
+    }
+    // Check for commissionPercentage (from create actions)
+    if (history.commissionPercentage !== undefined) {
+      return `${history.commissionPercentage}%`;
+    }
+    // For other actions or if no value found
+    return '';
+  };
+
+  // Helper function to get action description
+  const getActionDescription = (history: CommissionHistoryItem): string => {
+    const editor = getEditorName(history.role);
+    
+    switch (history.action) {
+      case 'create':
+        return `Created commission at ${getCommissionValue(history)}`;
+      case 'edit':
+        const oldValue = history.oldValue ? `${history.oldValue}%` : '';
+        const newValue = history.newValue ? `${history.newValue}%` : '';
+        return `Changed commission from ${oldValue} to ${newValue}`;
+      case 'approve':
+        return 'Approved the commission';
+      case 'reject':
+        return 'Rejected the commission';
+      default:
+        return `${history.action.charAt(0).toUpperCase() + history.action.slice(1)} commission`;
+    }
+  };
+
+  // Helper function to get action color
+  const getActionColor = (action: string): string => {
+    switch (action) {
+      case 'create': return COLORS.primary;
+      case 'edit': return COLORS.info;
+      case 'approve': return COLORS.success;
+      case 'reject': return COLORS.error;
+      default: return COLORS.subText;
+    }
   };
 
   const renderPendingCommissionCard = ({ item }: { item: CommissionItem }) => {
@@ -378,6 +532,14 @@ const CommissionScreen = () => {
         </View>
 
         <View style={styles.cardBody}>
+          {/* Show hospital name if showing all hospitals */}
+          {showAllHospitals && item?.hospitalName && (
+            <View style={styles.hospitalRow}>
+              <Text style={styles.hospitalLabel}>Hospital:</Text>
+              <Text style={styles.hospitalName}>{item.hospitalName}</Text>
+            </View>
+          )}
+
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Commission Rate</Text>
@@ -465,6 +627,14 @@ const CommissionScreen = () => {
         </View>
 
         <View style={styles.cardBody}>
+          {/* Show hospital name if showing all hospitals */}
+          {showAllHospitals && activeCommission?.hospitalName && (
+            <View style={styles.hospitalRow}>
+              <Text style={styles.hospitalLabel}>Hospital:</Text>
+              <Text style={styles.hospitalName}>{activeCommission.hospitalName}</Text>
+            </View>
+          )}
+
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Commission Rate</Text>
@@ -536,6 +706,7 @@ const CommissionScreen = () => {
 
     // Get the latest edit action from commissionHistory
     const commissionHistory = parseHistory(item?.commissionHistory);
+    console.log("8888", commissionHistory)
     const latestEdit = commissionHistory.length > 0
       ? commissionHistory.find(h => h.action === 'edit') || commissionHistory[0]
       : null;
@@ -550,6 +721,7 @@ const CommissionScreen = () => {
         case 5001: return 'Hospital Admin';
         case 5002: return 'Hospital Staff';
         case 5003: return 'Super Admin';
+        case 9999: return 'Admin'
         default: return 'System';
       }
     };
@@ -579,6 +751,41 @@ const CommissionScreen = () => {
         default: return COLORS.subText;
       }
     };
+    const getActionLabel = (action: string) => {
+      switch (action) {
+        case 'create': return 'CREATE';
+        case 'edit': return 'EDITED';
+        case 'approve': return 'APPROVED';
+        case 'reject': return 'REJECTED';
+        default: return 'UPDATED';
+      }
+    };
+    const getActionSubtitle = (action: string) => {
+      switch (action) {
+        case 'create':
+          return 'Created commission';
+        case 'edit':
+          return 'Modified commission rate';
+        case 'approve':
+          return 'Approved commission';
+        case 'reject':
+          return 'Rejected commission';
+        default:
+          return 'Processed request';
+      }
+    };
+    const getChangeLabel = (action: string) => {
+      switch (action) {
+        case 'create':
+          return 'Added as :';
+        case 'edit':
+          return 'Changed to:';
+        case 'approve':
+          return 'Approved at:';
+        default:
+          return 'Changed to:';
+      }
+    };
 
     return (
       <View style={[styles.card, { borderColor: COLORS.border }]}>
@@ -590,6 +797,14 @@ const CommissionScreen = () => {
         </View>
 
         <View style={styles.cardBody}>
+          {/* Show hospital name if showing all hospitals */}
+          {showAllHospitals && item?.hospitalName && (
+            <View style={styles.hospitalRow}>
+              <Text style={styles.hospitalLabel}>Hospital:</Text>
+              <Text style={styles.hospitalName}>{item.hospitalName}</Text>
+            </View>
+          )}
+
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>
               <Text style={styles.fieldLabel}>Commission Rate</Text>
@@ -637,11 +852,12 @@ const CommissionScreen = () => {
               <View style={styles.editHeader}>
                 <View style={[styles.actionBadge, { backgroundColor: getActionColor(latestEdit.action) }]}>
                   <Text style={styles.actionBadgeText}>
-                    {latestEdit.action?.toUpperCase() || 'UPDATED'}
+                    {getActionLabel(latestEdit.action)}
                   </Text>
+
                 </View>
                 <Text style={styles.editTimestamp}>
-                  {formatEditTime(latestEdit.timestamp)}
+                  {formatDateTime(latestEdit.timestamp)}
                 </Text>
               </View>
 
@@ -656,14 +872,16 @@ const CommissionScreen = () => {
                     {getEditorName(latestEdit.role)}
                   </Text>
                   <Text style={styles.editorRole}>
-                    {latestEdit.action === 'edit' ? 'Modified commission rate' : 'Processed request'}
+                    {getActionSubtitle(latestEdit.action)}
                   </Text>
                 </View>
               </View>
 
               {latestEdit.commissionPercentage && (
                 <View style={styles.changeDetails}>
-                  <Text style={styles.changeLabel}>Changed to:</Text>
+                  <Text style={styles.changeLabel}>
+                    {getChangeLabel(latestEdit.action)}
+                  </Text>
                   <View style={styles.changeValueContainer}>
                     <Text style={styles.changeValue}>
                       {latestEdit.commissionPercentage}%
@@ -724,155 +942,199 @@ const CommissionScreen = () => {
     );
   };
 
-  const renderCommissionModal = () => (
-    <Modal
-      visible={showCommissionModal}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowCommissionModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={[
-          styles.modalContent,
-          { maxHeight: SCREEN_HEIGHT * 0.85 }
-        ]}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Commission Details</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowCommissionModal(false)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <X size={moderateScale(20)} color={COLORS.subText} />
-            </TouchableOpacity>
-          </View>
+  const renderCommissionModal = () => {
+    const commissionHistoryList = selectedCommission ? parseHistory(selectedCommission.commissionHistory) : [];
+    
+    return (
+      <Modal
+        visible={showCommissionModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCommissionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[
+            styles.modalContent,
+            { maxHeight: SCREEN_HEIGHT * 0.85 }
+          ]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Commission Details</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowCommissionModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={moderateScale(20)} color={COLORS.subText} />
+              </TouchableOpacity>
+            </View>
 
-          {selectedCommission && (
-            <ScrollView
-              style={styles.modalBody}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.detailGrid}>
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Commission ID</Text>
-                  <Text style={styles.detailValue}>#{selectedCommission?.id}</Text>
-                </View>
+            {selectedCommission && (
+              <ScrollView
+                style={styles.modalBody}
+                contentContainerStyle={{
+                  paddingBottom: getSafeAreaInsets().bottom + responsiveHeight(6),
+                }}
+                showsVerticalScrollIndicator={false}
+              >
 
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Commission Rate</Text>
-                  <Text style={styles.detailValue}>{parseFloat(selectedCommission?.commissionPercentage || '0')}%</Text>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Consultation Fee</Text>
-                  <Text style={styles.detailValue}>₹{parseFloat(selectedCommission?.consultationFee || '0')}</Text>
-                </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Employment Type</Text>
-                  <Text style={styles.detailValue}>{selectedCommission?.employmentType || 'Not specified'}</Text>
-                </View>
-              </View>
-
-              <View style={styles.statusSection}>
-                <Text style={styles.sectionTitle}>Approval Status</Text>
-                <View style={styles.statusGrid}>
-                  <View style={styles.statusItem}>
-                    <Text style={styles.statusLabel}>Doctor Approval</Text>
-                    <View style={[
-                      styles.statusIndicator,
-                      { backgroundColor: selectedCommission?.doctorApproval === 1 ? COLORS.success : COLORS.warning }
-                    ]}>
-                      <Text style={styles.statusIndicatorText}>
-                        {selectedCommission?.doctorApproval === 1 ? 'Approved' : 'Pending'}
-                      </Text>
-                    </View>
+                <View style={styles.detailGrid}>
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailLabel}>Commission ID</Text>
+                    <Text style={styles.detailValue}>#{selectedCommission?.id}</Text>
                   </View>
 
-                  <View style={styles.statusItem}>
-                    <Text style={styles.statusLabel}>Admin Approval</Text>
-                    <View style={[
-                      styles.statusIndicator,
-                      { backgroundColor: selectedCommission?.adminApproval === 1 ? COLORS.success : COLORS.warning }
-                    ]}>
-                      <Text style={styles.statusIndicatorText}>
-                        {selectedCommission?.adminApproval === 1 ? 'Approved' : 'Pending'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.dateSection}>
-                <Text style={styles.sectionTitle}>Dates</Text>
-                <View style={styles.dateGrid}>
-                  <View style={styles.dateItem}>
-                    <Text style={styles.dateLabel}>Start Date</Text>
-                    <Text style={styles.dateValue}>{formatDate(selectedCommission?.startDate)}</Text>
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailLabel}>Commission Rate</Text>
+                    <Text style={styles.detailValue}>{parseFloat(selectedCommission?.commissionPercentage || '0')}%</Text>
                   </View>
 
-                  {selectedCommission?.endDate && (
-                    <View style={styles.dateItem}>
-                      <Text style={styles.dateLabel}>End Date</Text>
-                      <Text style={styles.dateValue}>{formatDate(selectedCommission?.endDate)}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailLabel}>Consultation Fee</Text>
+                    <Text style={styles.detailValue}>₹{parseFloat(selectedCommission?.consultationFee || '0')}</Text>
+                  </View>
 
-              <View style={styles.historySection}>
-                <Text style={styles.sectionTitle}>Commission History</Text>
-                {parseHistory(selectedCommission?.commissionHistory)?.length > 0 ? (
-                  parseHistory(selectedCommission?.commissionHistory)?.map((history, index) => (
-                    <View key={index} style={styles.historyItem}>
-                      <View style={styles.historyHeader}>
-                        <Text style={styles.historyBy}>{history?.doctorName || history?.by || 'System'}</Text>
-                        <Text style={styles.historyTime}>
-                          {formatDateTime(history?.deactivatedAt || history?.timestamp || selectedCommission?.updatedOn)}
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailLabel}>Employment Type</Text>
+                    <Text style={styles.detailValue}>{selectedCommission?.employmentType || 'Not specified'}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.statusSection}>
+                  <Text style={styles.sectionTitle}>Approval Status</Text>
+                  <View style={styles.statusGrid}>
+                    <View style={styles.statusItem}>
+                      <Text style={styles.statusLabel}>Doctor Approval</Text>
+                      <View style={[
+                        styles.statusIndicator,
+                        { backgroundColor: selectedCommission?.doctorApproval === 1 ? COLORS.success : COLORS.warning }
+                      ]}>
+                        <Text style={styles.statusIndicatorText}>
+                          {selectedCommission?.doctorApproval === 1 ? 'Approved' : 'Pending'}
                         </Text>
                       </View>
-                      <Text style={styles.historyAction}>
-                        {history?.action || 'Commission Updated'} {history?.commissionPercentage ? `${history?.commissionPercentage}%` : ''}
-                      </Text>
-                      {history?.reason && (
-                        <Text style={styles.historyReason}>Reason: {history?.reason}</Text>
-                      )}
                     </View>
-                  ))
-                ) : (
-                  <Text style={styles.noHistoryText}>No history available</Text>
-                )}
-              </View>
 
-              {selectedCommission?.doctorApproval === 0 && (
-                <>
-                  <Text style={styles.editTitle}>Edit Commission Rate (%)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter new commission rate (%)"
-                    placeholderTextColor={COLORS.placeholder}
-                    value={editCommission}
-                    onChangeText={setEditCommission}
-                    keyboardType="numeric"
-                  />
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[styles.modalActionButton, styles.editActionButton]}
-                      onPress={() => handleCommissionEdit(selectedCommission?.id || 0)}
-                    >
-                      <Text style={styles.modalActionButtonText}>Update</Text>
-                    </TouchableOpacity>
-
+                    <View style={styles.statusItem}>
+                      <Text style={styles.statusLabel}>Admin Approval</Text>
+                      <View style={[
+                        styles.statusIndicator,
+                        { backgroundColor: selectedCommission?.adminApproval === 1 ? COLORS.success : COLORS.warning }
+                      ]}>
+                        <Text style={styles.statusIndicatorText}>
+                          {selectedCommission?.adminApproval === 1 ? 'Approved' : 'Pending'}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                </>
-              )}
-            </ScrollView>
-          )}
+                </View>
+
+                <View style={styles.dateSection}>
+                  <Text style={styles.sectionTitle}>Dates</Text>
+                  <View style={styles.dateGrid}>
+                    <View style={styles.dateItem}>
+                      <Text style={styles.dateLabel}>Start Date</Text>
+                      <Text style={styles.dateValue}>{formatDate(selectedCommission?.startDate)}</Text>
+                    </View>
+
+                    {selectedCommission?.endDate && (
+                      <View style={styles.dateItem}>
+                        <Text style={styles.dateLabel}>End Date</Text>
+                        <Text style={styles.dateValue}>{formatDate(selectedCommission?.endDate)}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.historySection}>
+                  <Text style={styles.sectionTitle}>Commission History ({commissionHistoryList.length})</Text>
+                  {commissionHistoryList.length > 0 ? (
+                    commissionHistoryList.map((history: CommissionHistoryItem, index: number) => (
+                      <View key={index} style={[
+                        styles.historyItem,
+                        { borderLeftColor: getActionColor(history.action), borderLeftWidth: 3 }
+                      ]}>
+                        <View style={styles.historyHeader}>
+                          <View style={styles.historyByContainer}>
+                            <Text style={styles.historyBy}>
+                              {getEditorName(history.role)}
+                            </Text>
+                            <View style={[
+                              styles.historyActionBadge,
+                              { backgroundColor: getActionColor(history.action) }
+                            ]}>
+                              <Text style={styles.historyActionBadgeText}>
+                                {history.action.toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.historyTime}>
+                            {formatDateTime(history.timestamp)}
+                          </Text>
+                        </View>
+                        
+                        <Text style={styles.historyAction}>
+                          {getActionDescription(history)}
+                        </Text>
+                        
+                        {/* Show old and new values for edit actions */}
+                        {history.action === 'edit' && history.oldValue && history.newValue && (
+                          <View style={styles.historyValueChange}>
+                            <Text style={styles.historyValueChangeText}>
+                              From: <Text style={styles.historyValueOld}>{history.oldValue}%</Text>
+                            </Text>
+                            <Text style={styles.historyValueChangeText}>
+                              To: <Text style={styles.historyValueNew}>{history.newValue}%</Text>
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {/* Show commission value for create actions */}
+                        {history.action === 'create' && history.commissionPercentage && (
+                          <Text style={styles.historyValue}>
+                            Commission: {history.commissionPercentage}%
+                          </Text>
+                        )}
+                        
+                        {history.reason && (
+                          <Text style={styles.historyReason}>Reason: {history.reason}</Text>
+                        )}
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.noHistoryText}>No history available</Text>
+                  )}
+                </View>
+
+                {selectedCommission?.doctorApproval === 0 && (
+                  <>
+                    <Text style={styles.editTitle}>Edit Commission Rate (%)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter new commission rate (%)"
+                      placeholderTextColor={COLORS.placeholder}
+                      value={editCommission}
+                      onChangeText={setEditCommission}
+                      keyboardType="numeric"
+                    />
+
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity
+                        style={[styles.modalActionButton, styles.editActionButton]}
+                        onPress={() => handleCommissionEdit(selectedCommission?.id || 0)}
+                      >
+                        <Text style={styles.modalActionButtonText}>Update</Text>
+                      </TouchableOpacity>
+
+                    </View>
+                  </>
+                )}
+              </ScrollView>
+            )}
+          </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  };
 
   const renderEmptyState = (message: string, subMessage: string) => (
     <View style={styles.emptyState}>
@@ -883,7 +1145,7 @@ const CommissionScreen = () => {
 
   const safeAreaInsets = getSafeAreaInsets();
   const bottomPadding = hasNotch() ? safeAreaInsets.bottom : moderateScale(20);
-
+  console.log("conmsole", selectedCommission)
   return (
     <View style={styles.container}>
       {/* Commission Tab Navigation */}
@@ -904,6 +1166,24 @@ const CommissionScreen = () => {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* NEW: Hospital Filter Toggle */}
+      {activeCommissionTab === 'pending' && (
+        <View style={styles.hospitalFilterContainer}>
+          <Text style={styles.hospitalFilterText}>
+            {showAllHospitals ? 'Showing commissions for all hospitals' : 'Showing commissions for current hospital only'}
+          </Text>
+          <TouchableOpacity
+            style={styles.hospitalFilterButton}
+            onPress={toggleShowAllHospitals}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.hospitalFilterButtonText}>
+              {showAllHospitals ? 'Show Current Only' : 'View All'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Content Area with Footer Space */}
       {loading ? (
@@ -930,8 +1210,10 @@ const CommissionScreen = () => {
           {activeCommissionTab === 'pending' ? (
             pendingCommissions?.length === 0 ? (
               renderEmptyState(
-                'No Pending Commissions',
-                'You don\'t have any pending commission proposals at the moment.'
+                showAllHospitals ? 'No Pending Commissions' : 'No Pending Commissions for Current Hospital',
+                showAllHospitals ? 
+                  'You don\'t have any pending commission proposals at any hospitals.' : 
+                  'You don\'t have any pending commission proposals at the current hospital.'
               )
             ) : (
               pendingCommissions?.map((item, index) => (
@@ -957,8 +1239,10 @@ const CommissionScreen = () => {
                 </View>
               ) : commissionHistory?.length === 0 ? (
                 renderEmptyState(
-                  'No Commission History',
-                  'You don\'t have any commission history yet.'
+                  showAllHospitals ? 'No Commission History' : 'No Commission History for Current Hospital',
+                  showAllHospitals ? 
+                    'You don\'t have any commission history yet.' : 
+                    'You don\'t have any commission history for the current hospital.'
                 )
               ) : (
                 <>
@@ -1021,6 +1305,59 @@ const styles = StyleSheet.create({
   },
   activeCommissionTabText: {
     color: COLORS.card,
+  },
+
+  // NEW: Hospital Filter Styles
+  hospitalFilterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.card,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  hospitalFilterText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontWeight: '600',
+    color: COLORS.subText,
+    flex: 1,
+  },
+  hospitalFilterButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: moderateScale(4),
+    borderRadius: BORDER_RADIUS.sm,
+    marginLeft: SPACING.sm,
+  },
+  hospitalFilterButtonText: {
+    color: COLORS.card,
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    fontWeight: '700',
+  },
+  hospitalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+    paddingBottom: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  hospitalLabel: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
+    fontWeight: '700',
+    color: COLORS.subText,
+    marginRight: moderateScale(4),
+  },
+  hospitalName: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs),
+    fontWeight: '800',
+    color: COLORS.text,
+    flex: 1,
   },
 
   // Content Styles
@@ -1445,10 +1782,10 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: COLORS.modalOverlay,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
     padding: SPACING.md,
   },
+
   modalContent: {
     backgroundColor: COLORS.card,
     borderRadius: BORDER_RADIUS.xl,
@@ -1562,7 +1899,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
 
-  // History Section
+  // History Section in Modal - Updated Styles
   historySection: {
     marginBottom: SPACING.lg,
   },
@@ -1570,37 +1907,85 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.chip,
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   historyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: moderateScale(4),
+  },
+  historyByContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: moderateScale(2),
+    gap: SPACING.xs,
+    flex: 1,
   },
   historyBy: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
     fontWeight: '800',
     color: COLORS.text,
+  },
+  historyActionBadge: {
+    paddingHorizontal: moderateScale(6),
+    paddingVertical: moderateScale(2),
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  historyActionBadgeText: {
+    color: COLORS.card,
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 8 }),
+    fontWeight: '800',
   },
   historyTime: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
     color: COLORS.subText,
     fontWeight: '600',
+    textAlign: 'right',
   },
   historyAction: {
-    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
+    fontSize: getResponsiveFontSize(FONT_SIZE.sm),
     color: COLORS.text,
+    fontWeight: '600',
+    marginBottom: SPACING.xs,
+  },
+  historyValueChange: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  historyValueChangeText: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
+    color: COLORS.subText,
+    fontWeight: '600',
+  },
+  historyValueOld: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
+    color: COLORS.error,
     fontWeight: '700',
+    textDecorationLine: 'line-through',
+  },
+  historyValueNew: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
+    color: COLORS.success,
+    fontWeight: '700',
+  },
+  historyValue: {
+    fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 10 }),
+    color: COLORS.primary,
+    fontWeight: '700',
+    marginBottom: SPACING.xs,
   },
   historyReason: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs, { min: 9 }),
-    color: COLORS.error,
+    color: COLORS.subText,
     marginTop: moderateScale(2),
     fontStyle: 'italic',
     fontWeight: '600',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: SPACING.xs,
   },
   noHistoryText: {
     fontSize: getResponsiveFontSize(FONT_SIZE.sm),
