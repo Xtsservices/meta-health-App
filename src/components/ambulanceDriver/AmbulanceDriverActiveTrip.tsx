@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
 import {
-  useRoute,
   useNavigation,
   useFocusEffect,
 } from '@react-navigation/native';
@@ -150,7 +149,6 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   const [cancelReason, setCancelReason] = useState('');
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const user = useSelector((state: RootState) => state.currentUser);
   const dispatch = useDispatch();
@@ -190,12 +188,7 @@ const AmbulanceDriverActiveTrip: React.FC = () => {
   const [nearbyHospitals, setNearbyHospitals] = useState<Hospital[]>([]);
   const [loadingHospitals, setLoadingHospitals] = useState(false);
 
-  // Check if trip data was passed from navigation (when accepting a trip)
-  useEffect(() => {
-    if (route.params?.tripData) {
-      setActiveTrip(route.params.tripData);
-    }
-  }, [route.params]);
+
 
   // Track current location with higher frequency
   useEffect(() => {
@@ -554,11 +547,11 @@ console.log('useEffect activeTrip', activeTrip);
 
         // Update trip data with accurate distance and time from Google
         if (activeTrip) {
-          setActiveTrip({
-            ...activeTrip,
+          setActiveTrip(prevTrip => prevTrip ? {
+            ...prevTrip,
             distance: directionsResult.distance,
             estimatedTime: directionsResult.duration,
-          });
+          } : null);
         }
       } catch (error) {
         console.error('❌ Error fetching route:', error);
@@ -734,22 +727,22 @@ console.log('useEffect activeTrip', activeTrip);
     try {
       setArrivedLoading(true);
       const token = await AsyncStorage.getItem('token');
-      console.log('activeTrip', activeTrip);
+      console.log('handleSwipeConfirmactiveTrip', activeTrip);
       const response: any = await AuthPost(
         `ambulance/driver/bookings/${activeTrip.id}/arrived`,
         {},
         token,
       );
 
-      console.log('Arrived response:', response);
+      console.log('handleSwipeConfirm Arrived response:', response);
 
       if (
         response?.status === 'success' ||
         (response as any)?.message?.includes('arrived')
       ) {
         dispatch(showSuccess('Arrival confirmed! Please collect the OTP from the patient.'));
-        // Update local state
-        setActiveTrip({ ...activeTrip, status: 'arrived' });
+        // Update local state using functional update to preserve current state
+        setActiveTrip(prevTrip => prevTrip ? { ...prevTrip, status: 'arrived' } : null);
         // Show OTP modal
         setOtpModalVisible(true);
       } else {
@@ -771,7 +764,7 @@ console.log('useEffect activeTrip', activeTrip);
       dispatch(showError('Please enter a valid OTP.'));
       return;
     }
-
+    console.log("handleVerifyOtpactiveTrip", activeTrip);
     // Check if destination is set before starting journey
     if (!activeTrip?.dropLatitude || !activeTrip?.dropLongitude) {
       // Close modal first so error is visible
@@ -803,10 +796,8 @@ console.log('useEffect activeTrip', activeTrip);
         setOtpModalVisible(false);
         setOtp('');
         dispatch(showSuccess('OTP verified! Journey started.'));
-        // Update local state to in_progress
-        if (activeTrip) {
-          setActiveTrip({ ...activeTrip, status: 'in_progress' });
-        }
+        // Update local state to in_progress using functional update to preserve current state
+        setActiveTrip(prevTrip => prevTrip ? { ...prevTrip, status: 'in_progress' } : null);
 
         // Zoom to current location after OTP verification
         if (currentLocation && mapRef.current) {
@@ -914,13 +905,13 @@ console.log('useEffect activeTrip', activeTrip);
 
               console.log('✅ Destination confirmed response:', response);
 
-              // Update local state with selected hospital
-              setActiveTrip({
-                ...activeTrip,
+              // Update local state with selected hospital using functional update to preserve current state
+              setActiveTrip(prevTrip => prevTrip ? {
+                ...prevTrip,
                 dropLatitude: hospital.latitude,
                 dropLongitude: hospital.longitude,
                 dropAddress: hospital.address,
-              });
+              } : null);
 
               setSelectedHospital(hospital);
               setHospitalModalVisible(false);
@@ -942,7 +933,8 @@ console.log('useEffect activeTrip', activeTrip);
   // Show hospital selection only if destination address is missing and journey hasn't started
   const canSelectHospital = (!activeTrip?.dropAddress || activeTrip?.dropAddress === 'Hospital (To be selected)') && activeTrip?.status !== 'in_progress';
   const hasSelectedHospital = activeTrip?.dropLatitude && activeTrip?.dropLongitude;
-
+  console.log("hasSelectedHospitalboom",hasSelectedHospital)
+  console.log("hasSelectedHospitalactiveTrip",activeTrip)
   // Show loading only during initial fetch or when actively loading
   if (loading && !initialLoadComplete) {
     return (
