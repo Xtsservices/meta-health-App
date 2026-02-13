@@ -157,8 +157,89 @@ const EditMedicalHistoryScreen: React.FC = () => {
     !!medicalHistory?.givenRelation &&
     !saving;
 
+// Add this validation function to EditMedicalHistoryScreen.tsx
+const validateForm = useCallback((): { isValid: boolean; error?: string } => {
+  // Basic validation
+  if (!medicalHistory?.givenName?.trim()) {
+    return { isValid: false, error: "History given by is required" };
+  }
+  
+  if (!medicalHistory?.givenPhone?.trim()) {
+    return { isValid: false, error: "Mobile number is required" };
+  }
+  
+  if (!isValidIndianMobile(medicalHistory.givenPhone)) {
+    return { isValid: false, error: "Please enter a valid 10-digit Indian mobile number" };
+  }
+  
+  if (!medicalHistory?.givenRelation?.trim()) {
+    return { isValid: false, error: "Relationship is required" };
+  }
+  
+  if (!medicalHistory?.bloodGroup?.trim()) {
+    return { isValid: false, error: "Blood group is required" };
+  }
+  
+  // Surgical history validation
+  if (medicalHistory?.disease?.includes("Diabetes:") && !medicalHistory.disease.includes("Diabetes:")) {
+    return { isValid: false, error: "Diabetes diagnosis date is required" };
+  }
+  
+  if (medicalHistory?.disease?.includes("Been Through any Surgery")) {
+    if (!medicalHistory.disease.includes("|")) {
+      return { isValid: false, error: "Surgery details and date are required" };
+    }
+  }
+  
+  // Cancer section validation
+  if (medicalHistory?.cancer && medicalHistory.cancer.trim() !== "" && medicalHistory.cancer !== "No") {
+    // Check if cancer fields are properly filled
+    if (!medicalHistory.cancer.includes("Type:")) {
+      return { isValid: false, error: "Cancer type is required" };
+    }
+    
+    if (!medicalHistory.cancer.includes("Stage:")) {
+      return { isValid: false, error: "Cancer stage is required" };
+    }
+    
+    if (!medicalHistory.cancer.includes("Date:")) {
+      return { isValid: false, error: "Cancer diagnosis date is required" };
+    }
+    
+    // Extract values to check if they're not empty
+    const cancerTypeMatch = medicalHistory.cancer.match(/Type:\s*([^,]+)/i);
+    const cancerStageMatch = medicalHistory.cancer.match(/Stage:\s*([^,]+)/i);
+    const cancerDateMatch = medicalHistory.cancer.match(/Date:\s*([^,]+)/i);
+    
+    if (!cancerTypeMatch || !cancerTypeMatch[1]?.trim()) {
+      return { isValid: false, error: "Cancer type is required" };
+    }
+    
+    if (!cancerStageMatch || !cancerStageMatch[1]?.trim()) {
+      return { isValid: false, error: "Cancer stage is required" };
+    }
+    
+    if (!cancerDateMatch || !cancerDateMatch[1]?.trim()) {
+      return { isValid: false, error: "Cancer diagnosis date is required" };
+    }
+  }
+  
+  // Similar validations for other sections would go here...
+  
+  return { isValid: true };
+}, [medicalHistory]);
+
+// Update the handleSubmit function:
   const handleSubmit = async () => {
     if (!user?.hospitalID || !user?.id) return;
+  
+  // Validate the entire form
+  const validation = validateForm();
+  if (!validation.isValid) {
+    dispatch(showError(validation.error || "Please fill all required fields"));
+    return;
+  }
+  
     if (!canSave) return;
 
     try {

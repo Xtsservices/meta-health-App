@@ -518,6 +518,22 @@ export default function AddMedicineScreen() {
         );
         return;
       }
+const medTracker = new Set<string>();
+
+for (const r of rows) {
+  if (!r.medicineName) continue;
+
+  const key = `${r.medicineName.toLowerCase()}_${r.medicineType}`;
+
+  if (medTracker.has(key)) {
+    dispatch(
+      showError(`Duplicate medicine "${r.medicineName}" added.`)
+    );
+    return;
+  }
+
+  medTracker.add(key);
+}
 
       // Row-level validation
       for (const r of rows) {

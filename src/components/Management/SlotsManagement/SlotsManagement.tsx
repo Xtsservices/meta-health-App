@@ -198,7 +198,6 @@ const SlotsManagement: React.FC = () => {
       }
 
       await fetchSlots();
-      setShowSlotModal(false);
       dispatch(showSuccess("Slots created successfully"));
     } catch (err: any) {
       const errorMessage = err?.message || "Failed to create slots";
@@ -207,6 +206,7 @@ const SlotsManagement: React.FC = () => {
       dispatch(showError(errorMessage));
     } finally {
       setCreating(false);
+      setShowSlotModal(false);
     }
   };
 

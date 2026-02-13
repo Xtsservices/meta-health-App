@@ -54,7 +54,14 @@ const convertTo12HourFormat = (time: string) => {
   return `${h}:${m} ${suffix}`;
 };
 
-const BookAppointment: React.FC = () => {
+interface Props {
+  onAppointmentCreated?: () => void;
+}
+
+const BookAppointment: React.FC<Props> = ({
+  onAppointmentCreated,
+}) => {
+
   const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.currentUser);
 //   const rescheduleAppointmentData = useSelector(selectCurrAppointmentData);
@@ -210,7 +217,7 @@ const BookAppointment: React.FC = () => {
   // Inputs
   const handleTextChange = (name: keyof doctorAppointmentDetailType, value: string) => {
     let isvalid = true;
-    const showError = false;
+    let showError = false;
     let message = "This field is required";
     let finalValue: string | number = value;
 
@@ -346,35 +353,227 @@ const BookAppointment: React.FC = () => {
     }));
   };
 
+  const validateForm = () => {
+    let isValid = true;
+    const updatedFormData = { ...appointmentFormData };
+
+    // Patient Name validation
+    if (!appointmentFormData.pName.value || String(appointmentFormData.pName.value).trim() === "") {
+      updatedFormData.pName = {
+        ...updatedFormData.pName,
+        valid: false,
+        showError: true,
+        message: "Patient name is required"
+      };
+      isValid = false;
+      dispatch(showError("Patient name is required"));
+    } else {
+      updatedFormData.pName = {
+        ...updatedFormData.pName,
+        valid: true,
+        showError: false,
+        message: ""
+      };
+    }
+
+    // Mobile Number validation
+    if (!appointmentFormData.mobileNumber.value || String(appointmentFormData.mobileNumber.value).trim() === "") {
+      updatedFormData.mobileNumber = {
+        ...updatedFormData.mobileNumber,
+        valid: false,
+        showError: true,
+        message: "Mobile number is required"
+      };
+      isValid = false;
+      dispatch(showError("Mobile number is required"));
+    } else {
+      const mobileError = getPhoneValidationMessage(String(appointmentFormData.mobileNumber.value));
+      if (mobileError) {
+        updatedFormData.mobileNumber = {
+          ...updatedFormData.mobileNumber,
+          valid: false,
+          showError: true,
+          message: mobileError
+        };
+        isValid = false;
+        dispatch(showError(mobileError));
+      } else {
+        updatedFormData.mobileNumber = {
+          ...updatedFormData.mobileNumber,
+          valid: true,
+          showError: false,
+          message: ""
+        };
+      }
+    }
+
+    // Age validation
+    if (!appointmentFormData.age.value || String(appointmentFormData.age.value).trim() === "") {
+      updatedFormData.age = {
+        ...updatedFormData.age,
+        valid: false,
+        showError: true,
+        message: "Age is required"
+      };
+      isValid = false;
+      dispatch(showError("Age is required"));
+    } else if (!/^\d+[DMY]$/.test(String(appointmentFormData.age.value))) {
+      updatedFormData.age = {
+        ...updatedFormData.age,
+        valid: false,
+        showError: true,
+        message: "Age must be in format: 10D, 5M, or 2Y"
+      };
+      isValid = false;
+      dispatch(showError("Age must be in format: 10D, 5M, or 2Y"));
+    } else {
+      updatedFormData.age = {
+        ...updatedFormData.age,
+        valid: true,
+        showError: false,
+        message: ""
+      };
+    }
+
+    // Email validation
+    if (!appointmentFormData.email.value || String(appointmentFormData.email.value).trim() === "") {
+      updatedFormData.email = {
+        ...updatedFormData.email,
+        valid: false,
+        showError: true,
+        message: "Email is required"
+      };
+      isValid = false;
+      dispatch(showError("Email is required"));
+    } else {
+      const emailError = getEmailValidationMessage(String(appointmentFormData.email.value));
+      if (emailError) {
+        updatedFormData.email = {
+          ...updatedFormData.email,
+          valid: false,
+          showError: true,
+          message: emailError
+        };
+        isValid = false;
+        dispatch(showError(emailError));
+      } else {
+        updatedFormData.email = {
+          ...updatedFormData.email,
+          valid: true,
+          showError: false,
+          message: ""
+        };
+      }
+    }
+
+    // Gender validation
+    if (appointmentFormData.gender.value === -1 || !appointmentFormData.gender.value) {
+      updatedFormData.gender = {
+        ...updatedFormData.gender,
+        valid: false,
+        showError: true,
+        message: "Gender is required"
+      };
+      isValid = false;
+      dispatch(showError("Gender is required"));
+    } else {
+      updatedFormData.gender = {
+        ...updatedFormData.gender,
+        valid: true,
+        showError: false,
+        message: ""
+      };
+    }
+
+    // Department validation
+    if (appointmentFormData.department.value === -1 || !appointmentFormData.department.value) {
+      updatedFormData.department = {
+        ...updatedFormData.department,
+        valid: false,
+        showError: true,
+        message: "Department is required"
+      };
+      isValid = false;
+      dispatch(showError("Department is required"));
+    } else {
+      updatedFormData.department = {
+        ...updatedFormData.department,
+        valid: true,
+        showError: false,
+        message: ""
+      };
+    }
+
+    // Doctor validation
+    if (appointmentFormData.doctorName.value === -1 || !appointmentFormData.doctorName.value) {
+      updatedFormData.doctorName = {
+        ...updatedFormData.doctorName,
+        valid: false,
+        showError: true,
+        message: "Doctor is required"
+      };
+      isValid = false;
+      dispatch(showError("Doctor is required"));
+    } else {
+      updatedFormData.doctorName = {
+        ...updatedFormData.doctorName,
+        valid: true,
+        showError: false,
+        message: ""
+      };
+    }
+
+    // Date validation
+    if (!selectedDate) {
+      updatedFormData.date = {
+        ...updatedFormData.date,
+        valid: false,
+        showError: true,
+        message: "Appointment date is required"
+      };
+      isValid = false;
+      dispatch(showError("Appointment date is required"));
+    } else {
+      updatedFormData.date = {
+        ...updatedFormData.date,
+        valid: true,
+        showError: false,
+        message: ""
+      };
+    }
+
+    // Time slot validation
+    if (!appointmentFormData.timeSlot.value) {
+      updatedFormData.timeSlot = {
+        ...updatedFormData.timeSlot,
+        valid: false,
+        showError: true,
+        message: "Time slot is required"
+      };
+      isValid = false;
+      dispatch(showError("Time slot is required"));
+    } else {
+      updatedFormData.timeSlot = {
+        ...updatedFormData.timeSlot,
+        valid: true,
+        showError: false,
+        message: ""
+      };
+    }
+
+    setAppointmentFormData(updatedFormData);
+    return isValid;
+  };
+
   const handleSubmitAppointment = async () => {
     if (!user) {
       dispatch(showError("User not found"));
       return;
     }
-    if (!selectedDate) {
-      dispatch(showError("Please select appointment date"));
-      return;
-    }
-     const mobileError = getPhoneValidationMessage(
-      String(appointmentFormData.mobileNumber.value || "")
-    );
-    if (mobileError) {
-      dispatch(showError(mobileError));
-      return;
-    }
-     if (!/^\d+[DMY]$/.test(String(appointmentFormData.age.value))) {
-      dispatch(showError("Age must be in format: 10D, 5M, or 2Y"));
-      return;
-    }
 
-    const emailError = getEmailValidationMessage(
-      String(appointmentFormData.email.value || "")
-    );
-    if (emailError) {
-      dispatch(showError(emailError));
+    if (!validateForm()) {
       return;
     }
-    
 
     const reqBody: Record<string, unknown> = {
       departmentID: appointmentFormData.department.value,
@@ -412,14 +611,15 @@ const BookAppointment: React.FC = () => {
         token
       );
       setSubmitting(false);
-if (res?.status === "success" && "data" in res) {
-    dispatch(showSuccess("Appointment booked successfully"));
-}
+      if (res?.status === "success" && "data" in res) {
+        dispatch(showSuccess("Appointment booked successfully"));
+        resetAppointmentForm();
+        onAppointmentCreated?.();
+      }
       else {
         dispatch(showError("data" in res && res?.data?.message || "Unable to book appointment"));
         return;
       }
-      resetAppointmentForm();
     } catch (err) {
       setSubmitting(false);
       dispatch(
@@ -453,12 +653,15 @@ const debouncedSubmit = useMemo(
           <View style={styles.block}>
             <Text style={styles.label}>Patient Name *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, appointmentFormData.pName.showError && styles.inputError]}
               placeholder="Enter patient name"
               placeholderTextColor={COLORS.placeholder}
               value={String(appointmentFormData.pName.value || "")}
               onChangeText={(text) => handleTextChange("pName", text)}
             />
+            {appointmentFormData.pName.showError && (
+              <Text style={styles.errorText}>{appointmentFormData.pName.message}</Text>
+            )}
           </View>
          
        
@@ -467,7 +670,7 @@ const debouncedSubmit = useMemo(
           <View style={styles.block}>
             <Text style={styles.label}>Mobile Number *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, appointmentFormData.mobileNumber.showError && styles.inputError]}
               placeholder="10-digit mobile"
               placeholderTextColor={COLORS.placeholder}
               keyboardType="phone-pad"
@@ -475,29 +678,38 @@ const debouncedSubmit = useMemo(
               value={String(appointmentFormData.mobileNumber.value || "")}
               onChangeText={(text) => handleTextChange("mobileNumber", text)}
             />
+            {appointmentFormData.mobileNumber.showError && (
+              <Text style={styles.errorText}>{appointmentFormData.mobileNumber.message}</Text>
+            )}
           </View>
            <View style={styles.block}>
             <Text style={styles.label}>Age *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, appointmentFormData.age.showError && styles.inputError]}
               placeholder="Enter age ex: 3D or 3M or 3Y"
               placeholderTextColor={COLORS.placeholder}
               value={String(appointmentFormData.age.value || "")}
               
               onChangeText={(text) => handleTextChange("age", text)}
             />
+            {appointmentFormData.age.showError && (
+              <Text style={styles.errorText}>{appointmentFormData.age.message}</Text>
+            )}
         </View>
           {/* Email ID */}
         <View style={styles.block}>
             <Text style={styles.label}>Email ID *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, appointmentFormData.email.showError && styles.inputError]}
               placeholder="example@domain.com"
               placeholderTextColor={COLORS.placeholder}
               keyboardType="email-address"
               value={String(appointmentFormData.email.value || "")}
               onChangeText={(text) => handleTextChange("email", text)}
             />
+            {appointmentFormData.email.showError && (
+              <Text style={styles.errorText}>{appointmentFormData.email.message}</Text>
+            )}
           </View>
 
         {/* Gender chips */}
@@ -513,6 +725,7 @@ const debouncedSubmit = useMemo(
                   style={[
                     styles.chip,
                     isSelected && styles.chipActive,
+                    appointmentFormData.gender.showError && !isSelected && styles.chipError
                   ]}
                   onPress={() => handleClickGender(el.value)}
                 >
@@ -528,6 +741,9 @@ const debouncedSubmit = useMemo(
               );
             })}
           </View>
+          {appointmentFormData.gender.showError && (
+            <Text style={styles.errorText}>{appointmentFormData.gender.message}</Text>
+          )}
         </View>
 
         {/* Services */}
@@ -542,7 +758,7 @@ const debouncedSubmit = useMemo(
         
           <View style={styles.block}>
             <Text style={styles.label}>Department *</Text>
-            <View style={styles.Select}>
+            <View style={[styles.Select, appointmentFormData.department.showError && styles.SelectError]}>
               <Text style={styles.SelectText}>
                 {departments.find(d => d.id === appointmentFormData.department.value)?.name ||
                   "Select Department"}
@@ -564,11 +780,14 @@ const debouncedSubmit = useMemo(
                 ))}
               </Picker>
             </View>
+            {appointmentFormData.department.showError && (
+              <Text style={styles.errorText}>{appointmentFormData.department.message}</Text>
+            )}
           </View>
 
           <View style={styles.block}>
             <Text style={styles.label}>Doctor *</Text>
-<View style={styles.Select}>
+<View style={[styles.Select, appointmentFormData.doctorName.showError && styles.SelectError]}>
   <Text style={styles.SelectText}numberOfLines={1} ellipsizeMode="tail">
     {(() => {
       const doc = filteredDoctors.find(d => d.id === appointmentFormData.doctorName.value );
@@ -598,6 +817,9 @@ const debouncedSubmit = useMemo(
     ))}
               </Picker>
             </View>
+            {appointmentFormData.doctorName.showError && (
+              <Text style={styles.errorText}>{appointmentFormData.doctorName.message}</Text>
+            )}
 
           </View>
         
@@ -607,7 +829,7 @@ const debouncedSubmit = useMemo(
           <View style={styles.block}>
             <Text style={styles.label}>Select Date *</Text>
             <TouchableOpacity
-              style={styles.dateButton}
+              style={[styles.dateButton, appointmentFormData.date.showError && styles.dateButtonError]}
               activeOpacity={0.8}
               onPress={() => setShowDatePicker(true)}
             >
@@ -617,6 +839,9 @@ const debouncedSubmit = useMemo(
                   : "Tap to select appointment date"}
               </Text>
             </TouchableOpacity>
+            {appointmentFormData.date.showError && (
+              <Text style={styles.errorText}>{appointmentFormData.date.message}</Text>
+            )}
             {showDatePicker && (
               <DateTimePicker
                  value={selectedDate || new Date()}
@@ -632,7 +857,7 @@ const debouncedSubmit = useMemo(
 
         {/* Slots */}
         <View style={styles.block}>
-          <Text style={styles.label}>Select Time Slot</Text>
+          <Text style={styles.label}>Select Time Slot *</Text>
           {loadingSlots && (
             <View style={styles.centerRow}>
               <ActivityIndicator color={COLORS.brand} />
@@ -672,6 +897,7 @@ const debouncedSubmit = useMemo(
     { width: slotChipWidth },               // ⬅️ dynamic width per screen size
     isSelected && styles.slotChipActive,
     remaining <= 0 && styles.slotChipDisabled,
+    appointmentFormData.timeSlot.showError && !isSelected && styles.slotChipError
   ]}
   activeOpacity={remaining > 0 ? 0.8 : 1}
   onPress={() => handleSlotSelect(slot)}
@@ -698,6 +924,9 @@ const debouncedSubmit = useMemo(
                 );
               })}
           </View>
+          {appointmentFormData.timeSlot.showError && (
+            <Text style={styles.errorText}>{appointmentFormData.timeSlot.message}</Text>
+          )}
         </View>
 
         {/* Submit Button */}
@@ -810,6 +1039,9 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     backgroundColor: "#f9fafb",
   },
+  inputError: {
+    borderColor: "#ef4444",
+  },
 
   serviceDisplay: {
     height: responsiveHeight(6),
@@ -865,6 +1097,9 @@ const styles = StyleSheet.create({
   justifyContent: "center",
   paddingHorizontal: SPACING.sm,   // ✅ left & right padding
 },
+SelectError: {
+  borderColor: "#ef4444",
+},
 
 SelectText: {
   fontSize: FONT_SIZE.md,          // ✅ SMALL TEXT (this is what you want)
@@ -880,6 +1115,9 @@ hiddenPicker: {
   chipActive: {
     backgroundColor: COLORS.brand,
     borderColor: COLORS.brand,
+  },
+  chipError: {
+    borderColor: "#ef4444",
   },
   chipLabel: {
     fontSize: FONT_SIZE.sm,
@@ -898,6 +1136,9 @@ hiddenPicker: {
     justifyContent: "center",
     paddingHorizontal: SPACING.sm,
     backgroundColor: "#ecfeff",
+  },
+  dateButtonError: {
+    borderColor: "#ef4444",
   },
   dateText: {
     fontSize: FONT_SIZE.md,
@@ -944,6 +1185,9 @@ hiddenPicker: {
   slotChipDisabled: {
     opacity: 0.4,
   },
+  slotChipError: {
+    borderColor: "#ef4444",
+  },
   slotText: {
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
@@ -961,6 +1205,11 @@ hiddenPicker: {
   },
   slotSubActive: {
     color: "#dcfce7",
+  },
+  errorText: {
+    fontSize: FONT_SIZE.xs,
+    color: "#ef4444",
+    marginTop: SPACING.xs * 0.5,
   },
 
   submitButton: {
@@ -1016,4 +1265,3 @@ hiddenPicker: {
     fontWeight: "700",
   },
 });
-

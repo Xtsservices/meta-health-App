@@ -338,6 +338,12 @@ const DashboardIpd: React.FC = () => {
       icon: FileMinusIcon, 
       onPress: () => go("DischargedPatientsIPD") 
     },
+    { 
+      key: "expense", 
+      label: "Expenditure", 
+      icon: ActivityIcon,
+      onPress: () => go("ExpenseManagement") 
+    },
     { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab
     { 
       key: "mgmt", 

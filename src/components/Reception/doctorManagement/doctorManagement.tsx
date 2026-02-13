@@ -112,6 +112,7 @@ const DoctorManagementMobile: React.FC = () => {
         `user/${user.hospitalID}/list/${Role_NAME.doctor}`,
         token
       );
+      console.log("Fetched doctors response:", res);
 
       if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.users)) {
         const mapped: Doctor[] = res.data?.users.map((u: any): Doctor => {
@@ -219,9 +220,11 @@ const DoctorManagementMobile: React.FC = () => {
       dispatch(showError("Missing hospital or doctor details"));
       return;
     }
+    setSlotModalVisible(false);
+    setActiveDoctorForSlots(null);
 
     try {
-      setSlotCreating(true);
+    setSlotCreating(true);
       const token = user?.token ?? (await AsyncStorage.getItem("token"));
       if (!token) {
         setSlotCreating(false);
@@ -499,6 +502,9 @@ const DoctorManagementMobile: React.FC = () => {
           keyExtractor={(item) => String(item.id)}
           renderItem={renderDoctorCard}
           ListEmptyComponent={renderEmpty}
+          ListFooterComponent={
+            filteredDoctors.length > 0 ? renderPaginationBar : null
+          }
           contentContainerStyle={[
             styles.listContent,
             { paddingBottom: bottomPad },
@@ -506,9 +512,9 @@ const DoctorManagementMobile: React.FC = () => {
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
         />
+
       )}
 
-      {filteredDoctors.length > 0 && renderPaginationBar()}
 
       {/* Fixed footer */}
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>

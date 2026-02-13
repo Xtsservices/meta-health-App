@@ -69,7 +69,7 @@ const category_items = [
   "Tablets",
   "Tropical",
   "IV Line",
-  "Syrup",
+  "Syrups",
   "Injections",
 ];
 
@@ -207,6 +207,7 @@ const getMedicineIcon = (category?: string) => {
       return Syringe;
 
     case "Syrup":
+    case "Syrups": // Added Syrups here
     case "Drops":
       return Droplet;
 
@@ -240,7 +241,9 @@ const getMedicineIcon = (category?: string) => {
     }
 
     if (selectedCategory) {
-      filtered = filtered.filter((i) => i.category === selectedCategory);
+      filtered = filtered.filter((i) => 
+        i.category?.trim().toLowerCase() === selectedCategory.trim().toLowerCase()
+      );
     }
 
     if (selectedFilter === "In Stock") {
@@ -430,7 +433,7 @@ const getMedicineIcon = (category?: string) => {
   const renderItem = ({ item }: { item: StockData }) => {
     const status = getStockStatus(item);
     const statusColors = getStockStatusColor(status);
-    const unitLabel = item.category === "Tablets" || item.category === "Capsules" ? "Tablets" : item.category === "Syrup" ? "Bottles" : "Units";
+    const unitLabel = item.category === "Tablets" || item.category === "Capsules" ? "Tablets" : item.category === "Syrup" || item.category === "Syrups" ? "Bottles" : "Units";
 const statusColor = getStockStatusColor(status);
 const IconComponent = getMedicineIcon(item.category);
 
@@ -769,7 +772,7 @@ const IconComponent = getMedicineIcon(item.category);
           )}
         </ScrollView>
 
-        {/* Category Filter Modal */}
+        {/* Category Filter Modal - Using dynamic categories would be better, but keeping as is for now */}
         <FilterModalComponent
           visible={showCategoryModal}
           onClose={() => setShowCategoryModal(false)}
@@ -893,6 +896,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderRadius: 12,
     paddingHorizontal: SPACING.sm,
+    borderWidth: 1, // Added border
+    borderColor: COLORS.border, // Added border color
   },
   searchInput: {
     padding: SPACING.sm,

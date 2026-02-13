@@ -41,141 +41,143 @@ const InvoiceDetailsMobile: React.FC = () => {
   const [timelineId, setTimelineId] = useState<number | null>(null);
   const { invoice, source, nurses }: RouteParams = route.params;
 
-useEffect(() => {
-  const fetchPatientData = async () => {
-    try {
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));
-      
-      const response = await AuthFetch(
-        `patient/${user?.hospitalID}/patients/single/${invoice.patientID}`,
-        token
-      );      
-      // Store the timeline ID if available
-      if (response?.status === "success" && response?.data?.patient?.patientTimeLineID) {
-        setTimelineId(response.data.patient.patientTimeLineID);
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      try {
+        const token = user?.token ?? (await AsyncStorage.getItem("token"));
+        
+        const response = await AuthFetch(
+          `patient/${user?.hospitalID}/patients/single/${invoice.patientID}`,
+          token
+        );      
+        // Store the timeline ID if available
+        if (response?.status === "success" && response?.data?.patient?.patientTimeLineID) {
+          setTimelineId(response.data.patient.patientTimeLineID);
+        }
+        
+      } catch (error) {
+        console.error("Error fetching patient data:", error);
       }
-      
-    } catch (error) {
-      console.error("Error fetching patient data:", error);
-    }
-  };
+    };
 
-  if (invoice?.patientID && user?.hospitalID) {
-    fetchPatientData();
-  } else {}
-}, [invoice?.patientID, user?.hospitalID, user?.token]);
+    if (invoice?.patientID && user?.hospitalID) {
+      fetchPatientData();
+    }
+  }, [invoice?.patientID, user?.hospitalID, user?.token]);
 
   const getNurseName = (nurseId: number) => {
     const nurse = nurses?.find(n => n.id === nurseId);
     return nurse ? `${nurse.firstName} ${nurse.lastName}` : `Nurse #${nurseId}`;
   };
+  
   const hasPrescription = Boolean(invoice?.prescriptionURL);
   const isIPD = invoice?.dept?.includes('IPD');
   const firstMedicine = invoice?.medicinesList?.[0];
   const nurseId = (firstMedicine as any)?.nurseID;
   const nurseName = nurseId ? getNurseName(nurseId) : null;
-const isBillingSource = source === "billing";
-const isReceptionUser = user?.roleName?.toLowerCase() === 'reception';
-const isPharmacyUser = user?.roleName?.toLowerCase() === 'pharmacy';
-let displayTotal = 0;
-let numericPaid = 0;
-let numericDue = 0;
-let useApiDueAmount = false;
-  const medsBaseTotal = useMemo(() => {
-    return (invoice.medicinesList || []).reduce(
-      (sum, m: any) => sum + Number(m.totalPrice || m.amount || 0),
-      0
-    );
-  }, [invoice.medicinesList]);
+  const isBillingSource = source === "billing";
+  const isReceptionUser = user?.roleName?.toLowerCase() === 'reception';
+  const isPharmacyUser = user?.roleName?.toLowerCase() === 'pharmacy';
+  const isLabUser = user?.roleName?.toLowerCase() === 'pathology';
+  const isRadiologyUser = user?.roleName?.toLowerCase() === 'radiology';
+  const isLabOrRadiology = isLabUser || isRadiologyUser;
 
-const medsGstTotal = useMemo(() => {
-  return (invoice.medicinesList || []).reduce(
-      (sum, m: any) => {
+  let displayTotal = 0;
+  let numericPaid = 0;
+  let numericDue = 0;
+
+  // Check if this is a reception response structure
+  const isReceptionResponse = invoice?.grand_totalAmount !== undefined;
+
+  if (isReceptionResponse) {
+    // For RECEPTION users - use API values directly
+    displayTotal = Number(invoice.grand_totalAmount) || 0;
+    numericPaid = Number(invoice.grand_paidAmount) || 0;
+    numericDue = Number(invoice.grand_dueAmount) || 0;
+  } else if (isLabOrRadiology) {
+    // For lab/radiology users, use API values directly
+    displayTotal = Number(invoice.totalAmount) || 0;
+    numericPaid = Number(invoice.paidAmount) || 0;
+    numericDue = Number(invoice.dueAmount) || 0;
+  } else {
+    // For pharmacy users in billing mode, always show total amount only
+    if (isBillingSource && isPharmacyUser) {
+      displayTotal = invoice.medicinesList?.reduce((sum, medicine) => sum + (medicine.amount || 0), 0) || 0;
+      numericPaid = Number(invoice.paidAmount) || 0;
+      numericDue = Math.max(0, displayTotal - numericPaid);
+    } else {
+      const medsBaseTotal = invoice.medicinesList?.reduce((sum, m: any) => 
+        sum + Number(m.totalPrice || m.amount || 0), 0
+      ) || 0;
+      
+      const medsGstTotal = invoice.medicinesList?.reduce((sum, m: any) => {
         const price = Number(m.totalPrice || 0);
         const gst = Number(m.gst || 0);
         return sum + (price * gst) / 100;
-      },
-    0
-  );
-}, [invoice.medicinesList]);
-  const medsGrandTotal = medsBaseTotal + medsGstTotal;
-
-const testsTotal = useMemo(() => {
-  return (invoice.testList || []).reduce(
-    (sum, t) => sum + (t.amount || 0),
-    0
-  );
-}, [invoice.testList]);
-
-const grandTotal = medsGrandTotal + testsTotal;
-const getCompletedDate = () => {
-  if (!isPharmacyUser) {
-    return null;
-  }
-  
-  const completedDates = invoice.medicinesList
-    ?.map(med => med?.completedOn)
-    .filter(date => date) || [];
-  
-  if (completedDates.length === 0) {
-    return null;
-  }
-  
-  // Find the most recent completed date
-  const sortedDates = completedDates.sort((a, b) => 
-    Date.parse(b || "") - Date.parse(a || "")
-  );
-  
-  return sortedDates[0];
-};
-
-  const completedDate = getCompletedDate();
-  const paidAmount = Number(
-    (invoice as any)?.paidAmount ||
-    (invoice as any)?.paymentDetails?.reduce(
-      (sum: number, p: any) => sum + Number(p.cash || 0),
-      0
-    ) ||
-    0
-  );
-const payableAmount = Math.max(0, medsGrandTotal - paidAmount);
-// For pharmacy users in billing mode, always show total amount only
-if (isBillingSource && isPharmacyUser) {
-    displayTotal = medsGrandTotal;
-  numericPaid = paidAmount;
-  numericDue = payableAmount;
-  useApiDueAmount = false;
-} else {
-    numericPaid = paidAmount;
-    numericDue = Math.max(0, grandTotal - numericPaid);
-    displayTotal = grandTotal;
+      }, 0) || 0;
+      
+      const medsGrandTotal = medsBaseTotal + medsGstTotal;
+      const testsTotal = invoice.testList?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
+      
+      displayTotal = medsGrandTotal + testsTotal;
+      numericPaid = Number(invoice.paidAmount) || 0;
+      numericDue = Math.max(0, displayTotal - numericPaid);
+    }
   }
 
-  const handlePayPress = () => {
-  const payload: any = {
-    amount: numericDue,
-    department: invoice.dept,
-    orderData: {
-      patientID: invoice.patientID,
-      ptype: invoice.pType,
-      patientTimeLineID: timelineId,
-    },
-    user,
+  const getCompletedDate = () => {
+    if (!isPharmacyUser) {
+      return null;
+    }
+    
+    const completedDates = invoice.medicinesList
+      ?.map(med => med?.completedOn)
+      .filter(date => date) || [];
+    
+    if (completedDates.length === 0) {
+      return null;
+    }
+    
+    // Find the most recent completed date
+    const sortedDates = completedDates.sort((a, b) => 
+      Date.parse(b || "") - Date.parse(a || "")
+    );
+    
+    return sortedDates[0];
   };
 
-  const role = user?.roleName?.toLowerCase();
+  const completedDate = getCompletedDate();
+  const payableAmount = Math.max(0, displayTotal - numericPaid);
 
-  if (role === "pharmacy") {
-    payload.pharmacyData = invoice;
-    payload. type = "medicine"
-  } else if (role === "lab") {
-    payload.labData = invoice;
-  } else {
-    payload.receptionData = invoice;
-  }
+  const handlePayPress = () => {
+    const payload: any = {
+      amount: numericDue,
+      department: invoice.dept,
+      orderData: {
+        patientID: invoice.patientID,
+        ptype: invoice.pType,
+        patientTimeLineID: timelineId,
+      },
+      user,
+    };
 
-  navigation.navigate("PaymentScreen", payload);
-};
+    const role = user?.roleName?.toLowerCase();
+
+    if (role === "pharmacy") {
+      payload.pharmacyData = invoice;
+      payload.type = "medicine"
+    } else if (role === "lab" || role === "pathology") {
+      payload.labData = invoice;
+      payload.type = "lab"
+    } else if (role === "radiology") {
+      payload.radiologyData = invoice;
+      payload.type = "radiology"
+    } else {
+      payload.receptionData = invoice;
+    }
+
+    navigation.navigate("PaymentScreen", payload);
+  };
 
   return (
     <View
@@ -197,15 +199,16 @@ if (isBillingSource && isPharmacyUser) {
             {invoice.pName} • {invoice.patientID}
           </Text>
         </View>
-{!isBillingSource && (
-        <TouchableOpacity
-          style={styles.downloadChip}
-          activeOpacity={0.85}
-          onPress={() => setShowDownloadModal(true)}
-        >
-          <Download size={16} color="#fff" />
-          <Text style={styles.downloadChipText}>PDF</Text>
-        </TouchableOpacity>)}
+        {!isBillingSource && (
+          <TouchableOpacity
+            style={styles.downloadChip}
+            activeOpacity={0.85}
+            onPress={() => setShowDownloadModal(true)}
+          >
+            <Download size={16} color="#fff" />
+            <Text style={styles.downloadChipText}>PDF</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -230,29 +233,12 @@ if (isBillingSource && isPharmacyUser) {
             <Text style={styles.value}>{invoice.patientID || invoice.pIdNew}</Text>
           </View>
 
-          {/* <View style={styles.row}>
-            <Text style={styles.label}>Department</Text>
-            <Text style={styles.value}>{invoice.dept}</Text>
-          </View> */}
-
-          {/* <View style={styles.row}>
-            <Text style={styles.label}>Type</Text>
-            <Text style={styles.value}>{invoice.pType || "-"}</Text>
-          </View> */}
-
-            <View style={styles.row}>
-              <Text style={styles.label}>Doctor</Text>
-              <Text style={styles.value}>
-                {`${user?.firstName || ""} ${user?.lastName || ""}`.trim()}
-              </Text>
-            </View>
-
-          {/* {invoice.category && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Category</Text>
-              <Text style={styles.value}>{invoice.category}</Text>
-            </View>
-          )} */}
+          <View style={styles.row}>
+            <Text style={styles.label}>Doctor</Text>
+            <Text style={styles.value}>
+              {`${user?.firstName || ""} ${user?.lastName || ""}`.trim()}
+            </Text>
+          </View>
 
           <View style={styles.row}>
             <Text style={styles.label}>Added On</Text>
@@ -261,19 +247,19 @@ if (isBillingSource && isPharmacyUser) {
             </Text>
           </View>
 
-        {isIPD && nurseName && (
-          <View style={styles.row}>
-            <View style={styles.labelWithIcon}>
-              <UserIcon size={16} color={COLORS.brand} />
-              <Text style={[styles.label, { color: '#14b8a6', fontWeight: '600', marginLeft: 4 }]}>
-                Medication Given By
+          {isIPD && nurseName && (
+            <View style={styles.row}>
+              <View style={styles.labelWithIcon}>
+                <UserIcon size={16} color={COLORS.brand} />
+                <Text style={[styles.label, { color: '#14b8a6', fontWeight: '600', marginLeft: 4 }]}>
+                  Medication Given By
+                </Text>
+              </View>
+              <Text style={[styles.value, { color: '#14b8a6', fontWeight: '600' }]}>
+                {nurseName}
               </Text>
             </View>
-            <Text style={[styles.value, { color: '#14b8a6', fontWeight: '600' }]}>
-              {nurseName}
-            </Text>
-          </View>
-        )}
+          )}
 
           {isPharmacyUser && completedDate && (
             <View style={styles.row}>
@@ -320,7 +306,7 @@ if (isBillingSource && isPharmacyUser) {
                 </View>
                 <View style={{ flex: 1, alignItems: "flex-end" }}>
                   <Text style={styles.tdMain}>
-                    ₹{(m.amount ).toFixed(2)}
+                    ₹{(m.finalPrice || m.amount).toFixed(2)}
                   </Text>
                 </View>
               </View>
@@ -328,12 +314,14 @@ if (isBillingSource && isPharmacyUser) {
 
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Medicines Total</Text>
-              <Text style={styles.totalValue}>₹{medsBaseTotal.toFixed(2)}</Text>
+              <Text style={styles.totalValue}>
+                ₹{(invoice.medicine_totalAmount || invoice.medicinesList?.reduce((sum, m: any) => sum + Number(m.finalPrice || m.amount || 0), 0) || 0).toFixed(2)}
+              </Text>
             </View>
           </View>
         )}
 
-        {/* Tests section */}
+        {/* Tests section - MODIFIED for lab/radiology */}
         {invoice.testList && invoice.testList.length > 0 && (
           <View style={[styles.card, { backgroundColor: COLORS.card }]}>
             <Text style={styles.sectionTitle}>
@@ -342,22 +330,31 @@ if (isBillingSource && isPharmacyUser) {
 
             <View style={styles.tableHeaderRow}>
               <Text style={[styles.th, { flex: 2 }]}>Test</Text>
+              <Text style={[styles.th, { flex: 1, textAlign: "center" }]}>
+                GST %
+              </Text>
               <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>
                 Amount
               </Text>
             </View>
 
-            {invoice.testList.map((t, idx) => (
+            {invoice.testList.map((t: any, idx) => (
               <View key={String(t.testID) + idx} style={styles.tableRow}>
                 <View style={{ flex: 2 }}>
                   <Text style={styles.tdMain}>{t.testName}</Text>
                   <Text style={styles.tdSub}>
-                    Price: ₹{t.price.toFixed(2)} • GST: {t.gst}%{" "}
+                    Base: ₹{t.baseAmount?.toFixed(2) || t.price?.toFixed(2) || "0.00"}
+                    {t.gstAmount && ` • GST Amt: ₹${t.gstAmount.toFixed(2)}`}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, alignItems: "center" }}>
+                  <Text style={styles.tdMain}>
+                    {t.gstPercentage?.toFixed(2) || t.gst?.toFixed(2) || "0"}%
                   </Text>
                 </View>
                 <View style={{ flex: 1, alignItems: "flex-end" }}>
                   <Text style={styles.tdMain}>
-                    ₹{(t.amount ?? t.price).toFixed(2)}
+                    ₹{t.totalAmount?.toFixed(2) || t.amount?.toFixed(2) || "0.00"}
                   </Text>
                 </View>
               </View>
@@ -365,19 +362,44 @@ if (isBillingSource && isPharmacyUser) {
 
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Tests Total</Text>
-              <Text style={styles.totalValue}>₹{testsTotal.toFixed(2)}</Text>
+              <Text style={styles.totalValue}>
+                             ₹{(invoice.test_totalAmount || invoice.testList?.reduce((sum, t: any) => sum + Number(t.totalAmount || t.amount || 0), 0) || 0).toFixed(2)}
+              </Text>
             </View>
           </View>
         )}
 
-       {/* Grand total */}
-<View style={[styles.card, { backgroundColor: COLORS.card }]}>
-  <Text style={styles.sectionTitle}>
-    {isBillingSource ? "Payment Summary" : "Invoice Total"}
-  </Text>
+        {/* Grand total */}
+        <View style={[styles.card, { backgroundColor: COLORS.card }]}>
+          <Text style={styles.sectionTitle}>
+            {isBillingSource ? "Payment Summary" : "Invoice Total"}
+          </Text>
 
-  {isBillingSource && !hasPrescription ? (
-    <>
+          {isBillingSource && !hasPrescription ? (
+            <>
+              {/* Show breakdown for reception response */}
+              {isReceptionResponse && (
+                <>
+                  {invoice.medicine_totalAmount !== undefined && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Medicines Total:</Text>
+                      <Text style={styles.breakdownValue}>
+                        ₹{Number(invoice.medicine_totalAmount || 0).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {invoice.test_totalAmount !== undefined && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Tests Total:</Text>
+                      <Text style={styles.breakdownValue}>
+                        ₹{Number(invoice.test_totalAmount || 0).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+
       {/* Total Amount */}
       <View style={styles.breakdownRow}>
         <Text style={styles.breakdownLabel}>Total Amount:</Text>
@@ -386,6 +408,24 @@ if (isBillingSource && isPharmacyUser) {
         </Text>
       </View>
 
+              {/* Show breakdown for lab/radiology */}
+              {isLabOrRadiology && (
+                <>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Total Base Amount:</Text>
+                    <Text style={styles.breakdownValue}>
+                      ₹{Number(invoice.totalBaseAmount || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Total GST Amount:</Text>
+                    <Text style={styles.breakdownValue}>
+                      ₹{Number(invoice.totalGstAmount || 0).toFixed(2)}
+                    </Text>
+                  </View>
+                </>
+              )}
+
       {/* Payable Amount (what we intend to charge now) */}
       <View style={styles.breakdownRow}>
         <Text style={styles.breakdownLabel}>Payable Amount:</Text>
@@ -393,6 +433,16 @@ if (isBillingSource && isPharmacyUser) {
           ₹{payableAmount.toFixed(2)}
         </Text>
       </View>
+
+              {/* Paid Amount */}
+              {numericPaid > 0 && (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Already Paid:</Text>
+                  <Text style={[styles.breakdownValue, { color: COLORS.success }]}>
+                    ₹{numericPaid.toFixed(2)}
+                  </Text>
+                </View>
+              )}
 
       {/* Due Amount (outstanding) */}
       <View style={styles.totalRow}>
@@ -411,17 +461,13 @@ if (isBillingSource && isPharmacyUser) {
     // TAX INVOICE mode - Always show total amount
     <View style={styles.totalRow}>
       <Text style={styles.totalLabel}>Total Amount</Text>
-      <Text style={styles.totalValue}>₹{grandTotal.toFixed(2)}</Text>
+      <Text style={styles.totalValue}>₹{displayTotal.toFixed(2)}</Text>
     </View>
   )}
 </View>
 
-2
-
         {/* Pay button for Billing source */}
-       {isBillingSource &&
-  numericDue > 0 &&
-  !hasPrescription && (
+        {isBillingSource && numericDue > 0 && !hasPrescription && (
   <View style={styles.payButtonContainer}>
     <TouchableOpacity
       style={[styles.payButton, { backgroundColor: COLORS.brand }]}
@@ -444,7 +490,7 @@ if (isBillingSource && isPharmacyUser) {
         visible={showDownloadModal}
         onClose={() => setShowDownloadModal(false)}
         invoice={invoice}
-        grandTotal={grandTotal}
+        grandTotal={displayTotal}
       />
 
       {/* Footer */}
@@ -472,7 +518,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: "700",
   },
-    labelWithIcon: {
+  labelWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -498,7 +544,7 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
-    breakdownRow: {
+  breakdownRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 6,
@@ -513,7 +559,6 @@ const styles = StyleSheet.create({
     color: "#374151",
     fontWeight: "500",
   },
-
   card: {
     borderRadius: 14,
     padding: SPACING.md,

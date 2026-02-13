@@ -227,7 +227,7 @@ const TestAlerts: React.FC<TestAlertsProps> = ({
 
 // Rejected Alerts Component
 const RejectedAlerts: React.FC<RejectedAlertsProps> = ({ rejectedOrders }) => {
-  const displayData = [...(rejectedOrders ?? [])].reverse(); 
+  const displayData = [...(rejectedOrders ?? [])] 
 
   return (
     <View style={styles.tabContent}>
@@ -448,7 +448,6 @@ const AlertsLab: React.FC = () => {
           `test/${user?.roleName}/${user?.hospitalID}/getAlerts`,
           token
         );
-        // console.log("$$$$",response)
         alertsData =response && "data" in response && response?.data?.alerts || response && "alerts" in response && response?.alerts || [];
       }
       if (Array.isArray(alertsData)) {
@@ -499,23 +498,31 @@ const AlertsLab: React.FC = () => {
             `medicineInventoryPatientsOrder/${user?.hospitalID}/rejected/getMedicineInventoryPatientsOrder`,
             token
           );
-          rejectedData = response && "data" in response &&  response?.data?.data || [];
+          rejectedData = response && "data" in response && response?.data?.data || [];
         } else {
           // 👇 Existing lab rejected billing
           const response = await AuthFetch(
             `test/${user?.roleName}/${user?.hospitalID}/rejected/getBillingData`,
             token
           );
-          rejectedData = response && "data" in response &&  response?.data?.billingData || response && "billingData" in response &&  response?.billingData || [];
+          rejectedData = response && "data" in response && response?.data?.billingData || response && "billingData" in response && response?.billingData || [];
         }
         if (Array.isArray(rejectedData)) {
         const sortedRejected = [...rejectedData].sort((a: any, b: any) => {
           const dateA = new Date(
-            a?.addedOn || a?.createdAt || a?.rejectedOn || a?.timestamp || 0
+            a?.rejectedOn || 
+            a?.addedOn || a?.createdAt ||  a?.timestamp || 
+          a?.testsList?.[0]?.rejectedOn ||
+          a?.medicinesList?.[0]?.rejectedOn ||
+          0
           ).getTime();
 
           const dateB = new Date(
-            b?.addedOn || b?.createdAt || b?.rejectedOn || b?.timestamp || 0
+          b?.rejectedOn || 
+          b?.addedOn || b?.createdAt ||  b?.timestamp || 
+          b?.testsList?.[0]?.rejectedOn ||
+          b?.medicinesList?.[0]?.rejectedOn ||
+          0
           ).getTime();
 
           return dateB - dateA;

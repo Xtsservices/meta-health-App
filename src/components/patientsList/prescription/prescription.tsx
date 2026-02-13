@@ -309,12 +309,14 @@ const notesToShow =
         ) : list.length === 0 ? (
           <View style={[styles.emptyWrap, { paddingBottom: bottomPad }]}>
             <Text style={styles.emptyText}>No prescriptions yet</Text>
+            {user?.roleName !== "reception" &&  (
             <Pressable
               onPress={() => navigation.navigate("AddMedicineTest" as never, {} as never)}
               style={[styles.bigAddBtn, { backgroundColor: COLORS.brand }]}
             >
               <Text style={styles.bigAddText}>Add Prescription</Text>
             </Pressable>
+          )}
           </View>
         ) : (
           <FlatList

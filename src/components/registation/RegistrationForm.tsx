@@ -42,8 +42,42 @@ interface FormField {
 
 // Get dynamic dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const isSmallScreen = SCREEN_WIDTH < 375;
-const isLargeScreen = SCREEN_WIDTH > 768;
+const isSmallScreen = SCREEN_WIDTH < 600;
+
+// Responsive sizing
+const FONT_SIZE = {
+  xs: SCREEN_WIDTH * 0.03,
+  sm: SCREEN_WIDTH * 0.035,
+  md: SCREEN_WIDTH * 0.04,
+  lg: SCREEN_WIDTH * 0.045,
+  xl: SCREEN_WIDTH * 0.055,
+};
+
+const SPACING = {
+  xs: SCREEN_WIDTH * 0.02,
+  sm: SCREEN_WIDTH * 0.03,
+  md: SCREEN_WIDTH * 0.04,
+  lg: SCREEN_WIDTH * 0.05,
+  xl: SCREEN_WIDTH * 0.06,
+};
+
+const responsiveHeight = (factor: number) => SCREEN_HEIGHT * (factor / 100);
+const responsiveWidth = (factor: number) => SCREEN_WIDTH * (factor / 100);
+
+const COLORS = {
+  brand: '#03989e',
+  text: '#111827',
+  sub: '#6B7280',
+  border: '#D1D5DB',
+  placeholder: '#9CA3AF',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  background: '#f8fafc',
+  white: '#ffffff',
+  chipActive: '#03989e',
+  chipInactive: '#e5e7eb',
+};
 
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   const navigation = useNavigation<any>();
@@ -132,7 +166,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
       case 'lab':
         return [
           { name: 'name', label: 'Lab Name', type: 'text', placeholder: 'Enter lab name', required: true },
-          { name: 'parent', label: 'Parent/Group', type: 'text', placeholder: 'Enter parent/group name', required: true }, // Added missing field
+          { name: 'parent', label: 'Parent/Group', type: 'text', placeholder: 'Enter parent/group name', required: true },
           { name: 'address', label: 'Address', type: 'textarea', placeholder: 'Enter complete address', required: true },
           { name: 'country', label: 'Country', type: 'text', placeholder: 'Enter country', required: true },
           { name: 'state', label: 'State', type: 'text', placeholder: 'Enter state', required: true },
@@ -140,8 +174,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           { name: 'city', label: 'City', type: 'text', placeholder: 'Enter city', required: true },
           { name: 'pinCode', label: 'Pin Code', type: 'text', placeholder: 'Enter pin code', required: true },
           { name: 'website', label: 'Website', type: 'text', placeholder: 'Enter website URL', required: true },
-          { name: 'labEmail', label: 'Email', type: 'email', placeholder: 'Enter lab email', required: true }, // Specific label for lab
-          { name: 'phoneNo', label: 'Phone', type: 'tel', placeholder: 'Enter 10-digit phone number', required: true }, // Specific label for lab
+          { name: 'labEmail', label: 'Email', type: 'email', placeholder: 'Enter lab email', required: true },
+          { name: 'phoneNo', label: 'Phone', type: 'tel', placeholder: 'Enter 10-digit phone number', required: true },
           { name: 'labFirstName', label: 'First Name', type: 'text', placeholder: 'Enter first name', required: true },
           { name: 'labLastName', label: 'Last Name', type: 'text', placeholder: 'Enter last name', required: true },
         ];
@@ -342,14 +376,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           endpoint = 'diagnostic/register';
           payload = {
             name: formData.name,
-            parent: formData.parent || '', // Added parent field
+            parent: formData.parent || '',
             address: formData.address,
             country: formData.country || 'India',
             state: formData.state,
             district: formData.district,
             city: formData.city,
             pinCode: formData.pinCode,
-            email: formData.labEmail || formData.email, // Use labEmail if available
+            email: formData.labEmail || formData.email,
             phoneNo: formData.phoneNo,
             website: formData.website || '',
             userEmail: formData.labEmail || formData.email || formData.userEmail,
@@ -377,7 +411,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           payload = { ...formData, registeredAt: formatDateTime(new Date()) };
       }
 
-      const response = await AuthPost(endpoint, payload, null) as any ;
+      const response = await AuthPost(endpoint, payload, null) as any;
 
       if (response?.status === 'error') {
         dispatch(showError(response.message || 'Registration failed'));
@@ -456,7 +490,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
       const response = await AuthPost(verifyEndpoint, {
         email: email,
         otp: otpValue
-      }, null) as any ;
+      }, null) as any;
 
       if (response?.status === 'error') {
         dispatch(showError(response.message || 'OTP verification failed'));
@@ -479,15 +513,23 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           
           if (hospitalStatus === 'pending') {
             navigation.navigate('HospitalProfileForm', { hospitalId });
-          } 
-        } else if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
+          }
+          setShowOtpModal(false);
+          return;
+        } 
+        
+        if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
           const diagnosticId = loginData.organizationAssociations?.[0]?.organizationId || loginData.diagnosticID;
           const diagnosticStatus = response.data.diagnostic?.status || loginData.organizationAssociations?.[0]?.organizationDetails?.status;
           
           if (diagnosticStatus === 'pending') {
             navigation.navigate('DiagnosticProfileForm', { diagnosticId });
           }
-        } else if (categoryLower === 'pharmacy') {
+          setShowOtpModal(false);
+          return;
+        }
+        
+        if (categoryLower === 'pharmacy') {
           const pharmacyId = loginData.organizationAssociations?.[0]?.organizationId || loginData.pharmacyID;
           const pharmacyStatus = response.data.pharmacy?.status || loginData.organizationAssociations?.[0]?.organizationDetails?.status;
           
@@ -496,9 +538,18 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           } else {
             navigation.navigate('PharmacyDashboard');
           }
-        } else {
-          setShowSuccessScreen(true);
+          setShowOtpModal(false);
+          return;
         }
+
+        if (categoryLower === 'doctor') {
+          const doctorId = response?.data?.id || formData.email;
+          setShowOtpModal(false);
+          navigation.navigate('DoctorProfileForm', { doctorId });
+          return;
+        }
+        
+        setShowSuccessScreen(true);
       } else {
         setShowSuccessScreen(true);
       }
@@ -563,8 +614,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.successContainer}>
           <View style={styles.successContent}>
-            <View style={styles.successIcon}>
-              <CheckCircle size={SCREEN_WIDTH * 0.15} color="#10B981" />
+            <View style={styles.successIconWrapper}>
+              <CheckCircle size={SPACING.xl} color={COLORS.success} />
             </View>
             <Text style={styles.successTitle}>Account Verified!</Text>
             <Text style={styles.successMessage}>
@@ -576,7 +627,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
               disabled={isSubmitting}
             >
               {isSubmitting ? (
-                <ActivityIndicator color="#ffffff" size="small" />
+                <ActivityIndicator color={COLORS.white} size="small" />
               ) : (
                 <Text style={styles.loginButtonText}>Go to Login</Text>
               )}
@@ -604,9 +655,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.formContainer}>
-
             {fields.map((field) => (
-              <View key={field.name} style={styles.inputContainer}>
+              <View key={field.name} style={styles.fieldContainer}>
                 <Text style={styles.label}>
                   {field.label} {field.required && <Text style={styles.required}>*</Text>}
                 </Text>
@@ -615,7 +665,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
                   <TextInput
                     style={[styles.textArea, formErrors[field.name] && styles.inputError]}
                     placeholder={field.placeholder}
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={COLORS.placeholder}
                     value={formData[field.name] || ''}
                     onChangeText={(value) => handleInputChange(field.name, value)}
                     multiline
@@ -629,7 +679,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
                   <TextInput
                     style={[styles.input, formErrors[field.name] && styles.inputError]}
                     placeholder={field.placeholder}
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={COLORS.placeholder}
                     value={formData[field.name] || ''}
                     onChangeText={(value) => handleInputChange(field.name, value)}
                     keyboardType={
@@ -661,7 +711,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
                 disabled={isSubmitting}
               >
                 {termsAccepted ? (
-                  <Check size={SCREEN_WIDTH * 0.04} color="#FFFFFF" />
+                  <Check size={FONT_SIZE.sm} color={COLORS.white} />
                 ) : null}
               </TouchableOpacity>
               <Text style={styles.checkboxText}>
@@ -671,14 +721,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
             </View>
 
             <TouchableOpacity
-              style={[styles.submitButton, (isSubmitting || !termsAccepted) && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (isSubmitting || !termsAccepted) && styles.buttonDisabled]}
               onPress={submitRegistration}
               disabled={isSubmitting || !termsAccepted}
             >
               {isSubmitting ? (
-                <ActivityIndicator color="#ffffff" size="small" />
+                <ActivityIndicator color={COLORS.white} size="small" />
               ) : (
-                <Text style={styles.submitButtonText}>Validate & Continue</Text>
+                <Text style={styles.buttonText}>Validate & Continue</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -701,8 +751,8 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
               <View style={styles.modalContainer}>
                 <View style={styles.modalContent}>
                   <View style={styles.otpHeader}>
-                    <View style={styles.otpIcon}>
-                      <Mail size={SCREEN_WIDTH * 0.1} color="#03989e" />
+                    <View style={styles.otpIconWrapper}>
+                      <Mail size={SPACING.lg} color={COLORS.brand} />
                     </View>
                     <Text style={styles.otpTitle}>Enter OTP</Text>
                     <Text style={styles.otpSubtitle}>
@@ -717,7 +767,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
                         ref={setOtpRef(index)}
                         style={styles.otpInput}
                         placeholder="0"
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor={COLORS.placeholder}
                         value={digit}
                         onChangeText={(value) => handleOtpChange(index, value)}
                         onKeyPress={({ nativeEvent: { key } }) => handleOtpKeyPress(index, key)}
@@ -731,14 +781,14 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
                   </View>
 
                   <TouchableOpacity
-                    style={[styles.verifyButton, isSubmitting && styles.verifyButtonDisabled]}
+                    style={[styles.verifyButton, isSubmitting && styles.buttonDisabled]}
                     onPress={handleOtpSubmit}
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
+                      <ActivityIndicator color={COLORS.white} size="small" />
                     ) : (
-                      <Text style={styles.verifyButtonText}>Verify & Submit</Text>
+                      <Text style={styles.buttonText}>Verify & Submit</Text>
                     )}
                   </TouchableOpacity>
 
@@ -769,11 +819,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   );
 };
 
-// Responsive Styles
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -783,155 +832,156 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     flexGrow: 1,
-    paddingBottom: Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.05 : SCREEN_HEIGHT * 0.03,
+    paddingBottom: SPACING.xl,
   },
   formContainer: {
-    padding: SCREEN_WIDTH * 0.05,
-    paddingTop: SCREEN_HEIGHT * 0.03,
-    minHeight: SCREEN_HEIGHT * 0.9,
+    padding: SPACING.md,
+    paddingTop: SPACING.lg,
   },
-  inputContainer: {
-    marginBottom: SCREEN_HEIGHT * 0.015,
+  fieldContainer: {
+    marginBottom: SPACING.sm,
   },
   label: {
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.035 : SCREEN_WIDTH * 0.04,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: SCREEN_HEIGHT * 0.005,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.sub,
+    marginBottom: SPACING.xs,
   },
   required: {
-    color: '#EF4444',
+    color: COLORS.error,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: SCREEN_WIDTH * 0.03,
-    paddingVertical: SCREEN_HEIGHT * 0.015,
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.04 : SCREEN_WIDTH * 0.045,
-    color: '#111827',
-    minHeight: SCREEN_HEIGHT * 0.06,
+    height: responsiveHeight(6),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    backgroundColor: '#f9fafb',
   },
   textArea: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: SCREEN_WIDTH * 0.03,
-    paddingVertical: SCREEN_HEIGHT * 0.015,
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.04 : SCREEN_WIDTH * 0.045,
-    color: '#111827',
-    minHeight: SCREEN_HEIGHT * 0.12,
+    minHeight: responsiveHeight(12),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    backgroundColor: '#f9fafb',
     textAlignVertical: 'top',
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: COLORS.error,
   },
   errorText: {
-    color: '#EF4444',
-    fontSize: SCREEN_WIDTH * 0.03,
-    marginTop: SCREEN_HEIGHT * 0.005,
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.error,
+    marginTop: SPACING.xs * 0.5,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginTop: SCREEN_HEIGHT * 0.025,
-    marginBottom: SCREEN_HEIGHT * 0.03,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   checkbox: {
-    width: SCREEN_WIDTH * 0.06,
-    height: SCREEN_WIDTH * 0.06,
+    width: FONT_SIZE.lg,
+    height: FONT_SIZE.lg,
     borderWidth: 2,
-    borderColor: '#D1D5DB',
-    borderRadius: 4,
-    marginRight: SCREEN_WIDTH * 0.03,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.xs,
+    marginRight: SPACING.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    marginTop: SCREEN_HEIGHT * 0.002,
+    backgroundColor: COLORS.white,
+    marginTop: SPACING.xs * 0.5,
   },
   checkboxChecked: {
-    backgroundColor: '#03989e',
-    borderColor: '#03989e',
+    backgroundColor: COLORS.brand,
+    borderColor: COLORS.brand,
   },
   checkboxText: {
     flex: 1,
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.032 : SCREEN_WIDTH * 0.035,
-    color: '#374151',
-    lineHeight: SCREEN_HEIGHT * 0.025,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
+    lineHeight: FONT_SIZE.md * 1.2,
   },
   submitButton: {
-    backgroundColor: '#03989e',
-    borderRadius: 8,
-    paddingVertical: SCREEN_HEIGHT * 0.02,
+    backgroundColor: COLORS.brand,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.02,
+    marginBottom: SPACING.md,
   },
-  submitButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+  buttonDisabled: {
+    backgroundColor: COLORS.sub,
   },
-  submitButtonText: {
-    color: '#FFFFFF',
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.04 : SCREEN_WIDTH * 0.045,
-    fontWeight: '600',
+  buttonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
   },
   successContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SCREEN_WIDTH * 0.05,
+    paddingHorizontal: SPACING.md,
   },
   successContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: SCREEN_WIDTH * 0.06,
+    backgroundColor: COLORS.white,
+    borderRadius: SPACING.lg,
+    padding: SPACING.lg,
     width: '100%',
     maxWidth: 500,
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  successIcon: {
-    width: SCREEN_WIDTH * 0.2,
-    height: SCREEN_WIDTH * 0.2,
+  successIconWrapper: {
+    width: SPACING.xl * 1.5,
+    height: SPACING.xl * 1.5,
+    borderRadius: SPACING.xl,
     backgroundColor: '#D1FAE5',
-    borderRadius: SCREEN_WIDTH * 0.1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.03,
+    marginBottom: SPACING.md,
   },
   successTitle: {
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.06 : SCREEN_WIDTH * 0.065,
+    fontSize: FONT_SIZE.xl,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: SCREEN_HEIGHT * 0.015,
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
     textAlign: 'center',
   },
   successMessage: {
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.035 : SCREEN_WIDTH * 0.04,
-    color: '#6B7280',
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
     textAlign: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.04,
-    lineHeight: SCREEN_HEIGHT * 0.025,
+    marginBottom: SPACING.lg,
+    lineHeight: FONT_SIZE.md * 1.5,
   },
   loginButton: {
-    backgroundColor: '#03989e',
-    borderRadius: 8,
-    paddingHorizontal: SCREEN_WIDTH * 0.08,
-    paddingVertical: SCREEN_HEIGHT * 0.018,
+    backgroundColor: COLORS.brand,
+    borderRadius: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
     width: '100%',
     alignItems: 'center',
   },
   loginButtonText: {
-    color: '#FFFFFF',
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.04 : SCREEN_WIDTH * 0.045,
-    fontWeight: '600',
+    color: COLORS.white,
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
   },
   modalSafeArea: {
     flex: 1,
@@ -945,100 +995,94 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SCREEN_WIDTH * 0.05,
+    paddingHorizontal: SPACING.md,
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: SCREEN_WIDTH * 0.06,
+    backgroundColor: COLORS.white,
+    borderRadius: SPACING.lg,
+    padding: SPACING.lg,
     width: '100%',
     maxWidth: 500,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   otpHeader: {
     alignItems: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.04,
+    marginBottom: SPACING.lg,
   },
-  otpIcon: {
-    width: SCREEN_WIDTH * 0.16,
-    height: SCREEN_WIDTH * 0.16,
+  otpIconWrapper: {
+    width: SPACING.xl * 1.2,
+    height: SPACING.xl * 1.2,
+    borderRadius: SPACING.xl,
     backgroundColor: '#E0F2FE',
-    borderRadius: SCREEN_WIDTH * 0.08,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.02,
+    marginBottom: SPACING.md,
   },
   otpTitle: {
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.06 : SCREEN_WIDTH * 0.065,
+    fontSize: FONT_SIZE.lg,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: SCREEN_HEIGHT * 0.01,
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
   },
   otpSubtitle: {
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.035 : SCREEN_WIDTH * 0.04,
-    color: '#6B7280',
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     textAlign: 'center',
-    lineHeight: SCREEN_HEIGHT * 0.022,
+    lineHeight: FONT_SIZE.md * 1.2,
   },
   otpInputsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: SCREEN_HEIGHT * 0.04,
+    marginBottom: SPACING.lg,
   },
   otpInput: {
-    width: SCREEN_WIDTH * 0.12,
-    height: SCREEN_WIDTH * 0.12,
+    width: responsiveWidth(12),
+    height: responsiveWidth(12),
     borderWidth: 2,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.05 : SCREEN_WIDTH * 0.06,
-    color: '#111827',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    fontSize: FONT_SIZE.lg,
+    color: COLORS.text,
+    backgroundColor: COLORS.white,
   },
   verifyButton: {
-    backgroundColor: '#03989e',
-    borderRadius: 8,
-    paddingVertical: SCREEN_HEIGHT * 0.02,
+    backgroundColor: COLORS.brand,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.015,
-  },
-  verifyButtonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  verifyButtonText: {
-    color: '#FFFFFF',
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.04 : SCREEN_WIDTH * 0.045,
-    fontWeight: '600',
+    marginBottom: SPACING.sm,
   },
   backButton: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    paddingVertical: SCREEN_HEIGHT * 0.02,
+    backgroundColor: COLORS.chipInactive,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.03,
+    marginBottom: SPACING.md,
   },
   backButtonText: {
-    color: '#374151',
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.04 : SCREEN_WIDTH * 0.045,
-    fontWeight: '500',
+    color: COLORS.text,
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
   },
   resendText: {
-    fontSize: isSmallScreen ? SCREEN_WIDTH * 0.035 : SCREEN_WIDTH * 0.04,
-    color: '#6B7280',
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     textAlign: 'center',
   },
   resendLink: {
-    color: '#03989e',
-    fontWeight: '500',
+    color: COLORS.brand,
+    fontWeight: '600',
   },
   resendLinkDisabled: {
-    color: '#9CA3AF',
+    color: COLORS.sub,
   },
 });
 

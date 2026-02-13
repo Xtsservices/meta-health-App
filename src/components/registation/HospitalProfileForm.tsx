@@ -6,14 +6,68 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Check, ShieldCheck } from 'lucide-react-native';
+import { 
+  ArrowLeft, 
+  CheckCircle, 
+  Save,
+  ShieldCheck,
+  Building2,
+  Users,
+  Activity,
+  Award,
+  Thermometer,
+  Clock,
+  AlertCircle,
+} from 'lucide-react-native';
 import { AuthFetch, AuthPost } from '../../auth/auth';
+import { useDispatch } from 'react-redux';
+import { showSuccess, showError } from '../../store/toast.slice';
+import { formatDateTime } from '../../utils/dateTime';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const isSmallScreen = SCREEN_WIDTH < 600;
+
+// Responsive sizing
+const FONT_SIZE = {
+  xs: SCREEN_WIDTH * 0.03,
+  sm: SCREEN_WIDTH * 0.035,
+  md: SCREEN_WIDTH * 0.04,
+  lg: SCREEN_WIDTH * 0.045,
+  xl: SCREEN_WIDTH * 0.055,
+};
+
+const SPACING = {
+  xs: SCREEN_WIDTH * 0.02,
+  sm: SCREEN_WIDTH * 0.03,
+  md: SCREEN_WIDTH * 0.04,
+  lg: SCREEN_WIDTH * 0.05,
+  xl: SCREEN_WIDTH * 0.06,
+};
+
+const responsiveHeight = (factor: number) => SCREEN_HEIGHT * (factor / 100);
+const responsiveWidth = (factor: number) => SCREEN_WIDTH * (factor / 100);
+
+const COLORS = {
+  brand: '#03989e',
+  text: '#111827',
+  sub: '#6B7280',
+  border: '#D1D5DB',
+  placeholder: '#9CA3AF',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  background: '#f8fafc',
+  white: '#ffffff',
+  chipActive: '#03989e',
+  chipInactive: '#e5e7eb',
+};
+
 interface ProfileField {
   name: string;
   label: string;
@@ -27,17 +81,17 @@ const HOSPITAL_FIELDS: ProfileField[] = [
   { name: 'yearOfEstablishment', label: 'Year of Establishment', type: 'number', required: true, placeholder: '2020' },
   { name: 'hospitalType', label: 'Hospital Type', type: 'text', required: true, placeholder: 'Multi-Speciality' },
   { name: 'ownership', label: 'Ownership', type: 'text', required: true, placeholder: 'Private' },
-  { name: 'totalBeds', label: 'Total Beds', type: 'number', required: true },
-  { name: 'icuBeds', label: 'ICU Beds', type: 'number', required: true },
+  { name: 'totalBeds', label: 'Total Beds', type: 'number', required: true, placeholder: '0' },
+  { name: 'icuBeds', label: 'ICU Beds', type: 'number', required: true, placeholder: '0' },
   { name: 'emergencyFacility', label: 'Emergency Facility', type: 'text', required: true },
-  { name: 'operationTheatres', label: 'Operation Theatres', type: 'number', required: true },
-  { name: 'generalWard', label: 'General Ward', type: 'number', required: true },
-  { name: 'semiPrivate', label: 'Semi Private', type: 'number', required: true },
-  { name: 'privateRoom', label: 'Private Room', type: 'number', required: true },
-  { name: 'deluxeSuite', label: 'Deluxe Suite', type: 'number', required: true },
-  { name: 'totalDoctors', label: 'Total Doctors', type: 'number', required: true },
-  { name: 'nursesAndSupport', label: 'Nurses and Support', type: 'number', required: true },
-  { name: 'visitingConsultants', label: 'Visiting Consultants', type: 'number', required: true },
+  { name: 'operationTheatres', label: 'Operation Theatres', type: 'number', required: true, placeholder: '0' },
+  { name: 'generalWard', label: 'General Ward', type: 'number', required: true, placeholder: '0' },
+  { name: 'semiPrivate', label: 'Semi Private', type: 'number', required: true, placeholder: '0' },
+  { name: 'privateRoom', label: 'Private Room', type: 'number', required: true, placeholder: '0' },
+  { name: 'deluxeSuite', label: 'Deluxe Suite', type: 'number', required: true, placeholder: '0' },
+  { name: 'totalDoctors', label: 'Total Doctors', type: 'number', required: true, placeholder: '0' },
+  { name: 'nursesAndSupport', label: 'Nurses and Support', type: 'number', required: true, placeholder: '0' },
+  { name: 'visitingConsultants', label: 'Visiting Consultants', type: 'number', required: true, placeholder: '0' },
   { name: 'laboratory24x7', label: 'Laboratory 24x7', type: 'text', required: true },
   { name: 'pharmacy24x7', label: 'Pharmacy 24x7', type: 'text', required: true },
   { name: 'radiologyXRay', label: 'Radiology X-Ray', type: 'text', required: true },
@@ -53,10 +107,44 @@ const HOSPITAL_FIELDS: ProfileField[] = [
   { name: 'pollutionControlCompliance', label: 'Pollution Control Compliance', type: 'text', required: true },
 ];
 
+const HOSPITAL_SECTIONS = [
+  {
+    title: 'Basic Information',
+    icon: Building2,
+    fields: ['registrationNumber', 'yearOfEstablishment', 'hospitalType', 'ownership']
+  },
+  {
+    title: 'Infrastructure & Capacity',
+    icon: Activity,
+    fields: ['totalBeds', 'icuBeds', 'operationTheatres', 'generalWard', 'semiPrivate', 'privateRoom', 'deluxeSuite']
+  },
+  {
+    title: 'Staff & Workforce',
+    icon: Users,
+    fields: ['totalDoctors', 'nursesAndSupport', 'visitingConsultants']
+  },
+  {
+    title: 'Medical Services',
+    icon: Thermometer,
+    fields: ['emergencyFacility', 'laboratory24x7', 'pharmacy24x7', 'ambulanceService', 'bloodBank', 'physiotherapyUnit']
+  },
+  {
+    title: 'Radiology & Diagnostics',
+    icon: Activity,
+    fields: ['radiologyXRay', 'radiologyCT', 'radiologyMRI', 'radiologyUltrasound']
+  },
+  {
+    title: 'Accreditations & Compliance',
+    icon: Award,
+    fields: ['nabhAccredited', 'isoCertification', 'fireSafetyClearance', 'pollutionControlCompliance']
+  }
+];
+
 const HospitalProfileForm = () => {
   const route = useRoute();
   const navigation = useNavigation<any>();
-  const { hospitalId } = route.params as { hospitalId?: string };
+  const dispatch = useDispatch();
+  const { hospitalId } = route.params as { hospitalId?: string } || {};
   
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -80,7 +168,7 @@ const HospitalProfileForm = () => {
     const fetchProfile = async () => {
       const token = await getToken();
       if (!token) {
-        Alert.alert('Error', 'Please login to continue');
+        dispatch(showError('Please login to continue'));
         navigation.navigate('Login');
         return;
       }
@@ -102,15 +190,15 @@ const HospitalProfileForm = () => {
             setHasExistingProfile(true);
           }
         }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
+      } catch (error: any) {
+        dispatch(showError(error?.message || 'Failed to load profile'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchProfile();
-  }, [hospitalId, navigation]);
+  }, [hospitalId]);
 
   const getHospitalIdFromStorage = async (): Promise<string | null> => {
     try {
@@ -125,18 +213,50 @@ const HospitalProfileForm = () => {
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    const currentYear = new Date().getFullYear();
+    
+    HOSPITAL_FIELDS.forEach(field => {
+      const value = formData?.[field?.name];
+      
+      if (field.required && !value && value !== 0) {
+        errors[field.name] = `${field.label} is required`;
+      }
+      
+      if (field.name === 'yearOfEstablishment' && value) {
+        const year = parseInt(value);
+        if (year < 1800 || year > currentYear) {
+          errors[field.name] = `Year must be between 1800 and ${currentYear}`;
+        }
+      }
+      
+      if (field.type === 'number' && value && value < 0) {
+        errors[field.name] = `${field.label} cannot be negative`;
+      }
+    });
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const saveProfile = async () => {
+    if (!validateForm()) {
+      dispatch(showError('Please fill all required fields'));
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
       const token = await getToken();
-      if (!token) {
-        Alert.alert('Error', 'Please login to continue');
-        navigation.navigate('Login');
-        return;
-      }
+      if (!token) return;
 
       let response;
       if (profileId) {
@@ -146,16 +266,16 @@ const HospitalProfileForm = () => {
       }
 
       if (response?.status === 'success' || response?.data?.message?.toLowerCase().includes('success')) {
-        Alert.alert('Success', response?.data?.message || 'Profile saved successfully');
+        dispatch(showSuccess(response?.data?.message || 'Profile saved successfully'));
         setHasExistingProfile(true);
         if (response?.data?.hospitalId) {
           setProfileId(response.data.hospitalId);
         }
       } else {
-        Alert.alert('Error', response?.message || 'Failed to save profile');
+        dispatch(showError(response?.message || 'Failed to save profile'));
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save profile');
+      dispatch(showError(error?.message || 'Failed to save profile'));
     } finally {
       setIsSubmitting(false);
     }
@@ -163,7 +283,7 @@ const HospitalProfileForm = () => {
 
   const submitForVerification = async () => {
     if (!profileId) {
-      Alert.alert('Error', 'Please save your profile first');
+      dispatch(showError('Please save your profile first'));
       return;
     }
 
@@ -171,23 +291,22 @@ const HospitalProfileForm = () => {
     
     try {
       const token = await getToken();
-      if (!token) {
-        Alert.alert('Error', 'Please login to continue');
-        navigation.navigate('Login');
-        return;
-      }
+      if (!token) return;
 
       const response = await AuthPost(`hospital/${profileId}/profile/submit-verification`, {}, token) as any;
       
       if (response?.data?.currentStatus === 'approval_awaiting') {
-        Alert.alert('Info', 'Profile is already pending approval');
+        dispatch(showError('Profile is already pending approval'));
       } else if (response?.status === 'success' || response?.data?.message?.toLowerCase().includes('success')) {
-        Alert.alert('Success', 'Profile submitted for verification');
+        dispatch(showSuccess('Profile submitted for verification'));
+        setTimeout(() => {
+          navigation?.navigate?.('Login');
+        }, 1500);
       } else {
-        Alert.alert('Error', response?.message || 'Failed to submit for verification');
+        dispatch(showError(response?.message || 'Failed to submit for verification'));
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to submit for verification');
+      dispatch(showError(error?.message || 'Failed to submit for verification'));
     } finally {
       setIsSubmitting(false);
     }
@@ -214,11 +333,12 @@ const HospitalProfileForm = () => {
           <TextInput
             style={[styles.input, formErrors[field.name] && styles.inputError]}
             placeholder={field.placeholder}
+            placeholderTextColor={COLORS.placeholder}
             value={value ? String(value) : ''}
             onChangeText={(text) => {
-              const num = parseInt(text);
-              if (!isNaN(num) || text === '') {
-                handleInputChange(field.name, text === '' ? '' : num);
+              const num = text.replace(/[^0-9]/g, '');
+              if (num === '' || !isNaN(parseInt(num))) {
+                handleInputChange(field.name, num === '' ? '' : parseInt(num));
               }
             }}
             keyboardType="numeric"
@@ -240,12 +360,13 @@ const HospitalProfileForm = () => {
           </Text>
           <TextInput
             style={[styles.input, formErrors[field.name] && styles.inputError]}
-            placeholder={field.placeholder}
+            placeholder="0"
+            placeholderTextColor={COLORS.placeholder}
             value={value ? String(value) : ''}
             onChangeText={(text) => {
-              const num = parseInt(text);
-              if (!isNaN(num) || text === '') {
-                handleInputChange(field.name, text === '' ? '' : num);
+              const num = text.replace(/[^0-9]/g, '');
+              if (num === '' || !isNaN(parseInt(num))) {
+                handleInputChange(field.name, num === '' ? '' : parseInt(num));
               }
             }}
             keyboardType="numeric"
@@ -272,20 +393,20 @@ const HospitalProfileForm = () => {
               onPress={() => handleInputChange(field.name, 'Yes')}
               disabled={isSubmitting}
             >
-              <View style={styles.radioCircle}>
+              <View style={[styles.radioCircle, value === 'Yes' && styles.radioCircleSelected]}>
                 {value === 'Yes' && <View style={styles.radioSelected} />}
               </View>
-              <Text style={styles.radioText}>Yes</Text>
+              <Text style={[styles.radioText, value === 'Yes' && styles.radioTextSelected]}>Yes</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.radioOption}
               onPress={() => handleInputChange(field.name, 'No')}
               disabled={isSubmitting}
             >
-              <View style={styles.radioCircle}>
+              <View style={[styles.radioCircle, value === 'No' && styles.radioCircleSelected]}>
                 {value === 'No' && <View style={styles.radioSelected} />}
               </View>
-              <Text style={styles.radioText}>No</Text>
+              <Text style={[styles.radioText, value === 'No' && styles.radioTextSelected]}>No</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -328,6 +449,7 @@ const HospitalProfileForm = () => {
         <TextInput
           style={[styles.input, formErrors[field.name] && styles.inputError]}
           placeholder={field.placeholder}
+          placeholderTextColor={COLORS.placeholder}
           value={value || ''}
           onChangeText={(text) => handleInputChange(field.name, text)}
           editable={!isSubmitting}
@@ -339,65 +461,132 @@ const HospitalProfileForm = () => {
     );
   };
 
+  const renderSection = (section: typeof HOSPITAL_SECTIONS[0]) => {
+    const Icon = section.icon;
+    
+    return (
+      <View key={section.title} style={styles.sectionContainer}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionIcon}>
+            <Icon size={SPACING.md} color={COLORS.brand} />
+          </View>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+        </View>
+        
+        <View style={styles.sectionFields}>
+          {section.fields.map(fieldName => {
+            const field = HOSPITAL_FIELDS.find(f => f.name === fieldName);
+            return field ? renderField(field) : null;
+          })}
+        </View>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#03989e" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.brand} />
+          <Text style={styles.loadingText}>Loading hospital profile...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollContainer}>
-        <View style={styles.content}>
-          {hasExistingProfile ? (
-            <Text style={styles.subtitle}>
-              View your hospital profile information
-            </Text>
-          ) : (
-            <Text style={styles.subtitle}>
-              Complete your profile to activate your account
-            </Text>
-          )}
-
-          {HOSPITAL_FIELDS.map(field => renderField(field))}
-
-          <View style={styles.buttonContainer}>
-            {!hasExistingProfile && (
-              <TouchableOpacity
-                style={[styles.saveButton, isSubmitting && styles.buttonDisabled]}
-                onPress={saveProfile}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <>
-                    <Check size={20} color="#ffffff" />
-                    <Text style={styles.buttonText}>Save Profile</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-            
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation?.goBack?.()}
+              disabled={isSubmitting}
+            >
+              <ArrowLeft size={FONT_SIZE.lg} color={COLORS.text} />
+            </TouchableOpacity>
+            <Text style={styles.title}>Hospital Profile</Text>
             {hasExistingProfile && (
-              <TouchableOpacity
-                style={[styles.verifyButton, isSubmitting && styles.buttonDisabled]}
-                onPress={submitForVerification}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <>
-                    <ShieldCheck size={20} color="#ffffff" />
-                    <Text style={styles.buttonText}>Submit for Verification</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              <View style={styles.statusContainer}>
+                <CheckCircle size={FONT_SIZE.sm} color={COLORS.success} />
+                <Text style={styles.statusText}>Saved</Text>
+              </View>
             )}
+          </View>
+
+          <View style={styles.content}>
+            {hasExistingProfile && (
+              <View style={styles.approvalWaitingCard}>
+                <View style={styles.approvalWaitingIconWrapper}>
+                  <Clock size={SPACING.md} color={COLORS.warning} />
+                </View>
+                <View style={styles.approvalWaitingContent}>
+                  <Text style={styles.approvalWaitingTitle}>Pending Approval</Text>
+                  <Text style={styles.approvalWaitingDescription}>
+                    Your profile has been submitted and is currently under review by our team. 
+                    You cannot edit the profile while it's pending approval.
+                  </Text>
+                  <View style={styles.approvalWaitingBadge}>
+                    <AlertCircle size={FONT_SIZE.xs} color={COLORS.warning} />
+                    <Text style={styles.approvalWaitingBadgeText}>Under Review</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {hasExistingProfile ? (
+              <Text style={styles.subtitle}>
+                View your hospital profile information
+              </Text>
+            ) : (
+              <Text style={styles.subtitle}>
+                Complete your profile to activate your account
+              </Text>
+            )}
+
+            {HOSPITAL_SECTIONS.map(section => renderSection(section))}
+
+            <View style={styles.buttonContainer}>
+              {!hasExistingProfile && (
+                <TouchableOpacity
+                  style={[styles.saveButton, isSubmitting && styles.buttonDisabled]}
+                  onPress={saveProfile}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <>
+                      <Save size={FONT_SIZE.md} color={COLORS.white} />
+                      <Text style={styles.buttonText}>Save Profile</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+              
+              {hasExistingProfile && (
+                <TouchableOpacity
+                  style={[styles.verifyButton, isSubmitting && styles.buttonDisabled]}
+                  onPress={submitForVerification}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <>
+                      <ShieldCheck size={FONT_SIZE.md} color={COLORS.white} />
+                      <Text style={styles.buttonText}>Submit for Verification</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -406,183 +595,308 @@ const HospitalProfileForm = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
-  scrollContainer: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    flexGrow: 1,
+    paddingBottom: SPACING.xl,
+  },
+  container: {
     flex: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6B7280',
+    marginTop: SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1.5,
+    borderBottomColor: COLORS.border,
   },
-
+  backButton: {
+    padding: SPACING.xs,
+  },
   title: {
-    flex: 1,
-    fontSize: 20,
+    fontSize: FONT_SIZE.lg,
     fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-    marginLeft: -40,
+    color: COLORS.text,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.xs,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs * 0.5,
+    borderRadius: 20,
   },
   statusText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
     fontWeight: '500',
-    color: '#10B981',
+    color: '#065F46',
+  },
+  approvalWaitingCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: SPACING.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1.5,
+    borderColor: '#FCD34D',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    shadowColor: COLORS.warning,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  approvalWaitingIconWrapper: {
+    width: SPACING.xl,
+    height: SPACING.xl,
+    borderRadius: SPACING.lg,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  approvalWaitingContent: {
+    flex: 1,
+  },
+  approvalWaitingTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: SPACING.xs * 0.5,
+  },
+  approvalWaitingDescription: {
+    fontSize: FONT_SIZE.sm,
+    color: '#B45309',
+    lineHeight: FONT_SIZE.md * 1.4,
+    marginBottom: SPACING.xs,
+  },
+  approvalWaitingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs * 0.5,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    gap: SPACING.xs,
+    borderWidth: 1.5,
+    borderColor: '#FCD34D',
+  },
+  approvalWaitingBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
+    color: '#92400E',
   },
   content: {
-    padding: 20,
+    padding: SPACING.md,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: SPACING.md,
+  },
+  sectionContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: SPACING.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  sectionIcon: {
+    width: SPACING.xl,
+    height: SPACING.xl,
+    borderRadius: SPACING.lg,
+    backgroundColor: '#E0F2FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+    color: COLORS.brand,
+  },
+  sectionFields: {
+    gap: SPACING.sm,
   },
   fieldContainer: {
-    marginBottom: 20,
+    position: 'relative',
+    marginBottom: SPACING.xs,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: 8,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.sub,
+    marginBottom: SPACING.xs,
   },
   required: {
-    color: '#EF4444',
+    color: COLORS.error,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#111827',
+    height: responsiveHeight(6),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    backgroundColor: '#f9fafb',
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: COLORS.error,
   },
   errorText: {
-    color: '#EF4444',
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.error,
+    marginTop: SPACING.xs * 0.5,
   },
   readOnlyValue: {
+    height: responsiveHeight(6),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
     backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#6B7280',
+    textAlignVertical: 'center',
   },
   radioContainer: {
     flexDirection: 'row',
-    gap: 24,
+    gap: SPACING.lg,
   },
   radioOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.xs,
   },
   radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: FONT_SIZE.lg,
+    height: FONT_SIZE.lg,
+    borderRadius: FONT_SIZE.lg / 2,
     borderWidth: 2,
-    borderColor: '#03989e',
+    borderColor: COLORS.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  radioCircleSelected: {
+    borderColor: COLORS.brand,
+  },
   radioSelected: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#03989e',
+    width: FONT_SIZE.sm,
+    height: FONT_SIZE.sm,
+    borderRadius: FONT_SIZE.sm / 2,
+    backgroundColor: COLORS.brand,
   },
   radioText: {
-    fontSize: 16,
-    color: '#374151',
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
+  },
+  radioTextSelected: {
+    color: COLORS.brand,
+    fontWeight: '500',
   },
   optionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: SPACING.sm,
   },
   optionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: SPACING.sm,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
   },
   optionButtonSelected: {
-    backgroundColor: '#03989e',
-    borderColor: '#03989e',
+    backgroundColor: COLORS.brand,
+    borderColor: COLORS.brand,
   },
   optionText: {
-    fontSize: 14,
-    color: '#374151',
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.text,
   },
   optionTextSelected: {
-    color: '#FFFFFF',
+    color: COLORS.white,
   },
   buttonContainer: {
-    marginTop: 32,
-    marginBottom: 40,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.xl,
   },
   saveButton: {
-    backgroundColor: '#03989e',
-    borderRadius: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    backgroundColor: COLORS.brand,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: SPACING.sm,
+    shadowColor: COLORS.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   verifyButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    backgroundColor: COLORS.success,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: SPACING.sm,
+    shadowColor: COLORS.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
   buttonDisabled: {
-    backgroundColor: '#9CA3AF',
+    backgroundColor: COLORS.sub,
+    shadowOpacity: 0.1,
   },
   buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    color: COLORS.white,
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
   },
 });
 

@@ -51,7 +51,6 @@ const Footer: React.FC<Props> = ({
   const route = useRoute<any>();
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.currentUser);
-  console.log("0000",user)
   const { screenType, setScreenType } = useOTConfig();
   
   const [showProfilePopup, setShowProfilePopup] = useState(false);

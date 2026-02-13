@@ -53,6 +53,7 @@ import {
   Clock,
   Save,
   ArrowLeft,
+  Plus,
 } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { RootState } from '../../store/store';
@@ -314,6 +315,7 @@ interface CreateExpenseScreenProps {
   mode?: 'create' | 'edit';
   expenseData?: any;
   onExpenseCreated?: () => void;
+  editingExpenseId?: string | null;
 }
 
 interface Entity {
@@ -698,8 +700,7 @@ const DepartmentSubTypeModal = memo(({
                 if (isEditMode) return;
                 setFormData((prev: any) => ({ 
                   ...prev, 
-                  departmentSubType: subType.id,
-                  entityID: `${prev.entityID}_${subType.id}` // Combine department ID with sub-type
+                  departmentSubType: subType.id
                 }));
                 onClose();
               }}
@@ -728,7 +729,8 @@ const CreateExpenseScreen = ({
   userPermissions = {},
   mode = 'create',
   expenseData: propExpenseData,
-  onExpenseCreated 
+  onExpenseCreated,
+  editingExpenseId
 }: CreateExpenseScreenProps) => {
   const navigation = useNavigation();
   const route = useRoute();
@@ -854,12 +856,16 @@ const CreateExpenseScreen = ({
     if (!formData.entityType) {
       newErrors.entityType = "Please select 'What is this expense for?'";
     }
-    
+    // Department sub-type validation
+if (
+  formData.entityType === 'department' &&
+  !formData.departmentSubType
+) {
+  newErrors.departmentSubType = "Please select department type";
+}
+
     if (!formData.entityID) {
       newErrors.entityID = "Please select the specific entity";
-    }
-    if (formData.entityType === 'department' && formData.departmentSubType && !formData.entityID.includes('_')) {
-      newErrors.entityID = "Please select department sub-type";
     }
     
     setErrors(newErrors);
@@ -1034,22 +1040,24 @@ const prefillFormData = useCallback((expenseData: any) => {
     remarks: '',
     departmentSubType: '',
   });
-  let departmentSubType = '';
   let entityId = expenseData.entityID?.toString() || expenseData.entityId?.toString() || '';
+  let departmentSubType = expenseData.departmentSubType || '';
   
+// Handle old format where entityID might contain underscore
   if (expenseData.entityType === 'department' && entityId.includes('_')) {
     const parts = entityId.split('_');
     if (parts.length > 1) {
-      entityId = parts[0]; // Get the base department ID
-      departmentSubType = parts.slice(1).join('_'); // Get the sub-type
+      entityId = parts[0]; // ✅ Extract just the department ID
+      // Only use the sub-type from old format if we don't already have one
+      departmentSubType = departmentSubType || parts.slice(1).join('_');
     }
   }
-  
+
   // Then set the new data
   setFormData({
     categoryID: expenseData.categoryID?.toString() || expenseData.categoryId?.toString() || '',
       entityType: expenseData.entityType || '',
-      entityID: expenseData.entityID?.toString() || expenseData.entityId?.toString() || '',
+      entityID: entityId,
       expenseDate: expenseData.expenseDate ? new Date(expenseData.expenseDate) : new Date(),
       billingDate: expenseData.billingDate ? new Date(expenseData.billingDate) : null,
       amount: expenseData.amount?.toString() || '',
@@ -1059,7 +1067,7 @@ const prefillFormData = useCallback((expenseData: any) => {
       payeeContact: expenseData.payeeContact || '',
       description: expenseData.description || '',
       remarks: expenseData.remarks || '',
-      departmentSubType: departmentSubType || expenseData.departmentSubType || '',
+      departmentSubType: departmentSubType, 
     });
 
     // Load existing attachments
@@ -1659,7 +1667,7 @@ const prefillFormData = useCallback((expenseData: any) => {
         return;
       }
       
-      if (isEditMode && expenseId) {
+      if (isEditMode && editingExpenseId) {
         await handleUpdateExpense();
       } else {
         await handleCreateExpense();
@@ -1700,11 +1708,6 @@ const prefillFormData = useCallback((expenseData: any) => {
       // Optional fields
       if (formData.billingDate) {
         form.append('billingDate', formatDateSimple(formData.billingDate, 'YYYY-MM-DD'));
-      }
-      
-      // Add department sub-type if exists
-      if (formData.departmentSubType) {
-        form.append('departmentSubType', formData.departmentSubType);
       }
 
       // Append attachments
@@ -1757,7 +1760,7 @@ if (response?.status === 'success' || response?.message === 'success') {
       setLoading(true);
 
       const token = await AsyncStorage.getItem('token');
-      if (!token || !user?.hospitalID || !expenseId) {
+      if (!token || !user?.hospitalID || !editingExpenseId) {
         dispatch(showError('Authentication required'));
         setLoading(false);
         return;
@@ -1777,7 +1780,7 @@ if (response?.status === 'success' || response?.message === 'success') {
         billingDate: formData.billingDate ? formatDateSimple(formData.billingDate, 'YYYY-MM-DD') : null,
       };
 
-      console.log('Updating expense with data:', updateData);
+      console.log('Updating expense ID:', editingExpenseId, 'with data:', updateData);
 
       const form = new FormData();
 
@@ -1804,7 +1807,7 @@ if (response?.status === 'success' || response?.message === 'success') {
 
       // Use UpdateFiles for updating existing expense
       const response = await UpdateFiles(
-        `expense/${expenseId}/hospital/${user.hospitalID}`,
+        `expense/${editingExpenseId}/hospital/${user.hospitalID}`,
         form,
         token
       ) as any;
@@ -1813,7 +1816,7 @@ if (response?.status === 'success' || response?.message === 'success') {
       
 if (response?.status === 'success' || response?.message === 'success') {
   dispatch(showSuccess('Expense updated successfully'));
-
+  resetForm();
   onExpenseCreated?.(); // ✅ SAME FOR EDIT
 } else {
         dispatch(showError(response?.message || 'Failed to update expense'));
@@ -2198,7 +2201,7 @@ if (response?.status === 'success' || response?.message === 'success') {
         onPress={() => setShowDepartmentSubTypeModal(true)}
         icon={Building}
         editable={!isEditMode}
-        error={formData.entityType === 'department' && !formData.departmentSubType ? "Please select department type" : ''}
+error={errors.departmentSubType}
       />
     );
   };
@@ -2210,6 +2213,22 @@ if (response?.status === 'success' || response?.message === 'success') {
     >
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+
+        {/* HEADER */}
+        <View style={styles.header}>
+          {isEditMode && (
+            <TouchableOpacity
+              style={styles.addNewButton}
+              onPress={() => {
+                resetForm();
+                navigation.setParams({ mode: 'create', expenseData: null });
+              }}
+            >
+              <Plus size={18} color="#fff" />
+              <Text style={styles.addNewText}>Add New</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <ScrollView 
           style={styles.container}
@@ -2546,6 +2565,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end', 
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: COLORS.card,
@@ -2735,6 +2755,21 @@ const styles = StyleSheet.create({
   analyticsLoader: {
     marginLeft: SPACING.sm,
   },
+  addNewButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: COLORS.brand,
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 20,
+},
+
+addNewText: {
+  color: '#fff',
+  fontWeight: '600',
+  marginLeft: 6,
+  fontSize: 13,
+},
   entityIdNote: {
     fontSize: getResponsiveFontSize(FONT_SIZE.xs),
     color: COLORS.sub,

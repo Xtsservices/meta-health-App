@@ -85,11 +85,15 @@ export default function DoctorsScreen() {
 
   const sorted = useMemo(() => {
     const arr = [...(list || [])];
-    arr.sort(
-      (a, b) =>
-        new Date(b?.assignedDate || 0).getTime() -
-        new Date(a?.assignedDate || 0).getTime()
-    );
+    arr.sort((a, b) => {
+      // Primary doctors first
+      if (a.category === "primary" && b.category !== "primary") return -1;
+      if (a.category !== "primary" && b.category === "primary") return 1;
+      
+      // If same category, sort by assigned date (most recent first)
+      return new Date(b?.assignedDate || 0).getTime() -
+             new Date(a?.assignedDate || 0).getTime();
+    });
     return arr;
   }, [list]);
 
@@ -256,7 +260,7 @@ const styles = StyleSheet.create({
   },
 
   footerWrap: {
-    position: "absolute",
+    // position: "absolute",
     left: 0,
     right: 0,
     height: FOOTER_H,

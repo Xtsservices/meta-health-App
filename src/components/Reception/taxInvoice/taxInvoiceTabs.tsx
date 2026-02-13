@@ -83,9 +83,13 @@ export type PatientData = {
   dueAmount?: number;
   totalAmount?: number;
   prescriptionURL?: string; 
-medicineDueAmount?: number;
-testDueAmount?: number;
-
+  medicineDueAmount?: number;
+  testDueAmount?: number;
+  location?: string;
+  doctorName?: string;
+  doctorID?: number;
+  departmentType?: number;
+  orderID?: number | string;
 };
 
 type Mode = "billing" | "allTax";
@@ -126,6 +130,7 @@ const BillingTaxInvoiceMobile: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [nurses, setNurses] = useState<any[]>([]);
   const dispatch = useDispatch();
+  
   /* ------------------------------------------------------------------------ */
   /*                               Helper utils                               */
   /* ------------------------------------------------------------------------ */
@@ -137,32 +142,32 @@ const BillingTaxInvoiceMobile: React.FC = () => {
     const yyyy = d.getFullYear();
     return `${dd}-${mm}-${yyyy}`;
   };
+  
   const calculateTotalsFromLists = (
-  medicines: MedicineItem[] = [],
-  tests: TestItem[] = [],
-  paidAmount = 0
-) => {
-  const medicineTotal = medicines.reduce(
-    (sum, m) => sum + (Number(m.amount) || 0),
-    0
-  );
+    medicines: MedicineItem[] = [],
+    tests: TestItem[] = [],
+    paidAmount = 0
+  ) => {
+    const medicineTotal = medicines.reduce(
+      (sum, m) => sum + (Number(m.amount) || 0),
+      0
+    );
 
-  const testTotal = tests.reduce(
-    (sum, t) => sum + (Number(t.amount) || 0),
-    0
-  );
+    const testTotal = tests.reduce(
+      (sum, t) => sum + (Number(t.amount) || 0),
+      0
+    );
 
-  const grandTotal = medicineTotal + testTotal;
-  const payable = Math.max(0, grandTotal - paidAmount);
+    const grandTotal = medicineTotal + testTotal;
+    const payable = Math.max(0, grandTotal - paidAmount);
 
-  return {
-    medicineTotal,
-    testTotal,
-    grandTotal,
-    payable,
+    return {
+      medicineTotal,
+      testTotal,
+      grandTotal,
+      payable,
+    };
   };
-};
-
 
   const openDatePicker = (target: "start" | "end") => {
     setPickerTarget(target);
@@ -214,10 +219,11 @@ const BillingTaxInvoiceMobile: React.FC = () => {
   const getDepartmentLabelBilling = (ptype: number, department?: string) => {
     // For reception department
     if (department === 'reception') {
-    if (ptype === 1 || ptype === 21) return "OPD";
-    if (ptype === 2 || ptype === 3) return "IPD / Emergency";
-    return "Unknown";
-  };
+      if (ptype === 1 || ptype === 21) return "OPD";
+      if (ptype === 2 || ptype === 3) return "IPD / Emergency";
+      return "Unknown";
+    };
+    
     if (isPharmacy) {
       if (ptype === 21 || ptype === 1) return "OPD";
       if (ptype === 2 || ptype === 3) return "IPD";
@@ -230,18 +236,18 @@ const BillingTaxInvoiceMobile: React.FC = () => {
   };
 
   const getDepartmentLabelTax = (deptType: string, department?: string): string => {
-  // For reception department
-  if (department === 'reception') {
+    // For reception department
+    if (department === 'reception') {
+      if (deptType === "1") return "OPD";
+      return "IPD / Emergency";
+    }
+    
+    // For all other departments (pharmacy, lab, radiology, etc.)
     if (deptType === "1") return "OPD";
-    return "IPD / Emergency";
-  }
-  
-  // For all other departments (pharmacy, lab, radiology, etc.)
-  if (deptType === "1") return "OPD";
-  if (deptType === "2") return "IPD";
-  if (deptType === "3") return "Walk-in";
-  return "Unknown";
-};
+    if (deptType === "2") return "IPD";
+    if (deptType === "3") return "Walk-in";
+    return "Unknown";
+  };
 
   /* ------------------------------------------------------------------------ */
   /*                            Fetching & Normalizing                        */
@@ -255,380 +261,572 @@ const BillingTaxInvoiceMobile: React.FC = () => {
   }, [isBilling, department]);
 
   // Original reception billing function (unchanged)
- const fetchReceptionBilling = async (token: string) => {
-  if (!user?.hospitalID) return;
+  const fetchReceptionBilling = async (token: string) => {
+    if (!user?.hospitalID) return;
 
-  const deptNum =
-    typeof departmentType === "number"
-      ? departmentType
-      : Number(departmentType) || 2;
+    const deptNum =
+      typeof departmentType === "number"
+        ? departmentType
+        : Number(departmentType) || 2;
 
-  const url = `reception/${user?.hospitalID}/approved/${deptNum}/getReceptionBillingList`;
-  const response = await AuthFetch(url, token);
-  if (response?.status === "success" && "data" in response) {
-    const rawData = Array.isArray(response?.data?.data)
-      ? response.data?.data
-      : [];
+    const url = `reception/${user?.hospitalID}/approved/${deptNum}/getReceptionBillingList`;
+    const response = await AuthFetch(url, token);
+    console.log("Reception Billing Response12345:", response);
+    if (response?.status === "success" && "data" in response) {
+      const rawData = Array.isArray(response?.data?.data)
+        ? response.data?.data
+        : [];
 
-    const processed: PatientData[] = [];
-    rawData.forEach((item: any, index: number) => {
-      // 🔹 1. Start with raw lists
-      let tests = Array.isArray(item.testsList) ? [...item.testsList] : [];
-      const meds = Array.isArray(item.medicinesList) ? [...item.medicinesList] : [];
+      const processed: PatientData[] = [];
+      rawData.forEach((item: any, index: number) => {
+        // 🔹 1. Start with raw lists
+        let tests = Array.isArray(item.testsList) ? [...item.testsList] : [];
+        const meds = Array.isArray(item.medicinesList) ? [...item.medicinesList] : [];
 
-      // 🔹 2. Helpers to match OPD / IPD based on ptype
-      const getPtype = (obj: any) =>
-        Number(obj?.ptype ?? obj?.pType ?? obj?.visitType ?? item?.ptype ?? 0);
+        // 🔹 2. Helpers to match OPD / IPD based on ptype
+        const getPtype = (obj: any) =>
+          Number(obj?.ptype ?? obj?.pType ?? obj?.visitType ?? item?.ptype ?? 0);
 
-      const matchOPD = (pt: number) => pt === 1 || pt === 21;
-      const matchIPD = (pt: number) => pt === 2 || pt === 3;
+        const matchOPD = (pt: number) => pt === 1 || pt === 21;
+        const matchIPD = (pt: number) => pt === 2 || pt === 3;
 
-      // 🔹 3. 👉 Only filter TESTS by selected departmentType (deptNum)
-      //     Medicines are NOT filtered – they are always shown.
-      if (deptNum === 1) {
-        // OPD
-        tests = tests.filter((t: any) => matchOPD(getPtype(t)));
-      } else if (deptNum === 2) {
-        // IPD + Emergency
-        tests = tests.filter((t: any) => matchIPD(getPtype(t)));
-      }
+        // 🔹 3. 👉 Only filter TESTS by selected departmentType (deptNum)
+        //     Medicines are NOT filtered – they are always shown.
+        if (deptNum === 1) {
+          // OPD
+          tests = tests.filter((t: any) => matchOPD(getPtype(t)));
+        } else if (deptNum === 2) {
+          // IPD + Emergency
+          tests = tests.filter((t: any) => matchIPD(getPtype(t)));
+        }
 
-      const hasTests = tests.length > 0;   // filtered tests
-      const hasMeds  = meds.length > 0;    // all medicines (unfiltered)
+        const hasTests = tests.length > 0;   // filtered tests
+        const hasMeds  = meds.length > 0;    // all medicines (unfiltered)
 
-      // ❗ If there are no tests (after filter) AND no medicines at all, skip
-      if (!hasTests && !hasMeds) return;
+        // ❗ If there are no tests (after filter) AND no medicines at all, skip
+        if (!hasTests && !hasMeds) return;
 
-      // 🔹 4. Decide final dept type for label (OPD vs IPD/Emergency)
-      let ptypeSource =
-        item?.ptype ??
-        (hasTests ? getPtype(tests[0]) : undefined) ??
-        (hasMeds ? getPtype(meds[0]) : undefined);
+        // 🔹 4. Decide final dept type for label (OPD vs IPD/Emergency)
+        let ptypeSource =
+          item?.ptype ??
+          (hasTests ? getPtype(tests[0]) : undefined) ??
+          (hasMeds ? getPtype(meds[0]) : undefined);
 
-      const isOPD = matchOPD(Number(ptypeSource));
-      const isIPD = matchIPD(Number(ptypeSource));
-      const finalDeptType = isOPD ? 1 : 2;
+        const isOPD = matchOPD(Number(ptypeSource));
+        const isIPD = matchIPD(Number(ptypeSource));
+        const finalDeptType = isOPD ? 1 : 2;
 
-      // 🔹 5. Universal timeline extractor (unchanged)
-      const extractTimelineId = (obj: any): string => {
-        return (
-          obj?.timelineID ||
-          obj?.patientTimeLineID ||
-          obj?.timeline_id ||
-          obj?.patienttimelineID ||
-          obj?.patient_timeLine_id ||
-          obj?.visitID ||
-          obj?.timeLineID ||
-          obj?.orderID ||
-          ""
-        )
-          ?.toString()
-          ?.trim();
-      };
+        // 🔹 5. Universal timeline extractor (unchanged)
+        const extractTimelineId = (obj: any): string => {
+          return (
+            obj?.timelineID ||
+            obj?.patientTimeLineID ||
+            obj?.timeline_id ||
+            obj?.patienttimelineID ||
+            obj?.patient_timeLine_id ||
+            obj?.visitID ||
+            obj?.timeLineID ||
+            obj?.orderID ||
+            ""
+          )
+            ?.toString()
+            ?.trim();
+        };
 
-      let timelineID = extractTimelineId(item);
-      if (!timelineID && hasTests) {
-        timelineID = extractTimelineId(tests[0]);
-      }
-      if (!timelineID && hasMeds) {
-        timelineID = extractTimelineId(meds[0]);
-      }
-      if (
-        !timelineID &&
-        Array.isArray(item.timelineIDs) &&
-        item.timelineIDs[0]
-      ) {
-        timelineID = String(item.timelineIDs[0]);
-      }
+        let timelineID = extractTimelineId(item);
+        if (!timelineID && hasTests) {
+          timelineID = extractTimelineId(tests[0]);
+        }
+        if (!timelineID && hasMeds) {
+          timelineID = extractTimelineId(meds[0]);
+        }
+        if (
+          !timelineID &&
+          Array.isArray(item.timelineIDs) &&
+          item.timelineIDs[0]
+        ) {
+          timelineID = String(item.timelineIDs[0]);
+        }
 
-      const firstMed = hasMeds ? meds[0] : null;
-      const firstTest = hasTests ? tests[0] : null;
-      const addedOn = firstMed?.completedOn || firstMed?.addedOn || firstMed?.datetime || firstTest?.addedOn || firstTest?.datetime || "";
-      const timelineIDNum = Number(timelineID);
+        const firstMed = hasMeds ? meds[0] : null;
+        const firstTest = hasTests ? tests[0] : null;
+        const addedOn = firstMed?.completedOn || firstMed?.addedOn || firstMed?.datetime || firstTest?.addedOn || firstTest?.datetime || "";
+        const timelineIDNum = Number(timelineID);
 
-      // 🔹 6. DUE AMOUNT LOGIC (same concept as web)
+        // 🔹 6. DUE AMOUNT LOGIC (same concept as web)
+        const paidAmount =
+          Number(item?.medicine_paidAmount || 0) +
+          Number(item?.test_paidAmount || 0);
 
+        const {
+          medicineTotal,
+          testTotal,
+          grandTotal,
+          payable,
+        } = calculateTotalsFromLists(
+          meds.map((m: any) => ({
+            amount:
+              (Number(m.sellingPrice ?? m.price) *
+                Number(m.updatedQuantity ?? m.quantity ?? 1)) *
+              (1 + Number(m.gst ?? 0) / 100),
+          })),
+          tests.map((t: any) => ({
+            amount:
+              Number(t.testPrice ?? t.price ?? 0) *
+              (1 + Number(t.gst ?? 0) / 100),
+          })),
+          paidAmount
+        );
 
-const paidAmount =
-  Number(item?.medicine_paidAmount || 0) +
-  Number(item?.test_paidAmount || 0);
+        const patient: PatientData = {
+          id: index + 1,
+          patientID: String(item.patientID),
 
-  const {
-  medicineTotal,
-  testTotal,
-  grandTotal,
-  payable,
-} = calculateTotalsFromLists(
-  meds.map((m: any) => ({
-    amount:
-      (Number(m.sellingPrice ?? m.price) *
-        Number(m.updatedQuantity ?? m.quantity ?? 1)) *
-      (1 + Number(m.gst ?? 0) / 100),
-  })),
-  tests.map((t: any) => ({
-    amount:
-      Number(t.testPrice ?? t.price ?? 0) *
-      (1 + Number(t.gst ?? 0) / 100),
-  })),
-  paidAmount
-);
+          // 🔹 ADD THIS FIELD
+          pIdNew: String(item.pIdNew ?? item.patientID ?? `INV${index + 1}`),
 
-const patient: PatientData = {
-  id: index + 1,
-  patientID: String(item.patientID),
+          pName: item.pName ?? "",
+          dept: getDepartmentLabelBilling(item.ptype ?? ptypeSource),
+          addedOn,
+          firstName: item.doctorFirstName ?? "",
+          lastName: item.doctorLastName ?? "",
+          category: "",
+          patientTimeLineID: String(timelineIDNum),
+          pType: finalDeptType === 1 ? "Outpatient" : "Inpatient",
+          date: addedOn,
+          admissionDate: item.admittedOn ?? addedOn,
 
-  // 🔹 ADD THIS FIELD
-  pIdNew: String(item.pIdNew ?? item.patientID ?? `INV${index + 1}`),
+          // ✅ DUE FIELDS (aligned with web)
+          totalAmount: grandTotal,
+          paidAmount,
+          medicineDueAmount: medicineTotal,
+          testDueAmount: testTotal,
+          dueAmount: payable,
 
-  pName: item.pName ?? "",
-  dept: getDepartmentLabelBilling(item.ptype ?? ptypeSource),
-  addedOn,
-  firstName: item.doctorFirstName ?? "",
-  lastName: item.doctorLastName ?? "",
-  category: "",
-  patientTimeLineID: String(timelineIDNum),
-  pType: finalDeptType === 1 ? "Outpatient" : "Inpatient",
-  date: addedOn,
-  admissionDate: item.admittedOn ?? addedOn,
+          // 🔹 7. Use ALL medicines (unfiltered)
+          medicinesList: meds.map((m: any) => {
+            const sellingPrice = Number(m.sellingPrice) || 0;
+            const quantity = Number(m.updatedQuantity ?? m.quantity ?? 1);
+            const gst = Number(m.gst) || 0;
 
-  // ✅ DUE FIELDS (aligned with web)
-totalAmount: grandTotal,
-paidAmount,
-medicineDueAmount: medicineTotal,
-testDueAmount: testTotal,
-dueAmount: payable,
-
-
-  // 🔹 7. Use ALL medicines (unfiltered)
-  medicinesList: meds.map((m: any) => {
-    const sellingPrice = Number(m.sellingPrice) || 0;
-    const quantity = Number(m.updatedQuantity ?? m.quantity ?? 1);
-    const gst = Number(m.gst) || 0;
-
-    const baseAmount = sellingPrice * quantity;
-    const gstAmount = (baseAmount * gst) / 100;
-    const totalAmount = baseAmount + gstAmount;
-
-    return {
-      id: m.id,
-      name: m.name || m.medicineName || "Unknown",
-      qty: quantity,
-      hsn: m.hsn || "",
-      price: sellingPrice,
-      gst,
-      amount: totalAmount,
-      nurseID: m.nurseID,
-    };
-  }),
-
-  // 🔹 8. Use FILTERED tests
-  testList: tests.map((t: any) => ({
-    testID: t.id || t.testID,
-    testName: t.test || t.testName,
-    loinc_num_: t.loinc_num_ ?? "",
-    category: t.category ?? "pathology",
-    price: Number(t.testPrice) || 0,
-    gst: Number(t.gst) || 0,
-    amount:
-      (Number(t.testPrice) || 0) *
-      (1 + (Number(t.gst) || 0) / 100),
-  })),
-
-  procedures: [],
-};
-
-
-      processed.push(patient);
-    });
-
-    const sorted = processed.sort((a, b) => {
-      const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
-      const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
-      return dateB - dateA;
-    });
-    setData(sorted);
-  }
-};
-
-
-  // Pharmacy billing function
-// Pharmacy billing function
-// Pharmacy billing function - UPDATED to include prescriptionURL
-const fetchPharmacyBilling = async (token: string) => {
-  if (!user?.hospitalID) return;
-
-  const deptNum = typeof departmentType === "number" ? departmentType : Number(departmentType) || 2;
-  
-  let url = "";
-  if (deptNum === 1) {
-    // OPD
-    url = `medicineInventoryPatientsOrder/${user.hospitalID}/completed/1/getMedicineInventoryPatientsOrderWithType`;
-  } else if (deptNum === 2) {
-    // IPD
-    url = `medicineInventoryPatientsOrder/${user.hospitalID}/completed/2/getMedicineInventoryPatientsOrderWithType`;
-  } else if (deptNum === 3) {
-    // Walk-in
-    url = `medicineInventoryPatientsOrder/${user.hospitalID}/getMedicineInventoryPatientsOrderCompletedWithoutReg`;
-  } else if (deptNum === 4) {
-    // Rejected
-    url = `medicineInventoryPatientsOrder/${user.hospitalID}/rejected/getMedicineInventoryPatientsOrder`;
-  }
-
-  const response = await AuthFetch(url, token);
-  
-  if (response?.status === "success" && "data" in response) {
-    const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
-    const processed: PatientData[] = rawData.map((item: any, index: number) => {
-      let medicinesArray: any[] = [];
-      if (deptNum === 1 || deptNum === 2) {
-        // IPD/OPD uses 'medicines'
-        medicinesArray = Array.isArray(item.medicines) ? item.medicines : [];
-      } else {
-        // Walk-in and Rejected use 'medicinesList'
-        medicinesArray = Array.isArray(item.medicinesList) ? item.medicinesList : [];
-      }
-      
-      // Check if any medicine has rejection data
-      const hasRejectedMedicine = medicinesArray.some((med: any) => med.status === "rejected");
-      
-      // Get first rejected medicine if exists
-      const rejectedMedicine = hasRejectedMedicine ? 
-        medicinesArray.find((med: any) => med.status === "rejected") : null;
-      let totalAmount = 0;
-      let paidAmount = 0;
-      let dueAmount = 0;
-      
-      if (deptNum === 1 || deptNum === 2) {
-        totalAmount = Number(item.totalAmount) || 0;
-        paidAmount = Number(item.paidAmount) || 0;
-const medicinesForCalc = medicinesArray.map((m: any) => {
-  const base =
-    Number(m.sellingPrice || 0) *
-    Number(m.updatedQuantity || m.quantity || 1);
-
-  return { amount: base + (base * Number(m.gst || 0)) / 100 };
-});
-
-const { grandTotal, payable } = calculateTotalsFromLists(
-  medicinesForCalc,
-  [],
-  paidAmount
-);
-
-totalAmount = grandTotal;
-dueAmount = payable;
-
-
-      } else {
-        totalAmount = medicinesArray.reduce((sum: number, medicine: any) => {
-            const sellingPrice = Number(medicine.sellingPrice) || 0;
-            const quantity = Number(medicine.updatedQuantity || medicine.quantity || 1);
-            const gst = Number(medicine.gst) || 0;
-            
             const baseAmount = sellingPrice * quantity;
             const gstAmount = (baseAmount * gst) / 100;
-            return sum + (baseAmount + gstAmount);
-        }, 0);
-        
-        paidAmount = Number(item.paidAmount) || 0;
-const medicinesForCalc = medicinesArray.map((m: any) => {
-  const base =
-    Number(m.sellingPrice || 0) *
-    Number(m.updatedQuantity || m.quantity || 1);
+            const totalAmount = baseAmount + gstAmount;
 
-  return { amount: base + (base * Number(m.gst || 0)) / 100 };
-});
+            return {
+              id: m.id,
+              name: m.name || m.medicineName || "Unknown",
+              qty: quantity,
+              hsn: m.hsn || "",
+              price: sellingPrice,
+              gst,
+              amount: totalAmount,
+              nurseID: m.nurseID,
+            };
+          }),
 
-const { grandTotal, payable } = calculateTotalsFromLists(
-  medicinesForCalc,
-  [],
-  paidAmount
-);
+          // 🔹 8. Use FILTERED tests
+          testList: tests.map((t: any) => ({
+            testID: t.id || t.testID,
+            testName: t.test || t.testName,
+            loinc_num_: t.loinc_num_ ?? "",
+            category: t.category ?? "pathology",
+            price: Number(t.testPrice) || 0,
+            gst: Number(t.gst) || 0,
+            amount:
+              (Number(t.testPrice) || 0) *
+              (1 + (Number(t.gst) || 0) / 100),
+          })),
 
-totalAmount = grandTotal;
-dueAmount = payable;
+          procedures: [],
+        };
 
+        processed.push(patient);
+      });
 
-      }
+      const sorted = processed.sort((a, b) => {
+        const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
+        const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
+        return dateB - dateA;
+      });
+      setData(sorted);
+    }
+  };
 
-      // Get doctor names from item or from first medicine
-      const doctorName = item.doctorName || "";
-      const [firstName = "", lastName = ""] = doctorName.split(" ");
+  // Pharmacy billing function - UPDATED for new API structure
+  const fetchPharmacyBilling = async (token: string) => {
+    if (!user?.hospitalID) return;
 
-      // Get timeline ID from item or from first medicine
-      const timelineID = item.timelineID || 
-                         item.patientTimeLineID || 
-                         (medicinesArray[0]?.timelineID || 
-                          medicinesArray[0]?.patientTimeLineID || "");
+    const deptNum = typeof departmentType === "number" ? departmentType : Number(departmentType) || 2;
+    
+    let url = "";
+    if (deptNum === 1) {
+      // OPD
+      url = `medicineInventoryPatientsOrder/${user.hospitalID}/completed/1/getMedicineInventoryPatientsOrderWithType`;
+    } else if (deptNum === 2) {
+      // IPD
+      url = `medicineInventoryPatientsOrder/${user.hospitalID}/completed/2/getMedicineInventoryPatientsOrderWithType`;
+    } else if (deptNum === 3) {
+      // Walk-in
+      url = `medicineInventoryPatientsOrder/${user.hospitalID}/getMedicineInventoryPatientsOrderCompletedWithoutReg`;
+    } else if (deptNum === 4) {
+      // Rejected
+      url = `medicineInventoryPatientsOrder/${user.hospitalID}/rejected/getMedicineInventoryPatientsOrder`;
+    }
 
-      // Get location - different field names
-      const location = item.location || "";
+    const response = await AuthFetch(url, token);
+    
+    if (response?.status === "success" && "data" in response) {
+      const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
+      const processed: PatientData[] = [];
+      
+      // Check if response has the new structure (with orders array)
+      if (rawData.length > 0 && rawData[0].orders) {
+        // New API structure
+        rawData.forEach((item: any, index: number) => {
+          const patientInfo = item.patientInfo || {};
+          const patientTotals = item.patientTotals || {};
+          
+          // Process each order
+          if (Array.isArray(item.orders)) {
+            item.orders.forEach((order: any, orderIndex: number) => {
+              if (!Array.isArray(order.medicines) || order.medicines.length === 0) return;
+              
+              const isIPD = patientInfo.ptype === 2;
+              const isOPD = patientInfo.ptype === 21 || patientInfo.ptype === 1;
+              
+              // Filter based on department type
+              if (deptNum === 1 && !isOPD) return; // OPD only
+              if (deptNum === 2 && !isIPD) return; // IPD only
+              
+              const medicinesArray = order.medicines || [];
+              
+              // Get completedOn from first medicine
+              const completedOn = medicinesArray[0]?.completedOn || "";
+              
+              // Calculate medicine totals
+              let totalAmount = 0;
+              let paidAmount = 0;
+              let dueAmount = 0;
+              
+              // For IPD with order totals
+              if (isIPD && order.totalAmount !== null) {
+                totalAmount = Number(order.totalAmount) || 0;
+                paidAmount = Number(order.paidAmount) || 0;
+                dueAmount = Number(order.dueAmount) || 0;
+              } else {
+                // Calculate from medicines
+                const medicinesForCalc = medicinesArray.map((m: any) => {
+                  const base = Number(m.sellingPrice || 0) * Number(m.updatedQuantity || m.quantity || 1);
+                  return { amount: base + (base * Number(m.gst || 0)) / 100 };
+                });
 
-      // Get addedOn date - different sources
-      let addedOn = "";
-      if (deptNum === 3) {
-        // Walk-in has paymentDetails[0].timestamp
-        addedOn = item?.paymentDetails?.[0]?.timestamp || item?.addedOn || "";
-      } else if (deptNum === 4) {
-        // Rejected has rejectedOn in medicine
-        addedOn = rejectedMedicine?.rejectedOn || item?.addedOn || "";
+                const { grandTotal, payable } = calculateTotalsFromLists(
+                  medicinesForCalc,
+                  [],
+                  Number(order.paidAmount) || 0
+                );
+
+                totalAmount = grandTotal;
+                dueAmount = payable;
+                paidAmount = Number(order.paidAmount) || 0;
+              }
+
+              // Get payment timestamp if available
+              let paymentTimestamp = "";
+              if (Array.isArray(order.paymentDetails) && order.paymentDetails.length > 0) {
+                paymentTimestamp = order.paymentDetails[0]?.timestamp || "";
+              }
+
+              const patient: PatientData = {
+                id: processed.length + 1,
+                patientID: String(patientInfo.patientID || ""),
+                pIdNew: String(patientInfo.patientID || `PHAR${processed.length + 1}`),
+                pName: patientInfo.pName || "Unknown Patient",
+                dept: getDepartmentLabelBilling(patientInfo.ptype || deptNum),
+                addedOn: paymentTimestamp || completedOn || "",
+                firstName: "",
+                lastName: "",
+                category: order.location || "",
+                patientTimeLineID: String(item.timelineID || ""),
+                pType: isIPD ? "Inpatient" : "Outpatient",
+                type: "medicine",
+                location: order.location || "",
+                doctorName: order.doctorName || "",
+                doctorID: order.doctorID || null,
+                departmentType: order.departmemtType || null,
+                orderID: order.orderID || "",
+                
+                // Payment amounts
+                totalAmount,
+                paidAmount,
+                dueAmount,
+                
+                medicinesList: medicinesArray.map((m: any) => {
+                  const sellingPrice = Number(m.sellingPrice) || 0;
+                  const quantity = Number(m.updatedQuantity || m.quantity || 1);
+                  const gst = Number(m.gst) || 0;
+                  
+                  const baseAmount = sellingPrice * quantity;
+                  const gstAmount = (baseAmount * gst) / 100;
+                  const totalAmount = baseAmount + gstAmount;
+
+                  return {
+                    id: m.medicineID || m.itemID || m.id,
+                    name: m.medicineName || m.name || "Unknown",
+                    qty: quantity,
+                    hsn: m.hsn || "",
+                    price: sellingPrice,
+                    gst,
+                    amount: totalAmount,
+                    nurseID: m.nurseID || m.medGivenBy,
+                    completedOn: m.completedOn || "",
+                    status: m.status || "completed",
+                    rejectReason: m.rejectReason || null,
+                    rejectedOn: m.rejectedOn || null,
+                    rejectedBy: m.rejectedBy || null,
+                  };
+                }),
+                testList: [],
+                procedures: [],
+              };
+
+              processed.push(patient);
+            });
+          }
+        });
       } else {
-        // IPD/OPD has completedOn in medicine
-        addedOn = medicinesArray[0]?.completedOn || item?.addedOn || "";
+        // Old API structure (fallback)
+        rawData.forEach((item: any, index: number) => {
+          let medicinesArray: any[] = [];
+          if (deptNum === 1 || deptNum === 2) {
+            // IPD/OPD uses 'medicines'
+            medicinesArray = Array.isArray(item.medicines) ? item.medicines : [];
+          } else {
+            // Walk-in and Rejected use 'medicinesList'
+            medicinesArray = Array.isArray(item.medicinesList) ? item.medicinesList : [];
+          }
+          
+          if (medicinesArray.length === 0) return;
+          
+          // Check if any medicine has rejection data
+          const hasRejectedMedicine = medicinesArray.some((med: any) => med.status === "rejected");
+          
+          // Get first rejected medicine if exists
+          const rejectedMedicine = hasRejectedMedicine ? 
+            medicinesArray.find((med: any) => med.status === "rejected") : null;
+          
+          let totalAmount = 0;
+          let paidAmount = 0;
+          let dueAmount = 0;
+          
+          if (deptNum === 1 || deptNum === 2) {
+            totalAmount = Number(item.totalAmount) || 0;
+            paidAmount = Number(item.paidAmount) || 0;
+            const medicinesForCalc = medicinesArray.map((m: any) => {
+              const base = Number(m.sellingPrice || 0) * Number(m.updatedQuantity || m.quantity || 1);
+              return { amount: base + (base * Number(m.gst || 0)) / 100 };
+            });
+
+            const { grandTotal, payable } = calculateTotalsFromLists(
+              medicinesForCalc,
+              [],
+              paidAmount
+            );
+
+            totalAmount = grandTotal;
+            dueAmount = payable;
+          } else {
+            totalAmount = medicinesArray.reduce((sum: number, medicine: any) => {
+              const sellingPrice = Number(medicine.sellingPrice) || 0;
+              const quantity = Number(medicine.updatedQuantity || medicine.quantity || 1);
+              const gst = Number(medicine.gst) || 0;
+              
+              const baseAmount = sellingPrice * quantity;
+              const gstAmount = (baseAmount * gst) / 100;
+              return sum + (baseAmount + gstAmount);
+            }, 0);
+            
+            paidAmount = Number(item.paidAmount) || 0;
+            const medicinesForCalc = medicinesArray.map((m: any) => {
+              const base = Number(m.sellingPrice || 0) * Number(m.updatedQuantity || m.quantity || 1);
+              return { amount: base + (base * Number(m.gst || 0)) / 100 };
+            });
+
+            const { grandTotal, payable } = calculateTotalsFromLists(
+              medicinesForCalc,
+              [],
+              paidAmount
+            );
+
+            totalAmount = grandTotal;
+            dueAmount = payable;
+          }
+
+          // Get doctor names from item or from first medicine
+          const doctorName = item.doctorName || "";
+          const [firstName = "", lastName = ""] = doctorName.split(" ");
+
+          // Get timeline ID from item or from first medicine
+          const timelineID = item.timelineID || 
+                            item.patientTimeLineID || 
+                            (medicinesArray[0]?.timelineID || 
+                             medicinesArray[0]?.patientTimeLineID || "");
+
+          // Get location - different field names
+          const location = item.location || "";
+
+          // Get addedOn date - different sources
+          let addedOn = "";
+          if (deptNum === 3) {
+            // Walk-in has paymentDetails[0].timestamp
+            addedOn = item?.paymentDetails?.[0]?.timestamp || item?.addedOn || "";
+          } else if (deptNum === 4) {
+            // Rejected has rejectedOn in medicine
+            addedOn = rejectedMedicine?.rejectedOn || item?.addedOn || "";
+          } else {
+            // IPD/OPD has completedOn in medicine
+            addedOn = medicinesArray[0]?.completedOn || item?.addedOn || "";
+          }
+
+          // Get prescriptionURL for walk-in
+          const prescriptionURL = item.prescriptionURL || undefined;
+
+          const patient: PatientData = {
+            id: processed.length + 1,
+            patientID: String(item.patientID || item.pID || ""),
+            pIdNew: String(item.pIdNew || item.patientID || `PHAR${processed.length + 1}`),
+            pName: item.pName || "Unknown Patient",
+            dept: getDepartmentLabelBilling(item.ptype || deptNum),
+            addedOn,
+            firstName,
+            lastName,
+            category: location,
+            patientTimeLineID: String(timelineID),
+            pType: deptNum === 1 ? "Outpatient" : 
+                   deptNum === 2 ? "Inpatient" : 
+                   deptNum === 3 ? "Walk-in" : "Rejected",
+            type: "medicine",
+            prescriptionURL,
+            location,
+            doctorName,
+            orderID: item.orderID || "",
+            
+            // Payment amounts
+            totalAmount,
+            paidAmount,
+            dueAmount,
+            
+            medicinesList: medicinesArray.map((m: any) => {
+              const sellingPrice = Number(m.sellingPrice) || 0;
+              const quantity = Number(m.updatedQuantity || m.quantity || 1);
+              const gst = Number(m.gst) || 0;
+              
+              const baseAmount = sellingPrice * quantity;
+              const gstAmount = (baseAmount * gst) / 100;
+              const totalAmount = baseAmount + gstAmount;
+
+              return {
+                id: m.medicineID || m.id,
+                name: m.medicineName || m.name || "Unknown",
+                qty: quantity,
+                hsn: m.hsn || "",
+                price: sellingPrice,
+                gst,
+                amount: totalAmount,
+                nurseID: m.nurseID || m.medGivenBy,
+                status: m.status || "completed",
+                rejectReason: m.rejectReason || null,
+                rejectedOn: m.rejectedOn || null,
+                rejectedBy: m.rejectedBy || null,
+                completedOn: m.completedOn || "",
+              };
+            }),
+            testList: [],
+            procedures: [],
+          };
+
+          processed.push(patient);
+        });
       }
 
-      // Get prescriptionURL for walk-in
-      const prescriptionURL = item.prescriptionURL || undefined;
+      const sorted = processed.sort((a, b) => {
+        const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
+        const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      setData(sorted);
+    } else {
+      setData([]);
+    }
+  };
+
+  // Lab/Radiology billing function
+const fetchLabRadiologyBilling = async (token: string) => {
+  if (!user?.hospitalID) return;
+
+  const deptName = isRadiology ? 'radiology' : 'pathology';
+  const url = `test/${deptName}/${user.hospitalID}/approved/getBillingData`;
+  
+  const response = await AuthFetch(url, token) as any;
+  console.log("1234",response)
+  
+  if ((response?.status === "success") && Array.isArray(response?.data?.billingData)) {
+    const billingData = response?.data?.billingData || response?.billingData || response?.data?.data || response?.data;
+    
+    // Filter by department type
+    const filteredData = billingData.filter((each: any) => {
+      const ptype = each?.ptype;
+      if (departmentType === "1") return ptype === 21; // OPD (21)
+      if (departmentType === "2") return ptype === 2 || ptype === 3; // IPD (2 or 3)
+      return true;
+    });
+
+    const processed: PatientData[] = filteredData.map((item: any, index: number) => {
+      // Use API values directly instead of calculating
+      const totalAmount = Number(item.totalAmount) || 0;
+      const totalBaseAmount = Number(item.totalBaseAmount) || 0;
+      const totalGstAmount = Number(item.totalGstAmount) || 0;
+      const paidAmount = Number(item.paidAmount) || 0;
+      const dueAmount = Number(item.dueAmount) || 0;
+      
+      const tests: TestItem[] = Array.isArray(item.testsList)
+        ? item.testsList.map((t: any) => ({
+            testID: t.id || t.testID,
+            testName: t.test || t.testName,
+            loinc_num_: t.loinc_num_ || "",
+            category: t.category || "pathology",
+            price: Number(t.testPrice) || 0,
+            gst: Number(t.gstPercentage) || Number(t.gst) || 0,
+            amount: Number(t.totalAmount) || (Number(t.testPrice) || 0),
+            baseAmount: Number(t.baseAmount) || 0,
+            gstAmount: Number(t.gstAmount) || 0,
+            gstPercentage: Number(t.gstPercentage) || Number(t.gst) || 0,
+          }))
+        : [];
 
       return {
         id: index + 1,
         patientID: String(item.patientID || item.pID || ""),
-        // 🔹 ADD THIS: Include pIdNew
-        pIdNew: String(item.pIdNew || item.patientID || `PHAR${index + 1}`),
+        pIdNew: String(item.pIdNew || item.patientID || `LAB${index + 1}`),
         pName: item.pName || "Unknown Patient",
-        dept: getDepartmentLabelBilling(item.ptype || deptNum),
-        addedOn: addedOn,
-        firstName: firstName,
-        lastName: lastName,
-        category: location,
-        patientTimeLineID: String(timelineID),
-        pType: deptNum === 1 ? "Outpatient" : 
-               deptNum === 2 ? "Inpatient" : 
-               deptNum === 3 ? "Walk-in" : "Rejected",
-        type: "medicine",
-        // 🔹 ADD THIS: Include prescriptionURL if available
-        prescriptionURL: prescriptionURL,
-        // Payment amounts
+        dept: getDepartmentLabelBilling(item.ptype || 1),
+        addedOn: item.addedOn || item.datetime || "",
+        firstName: item.doctorFirstName || "",
+        lastName: item.doctorLastName || "",
+        category: "",
+        patientTimeLineID: String(item.timeLineID || item.id || ""),
+        pType: (item.ptype === 21) ? "Outpatient" : "Inpatient",
+        type: "lab",
+        testList: tests,
+        medicinesList: [],
+        procedures: [],
         totalAmount: totalAmount,
         paidAmount: paidAmount,
         dueAmount: dueAmount,
-        medicinesList: medicinesArray.map((m: any) => {
-          const sellingPrice = Number(m.sellingPrice) || 0;
-          const quantity = Number(m.updatedQuantity || m.quantity || 1);
-          const gst = Number(m.gst) || 0;
-          
-          const baseAmount = sellingPrice * quantity;
-          const gstAmount = (baseAmount * gst) / 100;
-          const totalAmount = baseAmount + gstAmount;
-
-          return {
-            id: m.medicineID || m.id,
-            name: m.medicineName || m.name || "Unknown",
-            qty: quantity,
-            hsn: m.hsn || "",
-            price: sellingPrice,
-            gst: gst,
-            amount: totalAmount,
-            nurseID: m.nurseID || m.medGivenBy,
-            // 🔹 ADD: Include rejection data if medicine is rejected
-            status: m.status || "completed",
-            rejectReason: m.rejectReason || null,
-            rejectedOn: m.rejectedOn || null,
-            rejectedBy: m.rejectedBy || null,
-          };
-        }),
-        testList: [],
-        procedures: [],
+        totalBaseAmount: totalBaseAmount,
+        totalGstAmount: totalGstAmount,
       };
     });
 
@@ -644,300 +842,194 @@ dueAmount = payable;
   }
 };
 
-  // Lab/Radiology billing function - MODIFIED to include dueAmount
-  const fetchLabRadiologyBilling = async (token: string) => {
-    if (!user?.hospitalID) return;
+const fetchReceptionTaxInvoices = async (token: string) => {
+  if (!user?.hospitalID) return;
 
-    const deptName = isRadiology ? 'radiology' : 'pathology';
-    const url = `test/${deptName}/${user.hospitalID}/approved/getBillingData`;
+  const deptStr = typeof departmentType === "string" ? departmentType : String(departmentType);
+
+  const endpoints: { url: string; deptType: string }[] =
+    deptStr === "all"
+      ? [
+          {
+            url: `reception/getReceptionCompletedTaxInvoiceData/${user.hospitalID}/1`,
+            deptType: "1",
+          },
+          {
+            url: `reception/getReceptionCompletedTaxInvoiceData/${user.hospitalID}/2`,
+            deptType: "2",
+          },
+        ]
+      : [
+          {
+            url: `reception/getReceptionCompletedTaxInvoiceData/${user.hospitalID}/${deptStr}`,
+            deptType: deptStr,
+          },
+        ];
+
+  const allRawItems: any[] = [];
+
+  for (const ep of endpoints) {
+    try {
+      const res: any = await AuthFetch(ep.url, token);
+      console.log("tax222222", ep.url, res);
+      const arr = Array.isArray(res?.data?.data) ? res.data.data : [];
+      arr.forEach((item: any) =>
+        allRawItems.push({ ...item, deptType: ep.deptType })
+      );
+    } catch {}
+  }
+
+  /* ✅ FILTER AFTER DATA IS READY */
+  const filteredItems = allRawItems.filter((item) => {
+    // Determine department type from the data
+    const hasLab = item.lab && Object.keys(item.lab).length > 0;
+    const hasPharmacy = item.pharmacy && Object.keys(item.pharmacy).length > 0;
     
-    const response = await AuthFetch(url, token)as any;
-    // FIXED: Use the correct response structure from working code
-    
-    if ((response?.status === "success") && Array.isArray(response?.data?.billingData)) {
-    const billingData = response?.data?.billingData || response?.billingData || response?.data?.data || response?.data;
+    // Check if it's OPD or IPD based on the endpoint or data
+    const isOPD = item.deptType === "1";
+    const isIPD = item.deptType === "2";
+
+    // Filter based on selected departmentType
+    if (departmentType === "1") {
+      return isOPD;
+    }
+    if (departmentType === "2") {
+      return isIPD;
+    }
+    return true;
+  });
+
+  const normalized: PatientData[] = filteredItems.map(
+    (item: any, index: number) => {
+      const deptType = item.deptType || "1";
       
-      // FIXED: Use the same filtering logic as working code
-      const filteredData = billingData.filter((each: any) => {
-        const ptype = each?.ptype;
-        if (departmentType === "1") return ptype === 21; // OPD (21)
-        if (departmentType === "2") return ptype === 2 || ptype === 3; // IPD (2 or 3)
-        return true;
-      });
-
-      const processed: PatientData[] = filteredData.map((item: any, index: number) => {
-        // Calculate total amount from tests
-        const totalAmount = Array.isArray(item.testsList) 
-          ? item.testsList.reduce((sum: number, test: any) => {
-              const price = Number(test.testPrice) || 0;
-              const gst = Number(test.gst) || 0;
-              return sum + (price * (1 + gst / 100));
-            }, 0)
-          : 0;
-const tests: TestItem[] = Array.isArray(item.testsList)
-  ? item.testsList.map((t: any) => ({
-      testID: t.id || t.testID,
-      testName: t.test || t.testName,
-      loinc_num_: t.loinc_num_ || "",
-      category: t.category || "pathology",
-      price: Number(t.testPrice) || 0,
-      gst: Number(t.gst) || 0,
-      amount:
-        (Number(t.testPrice) || 0) *
-        (1 + (Number(t.gst) || 0) / 100),
-    }))
-  : [];
-
-const paidAmount = Number(item.paidAmount) || 0;
-const { grandTotal, payable } = calculateTotalsFromLists(
-  [],
-  tests,
-  paidAmount
-);
-
-
-
-
-        return {
-          id: index + 1,
-          patientID: String(item.patientID || item.pID || ""),
-          pName: item.pName || "Unknown Patient",
-          dept: getDepartmentLabelBilling(item.ptype || 1),
-          addedOn: item.addedOn || item.datetime || "",
-          firstName: item.doctorFirstName || "",
-          lastName: item.doctorLastName || "",
-          category: "",
-          patientTimeLineID: String(item.timeLineID || item.id || ""),
-          pType: (item.ptype === 21) ? "Outpatient" : "Inpatient",
-          type: "lab",
-          testList: Array.isArray(item.testsList) ? item.testsList.map((t: any) => ({
-            testID: t.id || t.testID,
-            testName: t.test || t.testName,
-            loinc_num_: t.loinc_num_ || "",
-            category: t.category || "pathology",
-            price: Number(t.testPrice) || 0,
-            gst: Number(t.gst) || 0,
-            amount: (Number(t.testPrice) || 0) * (1 + (Number(t.gst) || 0) / 100),
-          })) : [],
-          medicinesList: [],
-          procedures: [],
-          // ADDED: Include payment amounts from API response
-totalAmount: grandTotal,
-paidAmount,
-dueAmount: payable,
-        };
-      });
-
-      const sorted = processed.sort((a, b) => {
-        const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
-        const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
-        return dateB - dateA;
-      });
-
-      setData(sorted);
-    } else {
-      setData([]); // Set empty array if no data
-    }
-  };
-  const fetchReceptionTaxInvoices = async (token: string) => {
-    if (!user?.hospitalID) return;
-
-    const deptStr =
-      typeof departmentType === "string" ? departmentType : String(departmentType);
-
-    const endpoints: { url: string; deptType: string }[] =
-      deptStr === "all"
-        ? [
-            {
-              url: `reception/getReceptionCompletedTaxInvoiceData/${user.hospitalID}/1`,
-              deptType: "1",
-            },
-            {
-              url: `reception/getReceptionCompletedTaxInvoiceData/${user.hospitalID}/2`,
-              deptType: "2",
-            },
-          ]
-        : [
-            {
-              url: `reception/getReceptionCompletedTaxInvoiceData/${user.hospitalID}/${deptStr}`,
-              deptType: deptStr,
-            },
-          ];
-
-const allRawItems: any[] = [];
-
-for (const ep of endpoints) {
-  try {
-    const res: any = await AuthFetch(ep.url, token);
-    const arr = Array.isArray(res?.data?.data) ? res.data.data : [];
-    arr.forEach((item: any) =>
-      allRawItems.push({ ...item, deptType: ep.deptType })
-    );
-  } catch {}
-}
-
-/* ✅ FILTER AFTER DATA IS READY */
-const filteredItems = allRawItems.filter((item) => {
-  const dept =
-    item?.lab?.departmentType ??
-    item?.pharmacy?.departmentType ??
-    null;
-
-  // OPD
-  if (departmentType === "1") {
-    return dept === 1;
-  }
-
-  // IPD / Emergency
-  if (departmentType === "2") {
-    return dept !== 1;
-  }
-
-  return true;
-});
-
-
-    for (const ep of endpoints) {
-      try {
-        const res: any = await AuthFetch(ep.url, token);
-        const arr = Array.isArray(res?.data?.data) ? res.data?.data : [];
-        arr.forEach((item: any) =>
+      // Process pharmacy medicines if they exist
+      const medicinesList: MedicineItem[] = [];
+      if (item.pharmacy?.medicinesList && Array.isArray(item.pharmacy.medicinesList)) {
+        item.pharmacy.medicinesList.forEach((m: any) => {
+          const sellingPrice = Number(m.sellingPrice) || 0;
+          const quantity = Number(m.updatedQuantity || m.quantity || 1);
+          const gst = Number(m.gst) || 0;
           
-          allRawItems.push({ ...item, deptType: ep.deptType })
-        );
+          const baseAmount = sellingPrice * quantity;
+          const gstAmount = (baseAmount * gst) / 100;
+          const totalAmount = baseAmount + gstAmount;
+
+          medicinesList.push({
+            id: m.id || m.medicineID,
+            name: m.medicineName || m.name || "Unknown Medicine",
+            category: m.medicineType || "",
+            qty: quantity,
+            hsn: m.hsn || "",
+            price: sellingPrice,
+            gst,
+            amount: totalAmount,
+            nurseID: m.nurseID,
+            date: m.completedOn || m.datetime || item.paidAt || "",
+            status: m.status || "completed",
+            completedOn: m.completedOn || "",
+          });
+        });
+      }
+
+      // Process lab tests if they exist
+      const testList: TestItem[] = [];
+      if (item.lab?.labTests && Array.isArray(item.lab.labTests)) {
+        item.lab.labTests.forEach((t: any) => {
+          testList.push({
+            testID: t.testID,
+            testName: t.testName || "Unknown Test",
+            loinc_num_: t.loincCode || "",
+            category: t.category || "pathology",
+            price: Number(t.baseAmount) || 0,
+            gst: Number(t.gstPercentage) || 0,
+            amount: Number(t.totalAmount) || 0,
+            baseAmount: Number(t.baseAmount) || 0,
+            gstAmount: Number(t.gstAmount) || 0,
+            gstPercentage: Number(t.gstPercentage) || 0,
+            date: t.lastUpdatedOn || t.addedOn || item.paidAt || "",
+          });
+        });
+      }
+
+      // Get payment date - use the latest date from various sources
+      const paymentDate = item.paidAt || 
+                         item.lab?.latestLabPaymentAt || 
+                         item.pharmacy?.paymentDetails?.[0]?.timestamp || 
+                         item.lab?.labTests?.[0]?.lastUpdatedOn ||
+                         item.pharmacy?.medicinesList?.[0]?.completedOn ||
+                         "";
+
+      // Get doctor name
+      const doctorName = item.doctorName || "";
+      const [firstName = "", lastName = ""] = doctorName.split(" ");
+
+      // Calculate totals from grand_* fields or from individual departments
+      const grandTotalAmount = Number(item.grand_totalAmount) || 0;
+      const grandPaidAmount = Number(item.grand_paidAmount) || 0;
+      const grandDueAmount = Number(item.grand_dueAmount) || 0;
+      const grandBaseAmount = Number(item.grand_baseAmount) || 0;
+      const grandGstAmount = Number(item.grand_gstAmount) || 0;
+
+      // Individual department totals
+      const pharmacyTotal = Number(item.pharmacy?.totalAmount) || 0;
+      const pharmacyPaid = Number(item.pharmacy?.paidAmount) || 0;
+      const pharmacyDue = Number(item.pharmacy?.dueAmount) || 0;
+      
+      const labTotal = Number(item.lab?.labTotals?.totalAmount) || 0;
+      const labPaid = Number(item.lab?.labTotals?.paidAmount) || 0;
+      const labDue = Number(item.lab?.labTotals?.dueAmount) || 0;
+
+      // Medicine and test due amounts from individual departments
+      const medicineDueAmount = medicinesList.reduce((sum, m) => sum + (m.amount || 0), 0);
+      const testDueAmount = testList.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+      return {
+        id: index + 1,
+        patientID: String(item.patientID || ""),
+        pIdNew: String(item.pIdNew || item.patientID || `INV${index + 1}`),
+        pName: item.pName || "Unknown Patient",
+        dept: getDepartmentLabelTax(deptType, 'reception'),
+        firstName,
+        lastName,
+        doctorName,
+        date: paymentDate,
+        addedOn: paymentDate,
+        admissionDate: item.admissionDate || paymentDate,
+        location: item.location || "",
+        category: item.location || (deptType === "1" ? "OPD" : "IPD"),
         
-      } catch {
-        // ignore one endpoint failure
-      }
+        // Test and medicine lists
+        testList,
+        medicinesList,
+        procedures: item.procedures || [],
+        
+        // Timeline/Order info
+        patientTimeLineID: String(item.patientTimeLineID || item.timelineID || ""),
+        orderID: item.orderID || "",
+        
+        // Patient type
+        pType: deptType === "1" ? "Outpatient" : "Inpatient",
+        type: testList.length > 0 ? "lab" : medicinesList.length > 0 ? "medicine" : "mixed",
+        
+        // ✅ USE GRAND TOTALS FROM API RESPONSE
+        totalAmount: grandTotalAmount || pharmacyTotal + labTotal,
+        paidAmount: grandPaidAmount || pharmacyPaid + labPaid,
+        dueAmount: grandDueAmount || pharmacyDue + labDue,
+        
+        // Individual due amounts for backward compatibility
+        medicineDueAmount: medicineDueAmount,
+        testDueAmount: testDueAmount,
+        
+        // Base and GST amounts
+        totalBaseAmount: grandBaseAmount || pharmacyTotal + labTotal,
+        totalGstAmount: grandGstAmount || pharmacyDue + labDue,
+      };
     }
+  );
 
-   const normalized: PatientData[] = filteredItems.map(
-  (item: any, index: number) => {
-    
-    const deptType =
-      item.pType?.toString() ||
-      item.deptType?.toString() ||
-      (item.lab ? "1" : null) ||
-      (item.pharmacy ? "2" : null) ||
-      "1";
-    const medicinesList: MedicineItem[] =
-      item.pharmacy?.medicinesList?.map((m: any) => {
-        const price = Number(m.sellingPrice) * Number(m.updatedQuantity) || 0;
-        const gst = Number(m.gst) || 0;
-        const amount = price + (price * gst) / 100;
-
-        return {
-          id: m.id,
-          name: m.medicineName || "Unknown Medicine",
-          category: m.medicineType || "",
-          qty: Number(m.updatedQuantity) || 0,
-          hsn: m.hsn || "",
-          price,
-          gst,
-          amount,
-          nurseID: m.nurseID,
-            date: m.completedOn || m.datetime || "",
-        };
-      }) || [];
-
-    const testList: TestItem[] =
-      item.lab?.labTests?.map((t: any) => {
-        const price = Number(t.testPrice) || 0;
-        const gst = Number(t.gst) || 0;
-        const amount = price + (price * gst) / 100;
-
-        return {
-          testID: t.testID,
-          testName: t.testName || "Unknown Test",
-          loinc_num_: t.loinc_num_ || "N/A",
-          category: t.category || "Uncategorized",
-          price,
-          gst,
-          amount,
-            date: t.lastUpdatedOn || t.addedOn || "",
-        };
-      }) || [];
-
-    // 🔹 NEW: calculate due amounts from lists
-    const medicineDueAmount = medicinesList.reduce(
-      (sum, m) => sum + (m.amount || 0),
-      0
-    );
-    const testDueAmount = testList.reduce(
-      (sum, t) => sum + (t.amount || 0),
-      0
-    );
-
-      // 🔹 UPDATED: Get dates from all possible sources and find the latest
-      const allDates: string[] = [];
-
-      // From medicines
-      medicinesList.forEach((med) => {
-        if (med.date) allDates.push(med.date);
-      });
-
-      // From tests
-      testList.forEach((test) => {
-        if (test.date) allDates.push(test.date);
-      });
-
-      // From pharmacy payment details
-      if (item.pharmacy?.paymentDetails?.[0]?.timestamp) {
-        allDates.push(item.pharmacy.paymentDetails[0].timestamp);
-      }
-
-      // From pharmacy completedOn
-      if (item.pharmacy?.medicinesList?.[0]?.completedOn) {
-        allDates.push(item.pharmacy.medicinesList[0].completedOn);
-      }
-
-      // From lab lastUpdatedOn
-      if (item.lab?.labTests?.[0]?.lastUpdatedOn) {
-        allDates.push(item.lab.labTests[0].lastUpdatedOn);
-      }
-
-      // From item addedOn
-      if (item.addedOn) {
-        allDates.push(item.addedOn);
-      }
-
-      // 🔹 Find the latest date
-      const latestDate = allDates.length > 0
-        ? allDates.sort((a: string, b: string) => 
-            new Date(b).getTime() - new Date(a).getTime()
-        )[0]
-        : "";
-
-    return {
-      id: index + 1,
-      patientID: item.patientID || `INV${index + 1}`,
-      // 🔹 NEW: satisfy PatientData.pIdNew
-      pIdNew: item.pIdNew || item.patientID || `INV${index + 1}`,
-
-      pName: item.pName || "Unknown Patient",
-      dept: getDepartmentLabelTax(deptType),
-      firstName: item.firstName || "",
-      lastName: item.lastName || "",
-      date: latestDate, 
-      addedOn: latestDate, 
-      admissionDate: item.admissionDate || "",
-      category: item.category || (deptType === "1" ? "OPD" : "IPD"),
-      testList,
-      medicinesList,
-      procedures: item.procedures || [],
-      patientTimeLineID: item.patientTimeLineID || "",
-      pType: deptType === "1" ? "Outpatient" : "Inpatient",
-
-      // 🔹 NEW: satisfy PatientData.medicineDueAmount / testDueAmount
-      medicineDueAmount,
-      testDueAmount,
-    };
-  }
-);
-
-
-    setData(normalized);
-  };
+  setData(normalized);
+};
 
   // Pharmacy tax invoices function
   const fetchPharmacyTaxInvoices = async (token: string) => {
@@ -963,7 +1055,6 @@ const filteredItems = allRawItems.filter((item) => {
       const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
       
       const processed: PatientData[] = rawData.map((item: any, index: number) => ({
-        
         id: index + 1,
         patientID: String(item.patientID || item.pID || ""),
         pName: item.pName || "Unknown Patient",
@@ -985,7 +1076,7 @@ const filteredItems = allRawItems.filter((item) => {
           gst: Number(m.gst) || 0,
           amount: (Number(m.sellingPrice) || 0) * (Number(m.updatedQuantity) || 1) * (1 + (Number(m.gst) || 0) / 100),
           nurseID: m.nurseID,
-          completedOn:m.completedOn || ""
+          completedOn: m.completedOn || ""
         })) : [],
         testList: [],
         procedures: [],
@@ -994,60 +1085,85 @@ const filteredItems = allRawItems.filter((item) => {
       setData(processed);
     }
   };
+
+const fetchLabRadiologyTaxInvoices = async (token: string) => {
+  if (!user?.hospitalID) return;
+
+  const deptName = isRadiology ? 'Radiology' : 'Pathology';
+  const url = `test/getOpdIpdTaxInvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`;
   
-
-  // Lab/Radiology tax invoices function
-  const fetchLabRadiologyTaxInvoices = async (token: string) => {
-    if (!user?.hospitalID) return;
-
-    const deptName = isRadiology ? 'Radiology' : 'Pathology';
-    const url = `test/getOpdIpdTaxInvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`;
+  const response = await AuthFetch(url, token);
+  console.log("Lab/Radiology Tax Invoice response:", response);
+  
+  if (response?.status === "success" && "data" in response) {
+    const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
+    const processed: PatientData[] = [];
     
-    const response = await AuthFetch(url, token);
-    if (response?.status === "success" && "data" in response) {
-      const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];
-      
-      // Filter by department type
-      const filteredData = rawData.filter((item: any) => {
-        if (departmentType === "1") return item.departmemtType === 1; // OPD
-        if (departmentType === "2") return item.departmemtType === 2; // IPD
-        return true;
-      });
-
-      const processed: PatientData[] = filteredData.map((item: any, index: number) => ({
-        id: index + 1,
-        patientID: String(item.patientID || ""),
-        pName: item.pName || "Unknown Patient",
-        dept: getDepartmentLabelTax(String(item.departmemtType || 1)),
-        addedOn: item.addedOn || "",
-        firstName: item.firstName || "",
-        lastName: item.lastName || "",
-        category: item.category || "",
-        patientTimeLineID: String(item.patientTimeLineID || ""),
-        pType: item.departmemtType === 1 ? "Outpatient" : "Inpatient",
-        type: "lab",
-        testList: Array.isArray(item.testsList) ? item.testsList.map((t: any) => ({
-          testID: t.testID,
-          testName: t.testName,
-          loinc_num_: t.loinc_num_ || "",
-          category: t.category || "",
-          price: Number(t.testPrice) || 0,
-          gst: Number(t.gst) || 0,
-          amount: (Number(t.testPrice) || 0) * (1 + (Number(t.gst) || 0) / 100),
-        })) : [],
-        medicinesList: [],
-        procedures: [],
-      }));
-      const sorted = processed.sort((a, b) => {
-      const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
-      const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
-      return dateB - dateA; // Descending order (newest first)
+    // Filter by department type first
+    const filteredData = rawData.filter((patient: any) => {
+      const deptType = patient?.departmentType;
+      if (departmentType === "1") return deptType === 1; // OPD
+      if (departmentType === "2") return deptType === 2; // IPD
+      return true;
     });
 
+    // Process each patient's invoices
+    filteredData.forEach((patient: any) => {
+      if (!Array.isArray(patient.invoices) || patient.invoices.length === 0) return;
 
-      setData(sorted);
-    }
-  };
+      // Process each invoice separately
+      patient.invoices.forEach((invoice: any) => {
+        if (!Array.isArray(invoice.testsList) || invoice.testsList.length === 0) return;
+
+        const tests: TestItem[] = invoice.testsList.map((t: any) => ({
+          testID: t.testID,
+          testName: t.testName,
+          loinc_num_: t.loincCode || "",
+          category: deptName,
+          price: Number(t.baseAmount) || 0,
+          gst: Number(t.gstPercentage) || 0,
+          amount: Number(t.totalAmount) || 0,
+          baseAmount: Number(t.baseAmount) || 0,
+          gstAmount: Number(t.gstAmount) || 0,
+          gstPercentage: Number(t.gstPercentage) || 0,
+        }));
+
+        processed.push({
+          id: processed.length + 1,
+          patientID: String(patient.patientID || ""),
+          pIdNew: String(patient.patientID || `TAX${processed.length + 1}`),
+          pName: patient.pName || "Unknown Patient",
+          dept: getDepartmentLabelTax(String(patient.departmentType || 1)),
+          addedOn: invoice.addedOn || "",
+          firstName: patient.doctorName?.split(' ')[0] || "",
+          lastName: patient.doctorName?.split(' ').slice(1).join(' ') || "",
+          category: "",
+          patientTimeLineID: String(patient.timelineID || ""),
+          pType: (patient.departmentType === 1) ? "Outpatient" : "Inpatient",
+          type: "lab",
+          testList: tests,
+          medicinesList: [],
+          procedures: [],
+          
+          // Use invoice-level amounts
+          totalAmount: Number(invoice.totalAmount) || 0,
+          paidAmount: Number(invoice.paidAmount) || 0,
+          dueAmount: Number(invoice.dueAmount) || 0,
+          totalBaseAmount: Number(invoice.totalBaseAmount) || 0,
+          totalGstAmount: Number(invoice.totalGstAmount) || 0,
+        });
+      });
+    });
+
+    const sorted = processed.sort((a, b) => {
+      const dateA = a.addedOn ? new Date(a.addedOn).getTime() : 0;
+      const dateB = b.addedOn ? new Date(b.addedOn).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    setData(sorted);
+  }
+};
 
   // Walk-in tax invoices function
   const fetchWalkinTaxInvoices = async (token: string) => {
@@ -1072,11 +1188,11 @@ const filteredItems = allRawItems.filter((item) => {
           patientTimeLineID: String(item.id || ""),
           pType: "Walk-in",
           type: "medicine",
-          pIdNew: item.pIdNew ? String(item.pIdNew) : undefined, // Add this
-          prescriptionURL: item.prescriptionURL || undefined, // Add this
+          pIdNew: item.pIdNew ? String(item.pIdNew) : undefined,
+          prescriptionURL: item.prescriptionURL || undefined,
           medicinesList: Array.isArray(item.medicinesList) ? item.medicinesList.map((m: any) => ({
             id: m.id,
-            name: m.name || m.medicineName || "Unknown", 
+            name: m.name || m.medicineName || "Unknown",
             category: m.medicineType || "",
             qty: Number(m.updatedQuantity) || 1,
             hsn: m.hsn || "",
@@ -1351,7 +1467,7 @@ const filteredItems = allRawItems.filter((item) => {
           departmentType={departmentType}
           onDepartmentTypeChange={setDepartmentType}
           userDepartment={department}
-          nurses={nurses} 
+          nurses={nurses}
         />
       </View>
 

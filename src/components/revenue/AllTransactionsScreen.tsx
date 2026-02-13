@@ -670,7 +670,7 @@ const AllTransactionsScreen = () => {
       const rows = transactions.map((t) => [
         t.id ?? "",
         t.patientName ?? "",
-        t.patientPhone ?? "",
+        t.patientPhone ? `="${t.patientPhone}"` : "",
         t.departmentName ?? "",
         formatDate(t.date) ?? "",
         t.consultationFee ?? 0,
@@ -797,81 +797,6 @@ const AllTransactionsScreen = () => {
             fontSize: moderateScale(12),
           }]}>
             Filters
-          </Text>
-        </TouchableOpacity>
-
-        {/* Time Period Quick Filter */}
-        <TouchableOpacity
-          style={[
-            styles.quickFilterButton,
-            { 
-              backgroundColor: filters.filterType !== FILTER_TYPES.THIS_MONTH ? COLORS.brandLight : COLORS.card,
-              minHeight: moderateScale(34),
-              paddingHorizontal: moderateScale(12),
-              paddingVertical: moderateScale(6),
-            }
-          ]}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <Calendar size={moderateScale(14)} color={filters.filterType !== FILTER_TYPES.THIS_MONTH ? COLORS.brand : COLORS.sub} />
-          <Text style={[
-            styles.quickFilterText,
-            { 
-              color: filters.filterType !== FILTER_TYPES.THIS_MONTH ? COLORS.brand : COLORS.text,
-              fontSize: moderateScale(12),
-            }
-          ]}>
-            {getFilterLabel(filters.filterType)}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Status Quick Filter */}
-        <TouchableOpacity
-          style={[
-            styles.quickFilterButton,
-            { 
-              backgroundColor: filters.status ? COLORS.brandLight : COLORS.card,
-              minHeight: moderateScale(34),
-              paddingHorizontal: moderateScale(12),
-              paddingVertical: moderateScale(6),
-            }
-          ]}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <CheckCircle size={moderateScale(14)} color={filters.status ? COLORS.brand : COLORS.sub} />
-          <Text style={[
-            styles.quickFilterText,
-            { 
-              color: filters.status ? COLORS.brand : COLORS.text,
-              fontSize: moderateScale(12),
-            }
-          ]}>
-            {getStatusLabel(filters.status)}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Source Quick Filter */}
-        <TouchableOpacity
-          style={[
-            styles.quickFilterButton,
-            { 
-              backgroundColor: filters.source ? COLORS.brandLight : COLORS.card,
-              minHeight: moderateScale(34),
-              paddingHorizontal: moderateScale(12),
-              paddingVertical: moderateScale(6),
-            }
-          ]}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <Tag size={moderateScale(14)} color={filters.source ? COLORS.brand : COLORS.sub} />
-          <Text style={[
-            styles.quickFilterText,
-            { 
-              color: filters.source ? COLORS.brand : COLORS.text,
-              fontSize: moderateScale(12),
-            }
-          ]}>
-            {getSourceLabel(filters.source)}
           </Text>
         </TouchableOpacity>
 

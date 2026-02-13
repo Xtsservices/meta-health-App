@@ -44,6 +44,8 @@ type WardType = {
   name: string;
   description?: string;
   capacity?: number;
+  availableBeds?: number; 
+  totalBeds?: number; 
 };
 
 type StaffType = {
@@ -392,14 +394,22 @@ const PatientRevisitScreen: React.FC = () => {
               </Text>
               <View style={[styles.pickerContainer, { 
                 borderColor: COLORS.border, 
-                backgroundColor: isDark ? '#1F2937' : COLORS.inputBg // Dark background in dark mode
+                backgroundColor: isDark ? '#1F2937' : COLORS.inputBg
               }]}>
                 <Picker
                   selectedValue={wardID}
-                  onValueChange={setWardID}
+                  onValueChange={(value) => {
+                    // Check if selected ward is full
+                    const selectedWard = wardList.find(w => w.id === value);
+                    if (selectedWard && selectedWard.availableBeds === 0) {
+                      Alert.alert("Ward Full", "Selected ward has no available beds. Please choose another ward.");
+                      return;
+                    }
+                    setWardID(value);
+                  }}
                   style={[styles.picker, { 
                     color: isDark ? '#000000ff' : COLORS.text,
-                    backgroundColor: isDark ? '#ffffffff' : COLORS.inputBg // Match container bg
+                    backgroundColor: isDark ? '#ffffffff' : COLORS.inputBg
                   }]}
                   dropdownIconColor={isDark ? '#FFFFFF' : COLORS.text}
                 >
@@ -409,14 +419,24 @@ const PatientRevisitScreen: React.FC = () => {
                     color={isDark ? '#FFFFFF' : COLORS.placeholder}
                   />
                   {wardList && wardList.length > 0 ? (
-                    wardList?.map((ward) => (
+                    wardList.map((ward) => {
+                    // Check if ward has available beds
+                    const isFull = ward.availableBeds === 0;
+                    const label = `${capitalizeFirstLetter(ward.name)}${isFull ? " (Full)" : ""}`;
+                    
+                    return (
                       <Picker.Item 
-                        key={ward?.id}
-                        label={capitalizeFirstLetter(ward?.name) || 'Unknown Ward'}
-                        value={ward?.id}
-                        color={isDark ? '#FFFFFF' : COLORS.text}
+                        key={ward.id}
+                        label={label}
+                        value={ward.id}
+                        color={isFull 
+                          ? (isDark ? '#666666' : '#999999') // Grey out when full
+                          : (isDark ? '#FFFFFF' : COLORS.text)
+                        }
+                        enabled={!isFull} // Disable selection when full
                       />
-                    ))
+                    );
+                  })
                   ) : (
                     <Picker.Item 
                       label="No wards available" 

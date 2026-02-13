@@ -110,9 +110,66 @@ const Login: React.FC = () => {
         if (data?.id != null) {
           await AsyncStorage.setItem('userID', String(data.id));
         }
-
+      await AsyncStorage.setItem('user', JSON.stringify(data));
         dispatch(showSuccess('Successfully Logged In'));
+      if (data.organizationAssociations && data.organizationAssociations.length > 0) {
+        const primaryOrg = data.organizationAssociations[0];
+        const orgType = primaryOrg.organizationType;
+        const orgId = primaryOrg.organizationId;
+        const orgStatus = primaryOrg.organizationDetails?.status;
+
+        // Handle pending/approval_awaiting status - Redirect to profile forms
+        if (orgStatus === 'approval_awaiting' || orgStatus === 'pending') {
+          dispatch(currentUser(data));
+          
+          if (orgType === 'hospital') {
+            return navigation.navigate('HospitalProfileForm', { orgId });
+          }
+          if (orgType === 'diagnostic') {
+            return navigation.navigate('DiagnosticProfileForm', { orgId });
+          }
+          if (orgType === 'pharmacy') {
+            return navigation.navigate('PharmacyProfileForm', { orgId });
+          }
+        }
         
+        if (orgStatus === 'active' && orgType !== 'doctor') {
+          dispatch(currentUser(data));
+          dispatch(showError('Please complete your profile on the website. Mobile profile completion is not available.'));
+          return navigation.navigate('PendingApproval', { 
+            orgType, 
+            orgId, 
+            orgStatus,
+            organizationName: primaryOrg.organizationDetails?.name || 
+              (orgType === 'hospital' ? 'Hospital' : 
+               orgType === 'diagnostic' ? 'Diagnostic Center' : 
+               orgType === 'pharmacy' ? 'Pharmacy' : 
+               orgType === 'ambulance' ? 'Ambulance Service' : 
+               orgType === 'bloodbank' ? 'Blood Bank' : 
+               orgType === 'lab' ? 'Laboratory' : 'Organization')
+          });
+        }
+        
+        // Only allow login if status is 'active'
+        if (orgStatus !== 'active') {
+          dispatch(showError('Your organization is not active. Please contact admin.'));
+          setIsSubmitting(false);
+          return;
+        }
+      }
+      
+      // Legacy: Check if hospital login and redirect based on status
+      else if (data.hospitalID || data.hospitalId) {
+        const hospitalId = data.hospitalID || data.hospitalId;
+        const hospitalStatus = data.hospitalDetails?.status;
+
+        if (hospitalStatus === 'pending') {
+          dispatch(currentUser(data));
+          return navigation.navigate('HospitalProfileForm', { orgId: hospitalId });
+        }
+      }
+      
+      // Ambulance roles
         if (Role_NAME.ambulanceAdmin === data?.role) {
             dispatch(currentUser(data));
           navigation.navigate('AmbulanceAdminDashboard' as never);
@@ -147,7 +204,13 @@ const Login: React.FC = () => {
                 };
                 dispatch(currentUser(updatedUser));
                 navigation.navigate(`OtDashboard` as never);
+            } else {
+              dispatch(currentUser(data));
+              navigation.navigate(link as never);
               }
+          } else {
+            dispatch(currentUser(data));
+            navigation.navigate('Home' as never);
             }
           } else {
             dispatch(currentUser(data));

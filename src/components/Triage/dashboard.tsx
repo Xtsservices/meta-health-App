@@ -218,7 +218,7 @@ const Sidebar: React.FC<{
   const overviewItems = items?.filter((item) => item.key === "dash") ?? [];
   const patientManagementItems =
     items?.filter((item) => ["plist", "addp", "app"].includes(item.key)) ?? [];
-  const operationsItems = items?.filter((item) => item.key === "mgmt") ?? [];
+  const operationsItems = items?.filter((item) => ["expense","mgmt"].includes(item.key))  ?? [];
   const supportItems = items?.filter((item) => item.key === "help") ?? [];
 
   return (
@@ -649,6 +649,12 @@ const DashboardTriage: React.FC = () => {
     { key: "dash", label: "Dashboard", icon: LayoutDashboardIcon, onPress: () => go("TriageDashboard") },
     { key: "plist", label: "Patients List", icon: ListIcon, onPress: () => go("PatientList") },
     { key: "addp", label: "Add Patient", icon: UserPlusIcon, onPress: () => go("AddPatient") },
+        { 
+          key: "expense", 
+          label: "Expenditure", 
+          icon: ActivityIcon,
+          onPress: () => go("ExpenseManagement") 
+        },
     { key: "mgmt", label: "Management", icon: SettingsIcon, onPress: () => go("Management") },
     { key: "help", label: "Help", icon: HelpCircleIcon, onPress: () => go("HelpScreen") },
   ];

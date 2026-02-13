@@ -533,12 +533,10 @@ useEffect(() => {
 
         <View style={styles.cardBody}>
           {/* Show hospital name if showing all hospitals */}
-          {showAllHospitals && item?.hospitalName && (
             <View style={styles.hospitalRow}>
               <Text style={styles.hospitalLabel}>Hospital:</Text>
               <Text style={styles.hospitalName}>{item.hospitalName}</Text>
             </View>
-          )}
 
           <View style={styles.infoRow}>
             <View style={styles.infoSection}>

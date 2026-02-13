@@ -64,7 +64,7 @@ import {
 import { COLORS } from "../../utils/colour";
 import { MONTH_OPTIONS } from '../../utils/yearMonth';
 import Svg, { Circle, Line, Polygon, Text as SvgText, TSpan } from "react-native-svg";
-import { CommissionIcon } from '../../utils/SvgIcons';
+import { ActivityIcon, CommissionIcon } from '../../utils/SvgIcons';
 
 interface DeptCount {
   department: string;
@@ -932,7 +932,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Patient Management Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Patient Management</Text>
-            {items?.filter(item => ["patients", "records", "appointments","commission","revenue"].includes(item.key)).map((item) => (
+            {items?.filter(item => ["patients", "records", "appointments","commission","revenue","expense"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -1248,6 +1248,12 @@ const DashboardReception: React.FC = () => {
       icon: Stethoscope, 
       onPress: () => go("DoctorManagement") 
     },
+            { 
+              key: "expense", 
+              label: "Expenditure", 
+              icon: ActivityIcon,
+              onPress: () => go("ExpenseManagement") 
+            },
         { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab      
 
         { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},

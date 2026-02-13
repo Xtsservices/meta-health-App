@@ -23,14 +23,14 @@ import {
   Users,
   Activity,
   Award,
-  Package,
   Clock,
+  AlertCircle,
 } from 'lucide-react-native';
 import { Picker } from '@react-native-picker/picker';
 import { AuthPost, AuthFetch } from '../../auth/auth';
 import { useDispatch } from 'react-redux';
 import { showSuccess, showError } from '../../store/toast.slice';
-import { formatDate, formatTime, formatDateTime } from '../../utils/dateTime';
+import { formatDateTime } from '../../utils/dateTime';
 
 // Types
 interface ProfileField {
@@ -43,7 +43,42 @@ interface ProfileField {
 
 // Get dynamic dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const isSmallScreen = SCREEN_WIDTH < 375;
+const isSmallScreen = SCREEN_WIDTH < 600;
+
+// Responsive sizing
+const FONT_SIZE = {
+  xs: SCREEN_WIDTH * 0.03,
+  sm: SCREEN_WIDTH * 0.035,
+  md: SCREEN_WIDTH * 0.04,
+  lg: SCREEN_WIDTH * 0.045,
+  xl: SCREEN_WIDTH * 0.055,
+};
+
+const SPACING = {
+  xs: SCREEN_WIDTH * 0.02,
+  sm: SCREEN_WIDTH * 0.03,
+  md: SCREEN_WIDTH * 0.04,
+  lg: SCREEN_WIDTH * 0.05,
+  xl: SCREEN_WIDTH * 0.06,
+};
+
+const responsiveHeight = (factor: number) => SCREEN_HEIGHT * (factor / 100);
+const responsiveWidth = (factor: number) => SCREEN_WIDTH * (factor / 100);
+
+const COLORS = {
+  brand: '#03989e',
+  text: '#111827',
+  sub: '#6B7280',
+  border: '#D1D5DB',
+  placeholder: '#9CA3AF',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  background: '#f8fafc',
+  white: '#ffffff',
+  chipActive: '#03989e',
+  chipInactive: '#e5e7eb',
+};
 
 // Pharmacy fields configuration matching web version
 const PHARMACY_FIELDS: ProfileField[] = [
@@ -51,9 +86,9 @@ const PHARMACY_FIELDS: ProfileField[] = [
   { name: 'yearOfEstablishment', label: 'Year of Establishment', type: 'number', required: true, placeholder: 'e.g., 1995' },
   { name: 'pharmacyType', label: 'Pharmacy Type', type: 'dropdown', required: true, placeholder: 'Select Pharmacy Type' },
   { name: 'ownership', label: 'Ownership', type: 'dropdown', required: true, placeholder: 'Select Ownership' },
-  { name: 'totalStaff', label: 'Total Staff', type: 'number', required: true },
-  { name: 'totalPharmacists', label: 'Total Pharmacists', type: 'number', required: true },
-  { name: 'totalTechnicians', label: 'Total Technicians', type: 'number', required: true },
+  { name: 'totalStaff', label: 'Total Staff', type: 'number', required: true, placeholder: '0' },
+  { name: 'totalPharmacists', label: 'Total Pharmacists', type: 'number', required: true, placeholder: '0' },
+  { name: 'totalTechnicians', label: 'Total Technicians', type: 'number', required: true, placeholder: '0' },
   { name: 'emergencyService', label: 'Emergency Service', type: 'toggle', required: false },
   { name: 'homeDelivery', label: 'Home Delivery', type: 'toggle', required: false },
   { name: 'onlineOrdering', label: 'Online Ordering', type: 'toggle', required: false },
@@ -218,7 +253,6 @@ const PharmacyProfileForm = () => {
       if (!userData) return null;
       const user = JSON?.parse?.(userData);
       
-      // Check organization associations first (matching web logic)
       if (user?.organizationAssociations?.[0]?.organizationType === 'pharmacy') {
         return user.organizationAssociations[0].organizationId;
       }
@@ -232,12 +266,10 @@ const PharmacyProfileForm = () => {
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
-    // Clear error for this field
     if (formErrors?.[field]) {
       setFormErrors(prev => ({ ...prev, [field]: '' }));
     }
 
-    // Special validation for registration number
     if (field === 'registrationNumber' && value?.length > 0 && value?.length <= 3) {
       setFormErrors(prev => ({ 
         ...prev, 
@@ -247,13 +279,12 @@ const PharmacyProfileForm = () => {
       setFormErrors(prev => ({ ...prev, registrationNumber: '' }));
     }
 
-    // Special validation for year
     if (field === 'yearOfEstablishment') {
       const year = parseInt(value);
       if (value && (year < 1800 || year > new Date().getFullYear())) {
         setFormErrors(prev => ({ 
           ...prev, 
-          yearOfEstablishment: 'Year must be between 1800 and current year' 
+          yearOfEstablishment: `Year must be between 1800 and ${new Date().getFullYear()}` 
         }));
       } else if (field === 'yearOfEstablishment') {
         setFormErrors(prev => ({ ...prev, yearOfEstablishment: '' }));
@@ -276,7 +307,6 @@ const PharmacyProfileForm = () => {
         errors[field.name] = `${field.label} is required`;
       }
       
-      // Special validations
       if (field.name === 'registrationNumber' && value && value.length <= 3) {
         errors[field.name] = 'Registration number must be more than three characters';
       }
@@ -305,7 +335,6 @@ const PharmacyProfileForm = () => {
       const token = await getToken();
       if (!token) return;
 
-      // Prepare payload matching web data types
       const payload = {
         ...formData,
         yearOfEstablishment: formData?.yearOfEstablishment ? parseInt(formData.yearOfEstablishment) : null,
@@ -331,13 +360,11 @@ const PharmacyProfileForm = () => {
           setProfileId(response.data.pharmacyId);
         }
         
-        // Navigate to Login after successful save (if first time)
         if (!profileId) {
           setTimeout(() => {
             navigation?.navigate?.('Login');
           }, 1500);
         }
-        
       } else {
         dispatch(showError(response?.message || 'Failed to save profile'));
       }
@@ -366,12 +393,9 @@ const PharmacyProfileForm = () => {
         dispatch(showError('Profile is already pending approval'));
       } else if (response?.status === 'success' || response?.data?.message?.toLowerCase()?.includes('success')) {
         dispatch(showSuccess('Profile submitted for verification'));
-        
-        // Navigate to Login after successful verification submission
         setTimeout(() => {
           navigation?.navigate?.('Login');
         }, 1500);
-        
       } else {
         dispatch(showError(response?.message || 'Failed to submit for verification'));
       }
@@ -409,8 +433,8 @@ const PharmacyProfileForm = () => {
           {field.label} {field.required && <Text style={styles.required}>*</Text>}
         </Text>
         
-        <View style={styles.Select}>
-          <Text style={styles.SelectText}>
+        <View style={[styles.Select, formErrors?.[field.name] && styles.SelectError]}>
+          <Text style={styles.SelectText} numberOfLines={1} ellipsizeMode="tail">
             {value || field.placeholder || `Select ${field.label}`}
           </Text>
 
@@ -495,18 +519,15 @@ const PharmacyProfileForm = () => {
         <TextInput
           style={[styles.input, formErrors?.[field.name] && styles.inputError]}
           placeholder={field.placeholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={COLORS.placeholder}
           value={value?.toString() || ''}
           onChangeText={(text) => {
-            // Allow only numbers and decimal for delivery radius
             let num = text?.replace?.(/[^0-9.]/g, '');
             if (field.name === 'deliveryRadius') {
-              // For delivery radius, allow decimals
               if (num === '' || !isNaN(parseFloat(num))) {
                 handleInputChange(field.name, num === '' ? '' : parseFloat(num));
               }
             } else {
-              // For other numbers, only integers
               num = num?.replace?.(/\./g, '');
               if (num === '' || !isNaN(parseInt(num))) {
                 handleInputChange(field.name, num === '' ? '' : parseInt(num));
@@ -543,7 +564,7 @@ const PharmacyProfileForm = () => {
         <TextInput
           style={[styles.input, formErrors?.[field.name] && styles.inputError]}
           placeholder={field.placeholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={COLORS.placeholder}
           value={value || ''}
           onChangeText={(text) => handleInputChange(field.name, text)}
           editable={!isSubmitting}
@@ -575,7 +596,7 @@ const PharmacyProfileForm = () => {
         <TextInput
           style={[styles.input, formErrors?.[field.name] && styles.inputError]}
           placeholder={field.placeholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={COLORS.placeholder}
           value={value?.toString() || ''}
           onChangeText={(text) => {
             const num = text?.replace?.(/[^0-9]/g, '');
@@ -615,7 +636,6 @@ const PharmacyProfileForm = () => {
       return renderYearField(field);
     }
     
-    // Default text field
     return renderTextField(field);
   };
 
@@ -626,7 +646,7 @@ const PharmacyProfileForm = () => {
       <View key={section.title} style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionIcon}>
-            <Icon size={SCREEN_WIDTH * 0.06} color="#03989e" />
+            <Icon size={SPACING.md} color={COLORS.brand} />
           </View>
           <Text style={styles.sectionTitle}>{section.title}</Text>
         </View>
@@ -642,7 +662,7 @@ const PharmacyProfileForm = () => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#03989e" />
+          <ActivityIndicator size="large" color={COLORS.brand} />
           <Text style={styles.loadingText}>Loading pharmacy profile...</Text>
         </View>
       </SafeAreaView>
@@ -671,17 +691,37 @@ const PharmacyProfileForm = () => {
                 onPress={() => navigation?.goBack?.()}
                 disabled={isSubmitting}
               >
+                <ArrowLeft size={FONT_SIZE.lg} color={COLORS.text} />
               </TouchableOpacity>
-              <Text style={styles.title}></Text>
+              <Text style={styles.title}>Pharmacy Profile</Text>
               {hasExistingProfile && (
                 <View style={styles.statusContainer}>
-                  <CheckCircle size={SCREEN_WIDTH * 0.05} color="#10B981" />
-                  <Text style={styles.statusText}>Profile Complete</Text>
+                  <CheckCircle size={FONT_SIZE.sm} color={COLORS.success} />
+                  <Text style={styles.statusText}>Saved</Text>
                 </View>
               )}
             </View>
 
             <View style={styles.content}>
+              {hasExistingProfile && (
+                <View style={styles.approvalWaitingCard}>
+                  <View style={styles.approvalWaitingIconWrapper}>
+                    <Clock size={SPACING.md} color={COLORS.warning} />
+                  </View>
+                  <View style={styles.approvalWaitingContent}>
+                    <Text style={styles.approvalWaitingTitle}>Pending Approval</Text>
+                    <Text style={styles.approvalWaitingDescription}>
+                      Your profile has been submitted and is currently under review by our team. 
+                      You cannot edit the profile while it's pending approval.
+                    </Text>
+                    <View style={styles.approvalWaitingBadge}>
+                      <AlertCircle size={FONT_SIZE.xs} color={COLORS.warning} />
+                      <Text style={styles.approvalWaitingBadgeText}>Under Review</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
               {hasExistingProfile ? (
                 <Text style={styles.subtitle}>
                   View your pharmacy profile information
@@ -703,10 +743,10 @@ const PharmacyProfileForm = () => {
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
+                      <ActivityIndicator color={COLORS.white} size="small" />
                     ) : (
                       <>
-                        <Save size={SCREEN_WIDTH * 0.05} color="#ffffff" />
+                        <Save size={FONT_SIZE.md} color={COLORS.white} />
                         <Text style={styles.buttonText}>Save Profile</Text>
                       </>
                     )}
@@ -720,10 +760,10 @@ const PharmacyProfileForm = () => {
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
+                      <ActivityIndicator color={COLORS.white} size="small" />
                     ) : (
                       <>
-                        <ShieldCheck size={SCREEN_WIDTH * 0.05} color="#ffffff" />
+                        <ShieldCheck size={FONT_SIZE.md} color={COLORS.white} />
                         <Text style={styles.buttonText}>Submit for Verification</Text>
                       </>
                     )}
@@ -741,7 +781,7 @@ const PharmacyProfileForm = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -751,7 +791,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     flexGrow: 1,
-    paddingBottom: SCREEN_HEIGHT * 0.05,
+    paddingBottom: SPACING.xl,
   },
   container: {
     flex: 1,
@@ -760,193 +800,274 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
   loadingText: {
-    marginTop: SCREEN_HEIGHT * 0.02,
-    fontSize: SCREEN_WIDTH * 0.04,
-    color: '#6B7280',
+    marginTop: SPACING.sm,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SCREEN_WIDTH * 0.05,
-    paddingVertical: SCREEN_HEIGHT * 0.02,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1.5,
+    borderBottomColor: COLORS.border,
   },
   backButton: {
-    padding: SCREEN_WIDTH * 0.02,
+    padding: SPACING.xs,
   },
   title: {
-    flex: 1,
-    fontSize: SCREEN_WIDTH * 0.055,
+    fontSize: FONT_SIZE.lg,
     fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-    marginLeft: -SCREEN_WIDTH * 0.1,
+    color: COLORS.text,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SCREEN_WIDTH * 0.02,
+    gap: SPACING.xs,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs * 0.5,
+    borderRadius: 20,
   },
   statusText: {
-    fontSize: SCREEN_WIDTH * 0.035,
+    fontSize: FONT_SIZE.sm,
     fontWeight: '500',
-    color: '#10B981',
+    color: '#065F46',
+  },
+  approvalWaitingCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: SPACING.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1.5,
+    borderColor: '#FCD34D',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    shadowColor: COLORS.warning,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  approvalWaitingIconWrapper: {
+    width: SPACING.xl,
+    height: SPACING.xl,
+    borderRadius: SPACING.lg,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  approvalWaitingContent: {
+    flex: 1,
+  },
+  approvalWaitingTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: SPACING.xs * 0.5,
+  },
+  approvalWaitingDescription: {
+    fontSize: FONT_SIZE.sm,
+    color: '#B45309',
+    lineHeight: FONT_SIZE.md * 1.4,
+    marginBottom: SPACING.xs,
+  },
+  approvalWaitingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs * 0.5,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    gap: SPACING.xs,
+    borderWidth: 1.5,
+    borderColor: '#FCD34D',
+  },
+  approvalWaitingBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
+    color: '#92400E',
   },
   content: {
-    padding: SCREEN_WIDTH * 0.05,
+    padding: SPACING.md,
   },
   subtitle: {
-    fontSize: SCREEN_WIDTH * 0.04,
-    color: '#6B7280',
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.sub,
     textAlign: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.03,
+    marginBottom: SPACING.md,
   },
   sectionContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: SCREEN_WIDTH * 0.05,
-    marginBottom: SCREEN_HEIGHT * 0.025,
+    backgroundColor: COLORS.white,
+    borderRadius: SPACING.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SCREEN_HEIGHT * 0.02,
-    gap: SCREEN_WIDTH * 0.03,
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
   },
   sectionIcon: {
-    width: SCREEN_WIDTH * 0.1,
-    height: SCREEN_WIDTH * 0.1,
-    borderRadius: SCREEN_WIDTH * 0.05,
+    width: SPACING.xl,
+    height: SPACING.xl,
+    borderRadius: SPACING.lg,
     backgroundColor: '#E0F2FE',
     justifyContent: 'center',
     alignItems: 'center',
   },
   sectionTitle: {
-    fontSize: SCREEN_WIDTH * 0.045,
+    fontSize: FONT_SIZE.md,
     fontWeight: '600',
-    color: '#03989e',
+    color: COLORS.brand,
   },
   sectionFields: {
-    gap: SCREEN_HEIGHT * 0.02,
+    gap: SPACING.sm,
   },
   fieldContainer: {
     position: 'relative',
+    marginBottom: SPACING.xs,
   },
   label: {
-    fontSize: SCREEN_WIDTH * 0.038,
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: SCREEN_HEIGHT * 0.01,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.sub,
+    marginBottom: SPACING.xs,
   },
   required: {
-    color: '#EF4444',
+    color: COLORS.error,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: SCREEN_WIDTH * 0.04,
-    paddingVertical: SCREEN_HEIGHT * 0.015,
-    fontSize: SCREEN_WIDTH * 0.04,
-    color: '#111827',
-    minHeight: SCREEN_HEIGHT * 0.06,
+    height: responsiveHeight(6),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    backgroundColor: '#f9fafb',
   },
   inputError: {
-    borderColor: '#EF4444',
+    borderColor: COLORS.error,
   },
   errorText: {
-    color: '#EF4444',
-    fontSize: SCREEN_WIDTH * 0.032,
-    marginTop: SCREEN_HEIGHT * 0.005,
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.error,
+    marginTop: SPACING.xs * 0.5,
   },
   readOnlyValue: {
+    height: responsiveHeight(6),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.sub,
     backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    paddingHorizontal: SCREEN_WIDTH * 0.04,
-    paddingVertical: SCREEN_HEIGHT * 0.015,
-    fontSize: SCREEN_WIDTH * 0.04,
-    color: '#6B7280',
+    textAlignVertical: 'center',
   },
   toggleContainer: {
     flexDirection: 'row',
-    gap: SCREEN_WIDTH * 0.05,
+    gap: SPACING.sm,
   },
   toggleButton: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    paddingVertical: SCREEN_HEIGHT * 0.015,
+    height: responsiveHeight(6),
+    backgroundColor: COLORS.chipInactive,
+    borderRadius: SPACING.sm,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   toggleButtonActive: {
-    backgroundColor: '#03989e',
+    backgroundColor: COLORS.chipActive,
+    borderColor: COLORS.chipActive,
   },
   toggleButtonText: {
-    fontSize: SCREEN_WIDTH * 0.04,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  toggleButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  buttonContainer: {
-    marginTop: SCREEN_HEIGHT * 0.04,
-    marginBottom: SCREEN_HEIGHT * 0.05,
-  },
-  saveButton: {
-    backgroundColor: '#03989e',
-    borderRadius: 8,
-    paddingVertical: SCREEN_HEIGHT * 0.02,
-    paddingHorizontal: SCREEN_WIDTH * 0.06,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SCREEN_WIDTH * 0.03,
-  },
-  verifyButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 8,
-    paddingVertical: SCREEN_HEIGHT * 0.02,
-    paddingHorizontal: SCREEN_WIDTH * 0.06,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SCREEN_WIDTH * 0.03,
-  },
-  buttonDisabled: {
-    backgroundColor: '#9CA3AF',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: SCREEN_WIDTH * 0.04,
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
     fontWeight: '600',
   },
-  Select: {
-    minHeight: SCREEN_HEIGHT * 0.06,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+  toggleButtonTextActive: {
+    color: COLORS.white,
+  },
+  buttonContainer: {
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.xl,
+  },
+  saveButton: {
+    backgroundColor: COLORS.brand,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SCREEN_WIDTH * 0.04,
+    gap: SPACING.sm,
+    shadowColor: COLORS.brand,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  verifyButton: {
+    backgroundColor: COLORS.success,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    shadowColor: COLORS.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  buttonDisabled: {
+    backgroundColor: COLORS.sub,
+    shadowOpacity: 0.1,
+  },
+  buttonText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
+  },
+  Select: {
+    height: responsiveHeight(6),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    backgroundColor: '#f9fafb',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.sm,
+  },
+  SelectError: {
+    borderColor: COLORS.error,
   },
   SelectText: {
-    fontSize: SCREEN_WIDTH * 0.04,
-    color: '#111827',
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    fontWeight: '500',
   },
   hiddenPicker: {
     ...StyleSheet.absoluteFillObject,
