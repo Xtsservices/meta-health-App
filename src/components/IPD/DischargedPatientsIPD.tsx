@@ -301,13 +301,61 @@ const fetchWards = useCallback(async () => {
       </View>
     </View>
   );
+  const calculateAgeFromDOB = (dob?: string, age?: string | number): string => {
+  if (dob) {
+    const birthDate = new Date(dob);
+    const today = new Date();
+
+    if (!isNaN(birthDate.getTime())) {
+      const diffTime = today.getTime() - birthDate.getTime();
+      const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      // 🔹 Less than 1 month → show days
+      if (totalDays < 30) {
+        return `${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+      }
+
+      let years = today.getFullYear() - birthDate.getFullYear();
+      let months = today.getMonth() - birthDate.getMonth();
+
+      if (today.getDate() < birthDate.getDate()) {
+        months--;
+      }
+
+      if (months < 0) {
+        years--;
+        months += 12;
+      }
+
+      // 🔹 If years exist → show only years
+      if (years > 0) {
+        return `${years} year${years !== 1 ? "s" : ""}`;
+      }
+
+      // 🔹 Only months
+      if (months > 0) {
+        return `${months} month${months !== 1 ? "s" : ""}`;
+      }
+    }
+  }
+
+  // 🔹 DOB missing → fallback to age (years only)
+  if (age) {
+    const ageNum = parseInt(String(age), 10);
+    if (!isNaN(ageNum)) {
+      return `${ageNum} year${ageNum !== 1 ? "s" : ""}`;
+    }
+  }
+
+  return "—";
+};
 
   const renderItem = ({ item }: { item: PatientType }) => {
     const paddedId = String(item?.id ?? "")?.padStart(4, "0");
     const name = item?.pName || "—";
     const doctor = item?.doctorName || "—";
     const phone = (item?.phoneNumber ?? item?.mobile ?? item?.contact ?? "—")?.toString();
-    const age = item?.age || formatageFromDOB(item?.dob || "");
+    const age = calculateAgeFromDOB(item?.dob, item?.age);
     const hasNotification = item?.notificationCount && item?.notificationCount > 0;
     const wardName = wardList?.find(w => w?.id === item?.wardID)?.name || "—";
     const dischargeDate = item?.endTime ? formatDate(item?.endTime) : "—";

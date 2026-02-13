@@ -868,7 +868,7 @@ const getMenuItems = () => {
             )}
 
             {/* Action Buttons for Discharged OR Previous Patients */}
-            {(shouldShowPatientRevisit) && (
+            {(shouldShowPatientRevisit) && user.role === "reception" && (
               <View style={styles.dischargedActionsContainer}>
                 <TouchableOpacity
                   style={[styles.actionButton, { backgroundColor: COLORS.warn }]}

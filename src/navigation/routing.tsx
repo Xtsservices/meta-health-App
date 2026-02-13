@@ -185,6 +185,8 @@ import CentralTransactionsScreen from '../components/revenue/CentralTransactions
 import HospitalComparisonScreen from '../components/revenue/HospitalComparisonScreen';
 import HospitalBreakdownScreen from '../components/revenue/HospitalBreakdownScreen';
 import RevenueTabNavigator from '../components/revenue/RevenueTabNavigator';
+import DoctorProfileForm from '../components/registation/DoctorProfileForm';
+import PendingApproval from '../components/PendingApproval';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -276,7 +278,26 @@ const Routing = () => {
     headerShown: true,
   }} 
 />
+{/* PendingApproval */}
+<Stack.Screen 
+  name="PendingApproval" 
+  component={PendingApproval}
+  options={{ 
+    title: 'Pending Approval',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
 
+<Stack.Screen 
+  name="DoctorProfileForm" 
+  component={DoctorProfileForm}
+  options={{ 
+    title: 'Doctor Profile',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
 <Stack.Screen 
   name="DiagnosticProfileForm" 
   component={DiagnosticProfileForm}

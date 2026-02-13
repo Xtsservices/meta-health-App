@@ -63,6 +63,7 @@ const DoctorSlotsScreen: React.FC = () => {
         }
         const url = `doctor/${user?.hospitalID}/${doctorId}/getDoctorAppointmentsSlotsFromCurrentDate`;
         const resp = await AuthFetch(url, token);
+        console.log("1111Response111:", resp); 
         if (resp?.status=== "success" && "data" in resp ) {
         const data = resp?.data?.data?.slots || [];
         const flattened: SimpleSlot[] = [];
@@ -158,11 +159,13 @@ finally {
   const renderSlotItem = (slot: SimpleSlot, index: number) => {
     const from = convertTo12Hour(String(slot.fromTime));
     const to = convertTo12Hour(String(slot.toTime));
-    const availableLabel =
-      slot.availableSlots === undefined || slot.availableSlots === null
-        ? "-"
-        : String(slot.availableSlots);
+    const total = Number(slot.availableSlots ?? 0);
+    const booked =
+      Number(slot.persons ?? 0);
 
+    const remaining = Math.max(0, total - booked);
+
+    const availableLabel = String(remaining);
     return (
       <View
         key={`${slot.date}-${slot.fromTime}-${slot.toTime}-${index}`}

@@ -14,10 +14,11 @@ import {
   Easing,
   Image,
   Pressable,
+  RefreshControl,
 } from "react-native";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Custom Icons
@@ -39,7 +40,8 @@ import {
   BellIcon,
   ReceiptIcon,
   DollarSignIcon,
-  CommissionIcon
+  CommissionIcon,
+  ActivityIcon
 } from "../../utils/SvgIcons";
 
 import { RootState } from "../../store/store";
@@ -299,7 +301,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Operations Section  
   const operationsItems = items?.filter(item => 
-    ["revenue","management", "pricing","commission"].includes(item?.key)
+    ["revenue","management", "pricing","commission","expense"].includes(item?.key)
   );
 
   // Support Section
@@ -444,6 +446,8 @@ const DashboardLab: React.FC = () => {
   const [lineCompleted, setLineCompleted] = useState<XY[]>([]);
   const [recentPatients, setRecentPatients] = useState<PatientCardData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [dailyTests, setDailyTests] = useState(0);
   const [pendingResults, setPendingResults] = useState(0);
@@ -689,8 +693,20 @@ const DashboardLab: React.FC = () => {
     }
   }, [user?.hospitalID, departmentType]);
 
+  // Refresh on focus effect
+  useFocusEffect(
+    useCallback(() => {
+      setRefreshTrigger(prev => prev + 1);
+    }, [])
+  );
+
+  // Main data loading effect
   useEffect(() => {
+    let isMounted = true;
+    
     const loadDashboardData = async () => {
+      if (!isMounted) return;
+      
       setLoading(true);
       try {
         await Promise.all([
@@ -701,7 +717,9 @@ const DashboardLab: React.FC = () => {
       } catch {
         // Error handling is done in individual functions
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -710,7 +728,35 @@ const DashboardLab: React.FC = () => {
     } else {
       setLoading(false);
     }
-  }, [user?.hospitalID, getRecentPatients, getTestCount, getTestsBargraphData, filterYear, filterMonth]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    user?.hospitalID, 
+    getRecentPatients, 
+    getTestCount, 
+    getTestsBargraphData, 
+    filterYear, 
+    filterMonth,
+    refreshTrigger
+  ]);
+
+  // Pull-to-refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        getRecentPatients(),
+        getTestCount(),
+        getTestsBargraphData(filterYear, filterMonth)
+      ]);
+    } catch {
+      // Error handling is done in individual functions
+    } finally {
+      setRefreshing(false);
+    }
+  }, [getRecentPatients, getTestCount, getTestsBargraphData, filterYear, filterMonth]);
 
   const handleRowClick = (patient: PatientCardData) => {
     const idToPass = patient?.prescriptionURL || patient?.fileName
@@ -814,6 +860,12 @@ const DashboardLab: React.FC = () => {
           department: departmentType 
         }),
       },
+              { 
+                key: "expense", 
+                label: "Expenditure", 
+                icon: ActivityIcon,
+                onPress: () => go("ExpenseManagement") 
+              },
     { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab      
       // Operations Section
       {
@@ -908,6 +960,14 @@ const DashboardLab: React.FC = () => {
         style={styles.container}
         contentContainerStyle={[styles.containerContent, { paddingBottom: FOOTER_H + insets.bottom + SPACING.lg }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.brand]}
+            tintColor={COLORS.brand}
+          />
+        }
       >
         <View style={styles.statsGrid}>
           <KpiCard

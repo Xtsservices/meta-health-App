@@ -237,11 +237,11 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
             <AlertTriangle size={40} color={COLORS.error} />
           </View>
           
-          <Text style={styles.deleteModalTitle}>Delete Expense?</Text>
+          <Text style={styles.deleteModalTitle}>Cancel Expense?</Text>
           
           <Text style={styles.deleteModalMessage}>
-            Are you sure you want to delete expense <Text style={styles.deleteModalHighlight}>{expenseNumber}</Text>? 
-            This action cannot be undone.
+            Are you sure you want to cancel expense <Text style={styles.deleteModalHighlight}>{expenseNumber}</Text>? 
+            This will mark the expense as cancelled.
           </Text>
           
           <View style={styles.deleteModalDetails}>
@@ -271,7 +271,7 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
               onPress={onClose}
               disabled={isProcessingDelete}
             >
-              <Text style={styles.deleteModalCancelText}>Cancel</Text>
+              <Text style={styles.deleteModalCancelText}>No, Keep It</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
@@ -283,8 +283,8 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Trash2 size={16} color="#fff" style={styles.deleteModalButtonIcon} />
-                  <Text style={styles.deleteModalConfirmText}>Delete</Text>
+                  <XCircle size={16} color="#fff" style={styles.deleteModalButtonIcon} />
+                  <Text style={styles.deleteModalConfirmText}>Yes, Cancel It</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -626,7 +626,7 @@ const FilterModal = ({
                     styles.categoryOptionText,
                     { color: localFilters.categoryId === category.id.toString() ? '#fff' : COLORS.text }
                   ]}>
-                    {category.name}
+                    {category.categoryName}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -844,17 +844,19 @@ const FilterModal = ({
     </Modal>
   );
 };
-
+interface ExpensesListScreenProps {
+  categories: any[];
+  userPermissions: any;
+  onEditExpense: (expense: any) => void;
+  refreshTrigger?: number; // Add this prop
+}
 /* ======================= EXPENSES LIST SCREEN ======================= */
 const ExpensesListScreen = ({ 
   categories, 
   userPermissions,
   onEditExpense, 
-}: { 
-  categories: any[];
-  userPermissions: any;
-  onEditExpense: (expense: any) => void;
-}) => {
+  refreshTrigger=0,
+}: ExpensesListScreenProps) =>  {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -867,7 +869,7 @@ const ExpensesListScreen = ({
   const [hasMore, setHasMore] = useState(true);
   const [totalRecords, setTotalRecords] = useState(0);
   const [processingDelete, setProcessingDelete] = useState<number | null>(null);
-  const dispatch = useDispatch(); // ✅ HERE
+  
   const [filters, setFilters] = useState<Filters>({
     filterType: 'all',
     filterValue: '',
@@ -882,6 +884,7 @@ const ExpensesListScreen = ({
   });
 
   const user = useSelector((state: RootState) => state.currentUser);
+  const dispatch = useDispatch();
   const flatRef = useRef<FlatList<any>>(null);
 
   const formatCurrency = (amount?: number | string) => {
@@ -919,7 +922,6 @@ const ExpensesListScreen = ({
       attachments: expense.attachments || [],
     };
     
-    console.log('Editing expense:', expenseToEdit);
     onEditExpense(expenseToEdit);
   };
 
@@ -961,32 +963,33 @@ const ExpensesListScreen = ({
         return;
       }
 
+    // ✅ CHANGE: Use PATCH instead of DELETE to update status
       const url = `expense/${selectedExpense.id}/hospital/${user.hospitalID}`;
-      console.log('Deleting expense URL:', url);
       
-      const response = await AuthDelete(url, token) as any;
-      console.log('Delete response:', response);
-
+    // Update status to 'cancelled' instead of deleting
+    const response = await AuthPatch(
+      url, 
+      { status: 'cancelled' },  // ✅ Just change status
+      token
+    ) as any;
+  
       if (response?.status === 'success' || response?.message === 'success') {
-        dispatch(showSuccess('Expense deleted successfully'));
+        dispatch(showSuccess('Expense cancelled successfully'));
         
-        // Remove deleted expense from local state
-        setExpenses(prev => prev.filter(exp => exp.id !== selectedExpense.id));
-        setTotalRecords(prev => prev - 1);
-        
-        // If this was the only expense, refresh the list
-        if (expenses.length === 1) {
-          loadExpenses(1);
-        }
+        // ✅ Update the expense status in local state instead of removing it
+        setExpenses(prev => prev.map(exp => 
+        exp.id === selectedExpense.id 
+          ? { ...exp, status: 'cancelled' }  // Update status
+          : exp
+      ));
         
         setShowDeleteModal(false);
         setSelectedExpense(null);
       } else {
-        Alert.alert('Error', response?.message || 'Failed to delete expense');
+        Alert.alert('Error', response?.message || 'Failed to cancel expense');
       }
     } catch (error) {
-      console.error('Delete expense error:', error);
-      Alert.alert('Error', 'Failed to delete expense. Please try again.');
+      Alert.alert('Error', 'Failed to cancel expense. Please try again.');
     } finally {
       setProcessingDelete(null);
     }
@@ -1003,11 +1006,8 @@ const ExpensesListScreen = ({
       }
 
       const url = `expense/${expenseId}/hospital/${user.hospitalID}`;
-      console.log('Updating expense URL:', url);
-      console.log('Update data:', updateData);
       
       const response = await AuthPatch(url, updateData, token) as any;
-      console.log('Update response:', response);
 
       if (response?.status === 'success' || response?.message === 'success') {
         Alert.alert('Success', 'Expense updated successfully');
@@ -1023,7 +1023,6 @@ const ExpensesListScreen = ({
         return false;
       }
     } catch (error) {
-      console.error('Update expense error:', error);
       Alert.alert('Error', 'Failed to update expense. Please try again.');
       return false;
     }
@@ -1119,30 +1118,49 @@ const loadExpenses = async (page: number = 1) => {
       return;
     }
 
-    console.log('📡 Loading expenses from URL:', url);
     const response = await AuthFetch(url, token) as any;
-    console.log('✅ API Response:', response);
     
-    // ... rest of your loading logic
-    
+    if (response?.data?.expenses) {
+      const expensesData = response.data.expenses;
+      const totalCount = response.data.count ?? expensesData.length;
+
+      setExpenses(page === 1 ? expensesData : prev => [...prev, ...expensesData]);
+      setTotalRecords(totalCount);
+      setHasMore(page < Math.ceil(totalCount / PAGE_SIZE));
+      setCurrentPage(page);
+
+    } else if (response?.data?.expense) {
+      // SINGLE expense (ID / Number filter)
+      setExpenses([response.data.expense]);
+      setTotalRecords(1);
+      setHasMore(false);
+      setCurrentPage(1);
+
+    } else {
+      setExpenses([]);
+      setTotalRecords(0);
+      setHasMore(false);
+    }
+
   } catch (error) {
-    console.error('❌ Failed to load expenses:', error);
+    Alert.alert('Error', 'Failed to load expenses');
     setExpenses([]);
     setTotalRecords(0);
     setHasMore(false);
   } finally {
     setLoading(false);
-    setRefreshing(false); // IMPORTANT: Always reset refreshing
+    setRefreshing(false);
   }
 };
 
   useEffect(() => {
-    loadExpenses(1);
-  }, [filters]);
+    if (refreshTrigger > 0) {
+      loadExpenses(1);
+    }
+  }, [refreshTrigger]);
 
 useFocusEffect(
   useCallback(() => {
-    console.log('🔄 ExpensesListScreen focused - refreshing data');
     
     let isActive = true;
     
@@ -1161,15 +1179,13 @@ useFocusEffect(
       }
     };
     
-    // Trigger refresh immediately
     refreshData();
     
     return () => {
       isActive = false;
-      console.log('📱 ExpensesListScreen unfocused');
     };
-  }, [filters]) // Include filters as dependency
-);
+  }, [filters])
+  );
 
 
   const onRefresh = async () => {
@@ -1262,7 +1278,6 @@ useFocusEffect(
       });
 
     } catch (error) {
-      console.error('Export error:', error);
       Alert.alert('Export failed', 'Could not export expenses');
     }
   };

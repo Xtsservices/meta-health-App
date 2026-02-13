@@ -204,4 +204,6 @@ DischargeSummaryDownload: undefined;
   HospitalComparison:undefined;
   HospitalBreakdown:undefined;
   RevenueTabNavigator:undefined;
+  DoctorProfileForm:undefined;
+  PendingApproval:undefined;
 };

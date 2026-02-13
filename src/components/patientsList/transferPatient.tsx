@@ -750,7 +750,7 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
 
               {/* Relative Name */}
               <View>
-                <Field label="Relative Name *" error={errors.relativeName}>
+                <Field label="Relative Name" error={errors.relativeName}>
                 <TextInput
                   value={form.relativeName}
                   onFocus={handleFocus("relativeName")}

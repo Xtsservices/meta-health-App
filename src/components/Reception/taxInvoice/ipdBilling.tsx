@@ -19,6 +19,7 @@ import { UserIcon } from "../../../utils/SvgIcons";
 import { ExternalLinkIcon } from "../../../utils/SvgIcons";
 import { showError } from "../../../store/toast.slice";
 import { useDispatch } from "react-redux";
+
 type Mode = "billing" | "allTax";
 
 type Props = {
@@ -49,14 +50,13 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
   nurses = [],
 }) => {
   const navigation = useNavigation<any>();
-
-  // User type detection at component level
+  const dispatch = useDispatch();
+  
   const isPharmacy = userDepartment === 'pharmacy';
   const isLab = userDepartment === 'pathology';
   const isRadiology = userDepartment === 'radiology';
   const isReception = userDepartment === 'reception' || (!isPharmacy && !isLab && !isRadiology);
-  const dispatch = useDispatch();
-  // Get department options based on mode and user department
+  
   const getDepartmentOptions = () => {
     const isBilling = mode === 'billing';
 
@@ -110,21 +110,19 @@ const BillingTaxInvoiceList: React.FC<Props> = ({
     const nurse = nurses.find(n => n.id === nurseId);
     return nurse ? `${nurse.firstName} ${nurse.lastName}` : `Nurse #${nurseId}`;
   };
-const sortedData = useMemo(() => {
-  if (!Array.isArray(data)) return [];
 
-  return [...data].sort((a, b) => {
-    const dateA = Date.parse(a.addedOn || "") || 0;
-    const dateB = Date.parse(b.addedOn || "") || 0;
-
-    // newest first
-    return dateB - dateA;
-  });
-}, [data]);
+  const sortedData = useMemo(() => {
+    if (!Array.isArray(data)) return [];
+    return [...data].sort((a, b) => {
+      const dateA = Date.parse(a.addedOn || "") || 0;
+      const dateB = Date.parse(b.addedOn || "") || 0;
+      return dateB - dateA;
+    });
+  }, [data]);
 
   const renderCard = ({ item }: { item: PatientData }) => {
     const rejectedMedicines = item.medicinesList?.filter(med => 
-    med?.status === "rejected" && med?.rejectReason
+      med?.status === "rejected" && med?.rejectReason
     ) || [];
     const hasRejectedMedicine = rejectedMedicines.length > 0;
     const firstRejection = rejectedMedicines[0]; 
@@ -141,43 +139,54 @@ const sortedData = useMemo(() => {
     const sourceParam = mode === "billing" ? "billing" : "allTax";
     const itemsLabel = mode === "billing" ? "Items" : "Invoices";
     const ctaText = mode === "billing" ? "View Billing Details" : "View Invoice Details";
-const getCompletedDate = () => {
-  if (!isPharmacy || !item.dept?.toLowerCase().includes('ipd')) {
-    return null;
-  }
-  
-  const completedDates = item.medicinesList
-    ?.map(med => med.completedOn)
-    .filter(date => date) || [];
-  
-  if (completedDates.length === 0) {
-    return null;
-  }
-  
-  const sortedDates = completedDates.sort((a, b) => 
-    Date.parse(b || "") - Date.parse(a || "")
-  );
-  
-  return sortedDates[0];
-};
-const getReceptionAddedOn = (item: any) => {
-  // 1️⃣ Payment timestamp (same as web)
-  if (item?.pharmacy?.paymentDetails?.length > 0) {
-    return item.pharmacy.paymentDetails[0]?.timestamp;
-  }
 
-  // 2️⃣ Fallbacks
-  return item.addedOn || item.admissionDate || null;
-};
+    const getCompletedDate = () => {
+      if (!isPharmacy || !item.dept?.toLowerCase().includes('ipd')) {
+        return null;
+      }
+      
+      const completedDates = item.medicinesList
+        ?.map(med => med.completedOn)
+        .filter(date => date) || [];
+      
+      if (completedDates.length === 0) {
+        return null;
+      }
+      
+      const sortedDates = completedDates.sort((a, b) => 
+        Date.parse(b || "") - Date.parse(a || "")
+      );
+      
+      return sortedDates[0];
+    };
 
-const testLabel = totalTests <= 1 ? "test" : "tests";
-const medLabel  = totalMeds <= 1  ? "med"  : "meds";
-const completedDate = getCompletedDate();
+    const testLabel = totalTests <= 1 ? "test" : "tests";
+    const medLabel  = totalMeds <= 1  ? "med"  : "meds";
+    const completedDate = getCompletedDate();
+
 const calculateAmounts = () => {
-  // Check if this is pharmacy IPD case
-  const isPharmacyIPD = isPharmacy && item.dept?.toLowerCase().includes('ipd');
+  // For RECEPTION users in ALL TAX mode - use grand totals from API
+  if (isReception && mode === "allTax") {
+    // Use the grand totals from the API response
+    const totalAmount = Number(item.totalAmount) || 0;
+    const paidAmount = Number(item.paidAmount) || 0;
+    const dueAmount = Number(item.dueAmount) || 0;
+    
+    return { total: totalAmount, dueAmount, paidAmount };
+  }
+  
+  // For RECEPTION users in BILLING mode - use reception response structure
+  if (isReception && mode === "billing") {
+    const totalAmount = Number(item.grand_totalAmount) || 0;
+    const paidAmount = Number(item.grand_paidAmount) || 0;
+    const dueAmount = Number(item.grand_dueAmount) || 0;
+    
+    return { total: totalAmount, dueAmount, paidAmount };
+  }
   
   // For PHARMACY IPD cases in BILLING mode, show due and paid amounts
+  const isPharmacyIPD = isPharmacy && item.dept?.toLowerCase().includes('ipd');
+  
   if (isPharmacyIPD && mode === "billing") {
     const dueAmount = Number(item.dueAmount) || 0;
     const paidAmount = Number(item.paidAmount) || 0;
@@ -187,8 +196,17 @@ const calculateAmounts = () => {
   
   // For PHARMACY users in BILLING mode, always show total amount only
   if (isPharmacy && mode === "billing") {
-    const total = item.medicinesList?.reduce((sum, medicine) => sum + medicine.amount, 0) || 0;
+    const total = item.medicinesList?.reduce((sum, medicine) => 
+      sum + Number(medicine.finalPrice || medicine.amount || 0), 0) || 0;
     return { total, dueAmount: 0, paidAmount: 0 };
+  }
+  
+  // For LAB/RADIOLOGY users in BILLING mode, use API values directly
+  if ((isLab || isRadiology) && mode === "billing") {
+    const totalAmount = Number(item.totalAmount) || 0;
+    const paidAmount = Number(item.paidAmount) || 0;
+    const dueAmount = Number(item.dueAmount) || 0;
+    return { total: totalAmount, dueAmount, paidAmount };
   }
   
   // For BILLING mode and non-reception users, use dueAmount from API
@@ -202,42 +220,66 @@ const calculateAmounts = () => {
   let total = 0;
   
   if (itemIsPharmacy) {
-    total = item.medicinesList?.reduce((sum, medicine) => sum + Number(medicine.amount || 0),
-        0
-      ) || 0;
+    total = item.medicinesList?.reduce((sum, medicine) => 
+      sum + Number(medicine.finalPrice || medicine.amount || 0), 0) || 0;
   } else {
-    total = item.testList?.reduce((sum, test) => sum + Number(test.amount || 0),
-        0
-      ) || 0;
+    total = item.testList?.reduce((sum, test) => 
+      sum + Number(test.totalAmount || test.amount || 0), 0) || 0;
   }
   
-  // Get paid amount from the item data
   const paidAmount = Number(item.paidAmount || 0);
   const dueAmount = Math.max(0, total - paidAmount);
   
   return { total, dueAmount, paidAmount };
 };
 
-  const { total, dueAmount, paidAmount } = calculateAmounts();
+    const { total, dueAmount, paidAmount } = calculateAmounts();
 
-  // Show due amount only in BILLING mode for non-reception users
-const showDueAmount = (mode === "billing" && !isReception && !isPharmacy) ||  (isPharmacy && mode === "billing" && item.pType?.toLowerCase().includes('inpatient'));
-const displayAmount = showDueAmount ? dueAmount : total;
-const amountLabel = showDueAmount ? "Due Amount" : "Total Amount";
+    // Show due amount only in BILLING mode for non-reception users
+const showDueAmount = 
+  (mode === "billing" && !isReception && !isPharmacy) ||  
+  (isPharmacy && mode === "billing" && item.pType?.toLowerCase().includes('inpatient')) ||
+  (isReception && mode === "allTax"); // Show due amount for reception tax invoices
 
+// For reception in allTax mode, display the total amount (since they're completed invoices)
+const displayAmount = 
+  (isLab || isRadiology) && mode === "billing" ? dueAmount : 
+  showDueAmount ? dueAmount : total;
+
+const amountLabel = 
+  (isLab || isRadiology) && mode === "billing" ? "Due Amount" : 
+  showDueAmount ? "Due Amount" : 
+  (isReception && mode === "allTax") ? "Total Amount" : "Total Amount";
     const handlePrescriptionPress = () => {
-        if (item.prescriptionURL) {
-          Linking.openURL(item.prescriptionURL)
-            .catch(err => {
-              dispatch(showError("Failed to open prescription URL"));
-            });
-        }
+      if (item.prescriptionURL) {
+        Linking.openURL(item.prescriptionURL)
+          .catch(err => {
+            dispatch(showError("Failed to open prescription URL"));
+          });
+      }
     };
 
-const isPharmacyWalkin =
-  isPharmacy &&
-  item.dept === "Walk-in" &&
-  item.type === "medicine";
+    // Format admission/added date
+    const formatDisplayDate = () => {
+      if (item.admissionDate) {
+        return formatDateTime(item.admissionDate);
+      } else if (item.addedOn) {
+        return formatDateTime(item.addedOn);
+      }
+      return "—";
+    };
+
+    // Get doctor name for display
+    const getDoctorName = () => {
+      if (item.doctorName) {
+        return item.doctorName;
+      } else if (item.firstName || item.lastName) {
+        return `${item.firstName || ""} ${item.lastName || ""}`.trim();
+      }
+      return "";
+    };
+
+    const doctorName = getDoctorName();
 
     return (
       <TouchableOpacity
@@ -252,18 +294,21 @@ const isPharmacyWalkin =
           })
         }
       >
-       {hasRejectedMedicine && (
-        <View style={styles.rejectionBanner}>
-          <Text style={styles.rejectionText}>
-            ❌ Rejected: {firstRejection?.rejectReason}
-          </Text>
-          {firstRejection?.rejectedOn && (
-            <Text style={styles.rejectionDate}>
-              On: {formatDateTime(firstRejection?.rejectedOn)}
+        {/* Rejection Banner */}
+        {hasRejectedMedicine && (
+          <View style={styles.rejectionBanner}>
+            <Text style={styles.rejectionText}>
+              ❌ Rejected: {firstRejection?.rejectReason}
             </Text>
-          )}
-        </View>
-      )}
+            {firstRejection?.rejectedOn && (
+              <Text style={styles.rejectionDate}>
+                On: {formatDateTime(firstRejection?.rejectedOn)}
+              </Text>
+            )}
+          </View>
+        )}
+        
+        {/* Card Header */}
         <View style={styles.cardHeaderRow}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.patientName, { color: COLORS.text }]}>
@@ -278,78 +323,78 @@ const isPharmacyWalkin =
               style={[
                 styles.badge,
                 {
-                  backgroundColor:
-                    mode === "billing" ? "#BFDBFE" : COLORS.brandSoft,
+                  backgroundColor: mode === "billing" ? "#BFDBFE" : COLORS.brandSoft,
                 },
               ]}
             >
               {item.dept}
             </Text>
+            {item.orderID && (
+              <Text style={styles.orderId}>
+                Order: {item.orderID}
+              </Text>
+            )}
           </View>
         </View>
 
-{item.prescriptionURL && (
-  <View style={styles.prescriptionSection}>
-    <View style={styles.prescriptionHeader}>
-      <Text style={styles.prescriptionLabel}>Prescription Available</Text>
-     
-    </View>
-    <TouchableOpacity 
-      style={styles.prescriptionButton}
-      onPress={handlePrescriptionPress}
-      activeOpacity={0.8}
-    >
-      <ExternalLinkIcon size={16} color="#ffffff" />
-      <Text style={styles.prescriptionButtonText}>Open Prescription</Text>
-    </TouchableOpacity>
-  </View>
-)}
+        {/* Prescription Section */}
+        {item.prescriptionURL && (
+          <View style={styles.prescriptionSection}>
+            <View style={styles.prescriptionHeader}>
+              <Text style={styles.prescriptionLabel}>Prescription Available</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.prescriptionButton}
+              onPress={handlePrescriptionPress}
+              activeOpacity={0.8}
+            >
+              <ExternalLinkIcon size={16} color="#ffffff" />
+              <Text style={styles.prescriptionButtonText}>Open Prescription</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
+        {/* Doctor Information */}
+        {doctorName && (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>Doctor</Text>
+            <Text style={styles.metaValue}>
+              {doctorName}
+            </Text>
+          </View>
+        )}
 
- {/* {(item.firstName || item.lastName) && (
-  <View style={styles.metaRow}>
-    <Text style={styles.metaLabel}>Doctor</Text>
-    <Text style={styles.metaValue}>
-      {`${item.firstName || ""}`}
-    </Text>
-  </View>
-)} */}
-        
-{/* {item.category && (
-  <View style={styles.metaRow}>
-    <Text style={styles.metaLabel}>Category</Text>
-    <Text style={styles.metaValue}>
-      {item.category}
-    </Text>
-  </View>
-)} */}
+        {/* Location/Category */}
+        {item.location && (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>Location</Text>
+            <Text style={styles.metaValue}>
+              {item.location}
+            </Text>
+          </View>
+        )}
 
+        {/* Date Information */}
+        <View style={styles.metaRow}>
+          <Text style={styles.metaLabel}>
+            {isReception ? "Added on" : isPharmacy ? "Order Date" : "Admission Date"}
+          </Text>
+          <Text style={styles.metaValue}>
+            {formatDisplayDate()}
+          </Text>
+        </View>
 
-<View style={styles.metaRow}>
-  <Text style={styles.metaLabel}>
-    {isReception ? "Added on" : isPharmacy ? "Order Date" : "Admission Date"
-    }
-  </Text>
-  <Text style={styles.metaValue}>
-    {item.admissionDate 
-      ? formatDateTime(item.admissionDate) 
-      : item.addedOn 
-        ? formatDateTime(item.addedOn) 
-        : "—"
-    }
-  </Text>
-</View>
+        {/* Completed Date for Pharmacy IPD */}
+        {isPharmacy && item.dept?.toLowerCase().includes('ipd') && completedDate && (
+          <View style={styles.metaRow}>
+            <Text style={[styles.metaLabel, { color: COLORS.success }]}>Completed On</Text>
+            <Text style={[styles.metaValue, { color: COLORS.success, fontWeight: '600' }]}>
+              {formatDateTime(completedDate)}
+            </Text>
+          </View>
+        )}
 
-{/* Show completed date only for pharmacy IPD */}
-{isPharmacy && item.dept?.toLowerCase().includes('ipd') && completedDate && (
-  <View style={styles.metaRow}>
-    <Text style={[styles.metaLabel, { color: COLORS.success }]}>Completed On</Text>
-    <Text style={[styles.metaValue, { color: COLORS.success, fontWeight: '600' }]}>
-      {formatDateTime(completedDate)}
-    </Text>
-  </View>
-)}
-
+        {/* Items Count */}
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>{itemsLabel}</Text>
           <Text style={styles.metaValue}>
@@ -362,27 +407,30 @@ const isPharmacyWalkin =
           </Text>
         </View>
 
-        {!isReception && 
-        <View style={styles.metaRow}>
-        <Text style={styles.metaLabel}>{amountLabel}</Text>
-        <Text style={[
-          styles.totalAmount, 
-          showDueAmount && dueAmount > 0 && { color: COLORS.error }
-        ]}>
-          ₹{displayAmount.toFixed(2)}
-        </Text>
-      </View>}
+        {/* Amount */}
+        {!isReception && (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>{amountLabel}</Text>
+            <Text style={[
+              styles.totalAmount, 
+              showDueAmount && dueAmount > 0 && { color: COLORS.error }
+            ]}>
+              ₹{displayAmount.toFixed(2)}
+            </Text>
+          </View>
+        )}
       
-      {/* Show paid amount only in BILLING mode for non-reception users when there's a paid amount */}
-      {mode === "billing" && !isReception && paidAmount > 0 && (
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Paid Amount</Text>
-          <Text style={[styles.metaValue, { color: COLORS.success }]}>
-            ₹{paidAmount.toFixed(2)}
-          </Text>
-        </View>
-      )}
+        {/* Paid Amount (only in billing mode with actual paid amount) */}
+        {mode === "billing" && !isReception && paidAmount > 0 && (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>Paid Amount</Text>
+            <Text style={[styles.metaValue, { color: COLORS.success }]}>
+              ₹{paidAmount.toFixed(2)}
+            </Text>
+          </View>
+        )}
 
+        {/* Nurse Information for IPD */}
         {isIPD && nurseName && (
           <View style={styles.metaRow}>
             <View style={styles.labelWithIcon}>
@@ -397,6 +445,7 @@ const isPharmacyWalkin =
           </View>
         )}
 
+        {/* View Details CTA */}
         <View style={styles.viewDetailsRow}>
           <Text style={styles.viewDetailsText}>{ctaText}</Text>
         </View>
@@ -449,7 +498,7 @@ const isPharmacyWalkin =
       ) : (
         <FlatList
           data={sortedData}
-          keyExtractor={(item) => String(item.id)}
+          keyExtractor={(item) => `${item.id}-${item.patientID}-${item.orderID || ''}`}
           renderItem={renderCard}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
@@ -492,99 +541,19 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontWeight: "500",
   },
-    
-  labelWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-    pickerWrap: {
-        width: responsiveWidth(90),
+  pickerWrap: {
+    width: responsiveWidth(90),
     borderWidth: 1.5,
-     borderColor: COLORS.border,
-     borderRadius: 12,
-     overflow: "hidden",
-     backgroundColor: "#f9fafb",
-  },
-  prescriptionSection: {
-    marginTop: 12,
-    marginBottom: 8,
-    padding: 12,
-    backgroundColor: '#f0fdfa',
+    borderColor: COLORS.border,
     borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#ccfbf1',
-    shadowColor: '#14b8a6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    overflow: "hidden",
+    backgroundColor: "#f9fafb",
   },
-  prescriptionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  prescriptionLabel: {
-    fontSize: FONT_SIZE.sm,
-    color: '#0f766e',
-    fontWeight: '600',
-  },
-  prescriptionBadge: {
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-    rejectionBanner: {
-    backgroundColor: '#fee2e2',
-    borderLeftWidth: 4,
-    borderLeftColor: '#ef4444',
-    padding: 12,
-    marginBottom: 12,
-    borderRadius: 8,
-  },
-  rejectionText: {
-    fontSize: FONT_SIZE.sm,
-    color: '#991b1b',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  rejectionDate: {
-    fontSize: FONT_SIZE.xs,
-    color: '#dc2626',
-    fontStyle: 'italic',
-  },
-
-
-  prescriptionBadgeText: {
-    fontSize: FONT_SIZE.xs,
-    color: '#ffffff',
-    fontWeight: '700',
-  },
-  prescriptionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#14b8a6',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  prescriptionButtonText: {
-    fontSize: FONT_SIZE.sm,
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-
-  
   picker: {
     height: 55,
     width: "100%",
     color: "black"
   },
- 
   loadingBox: {
     flex: 1,
     alignItems: "center",
@@ -651,6 +620,71 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     fontWeight: "600",
     color: "#111827",
+    marginBottom: 4,
+  },
+  orderId: {
+    fontSize: FONT_SIZE.xs,
+    color: "#6B7280",
+    fontStyle: "italic",
+  },
+  prescriptionSection: {
+    marginTop: 12,
+    marginBottom: 8,
+    padding: 12,
+    backgroundColor: '#f0fdfa',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#ccfbf1',
+    shadowColor: '#14b8a6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  prescriptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  prescriptionLabel: {
+    fontSize: FONT_SIZE.sm,
+    color: '#0f766e',
+    fontWeight: '600',
+  },
+  prescriptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#14b8a6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  prescriptionButtonText: {
+    fontSize: FONT_SIZE.sm,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  rejectionBanner: {
+    backgroundColor: '#fee2e2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+    padding: 12,
+    marginBottom: 12,
+    borderRadius: 8,
+  },
+  rejectionText: {
+    fontSize: FONT_SIZE.sm,
+    color: '#991b1b',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  rejectionDate: {
+    fontSize: FONT_SIZE.xs,
+    color: '#dc2626',
+    fontStyle: 'italic',
   },
   metaRow: {
     flexDirection: "row",
@@ -665,7 +699,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     color: COLORS.text,
     textAlign: "right",
-    lineHeight: 16, 
+    lineHeight: 16,
   },
   totalAmount: {
     fontSize: FONT_SIZE.sm,
@@ -680,5 +714,9 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     fontWeight: "600",
     color: COLORS.brandDark,
+  },
+  labelWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

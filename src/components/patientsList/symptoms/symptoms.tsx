@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Trash2, Plus, User } from "lucide-react-native";
 import { AuthDelete, AuthFetch } from "../../../auth/auth";
-import { formatDateTime, formatDurationParameter } from "../../../utils/dateTime";
+import { formatDate, formatDateTime, formatDurationParameter } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showError, showSuccess } from "../../../store/toast.slice";
@@ -396,7 +396,7 @@ export default function SymptomsScreen() {
                         <Text style={styles.inputLabel}>Date of Birth</Text>
                         <View style={styles.inputValue}>
                           <Text style={styles.inputText}>
-                            {userData?.dob ? userData.dob.split("T")[0] : ""}
+                            {userData?.dob ? formatDate(userData.dob) : "-"}
                           </Text>
                         </View>
                       </View>

@@ -162,17 +162,21 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
 
   const buildStatusDateLabel = (row: AppointmentType): string => {
     if (status === "completed" && row.completedAt) {
-      return formatDateTime(row.completedAt);
+      return `Completed Date: ${formatDateTime(row.completedAt)}`;
     }
+
     if (status === "canceled" && row.canceledAt) {
-      return formatDateTime(row.canceledAt);
+      return `Cancelled Date: ${formatDateTime(row.canceledAt)}`;
     }
+
     const dateStr = row.appointmentDate || row.AppointmentDate || "";
     const timeStr = row.timeSlot || row.Time || "";
-    const datePart = dateStr ? `${formatDate(dateStr)},` : "-";
+    const datePart = dateStr ? formatDate(dateStr) : "-";
     const timePart = timeStr ? convertTo12Hour(timeStr) : "";
-    return `${datePart}${timePart ? ` ${timePart}` : ""}`;
+
+    return `Appointment Date: ${datePart}${timePart ? `, ${timePart}` : ""}`;
   };
+
 
   // ------------------- API Calls -------------------
 
@@ -300,6 +304,31 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
       );
     }
   };
+const formatAge = (age: string | number | undefined) => {
+  if (!age) return "-";
+
+  const ageStr = String(age).trim().toUpperCase();
+
+  const match = ageStr.match(/^(\d+)\s*(D|M|Y)$/);
+  if (!match) return ageStr;
+
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+
+  if (unit === "D") {
+    return `${value} day${value === 1 ? "" : "s"}`;
+  }
+
+  if (unit === "M") {
+    return `${value} month${value === 1 ? "" : "s"}`;
+  }
+
+  if (unit === "Y") {
+    return `${value} year${value === 1 ? "" : "s"}`;
+  }
+
+  return ageStr;
+};
 
   const handleCancel = async (id: number) => {
     const token = user?.token ?? (await AsyncStorage.getItem('token'));
@@ -446,6 +475,15 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
       setPage(1);
     }
   };
+const formatStatus = (value: string | undefined) => {
+  if (!value) return "-";
+
+  if (value.toLowerCase() === "canceled") return "Cancelled";
+  if (value.toLowerCase() === "completed") return "Completed";
+  if (value.toLowerCase() === "scheduled") return "Scheduled";
+
+  return value;
+};
 
   const onRescheduleDatePick = (event: any, date?: Date) => {
     if (Platform.OS === "android") setRescheduleDateObj(undefined);
@@ -684,7 +722,7 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
                         row.departmentID ??
                         "-",
                     ],
-                    ["Age", row.age ?? "-"],
+                    ["Age", formatAge(row.age)],
                     ["Gender", row.gender === "1" ? "Male" : row.gender === "2" ? "Female" : "Others"],
                     ["Mobile", row.mobileNumber ?? "-"],
                     ["Email", row.email ?? "-"],
@@ -701,14 +739,14 @@ const AppointmentsListMobile: React.FC<Props> = ({ status, title }) => {
                     ...(status === "canceled"
                       ? [
                           [
-                            "Canceled At",
+                            "Cancelled At",
                             row.canceledAt
                               ? formatDateTime(row.canceledAt)
                               : "-",
                           ] as [string, string],
                         ]
                       : []),
-                    ["Status", row.status ?? status],
+                    ["Status", formatStatus(row.status ?? status)],
                   ].map(([label, value]) => (
                     <View key={label} style={styles.detailRow}>
                       <Text style={styles.detailLabel}>{label}</Text>

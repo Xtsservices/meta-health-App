@@ -39,6 +39,29 @@ import Footer from "../../dashboard/footer";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 const FOOTER_H = FOOTER_HEIGHT;
 
+// Mobile number validation function
+const validateMobileNumber = (number: string): boolean => {
+  if (!number) return false;
+  // Check if starts with 6,7,8,9 and has exactly 10 digits
+  const mobileRegex = /^[6-9]\d{9}$/;
+  return mobileRegex.test(number);
+};
+
+// Get validation error message
+const getMobileValidationMessage = (number: string): string => {
+  if (!number) return "Contact number is required";
+  if (!/^[6-9]/.test(number)) {
+    return "Mobile number must start with 6, 7, 8, or 9";
+  }
+  if (number.length !== 10) {
+    return "Mobile number must be 10 digits";
+  }
+  if (!/^\d+$/.test(number)) {
+    return "Mobile number must contain only digits";
+  }
+  return "";
+};
+
 /* ===================== TYPES ===================== */
 
 interface SelectedMedicineData {
@@ -88,6 +111,10 @@ const AddOrderScreen: React.FC = () => {
   const [medicineInStockData, setMedicineInStockData] = useState<StockData[]>([]);
   const [manufactureData, setManufactureData] = useState<ManufacturerData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Mobile number validation state
+  const [contactError, setContactError] = useState<string>("");
+  const [contactTouched, setContactTouched] = useState(false);
   
   const scrollViewRef = useRef<ScrollView>(null);
   const addedMedicinesRef = useRef<View>(null);
@@ -191,13 +218,19 @@ const AddOrderScreen: React.FC = () => {
     );
 
     if (selectedAgency) {
+      // Validate contact number when auto-filled
+      const contactNo = selectedAgency.contactNo || "";
+      const error = getMobileValidationMessage(contactNo);
+      
       setSelectedMedicineData((prev) => ({
         ...prev,
-        contactNo: selectedAgency.contactNo,
-        email: selectedAgency.email,
+        contactNo: contactNo,
+        email: selectedAgency.email || "",
         agentCode: selectedAgency.agentCode,
         manufacturer: selectedAgency.manufacturer,
       }));
+      
+      setContactError(error);
     }
   }, [selectedMedicineData.agencyName, manufactureData]);
 
@@ -240,6 +273,31 @@ const AddOrderScreen: React.FC = () => {
     }, 200);
   };
 
+  const validateContactNumber = (contactNo: string): boolean => {
+    if (!contactNo) {
+      setContactError("Contact number is required");
+      return false;
+    }
+    
+    if (!/^[6-9]/.test(contactNo)) {
+      setContactError("Mobile number must start with 6, 7, 8, or 9");
+      return false;
+    }
+    
+    if (contactNo.length !== 10) {
+      setContactError("Mobile number must be 10 digits");
+      return false;
+    }
+    
+    if (!/^\d+$/.test(contactNo)) {
+      setContactError("Mobile number must contain only digits");
+      return false;
+    }
+    
+    setContactError("");
+    return true;
+  };
+
   const addMedicineToList = () => {
     const errors: string[] = [];
 
@@ -247,7 +305,13 @@ const AddOrderScreen: React.FC = () => {
     if (!selectedMedicineData.category) errors.push("Category");
     if (!selectedMedicineData.quantity || selectedMedicineData.quantity <= 0) errors.push("Quantity");
     if (!selectedMedicineData.agencyName) errors.push("Agency");
-    if (!selectedMedicineData.contactNo) errors.push("Contact No");
+    
+    // Validate contact number
+    const isContactValid = validateContactNumber(selectedMedicineData.contactNo);
+    if (!isContactValid) {
+      errors.push("Valid Contact Number (10 digits starting with 6-9)");
+    }
+    
     if (!selectedMedicineData.email) errors.push("Email");
     if (!selectedMedicineData.manufacturer) errors.push("Manufacturer");
 
@@ -262,6 +326,8 @@ const AddOrderScreen: React.FC = () => {
     ]);
 
     setSelectedMedicineData(initialSelectedMedicineData);
+    setContactError("");
+    setContactTouched(false);
     setShowMedicineSuggestions(false);
     setShowAgencySuggestions(false);
     setShowCategorySuggestions(false);
@@ -282,6 +348,15 @@ const AddOrderScreen: React.FC = () => {
     if (!medicineList.length) {
       dispatch(showError("No medicines added to the order"));
       return;
+    }
+
+    // Validate all medicines in the list
+    for (const medicine of medicineList) {
+      if (!validateMobileNumber(medicine.contactNo)) {
+        const errorMsg = getMobileValidationMessage(medicine.contactNo);
+        dispatch(showError(`Invalid contact number for ${medicine.name}: ${errorMsg || "Must be 10 digits starting with 6-9"}`));
+        return;
+      }
     }
 
     try {
@@ -332,7 +407,10 @@ const AddOrderScreen: React.FC = () => {
   }: {
     item: SelectedMedicineData;
     index: number;
-  }) => (
+  }) => {
+    const isContactValid = validateMobileNumber(item.contactNo);
+    
+    return (
     <View style={styles.medicineItem}>
       <View style={styles.medicineContent}>
         <View style={styles.medicineHeader}>
@@ -356,6 +434,15 @@ const AddOrderScreen: React.FC = () => {
           <Text style={styles.detailLabel}>Agent Code</Text>
           <Text style={styles.detailValue}>: {item.agentCode || "N/A"}</Text>
         </View>
+        <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Contact</Text>
+            <Text style={[
+              styles.detailValue,
+              !isContactValid && { color: COLORS.danger }
+            ]}>
+              : {item.contactNo || "N/A"}
+            </Text>
+        </View>
       </View>
       <TouchableOpacity 
         style={styles.deleteBtn}
@@ -365,6 +452,7 @@ const AddOrderScreen: React.FC = () => {
       </TouchableOpacity>
     </View>
   );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -467,7 +555,6 @@ const AddOrderScreen: React.FC = () => {
         keyboardShouldPersistTaps="always"
         nestedScrollEnabled={true}  
         scrollEnabled={true}
-
         showsVerticalScrollIndicator={true}
         style={{ maxHeight: 200 }}
         renderItem={({ item }) => (
@@ -547,7 +634,18 @@ const AddOrderScreen: React.FC = () => {
                           key={index}
                           style={styles.suggestionItem}
                           onPress={() => {
-                            setSelectedMedicineData((p) => ({ ...p, ...item }));
+                            // Validate contact number when selecting from suggestions
+                            const contactNo = item.contactNo || "";
+                            const error = getMobileValidationMessage(contactNo);
+                            
+                            setSelectedMedicineData((p) => ({ 
+                              ...p, 
+                              ...item,
+                              contactNo: contactNo 
+                            }));
+                            
+                            setContactError(error);
+                            setContactTouched(true);
                             setShowAgencySuggestions(false);
                           }}
                         >
@@ -569,16 +667,39 @@ const AddOrderScreen: React.FC = () => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Contact Number *</Text>
               <TextInput
-                style={styles.input}
-                placeholder="Enter contact number"
+                style={[
+                  styles.input,
+                  contactTouched && contactError ? styles.inputError : null
+                ]}
+                placeholder="Enter 10-digit mobile number"
                 placeholderTextColor={COLORS.sub}
                 keyboardType="phone-pad"
                 maxLength={10}
                 value={selectedMedicineData.contactNo}
-                onChangeText={(t) =>
-                  setSelectedMedicineData((p) => ({ ...p, contactNo: t }))
-                }
+                onChangeText={(t) => {
+                  // Allow only digits
+                  const cleaned = t.replace(/[^0-9]/g, '');
+                  setSelectedMedicineData((p) => ({ ...p, contactNo: cleaned }));
+                  
+                  // Validate in real-time
+                  if (cleaned.length === 10) {
+                    const error = getMobileValidationMessage(cleaned);
+                    setContactError(error);
+                  } else if (cleaned.length > 0) {
+                    setContactError("Mobile number must be 10 digits");
+                  } else {
+                    setContactError("Contact number is required");
+                  }
+                }}
+                onBlur={() => {
+                  setContactTouched(true);
+                  validateContactNumber(selectedMedicineData.contactNo);
+                }}
+                onFocus={() => setContactTouched(true)}
               />
+              {contactTouched && contactError ? (
+                <Text style={styles.errorText}>{contactError}</Text>
+              ) : null}
             </View>
 
             <View style={styles.inputGroup}>
@@ -844,6 +965,17 @@ dropdownItemTextSelected: {
     backgroundColor: COLORS.field,
     fontSize: 15,
     color: COLORS.text,
+  },
+  
+  inputError: {
+    borderColor: COLORS.danger,
+  },
+  
+  errorText: {
+    color: COLORS.danger,
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: "500",
   },
 
   row: {

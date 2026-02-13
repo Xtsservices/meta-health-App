@@ -1,4 +1,4 @@
-// src/screens/MedicalHistoryFormScreen.tsx
+1.// src/screens/MedicalHistoryFormScreen.tsx
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
@@ -12,8 +12,9 @@ import {
   KeyboardAvoidingView,
   Alert,
   Modal,
+  FlatList,
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import { RootState } from "../../../store/store";
@@ -27,6 +28,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
 import { debounce } from "../../../utils/debounce";
 import { ageFromDOB, ageFromDOBList } from "../../../utils/age";
+import { showError } from "../../../store/toast.slice";
 
 // 🔹 Mental problem master list (same as web)
 const mentalProblemList = [
@@ -425,7 +427,7 @@ const parseCancerField = (raw?: string | null) => {
   if (stageMatch) details.stage = stageMatch[1].trim();
   if (dateMatch) {
     const dateStr = dateMatch[1].trim();
- details.date = parseDateString(dateStr);
+    details.date = parseDateString(dateStr);
   }
   return { istrue: true, details };
 };
@@ -595,6 +597,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const { section, medicalHistoryData, onDataUpdate } = route.params;
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
+  const dispatch = useDispatch();
 
   // Basic Section State
   const [giveBy, setGiveBy] = useState(medicalHistoryData?.givenName || "");
@@ -608,11 +611,15 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   const [bloodPressure, setBloodPressure] = useState<boolean | null>(
     medicalHistoryData?.bloodPressure === "Yes" ? true : false
   );
+  
+  // Form validation state
+  const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+
   const isValidIndianMobile = (phone: string) => {
-  if (phone.length !== 10) return false;
-  if (!/^[6-9]/.test(phone[0])) return false;
-  return /^[6-9]\d{9}$/.test(phone);
-};
+    if (phone.length !== 10) return false;
+    if (!/^[6-9]/.test(phone[0])) return false;
+    return /^[6-9]\d{9}$/.test(phone);
+  };
 
   // Surgical Section State
   const parsedDisease = parseDiseaseField(medicalHistoryData?.disease);
@@ -678,7 +685,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
     istrue: boolean;
     items: MedItem[];
   }>(() => parseMedList(medicalHistoryData?.meds));
-  console.log("prescribedMeds",medicalHistoryData,"123",prescribedMeds)
 
   const [newPrescribedMed, setNewPrescribedMed] = useState<MedItem>({
     name: "",
@@ -827,22 +833,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
     date: parsedPregnancy.date,
   });
 
-  // 🔹 If patient is neonate (category 1), force pregnancy to "No"
-  useEffect(() => {
-    if (currentPatient?.category === 1) {
-      setPregnant(false);
-      setPregnancyDetails({
-        numberOfPregnancies: "",
-        liveBirths: "",
-        date: null,
-      });
-    }
-  }, [currentPatient?.category]);
-  useEffect(() => {
-  const isValidMobile = isValidIndianMobile(phoneNumber);
-  setFormDisabled(!(giveBy && isValidMobile && relation));
-}, [giveBy, phoneNumber, relation]);
-
   const [hereditaryDisease, setHereditaryDisease] = useState<{
     istrue: boolean;
     items: { disease: string; name: string }[];
@@ -893,13 +883,182 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
     "cancer",
   ];
 
-  // Disable form if basic mandatory fields not filled
+  // 🔹 VALIDATION FUNCTIONS FOR EACH SECTION
+  const validateSection = () => {
+    const errors: {[key: string]: string} = {};
+
+    switch (section) {
+      case "basic":
+        if (!giveBy.trim()) {
+          errors.giveBy = "History given by is required";
+        }
+        if (!phoneNumber.trim()) {
+          errors.phoneNumber = "Mobile number is required";
+        } else if (!isValidIndianMobile(phoneNumber)) {
+          errors.phoneNumber = "Please enter a valid 10-digit Indian mobile number";
+        }
+        if (!relation.trim()) {
+          errors.relation = "Relationship is required";
+        }
+        if (!bloodGrp.trim()) {
+          errors.bloodGrp = "Blood group is required";
+        }
+        break;
+
+      case "surgical":
+        if (checkedDiseases.has("Diabetes") && !dates["Diabetes"]) {
+          errors.diabetesDate = "Diabetes diagnosis date is required";
+        }
+        if (checkedDiseases.has("Been Through any Surgery")) {
+          if (!surgeryText.trim()) {
+            errors.surgeryText = "Surgery details are required";
+          }
+          if (!dates["Surgery"]) {
+            errors.surgeryDate = "Surgery date is required";
+          }
+        }
+        break;
+
+      case "lipid":
+        if (hyperLipidaemia === true && !hyperLipidaemiaDate) {
+          errors.hyperLipidaemiaDate = "Hyper Lipidaemia diagnosis date is required";
+        }
+        break;
+
+      case "allergies":
+        if (foodAllergy.istrue && foodAllergy.items.length === 0) {
+          errors.foodAllergy = "Please add at least one food allergy or select 'No'";
+        }
+        if (medicineAllergy.istrue && medicineAllergy.items.length === 0) {
+          errors.medicineAllergy = "Please add at least one medicine allergy or select 'No'";
+        }
+        break;
+
+      case "prescribed":
+        if (prescribedMeds.istrue && prescribedMeds.items.length === 0) {
+          errors.prescribedMeds = "Please add at least one prescribed medicine or select 'No'";
+        }
+        break;
+
+      case "selfmeds":
+        if (selfMeds.istrue && selfMeds.items.length === 0) {
+          errors.selfMeds = "Please add at least one self-prescribed medicine or select 'No'";
+        }
+        break;
+
+      case "health":
+        if (chestCondition.istrue && chestCondition.items.length === 0) {
+          errors.chestCondition = "Please add at least one chest condition or select 'No'";
+        }
+        if (neurologicalDisorder.istrue && neurologicalDisorder.items.length === 0) {
+          errors.neurologicalDisorder = "Please add at least one neurological disorder or select 'No'";
+        }
+        if (heartProblems.istrue && heartProblems.items.length === 0) {
+          errors.heartProblems = "Please add at least one heart problem or select 'No'";
+        }
+        if (mentalHealth.istrue && mentalHealth.items.length === 0) {
+          errors.mentalHealth = "Please add at least one mental health problem or select 'No'";
+        }
+        break;
+
+      case "infectious":
+        if (infections.istrue && infections.items.length === 0) {
+          errors.infections = "Please select at least one infectious disease or select 'No'";
+        }
+        break;
+
+      case "addiction":
+        if (addiction.istrue && addiction.items.length === 0) {
+          errors.addiction = "Please select at least one addiction or select 'No'";
+        }
+        break;
+
+      case "family":
+        if (pregnant && (!pregnancyDetails.date || !pregnancyDetails.numberOfPregnancies.trim() || !pregnancyDetails.liveBirths.trim())) {
+          errors.pregnancy = "Please fill all pregnancy details";
+        }
+        if (hereditaryDisease.istrue && hereditaryDisease.items.length === 0) {
+          errors.hereditaryDisease = "Please add at least one hereditary disease or select 'No'";
+        }
+        break;
+
+      case "physical":
+        if (lumps.istrue) {
+          if (!lumps.details.location.trim()) {
+            errors.lumpsLocation = "Lump location is required";
+          }
+          if (!lumps.details.size.trim()) {
+            errors.lumpsSize = "Lump size is required";
+          }
+          if (!lumps.details.consistency.trim()) {
+            errors.lumpsConsistency = "Lump consistency is required";
+          }
+          if (!lumps.details.date) {
+            errors.lumpsDate = "Examination date is required";
+          }
+        }
+        break;
+
+      case "cancer":
+        if (cancer.istrue) {
+          if (!cancer.details.type.trim()) {
+            errors.cancerType = "Cancer type is required";
+          }
+          if (!cancer.details.stage.trim()) {
+            errors.cancerStage = "Cancer stage is required";
+          }
+          if (!cancer.details.date) {
+            errors.cancerDate = "Diagnosis date is required";
+          }
+        }
+        break;
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // 🔹 Force pregnancy to "No" for neonates
+  useEffect(() => {
+    if (currentPatient?.category === 1) {
+      setPregnant(false);
+      setPregnancyDetails({
+        numberOfPregnancies: "",
+        liveBirths: "",
+        date: null,
+      });
+    }
+  }, [currentPatient?.category]);
+
+  // 🔹 Disable form if basic mandatory fields not filled
   useEffect(() => {
     const isValidMobile = isValidIndianMobile(phoneNumber);
-    setFormDisabled(!(giveBy && isValidMobile && relation && bloodGrp));
-  }, [giveBy, phoneNumber, relation, bloodGrp]);
+    setFormDisabled(!(giveBy && isValidMobile && relation));
+  }, [giveBy, phoneNumber, relation]);
 
-  // Fetch master data (food allergy list, heart problems, blood groups, medicines)
+  const ageInfo = currentPatient?.dob
+    ? ageFromDOBList(currentPatient.dob)
+    : null;
+  const getAgeInDays = (ageInfo: string | null) => {
+    if (!ageInfo) return null;
+
+    if (ageInfo.includes("day")) {
+      return parseInt(ageInfo);
+    }
+
+    if (ageInfo.includes("month")) {
+      return parseInt(ageInfo) * 30;
+    }
+
+    if (ageInfo.includes("year")) {
+      return parseInt(ageInfo) * 365;
+    }
+
+    return null;
+  };
+  const ageInDays = getAgeInDays(ageInfo);
+
+  // Fetch master data
   const getAllData = useCallback(async () => {
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     if (!token) return;
@@ -951,6 +1110,7 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
     getAllData();
     getRelationList();
   }, [getAllData, getRelationList]);
+
   const fetchMedicineSuggestions = async (text: string, isPrescribed: boolean) => {
     try {
       if (text.length < 3) {
@@ -970,11 +1130,11 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
         token
       );
 
-    if ("data" in response && response?.data?.message === 'success') {
-      const names =
-        response?.data?.medicines
-          ?.map((m: any) => m.Medicine_Name)
-          .filter(Boolean) || [];
+      if ("data" in response && response?.data?.message === 'success') {
+        const names =
+          response?.data?.medicines
+            ?.map((m: any) => m.Medicine_Name)
+            .filter(Boolean) || [];
         
         if (isPrescribed) {
           setPrescribedMedicineSuggestions(names);
@@ -1053,7 +1213,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   // ---------- Suggestions (used for pickers) ----------
-
   const filteredFoodAllergyOptions = useMemo(
     () =>
       newFoodAllergy.trim()
@@ -1099,7 +1258,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
       const searchTerm = newPrescribedMed.name.trim().toLowerCase();
       if (!searchTerm) return medicineList;
       
-      // Combine local list with API suggestions
       const allOptions = [...medicineList, ...prescribedMedicineSuggestions];
       const uniqueOptions = Array.from(new Set(allOptions));
       
@@ -1115,7 +1273,6 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
       const searchTerm = newSelfMed.name.trim().toLowerCase();
       if (!searchTerm) return medicineList;
       
-      // Combine local list with API suggestions
       const allOptions = [...medicineList, ...selfMedicineSuggestions];
       const uniqueOptions = Array.from(new Set(allOptions));
       
@@ -1150,23 +1307,22 @@ const MedicalHistoryFormScreen: React.FC<Props> = ({ route, navigation }) => {
 
   // 🔹 Build final data ONLY when needed (no auto-save)
   const buildUpdatedData = useCallback((): medicalHistoryFormType => {
-const medsString = prescribedMeds.items
-  .map((item) => {
-    const formattedDate = item.startDate ? formatDate(item.startDate) : "";
-    const datePart = formattedDate ? ` (${formattedDate})` : "";
+    const medsString = prescribedMeds.items
+      .map((item) => {
+        const formattedDate = item.startDate ? formatDate(item.startDate) : "";
+        const datePart = formattedDate ? ` (${formattedDate})` : "";
 
-    // Ensure all parts are included even if some are empty
-    const parts = [
-      item.dosage ? `Dosage: ${item.dosage} ${item.dosageUnit}` : "",
-      item.frequency ? `Frequency: ${item.frequency}` : "",
-      item.duration ? `Duration: ${item.duration} ${displayDurationUnit(item.duration, item.durationUnit)}` : "",
-    ].filter(Boolean);
+        const parts = [
+          item.dosage ? `Dosage: ${item.dosage} ${item.dosageUnit}` : "",
+          item.frequency ? `Frequency: ${item.frequency}` : "",
+          item.duration ? `Duration: ${item.duration} ${displayDurationUnit(item.duration, item.durationUnit)}` : "",
+        ].filter(Boolean);
 
-    const details = parts.length > 0 ? ` (${parts.join(" | ")})` : "";
+        const details = parts.length > 0 ? ` (${parts.join(" | ")})` : "";
 
-    return `${item.name}${details}${datePart}`;
-  })
-  .join(", ");
+        return `${item.name}${details}${datePart}`;
+      })
+      .join(", ");
 
     const selfMedsString = selfMeds.items
       .map((item) => {
@@ -1292,17 +1448,57 @@ const medsString = prescribedMeds.items
   ]);
 
   const handleSave = () => {
+    if (!validateSection()) {
+      const firstError = Object.values(formErrors)[0];
+      dispatch(showError(firstError));
+      return;
+    }
+    
     const updatedData = buildUpdatedData();
     onDataUpdate(updatedData);
     navigation.goBack();
   };
 
   const handleClose = () => {
-  // Save current form data before closing
-  const updatedData = buildUpdatedData();
-  onDataUpdate(updatedData);  // This saves to parent state
-  navigation.goBack();
-};
+    // Save current form data before closing
+    const updatedData = buildUpdatedData();
+    onDataUpdate(updatedData);
+    navigation.goBack();
+  };
+
+  const handleNext = () => {
+    if (!validateSection()) {
+      const firstError = Object.values(formErrors)[0];
+      dispatch(showError(firstError));
+      return;
+    }
+    
+    const updatedData = buildUpdatedData();
+    onDataUpdate(updatedData);
+    
+    const idx = sectionOrder.indexOf(section);
+    if (idx < sectionOrder.length - 1) {
+      navigation.navigate("MedicalHistoryForm", {
+        section: sectionOrder[idx + 1],
+        medicalHistoryData: updatedData,
+        onDataUpdate,
+      });
+    }
+  };
+
+  const handlePrev = () => {
+    const updatedData = buildUpdatedData();
+    onDataUpdate(updatedData);
+    
+    const idx = sectionOrder.indexOf(section);
+    if (idx > 0) {
+      navigation.navigate("MedicalHistoryForm", {
+        section: sectionOrder[idx - 1],
+        medicalHistoryData: updatedData,
+        onDataUpdate,
+      });
+    }
+  };
 
   const getSectionTitle = () => {
     const sectionsMap: { [key: string]: string } = {
@@ -1332,7 +1528,6 @@ const medsString = prescribedMeds.items
           style={styles.input}
           value={giveBy}
           onChangeText={(text) => {
-            // Allow only A–Z, a–z and spaces
             const cleaned = text.replace(/[^A-Za-z\s]/g, "");
             setGiveBy(cleaned);
           }}
@@ -1340,6 +1535,7 @@ const medsString = prescribedMeds.items
           placeholder="Enter name"
           placeholderTextColor="#9ca3af"
         />
+        {formErrors.giveBy && <Text style={styles.errorText}>{formErrors.giveBy}</Text>}
       </View>
 
       <View style={styles.fieldBlock}>
@@ -1356,18 +1552,13 @@ const medsString = prescribedMeds.items
           maxLength={10}
           onChangeText={(text) => {
             const onlyDigits = text.replace(/\D/g, "");
-
-            // block more than 10 digits
             if (onlyDigits.length > 10) return;
-
-            // first digit must be 6 / 7 / 8 / 9
-            if (onlyDigits.length === 1 && !/^[6-9]/.test(onlyDigits))
-              return;
-
+            if (onlyDigits.length === 1 && !/^[6-9]/.test(onlyDigits)) return;
             setPhoneNumber(onlyDigits);
           }}
         />
-        {phoneNumber && !isValidIndianMobile(phoneNumber) && (
+        {formErrors.phoneNumber && <Text style={styles.errorText}>{formErrors.phoneNumber}</Text>}
+        {phoneNumber && !isValidIndianMobile(phoneNumber) && !formErrors.phoneNumber && (
           <Text style={styles.errorText}>
             Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9
           </Text>
@@ -1389,6 +1580,7 @@ const medsString = prescribedMeds.items
             ))}
           </Picker>
         </View>
+        {formErrors.relation && <Text style={styles.errorText}>{formErrors.relation}</Text>}
       </View>
 
       <Text style={styles.subTitle}>Past Medical History</Text>
@@ -1405,6 +1597,7 @@ const medsString = prescribedMeds.items
             />
           ))}
         </View>
+        {formErrors.bloodGrp && <Text style={styles.errorText}>{formErrors.bloodGrp}</Text>}
       </View>
 
       <View style={styles.fieldBlock}>
@@ -1465,6 +1658,7 @@ const medsString = prescribedMeds.items
             }}
           />
         )}
+        {formErrors.diabetesDate && <Text style={styles.errorText}>{formErrors.diabetesDate}</Text>}
       </View>
 
       <View style={styles.fieldBlock}>
@@ -1490,7 +1684,7 @@ const medsString = prescribedMeds.items
         {checkedDiseases.has("Been Through any Surgery") && (
           <>
             <View style={styles.fieldBlock}>
-              <Text style={styles.label}>Surgery Details</Text>
+              <Text style={styles.label}>Surgery Details *</Text>
               <TextInput
                 style={styles.input}
                 value={surgeryText}
@@ -1498,9 +1692,10 @@ const medsString = prescribedMeds.items
                 placeholder="Enter surgery details"
                 placeholderTextColor="#9ca3af"
               />
+              {formErrors.surgeryText && <Text style={styles.errorText}>{formErrors.surgeryText}</Text>}
             </View>
             <DateField
-              label="Surgery Date"
+              label="Surgery Date *"
               value={dates["Surgery"] || null}
               maximumDate={new Date()}
               disabled={formDisabled}
@@ -1518,6 +1713,7 @@ const medsString = prescribedMeds.items
                 }
               }}
             />
+            {formErrors.surgeryDate && <Text style={styles.errorText}>{formErrors.surgeryDate}</Text>}
           </>
         )}
       </View>
@@ -1550,7 +1746,7 @@ const medsString = prescribedMeds.items
         />
         {hyperLipidaemia && (
           <DateField
-            label="Diagnosed Date"
+            label="Diagnosed Date *"
             value={hyperLipidaemiaDate}
             maximumDate={new Date()}
             disabled={formDisabled}
@@ -1569,6 +1765,7 @@ const medsString = prescribedMeds.items
             }}
           />
         )}
+        {formErrors.hyperLipidaemiaDate && <Text style={styles.errorText}>{formErrors.hyperLipidaemiaDate}</Text>}
       </View>
     </View>
   );
@@ -1577,7 +1774,7 @@ const medsString = prescribedMeds.items
     <View style={styles.section}>
       {/* Food Allergy */}
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Any Food Allergy?</Text>
+        <Text style={styles.label}>Any Food Allergy? *</Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
@@ -1602,26 +1799,24 @@ const medsString = prescribedMeds.items
         </View>
         {foodAllergy.istrue && (
           <>
-            {/* Type free text OR select from list */}
             <View style={styles.fieldBlock}>
-  <Text style={styles.label}>Food Allergy</Text>
-  <View style={styles.pickerContainer}>
-    <Picker
-      selectedValue={newFoodAllergy}
-      onValueChange={(value) => {
-        setNewFoodAllergy(value);
-      }}
-      style={styles.picker}
-      dropdownIconColor="#6b7280"
-    >
-      <Picker.Item label="Select allergy" value="" />
-      {foodAlergyList.map((item) => (
-        <Picker.Item key={item} label={item} value={item} />
-      ))}
-    </Picker>
-  </View>
-</View>
-
+              <Text style={styles.label}>Food Allergy</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={newFoodAllergy}
+                  onValueChange={(value) => {
+                    setNewFoodAllergy(value);
+                  }}
+                  style={styles.picker}
+                  dropdownIconColor="#6b7280"
+                >
+                  <Picker.Item label="Select allergy" value="" />
+                  {foodAlergyList.map((item) => (
+                    <Picker.Item key={item} label={item} value={item} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
 
             <DateField
               label="Allergy Noted On"
@@ -1697,11 +1892,12 @@ const medsString = prescribedMeds.items
             ))}
           </>
         )}
+        {formErrors.foodAllergy && <Text style={styles.errorText}>{formErrors.foodAllergy}</Text>}
       </View>
 
       {/* Medicine Allergy */}
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Any Medicine Allergy?</Text>
+        <Text style={styles.label}>Any Medicine Allergy? *</Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
@@ -1843,6 +2039,7 @@ const medsString = prescribedMeds.items
             ))}
           </>
         )}
+        {formErrors.medicineAllergy && <Text style={styles.errorText}>{formErrors.medicineAllergy}</Text>}
       </View>
 
       <View style={styles.fieldBlock}>
@@ -1868,7 +2065,7 @@ const medsString = prescribedMeds.items
   const renderPrescribedSection = () => (
     <View style={styles.section}>
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Taking Any Prescribed Medicines?</Text>
+        <Text style={styles.label}>Taking Any Prescribed Medicines? *</Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
@@ -1891,6 +2088,7 @@ const medsString = prescribedMeds.items
             }
           />
         </View>
+        {formErrors.prescribedMeds && <Text style={styles.errorText}>{formErrors.prescribedMeds}</Text>}
       </View>
 
       {prescribedMeds.istrue && (
@@ -1912,22 +2110,25 @@ const medsString = prescribedMeds.items
             )}
           </View>
 
+          {/* Medicine suggestions dropdown */}
           {!formDisabled && prescribedMedicineSuggestions.length > 0 && (
             <View style={styles.suggestionsContainer}>
-              <Text style={styles.suggestionTitle}>Suggestions:</Text>
-              <ScrollView style={styles.suggestionsList}>
-                {prescribedMedicineSuggestions.map((suggestion, index) => (
+              <FlatList
+                data={prescribedMedicineSuggestions}
+                keyExtractor={(item, index) => `${item}-${index}`}
+                renderItem={({ item }) => (
                   <TouchableOpacity
-                    key={index}
                     style={styles.suggestionItem}
-                    onPress={() => handlePrescribedMedicineSelect(suggestion)}
+                    onPress={() => handlePrescribedMedicineSelect(item)}
                   >
-                    <Text style={styles.suggestionText}>{suggestion}</Text>
+                    <Text style={styles.suggestionText}>{item}</Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-              </View>
-            )}
+                )}
+                style={styles.suggestionsList}
+                nestedScrollEnabled={true}
+              />
+            </View>
+          )}
 
           <View style={styles.row}>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
@@ -1967,43 +2168,33 @@ const medsString = prescribedMeds.items
           <View style={styles.row}>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
               <Text style={styles.label}>Frequency (per day) *</Text>
-             <TextInput
-  style={styles.input}
-  value={newPrescribedMed.frequency}
-  onChangeText={(text) => {
-    // Remove all non-digit characters
-    const digits = text.replace(/\D/g, "");
-
-    // If empty, clear the field
-    if (!digits) {
-      setNewPrescribedMed((prev) => ({
-        ...prev,
-        frequency: "",
-      }));
-      return;
-    }
-
-    // Convert to number and cap at 50
-    let num = parseInt(digits, 10);
-
-    // Prevent numbers greater than 50
-    if (num > 50) {
-      num = 50;
-    }
-
-    // Optional: Prevent leading zeros (e.g., "05" → "5"), except for "0"
-    const cleanedValue = num === 0 ? "0" : String(num);
-
-    setNewPrescribedMed((prev) => ({
-      ...prev,
-      frequency: cleanedValue,
-    }));
-  }}
-  placeholder="Frequency"
-  placeholderTextColor="#9ca3af"
-  keyboardType="numeric"
-  maxLength={2} // Prevents typing more than 2 digits (since 50 is max)
-/>
+              <TextInput
+                style={styles.input}
+                value={newPrescribedMed.frequency}
+                onChangeText={(text) => {
+                  const digits = text.replace(/\D/g, "");
+                  if (!digits) {
+                    setNewPrescribedMed((prev) => ({
+                      ...prev,
+                      frequency: "",
+                    }));
+                    return;
+                  }
+                  let num = parseInt(digits, 10);
+                  if (num > 50) {
+                    num = 50;
+                  }
+                  const cleanedValue = num === 0 ? "0" : String(num);
+                  setNewPrescribedMed((prev) => ({
+                    ...prev,
+                    frequency: cleanedValue,
+                  }));
+                }}
+                placeholder="Frequency"
+                placeholderTextColor="#9ca3af"
+                keyboardType="numeric"
+                maxLength={2}
+              />
             </View>
             <View style={[styles.fieldBlock, { flex: 1 }]}>
               <Text style={styles.label}>Duration *</Text>
@@ -2066,12 +2257,24 @@ const medsString = prescribedMeds.items
             }
             onPress={() => {
               const name = newPrescribedMed.name.trim();
+              const dosage = newPrescribedMed.dosage.trim();
               const duration = newPrescribedMed.duration.trim();
 
               if (!name || !duration) {
-                Alert.alert(
-                  "Validation",
-                  "Medicine name and duration are mandatory."
+                dispatch(showError("Medicine name and duration are mandatory."));
+                return;
+              }
+
+              const isDuplicate = prescribedMeds.items.some(item => 
+                item.name.toLowerCase() === name.toLowerCase() && 
+                item.dosage === dosage
+              );
+
+              if (isDuplicate) {
+                dispatch(
+                  showError(
+                    `Medicine "${name}" with dosage "${dosage}${newPrescribedMed.dosageUnit}" already exists.`
+                  )
                 );
                 return;
               }
@@ -2118,12 +2321,11 @@ const medsString = prescribedMeds.items
       )}
     </View>
   );
-  console.log("pushhh",prescribedMeds)
 
   const renderSelfMedsSection = () => (
     <View style={styles.section}>
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Taking Any Self Prescribed Medicines?</Text>
+        <Text style={styles.label}>Taking Any Self Prescribed Medicines? *</Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
@@ -2142,6 +2344,7 @@ const medsString = prescribedMeds.items
             }
           />
         </View>
+        {formErrors.selfMeds && <Text style={styles.errorText}>{formErrors.selfMeds}</Text>}
       </View>
 
       {selfMeds.istrue && (
@@ -2163,20 +2366,23 @@ const medsString = prescribedMeds.items
             )}
           </View>
 
+          {/* Self medicine suggestions dropdown */}
           {!formDisabled && selfMedicineSuggestions.length > 0 && (
             <View style={styles.suggestionsContainer}>
-              <Text style={styles.suggestionTitle}>Suggestions:</Text>
-              <ScrollView style={styles.suggestionsList}>
-                {selfMedicineSuggestions.map((suggestion, index) => (
+              <FlatList
+                data={selfMedicineSuggestions}
+                keyExtractor={(item, index) => `${item}-${index}`}
+                renderItem={({ item }) => (
                   <TouchableOpacity
-                    key={index}
                     style={styles.suggestionItem}
-                    onPress={() => handleSelfMedicineSelect(suggestion)}
+                    onPress={() => handleSelfMedicineSelect(item)}
                   >
-                    <Text style={styles.suggestionText}>{suggestion}</Text>
+                    <Text style={styles.suggestionText}>{item}</Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                )}
+                style={styles.suggestionsList}
+                nestedScrollEnabled={true}
+              />
             </View>
           )}
 
@@ -2302,12 +2508,24 @@ const medsString = prescribedMeds.items
             }
             onPress={() => {
               const name = newSelfMed.name.trim();
+              const dosage = newSelfMed.dosage.trim();
               const duration = newSelfMed.duration.trim();
 
               if (!name || !duration) {
-                Alert.alert(
-                  "Validation",
-                  "Medicine name and duration are mandatory."
+                dispatch(showError("Medicine name and duration are mandatory."));
+                return;
+              }
+
+              const isDuplicate = selfMeds.items.some(item => 
+                item.name.toLowerCase() === name.toLowerCase() && 
+                item.dosage === dosage
+              );
+
+              if (isDuplicate) {
+                dispatch(
+                  showError(
+                    `Medicine "${name}" with dosage "${dosage}${newSelfMed.dosageUnit}" already exists.`
+                  )
                 );
                 return;
               }
@@ -2360,7 +2578,7 @@ const medsString = prescribedMeds.items
     <View style={styles.section}>
       {/* Chest Condition */}
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Any Chest Condition?</Text>
+        <Text style={styles.label}>Any Chest Condition? *</Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
@@ -2383,135 +2601,136 @@ const medsString = prescribedMeds.items
             }
           />
         </View>
-        {chestCondition.istrue && (
-          <>
-<View style={styles.fieldBlock}>
-  <Text style={styles.label}>Chest Condition</Text>
+        {formErrors.chestCondition && <Text style={styles.errorText}>{formErrors.chestCondition}</Text>}
+      </View>
 
-  <TouchableOpacity
-    style={styles.input}
-    onPress={() => setChestModalVisible(true)}
-  >
-    <Text style={styles.inputText}>
-      {newChestCondition || "Select condition"}
-    </Text>
-  </TouchableOpacity>
-</View>
-
-
-            <DateField
-              label="Condition Since"
-              value={newChestConditionDate}
-              maximumDate={new Date()}
-              disabled={formDisabled}
-              onChange={setNewChestConditionDate}
-            />
-
+      {chestCondition.istrue && (
+        <>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Chest Condition</Text>
             <TouchableOpacity
-              style={[
-                styles.addButtonLarge,
-                (formDisabled ||
-                  !newChestCondition.trim() ||
-                  !newChestConditionDate) &&
-                  styles.navButtonDisabled,
-              ]}
-              disabled={
-                formDisabled ||
-                !newChestCondition.trim() ||
-                !newChestConditionDate
-              }
-              onPress={() => {
-                const v = newChestCondition.trim();
-                if (!v || !newChestConditionDate) return;
-
-                if (
-                  !chestCondition.items.some(
-                    (c) => c.name.toLowerCase() === v.toLowerCase()
-                  )
-                ) {
-                  setChestCondition((prev) => ({
-                    ...prev,
-                    items: [
-                      ...prev.items,
-                      { name: v, date: newChestConditionDate },
-                    ],
-                  }));
-                }
-                setNewChestCondition("");
-                setNewChestConditionDate(null);
-                setSelectedChestConditionOption("");
-              }}
+              style={styles.input}
+              onPress={() => setChestModalVisible(true)}
             >
-              <Text style={styles.addButtonText}>Add Condition</Text>
+              <Text style={styles.inputText}>
+                {newChestCondition || "Select condition"}
+              </Text>
             </TouchableOpacity>
+          </View>
 
-            {chestCondition.items.map((condition, index) => (
-              <View key={index} style={styles.selectedItem}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.selectedItemText}>
-                    {condition.name}
-                  </Text>
-                  <DateField
-                    label="Condition Since"
-                    value={condition.date}
-                    maximumDate={new Date()}
-                    disabled={formDisabled}
-                    onChange={(date) => {
-                      setChestCondition((prev) => ({
-                        ...prev,
-                        items: prev.items.map((it, i) =>
-                          i === index ? { ...it, date } : it
-                        ),
-                      }));
-                    }}
-                  />
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
+          <DateField
+            label="Condition Since"
+            value={newChestConditionDate}
+            maximumDate={new Date()}
+            disabled={formDisabled}
+            onChange={setNewChestConditionDate}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.addButtonLarge,
+              (formDisabled ||
+                !newChestCondition.trim() ||
+                !newChestConditionDate) &&
+                styles.navButtonDisabled,
+            ]}
+            disabled={
+              formDisabled ||
+              !newChestCondition.trim() ||
+              !newChestConditionDate
+            }
+            onPress={() => {
+              const v = newChestCondition.trim();
+              if (!v || !newChestConditionDate) return;
+
+              if (
+                !chestCondition.items.some(
+                  (c) => c.name.toLowerCase() === v.toLowerCase()
+                )
+              ) {
+                setChestCondition((prev) => ({
+                  ...prev,
+                  items: [
+                    ...prev.items,
+                    { name: v, date: newChestConditionDate },
+                  ],
+                }));
+              }
+              setNewChestCondition("");
+              setNewChestConditionDate(null);
+              setSelectedChestConditionOption("");
+            }}
+          >
+            <Text style={styles.addButtonText}>Add Condition</Text>
+          </TouchableOpacity>
+
+          {chestCondition.items.map((condition, index) => (
+            <View key={index} style={styles.selectedItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectedItemText}>
+                  {condition.name}
+                </Text>
+                <DateField
+                  label="Condition Since"
+                  value={condition.date}
+                  maximumDate={new Date()}
+                  disabled={formDisabled}
+                  onChange={(date) => {
                     setChestCondition((prev) => ({
                       ...prev,
-                      items: prev.items.filter((_, i) => i !== index),
+                      items: prev.items.map((it, i) =>
+                        i === index ? { ...it, date } : it
+                      ),
                     }));
                   }}
-                >
-                  <Text style={styles.removeText}>✕</Text>
-                </TouchableOpacity>
+                />
               </View>
-            ))}
-          </>
-        )}
-      </View>
-<Modal visible={chestModalVisible} animationType="slide">
-  <View style={{ flex: 1, backgroundColor: "#fff" }}>
-    <View style={styles.modalHeader}>
-      <TouchableOpacity style={styles.closeButton} onPress={() => setChestModalVisible(false)}>
-        <X size={24} color="#0f172a" />
-      </TouchableOpacity>
-      <Text style={styles.modalTitle}>Select condition</Text>
-      <View style={styles.headerPlaceholder} />
-    </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setChestCondition((prev) => ({
+                    ...prev,
+                    items: prev.items.filter((_, i) => i !== index),
+                  }));
+                }}
+              >
+                <Text style={styles.removeText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      )}
 
-    <ScrollView>
-      {chestConditionList.map(item => (
-        <TouchableOpacity
-          key={item}
-          style={styles.modalItem}
-          onPress={() => {
-            setNewChestCondition(item);
-            setChestModalVisible(false);
-          }}
-        >
-          <Text style={styles.modalItemText}>{item}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  </View>
-</Modal>
+      <Modal visible={chestModalVisible} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setChestModalVisible(false)}>
+              <X size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Select condition</Text>
+            <View style={styles.headerPlaceholder} />
+          </View>
+
+          <ScrollView>
+            {chestConditionList.map(item => (
+              <TouchableOpacity
+                key={item}
+                style={styles.modalItem}
+                onPress={() => {
+                  setNewChestCondition(item);
+                  setChestModalVisible(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* Neurological */}
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>
-          Epilepsy or other Neurological Disorder?
+          Epilepsy or other Neurological Disorder? *
         </Text>
         <View style={styles.row}>
           <ChipButton
@@ -2535,102 +2754,104 @@ const medsString = prescribedMeds.items
             }
           />
         </View>
-        {neurologicalDisorder.istrue && (
-          <>
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>Neurological Disorder</Text>
-              <TouchableOpacity
-                style={styles.input}
-                onPress={() => setNeurologicalModalVisible(true)}
-              >
-                <Text style={styles.inputText}>
-                  {newNeurologicalCondition || "Select disorder"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+        {formErrors.neurologicalDisorder && <Text style={styles.errorText}>{formErrors.neurologicalDisorder}</Text>}
+      </View>
 
-            <DateField
-              label="Condition Since"
-              value={newNeurologicalDate}
-              maximumDate={new Date()}
-              disabled={formDisabled}
-              onChange={setNewNeurologicalDate}
-            />
-
+      {neurologicalDisorder.istrue && (
+        <>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Neurological Disorder</Text>
             <TouchableOpacity
-              style={[
-                styles.addButtonLarge,
-                (formDisabled ||
-                  !newNeurologicalCondition.trim() ||
-                  !newNeurologicalDate) &&
-                  styles.navButtonDisabled,
-              ]}
-              disabled={
-                formDisabled ||
-                !newNeurologicalCondition.trim() ||
-                !newNeurologicalDate
-              }
-              onPress={() => {
-                const v = newNeurologicalCondition.trim();
-                if (!v || !newNeurologicalDate) return;
-
-                if (
-                  !neurologicalDisorder.items.some(
-                    (c) => c.name.toLowerCase() === v.toLowerCase()
-                  )
-                ) {
-                  setNeurologicalDisorder((prev) => ({
-                    ...prev,
-                    items: [
-                      ...prev.items,
-                      { name: v, date: newNeurologicalDate },
-                    ],
-                  }));
-                }
-                setNewNeurologicalCondition("");
-                setNewNeurologicalDate(null);
-                setSelectedNeurologicalOption("");
-              }}
+              style={styles.input}
+              onPress={() => setNeurologicalModalVisible(true)}
             >
-              <Text style={styles.addButtonText}>Add Disorder</Text>
+              <Text style={styles.inputText}>
+                {newNeurologicalCondition || "Select disorder"}
+              </Text>
             </TouchableOpacity>
+          </View>
 
-            {neurologicalDisorder.items.map((condition, index) => (
-              <View key={index} style={styles.selectedItem}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.selectedItemText}>
-                    {condition.name}
-                  </Text>
-                  <DateField
-                    label="Condition Since"
-                    value={condition.date}
-                    maximumDate={new Date()}
-                    disabled={formDisabled}
-                    onChange={(date) => {
-                      setNeurologicalDisorder((prev) => ({
-                        ...prev,
-                        items: prev.items.map((it, i) =>
-                          i === index ? { ...it, date } : it
-                        ),
-                      }));
-                    }}
-                  />
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
+          <DateField
+            label="Condition Since"
+            value={newNeurologicalDate}
+            maximumDate={new Date()}
+            disabled={formDisabled}
+            onChange={setNewNeurologicalDate}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.addButtonLarge,
+              (formDisabled ||
+                !newNeurologicalCondition.trim() ||
+                !newNeurologicalDate) &&
+                styles.navButtonDisabled,
+            ]}
+            disabled={
+              formDisabled ||
+              !newNeurologicalCondition.trim() ||
+              !newNeurologicalDate
+            }
+            onPress={() => {
+              const v = newNeurologicalCondition.trim();
+              if (!v || !newNeurologicalDate) return;
+
+              if (
+                !neurologicalDisorder.items.some(
+                  (c) => c.name.toLowerCase() === v.toLowerCase()
+                )
+              ) {
+                setNeurologicalDisorder((prev) => ({
+                  ...prev,
+                  items: [
+                    ...prev.items,
+                    { name: v, date: newNeurologicalDate },
+                  ],
+                }));
+              }
+              setNewNeurologicalCondition("");
+              setNewNeurologicalDate(null);
+              setSelectedNeurologicalOption("");
+            }}
+          >
+            <Text style={styles.addButtonText}>Add Disorder</Text>
+          </TouchableOpacity>
+
+          {neurologicalDisorder.items.map((condition, index) => (
+            <View key={index} style={styles.selectedItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectedItemText}>
+                  {condition.name}
+                </Text>
+                <DateField
+                  label="Condition Since"
+                  value={condition.date}
+                  maximumDate={new Date()}
+                  disabled={formDisabled}
+                  onChange={(date) => {
                     setNeurologicalDisorder((prev) => ({
                       ...prev,
-                      items: prev.items.filter((_, i) => i !== index),
+                      items: prev.items.map((it, i) =>
+                        i === index ? { ...it, date } : it
+                      ),
                     }));
                   }}
-                >
-                  <Text style={styles.removeText}>✕</Text>
-                </TouchableOpacity>
+                />
               </View>
-            ))}
-          </>
-        )}
-      </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setNeurologicalDisorder((prev) => ({
+                    ...prev,
+                    items: prev.items.filter((_, i) => i !== index),
+                  }));
+                }}
+              >
+                <Text style={styles.removeText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      )}
 
       <Modal visible={neurologicalModalVisible} animationType="slide">
         <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -2661,7 +2882,7 @@ const medsString = prescribedMeds.items
 
       {/* Heart Problems from API list */}
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Any Heart Problems?</Text>
+        <Text style={styles.label}>Any Heart Problems? *</Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
@@ -2684,102 +2905,104 @@ const medsString = prescribedMeds.items
             }
           />
         </View>
-        {heartProblems.istrue && (
-          <>
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>Heart Problem</Text>
-              <TouchableOpacity
-                style={styles.input}
-                onPress={() => setHeartProblemModalVisible(true)}
-              >
-                <Text style={styles.inputText}>
-                  {newHeartProblem || "Select problem"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+        {formErrors.heartProblems && <Text style={styles.errorText}>{formErrors.heartProblems}</Text>}
+      </View>
 
-            <DateField
-              label="Problem Since"
-              value={newHeartProblemDate}
-              maximumDate={new Date()}
-              disabled={formDisabled}
-              onChange={setNewHeartProblemDate}
-            />
-
+      {heartProblems.istrue && (
+        <>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Heart Problem</Text>
             <TouchableOpacity
-              style={[
-                styles.addButtonLarge,
-                (formDisabled ||
-                  !newHeartProblem.trim() ||
-                  !newHeartProblemDate) &&
-                  styles.navButtonDisabled,
-              ]}
-              disabled={
-                formDisabled ||
-                !newHeartProblem.trim() ||
-                !newHeartProblemDate
-              }
-              onPress={() => {
-                const v = newHeartProblem.trim();
-                if (!v || !newHeartProblemDate) return;
-
-                if (
-                  !heartProblems.items.some(
-                    (c) => c.name.toLowerCase() === v.toLowerCase()
-                  )
-                ) {
-                  setHeartProblems((prev) => ({
-                    ...prev,
-                    items: [
-                      ...prev.items,
-                      { name: v, date: newHeartProblemDate },
-                    ],
-                  }));
-                }
-                setNewHeartProblem("");
-                setNewHeartProblemDate(null);
-                setSelectedHeartProblemOption("");
-              }}
+              style={styles.input}
+              onPress={() => setHeartProblemModalVisible(true)}
             >
-              <Text style={styles.addButtonText}>Add Heart Problem</Text>
+              <Text style={styles.inputText}>
+                {newHeartProblem || "Select problem"}
+              </Text>
             </TouchableOpacity>
+          </View>
 
-            {heartProblems.items.map((condition, index) => (
-              <View key={index} style={styles.selectedItem}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.selectedItemText}>
-                    {condition.name}
-                  </Text>
-                  <DateField
-                    label="Problem Since"
-                    value={condition.date}
-                    maximumDate={new Date()}
-                    disabled={formDisabled}
-                    onChange={(date) => {
-                      setHeartProblems((prev) => ({
-                        ...prev,
-                        items: prev.items.map((it, i) =>
-                          i === index ? { ...it, date } : it
-                        ),
-                      }));
-                    }}
-                  />
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
+          <DateField
+            label="Problem Since"
+            value={newHeartProblemDate}
+            maximumDate={new Date()}
+            disabled={formDisabled}
+            onChange={setNewHeartProblemDate}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.addButtonLarge,
+              (formDisabled ||
+                !newHeartProblem.trim() ||
+                !newHeartProblemDate) &&
+                styles.navButtonDisabled,
+            ]}
+            disabled={
+              formDisabled ||
+              !newHeartProblem.trim() ||
+              !newHeartProblemDate
+            }
+            onPress={() => {
+              const v = newHeartProblem.trim();
+              if (!v || !newHeartProblemDate) return;
+
+              if (
+                !heartProblems.items.some(
+                  (c) => c.name.toLowerCase() === v.toLowerCase()
+                )
+              ) {
+                setHeartProblems((prev) => ({
+                  ...prev,
+                  items: [
+                    ...prev.items,
+                    { name: v, date: newHeartProblemDate },
+                  ],
+                }));
+              }
+              setNewHeartProblem("");
+              setNewHeartProblemDate(null);
+              setSelectedHeartProblemOption("");
+            }}
+          >
+            <Text style={styles.addButtonText}>Add Heart Problem</Text>
+          </TouchableOpacity>
+
+          {heartProblems.items.map((condition, index) => (
+            <View key={index} style={styles.selectedItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectedItemText}>
+                  {condition.name}
+                </Text>
+                <DateField
+                  label="Problem Since"
+                  value={condition.date}
+                  maximumDate={new Date()}
+                  disabled={formDisabled}
+                  onChange={(date) => {
                     setHeartProblems((prev) => ({
                       ...prev,
-                      items: prev.items.filter((_, i) => i !== index),
+                      items: prev.items.map((it, i) =>
+                        i === index ? { ...it, date } : it
+                      ),
                     }));
                   }}
-                >
-                  <Text style={styles.removeText}>✕</Text>
-                </TouchableOpacity>
+                />
               </View>
-            ))}
-          </>
-        )}
-      </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setHeartProblems((prev) => ({
+                    ...prev,
+                    items: prev.items.filter((_, i) => i !== index),
+                  }));
+                }}
+              >
+                <Text style={styles.removeText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      )}
 
       <Modal visible={heartProblemModalVisible} animationType="slide">
         <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -2810,7 +3033,7 @@ const medsString = prescribedMeds.items
 
       {/* Mental Health from master list */}
       <View style={styles.fieldBlock}>
-        <Text style={styles.label}>Any Mental Health Problems?</Text>
+        <Text style={styles.label}>Any Mental Health Problems? *</Text>
         <View style={styles.row}>
           <ChipButton
             label="Yes"
@@ -2833,102 +3056,104 @@ const medsString = prescribedMeds.items
             }
           />
         </View>
-        {mentalHealth.istrue && (
-          <>
-            <View style={styles.fieldBlock}>
-              <Text style={styles.label}>Mental Health Problem</Text>
-              <TouchableOpacity
-                style={styles.input}
-                onPress={() => setMentalHealthModalVisible(true)}
-              >
-                <Text style={styles.inputText}>
-                  {newMentalHealth || "Select problem"}
-                </Text>
-              </TouchableOpacity>
-            </View>
+        {formErrors.mentalHealth && <Text style={styles.errorText}>{formErrors.mentalHealth}</Text>}
+      </View>
 
-            <DateField
-              label="Problem Since"
-              value={newMentalHealthDate}
-              maximumDate={new Date()}
-              disabled={formDisabled}
-              onChange={setNewMentalHealthDate}
-            />
-
+      {mentalHealth.istrue && (
+        <>
+          <View style={styles.fieldBlock}>
+            <Text style={styles.label}>Mental Health Problem</Text>
             <TouchableOpacity
-              style={[
-                styles.addButtonLarge,
-                (formDisabled ||
-                  !newMentalHealth.trim() ||
-                  !newMentalHealthDate) &&
-                  styles.navButtonDisabled,
-              ]}
-              disabled={
-                formDisabled ||
-                !newMentalHealth.trim() ||
-                !newMentalHealthDate
-              }
-              onPress={() => {
-                const v = newMentalHealth.trim();
-                if (!v || !newMentalHealthDate) return;
-
-                if (
-                  !mentalHealth.items.some(
-                    (c) => c.name.toLowerCase() === v.toLowerCase()
-                  )
-                ) {
-                  setMentalHealth((prev) => ({
-                    ...prev,
-                    items: [
-                      ...prev.items,
-                      { name: v, date: newMentalHealthDate },
-                    ],
-                  }));
-                }
-                setNewMentalHealth("");
-                setNewMentalHealthDate(null);
-                setSelectedMentalHealthOption("");
-              }}
+              style={styles.input}
+              onPress={() => setMentalHealthModalVisible(true)}
             >
-              <Text style={styles.addButtonText}>Add Mental Problem</Text>
+              <Text style={styles.inputText}>
+                {newMentalHealth || "Select problem"}
+              </Text>
             </TouchableOpacity>
+          </View>
 
-            {mentalHealth.items.map((condition, index) => (
-              <View key={index} style={styles.selectedItem}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.selectedItemText}>
-                    {condition.name}
-                  </Text>
-                  <DateField
-                    label="Problem Since"
-                    value={condition.date}
-                    maximumDate={new Date()}
-                    disabled={formDisabled}
-                    onChange={(date) => {
-                      setMentalHealth((prev) => ({
-                        ...prev,
-                        items: prev.items.map((it, i) =>
-                          i === index ? { ...it, date } : it
-                        ),
-                      }));
-                    }}
-                  />
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
+          <DateField
+            label="Problem Since"
+            value={newMentalHealthDate}
+            maximumDate={new Date()}
+            disabled={formDisabled}
+            onChange={setNewMentalHealthDate}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.addButtonLarge,
+              (formDisabled ||
+                !newMentalHealth.trim() ||
+                !newMentalHealthDate) &&
+                styles.navButtonDisabled,
+            ]}
+            disabled={
+              formDisabled ||
+              !newMentalHealth.trim() ||
+              !newMentalHealthDate
+            }
+            onPress={() => {
+              const v = newMentalHealth.trim();
+              if (!v || !newMentalHealthDate) return;
+
+              if (
+                !mentalHealth.items.some(
+                  (c) => c.name.toLowerCase() === v.toLowerCase()
+                )
+              ) {
+                setMentalHealth((prev) => ({
+                  ...prev,
+                  items: [
+                    ...prev.items,
+                    { name: v, date: newMentalHealthDate },
+                  ],
+                }));
+              }
+              setNewMentalHealth("");
+              setNewMentalHealthDate(null);
+              setSelectedMentalHealthOption("");
+            }}
+          >
+            <Text style={styles.addButtonText}>Add Mental Problem</Text>
+          </TouchableOpacity>
+
+          {mentalHealth.items.map((condition, index) => (
+            <View key={index} style={styles.selectedItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectedItemText}>
+                  {condition.name}
+                </Text>
+                <DateField
+                  label="Problem Since"
+                  value={condition.date}
+                  maximumDate={new Date()}
+                  disabled={formDisabled}
+                  onChange={(date) => {
                     setMentalHealth((prev) => ({
                       ...prev,
-                      items: prev.items.filter((_, i) => i !== index),
+                      items: prev.items.map((it, i) =>
+                        i === index ? { ...it, date } : it
+                      ),
                     }));
                   }}
-                >
-                  <Text style={styles.removeText}>✕</Text>
-                </TouchableOpacity>
+                />
               </View>
-            ))}
-          </>
-        )}
-      </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setMentalHealth((prev) => ({
+                    ...prev,
+                    items: prev.items.filter((_, i) => i !== index),
+                  }));
+                }}
+              >
+                <Text style={styles.removeText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      )}
 
       <Modal visible={mentalHealthModalVisible} animationType="slide">
         <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -2963,7 +3188,7 @@ const medsString = prescribedMeds.items
     <View style={styles.section}>
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>
-          Do You Have/Had Hepatitis B, Hepatitis C or HIV?
+          Do You Have/Had Hepatitis B, Hepatitis C or HIV? *
         </Text>
         <View style={styles.row}>
           <ChipButton
@@ -2983,6 +3208,7 @@ const medsString = prescribedMeds.items
             }
           />
         </View>
+        {formErrors.infections && <Text style={styles.errorText}>{formErrors.infections}</Text>}
       </View>
 
       {infections.istrue && (
@@ -3039,29 +3265,7 @@ const medsString = prescribedMeds.items
       )}
     </View>
   );
-  const ageInfo = currentPatient?.dob
-  ? ageFromDOBList(currentPatient.dob)
-  : null;
-const getAgeInDays = (ageInfo: string | null) => {
-  if (!ageInfo) return null;
 
-  if (ageInfo.includes("day")) {
-    return parseInt(ageInfo);
-  }
-
-  if (ageInfo.includes("month")) {
-    return parseInt(ageInfo) * 30;
-  }
-
-  if (ageInfo.includes("year")) {
-    return parseInt(ageInfo) * 365;
-  }
-
-  return null;
-};
-const ageInDays = getAgeInDays(ageInfo);
-
-console.log("currentPatient",ageInfo)
   const renderAddictionSection = () => (
     <View style={styles.section}>
       {ageInDays !== null && ageInDays <= 28 ? (
@@ -3070,7 +3274,7 @@ console.log("currentPatient",ageInfo)
         <>
           <View style={styles.fieldBlock}>
             <Text style={styles.label}>
-              Drug, Tobacco or Alcohol addiction?
+              Drug, Tobacco or Alcohol addiction? *
             </Text>
             <View style={styles.row}>
               <ChipButton
@@ -3094,6 +3298,7 @@ console.log("currentPatient",ageInfo)
                 }
               />
             </View>
+            {formErrors.addiction && <Text style={styles.errorText}>{formErrors.addiction}</Text>}
           </View>
 
           {addiction.istrue && (
@@ -3176,7 +3381,7 @@ console.log("currentPatient",ageInfo)
           {pregnant && (
             <>
               <DateField
-                label="Pregnancy Date"
+                label="Pregnancy Date *"
                 value={pregnancyDetails.date}
                 maximumDate={new Date()}
                 disabled={formDisabled}
@@ -3186,7 +3391,7 @@ console.log("currentPatient",ageInfo)
               />
               <View style={styles.row}>
                 <View style={[styles.fieldBlock, { flex: 1 }]}>
-                  <Text style={styles.label}>Number of Pregnancies</Text>
+                  <Text style={styles.label}>Number of Pregnancies *</Text>
                   <TextInput
                     style={styles.input}
                     value={pregnancyDetails.numberOfPregnancies}
@@ -3202,7 +3407,7 @@ console.log("currentPatient",ageInfo)
                   />
                 </View>
                 <View style={[styles.fieldBlock, { flex: 1 }]}>
-                  <Text style={styles.label}>Live Births</Text>
+                  <Text style={styles.label}>Live Births *</Text>
                   <TextInput
                     style={styles.input}
                     value={pregnancyDetails.liveBirths}
@@ -3218,6 +3423,7 @@ console.log("currentPatient",ageInfo)
                   />
                 </View>
               </View>
+              {formErrors.pregnancy && <Text style={styles.errorText}>{formErrors.pregnancy}</Text>}
             </>
           )}
         </View>
@@ -3225,7 +3431,7 @@ console.log("currentPatient",ageInfo)
 
       <View style={styles.fieldBlock}>
         <Text style={styles.label}>
-          Any Known Disease Mother/Father is Suffering / Suffered?
+          Any Known Disease Mother/Father is Suffering / Suffered? *
         </Text>
         <View style={styles.row}>
           <ChipButton
@@ -3249,6 +3455,7 @@ console.log("currentPatient",ageInfo)
             }
           />
         </View>
+        {formErrors.hereditaryDisease && <Text style={styles.errorText}>{formErrors.hereditaryDisease}</Text>}
       </View>
 
       {hereditaryDisease.istrue && (
@@ -3352,7 +3559,7 @@ console.log("currentPatient",ageInfo)
       {lumps.istrue && (
         <>
           <DateField
-            label="Examination Date"
+            label="Examination Date *"
             value={lumps.details.date}
             maximumDate={new Date()}
             disabled={formDisabled}
@@ -3363,9 +3570,10 @@ console.log("currentPatient",ageInfo)
               }))
             }
           />
+          {formErrors.lumpsDate && <Text style={styles.errorText}>{formErrors.lumpsDate}</Text>}
 
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Location</Text>
+            <Text style={styles.label}>Location *</Text>
             <TouchableOpacity
               style={styles.input}
               onPress={() => setLumpsLocationModalVisible(true)}
@@ -3374,6 +3582,7 @@ console.log("currentPatient",ageInfo)
                 {lumps.details.location || "Select Location"}
               </Text>
             </TouchableOpacity>
+            {formErrors.lumpsLocation && <Text style={styles.errorText}>{formErrors.lumpsLocation}</Text>}
           </View>
 
           <Modal visible={lumpsLocationModalVisible} animationType="slide">
@@ -3423,7 +3632,7 @@ console.log("currentPatient",ageInfo)
           </Modal>
 
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Size</Text>
+            <Text style={styles.label}>Size *</Text>
             <TouchableOpacity
               style={styles.input}
               onPress={() => setLumpsSizeModalVisible(true)}
@@ -3432,6 +3641,7 @@ console.log("currentPatient",ageInfo)
                 {lumps.details.size || "Select Size"}
               </Text>
             </TouchableOpacity>
+            {formErrors.lumpsSize && <Text style={styles.errorText}>{formErrors.lumpsSize}</Text>}
           </View>
 
           <Modal visible={lumpsSizeModalVisible} animationType="slide">
@@ -3465,7 +3675,7 @@ console.log("currentPatient",ageInfo)
           </Modal>
 
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Consistency</Text>
+            <Text style={styles.label}>Consistency *</Text>
             <TouchableOpacity
               style={styles.input}
               onPress={() => setLumpsConsistencyModalVisible(true)}
@@ -3474,6 +3684,7 @@ console.log("currentPatient",ageInfo)
                 {lumps.details.consistency || "Select Consistency"}
               </Text>
             </TouchableOpacity>
+            {formErrors.lumpsConsistency && <Text style={styles.errorText}>{formErrors.lumpsConsistency}</Text>}
           </View>
 
           <Modal visible={lumpsConsistencyModalVisible} animationType="slide">
@@ -3538,7 +3749,7 @@ console.log("currentPatient",ageInfo)
       {cancer.istrue && (
         <>
           <DateField
-            label="Diagnosis Date"
+            label="Diagnosis Date *"
             value={cancer.details.date}
             maximumDate={new Date()}
             disabled={formDisabled}
@@ -3549,9 +3760,10 @@ console.log("currentPatient",ageInfo)
               }))
             }
           />
+          {formErrors.cancerDate && <Text style={styles.errorText}>{formErrors.cancerDate}</Text>}
 
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Type of Cancer</Text>
+            <Text style={styles.label}>Type of Cancer *</Text>
             <TouchableOpacity
               style={styles.input}
               onPress={() => setCancerTypeModalVisible(true)}
@@ -3560,6 +3772,7 @@ console.log("currentPatient",ageInfo)
                 {cancer.details.type || "Select Type"}
               </Text>
             </TouchableOpacity>
+            {formErrors.cancerType && <Text style={styles.errorText}>{formErrors.cancerType}</Text>}
           </View>
 
           <Modal visible={cancerTypeModalVisible} animationType="slide">
@@ -3601,7 +3814,7 @@ console.log("currentPatient",ageInfo)
           </Modal>
 
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>Stage of Cancer</Text>
+            <Text style={styles.label}>Stage of Cancer *</Text>
             <TextInput
               style={styles.input}
               value={cancer.details.stage}
@@ -3614,6 +3827,7 @@ console.log("currentPatient",ageInfo)
               placeholder="Enter cancer stage"
               placeholderTextColor="#9ca3af"
             />
+            {formErrors.cancerStage && <Text style={styles.errorText}>{formErrors.cancerStage}</Text>}
           </View>
         </>
       )}
@@ -3687,18 +3901,7 @@ console.log("currentPatient",ageInfo)
               {/* PREV */}
               <TouchableOpacity
                 style={[styles.navButton]}
-                onPress={() => {
-                  const idx = sectionOrder.indexOf(section);
-                  if (idx > 0) {
-                    const updatedData = buildUpdatedData();
-                    onDataUpdate(updatedData);
-                    navigation.navigate("MedicalHistoryForm", {
-                      section: sectionOrder[idx - 1],
-                      medicalHistoryData: updatedData,
-                      onDataUpdate,
-                    });
-                  }
-                }}
+                onPress={handlePrev}
               >
                 <Text style={styles.navButtonText}>Prev</Text>
               </TouchableOpacity>
@@ -3712,10 +3915,7 @@ console.log("currentPatient",ageInfo)
                     formDisabled && styles.navButtonDisabled,
                   ]}
                   disabled={formDisabled}
-                  onPress={() => {
-                    if (formDisabled) return;
-                    handleSave();
-                  }}
+                  onPress={handleSave}
                 >
                   <Text style={styles.navButtonText}>Close</Text>
                 </TouchableOpacity>
@@ -3726,19 +3926,7 @@ console.log("currentPatient",ageInfo)
                     formDisabled && styles.navButtonDisabled,
                   ]}
                   disabled={formDisabled}
-                  onPress={() => {
-                    if (formDisabled) return;
-                    const idx = sectionOrder.indexOf(section);
-                    if (idx < sectionOrder.length - 1) {
-                      const updatedData = buildUpdatedData();
-                      onDataUpdate(updatedData);
-                      navigation.navigate("MedicalHistoryForm", {
-                        section: sectionOrder[idx + 1],
-                        medicalHistoryData: updatedData,
-                        onDataUpdate,
-                      });
-                    }
-                  }}
+                  onPress={handleNext}
                 >
                   <Text style={styles.navButtonText}>Next</Text>
                 </TouchableOpacity>
@@ -3949,22 +4137,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   picker: {
-
     color: "#111827",
     width: "100%",
   },
   modalItemText: {
     fontSize: 16,
     color: "#111827",
-    flexWrap: "wrap",     // ✅ works
+    flexWrap: "wrap",
     lineHeight: 22,
   },
-modalItem: {
-  padding: 16,
-  borderBottomWidth: 1,
-  borderBottomColor: "#e5e7eb",
-},
-
+  modalItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
   subTitle: {
     fontSize: 16,
     fontWeight: "600",
@@ -4070,7 +4256,8 @@ modalItem: {
     marginBottom: 16,
     backgroundColor: "#f9fafb",
     borderRadius: 8,
-    padding: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
     maxHeight: 150,
   },
   suggestionTitle: {
@@ -4078,17 +4265,17 @@ modalItem: {
     fontWeight: "600",
     color: "#6b7280",
     marginBottom: 4,
+    paddingHorizontal: 8,
+    paddingTop: 8,
   },
   suggestionsList: {
     maxHeight: 120,
   },
   suggestionItem: {
-    padding: 8,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
     backgroundColor: "#ffffff",
-    borderRadius: 4,
-    marginBottom: 4,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
   },
   suggestionText: {
     fontSize: 14,
@@ -4113,6 +4300,5 @@ modalItem: {
     backgroundColor: "#f9fafb",
   },
 });
-
 
 export default MedicalHistoryFormScreen;

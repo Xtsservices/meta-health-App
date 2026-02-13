@@ -39,7 +39,13 @@ const AppointmentTabsMobile: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case "BookAppointment":
-        return <AppointmentForm />;
+        return (
+          <AppointmentForm
+            onAppointmentCreated={() =>
+              setActiveTab("ScheduledAppointment")
+            }
+          />
+        );
 
       case "ScheduledAppointment":
         return (

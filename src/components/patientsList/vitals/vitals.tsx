@@ -17,7 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Plus } from "lucide-react-native";
 import { RootState } from "../../../store/store";
 import { AuthFetch } from "../../../auth/auth";
-import { formatDateTime } from "../../../utils/dateTime";
+import { formatDateTime, formatTime } from "../../../utils/dateTime";
 import Footer from "../../dashboard/footer";
 import { COLORS } from "../../../utils/colour";
 
@@ -27,7 +27,7 @@ const FOOTER_H = 70;
 
 // ---- types ----
 type VitalRow = {
-  id: string; // local key
+  id: string;
   temperature?: number | string;
   pulse?: number | string;
   bp?: string | null;
@@ -35,6 +35,13 @@ type VitalRow = {
   oxygen?: number | string;
   hrv?: number | string;
   recordedDate?: string;
+  temperatureTime?: string;
+  pulseTime?: string;
+  bpTime?: string;
+  respiratoryRateTime?: string;
+  oxygenTime?: string;
+  hrvTime?: string;
+  hasCommonTime?: boolean;
 };
 type RouteParams = { ot: boolean };
 
@@ -65,6 +72,7 @@ export default function VitalsTabScreen() {
           : `vitals/${user?.hospitalID}/${timeLinePatientID}`;
 
       const res = await AuthFetch(apiUrl, token);
+      console.log("111",res)
       let list: any[] = [];
       if (res?.status === "success" && "data" in res) {
         if (currentPatinet?.currentPatient?.role === "homecarepatient") {
@@ -77,9 +85,39 @@ export default function VitalsTabScreen() {
             respiratoryRate: Number(item.respiratoryRate) || "",
             bp: null,
             recordedDate: item.addedOn || item.givenTime,
+            hasCommonTime: true,
           }));
         } else {
-          list = (res?.data?.vitals || []).map((vital: any, idx: number) => ({
+          list = (res?.data?.vitals || []).map((vital: any, idx: number) => {
+            const timestamps = [
+              vital?.temperatureTime,
+              vital?.pulseTime,
+              vital?.bpTime,
+              vital?.oxygenTime,
+              vital?.respiratoryRateTime,
+              vital?.hrvTime,
+              vital?.addedOn,
+              vital?.givenTime
+            ].filter(Boolean);
+            
+            const latestTimestamp = timestamps.length > 0 
+              ? timestamps.reduce((latest, current) => {
+                  return new Date(current) > new Date(latest) ? current : latest;
+                })
+              : vital?.addedOn;
+            
+            const uniqueTimes = new Set([
+              vital?.temperatureTime,
+              vital?.pulseTime,
+              vital?.bpTime,
+              vital?.oxygenTime,
+              vital?.respiratoryRateTime,
+              vital?.hrvTime
+            ].filter(Boolean));
+            
+            const hasCommonTime = uniqueTimes.size <= 1;
+            
+            return {
             id: String(vital?.id ?? idx),
             temperature: vital?.temperature ?? "",
             pulse: vital?.pulse ?? "",
@@ -87,19 +125,19 @@ export default function VitalsTabScreen() {
             respiratoryRate: vital?.respiratoryRate ?? "",
             oxygen: vital?.oxygen ?? "",
             hrv: vital?.hrv ?? "",
-            recordedDate:
-              vital?.temperatureTime ||
-              vital?.pulseTime ||
-              vital?.bpTime ||
-              vital?.oxygenTime ||
-              vital?.respiratoryRateTime ||
-              vital?.hrvTime ||
-              vital?.addedOn,
-          }));
-        }
+            recordedDate: latestTimestamp || vital?.addedOn,
+            temperatureTime: vital?.temperatureTime,
+            pulseTime: vital?.pulseTime,
+            bpTime: vital?.bpTime,
+            respiratoryRateTime: vital?.respiratoryRateTime,
+            oxygenTime: vital?.oxygenTime,
+            hrvTime: vital?.hrvTime,
+            hasCommonTime,
+          };
+        });
+      }
       }
 
-      // newest first
       list.reverse();
       const normalized: VitalRow[] = list.map((vital: any, i: number) => ({
         id: vital.id ?? String(i),
@@ -110,6 +148,13 @@ export default function VitalsTabScreen() {
         oxygen: vital.oxygen ?? "",
         hrv: vital.hrv ?? "",
         recordedDate: vital?.recordedDate ? formatDateTime(vital?.recordedDate) : "-",
+        temperatureTime: vital?.temperatureTime ? formatTime(vital?.temperatureTime) : undefined,
+        pulseTime: vital?.pulseTime ? formatTime(vital?.pulseTime) : undefined,
+        bpTime: vital?.bpTime ? formatTime(vital?.bpTime) : undefined,
+        respiratoryRateTime: vital?.respiratoryRateTime ? formatTime(vital?.respiratoryRateTime) : undefined,
+        oxygenTime: vital?.oxygenTime ? formatTime(vital?.oxygenTime) : undefined,
+        hrvTime: vital?.hrvTime ? formatTime(vital?.hrvTime) : undefined,
+        hasCommonTime: vital?.hasCommonTime ?? false,
       }));
       setRows(normalized);
     } finally {
@@ -117,7 +162,6 @@ export default function VitalsTabScreen() {
     }
   }, [currentPatinet, timeline, user?.token, user?.hospitalID]);
 
-  // refetch on screen focus
   useFocusEffect(
     useCallback(() => {
       fetchVitals();
@@ -125,18 +169,25 @@ export default function VitalsTabScreen() {
   );
 
   const renderItem = ({ item, index }: { item: VitalRow; index: number }) => {
-    // helper to decide presence — treat undefined, null, "", 0, "0" as absent
     const hasValue = (v: any) =>
       v !== undefined && v !== null && v !== "" && v !== 0 && v !== "0";
 
-    // Build list of chips dynamically — only include when value is present
-    const chips: { label: string; bg: string }[] = [];
-    if (hasValue(item.temperature)) chips.push({ label: `Temp: ${item.temperature}`, bg: COLORS.chipTemp });
-    if (hasValue(item.pulse)) chips.push({ label: `HR: ${item.pulse}`, bg: COLORS.chipHR });
-    if (hasValue(item.bp)) chips.push({ label: `BP: ${item.bp}`, bg: COLORS.chipBP });
-    if (hasValue(item.respiratoryRate)) chips.push({ label: `RR: ${item.respiratoryRate}`, bg: COLORS.chipRR });
-    if (hasValue(item.oxygen)) chips.push({ label: `SpO₂: ${item.oxygen}`, bg: COLORS.chipSpO2 });
-    if (hasValue(item.hrv)) chips.push({ label: `HRV: ${item.hrv}`, bg: COLORS.chipHRV });
+    const chips: { label: string; bg: string; time?: string }[] = [];
+    if (hasValue(item.temperature)) chips.push({ label: `Temp: ${item.temperature}`, bg: COLORS.chipTemp, time: item.temperatureTime });
+    if (hasValue(item.pulse)) chips.push({ label: `HR: ${item.pulse}`, bg: COLORS.chipHR, time: item.pulseTime });
+    if (hasValue(item.bp)) chips.push({ label: `BP: ${item.bp}`, bg: COLORS.chipBP, time: item.bpTime });
+    if (hasValue(item.respiratoryRate)) chips.push({ label: `RR: ${item.respiratoryRate}`, bg: COLORS.chipRR, time: item.respiratoryRateTime });
+    if (hasValue(item.oxygen)) chips.push({ label: `SpO₂: ${item.oxygen}`, bg: COLORS.chipSpO2, time: item.oxygenTime });
+    if (hasValue(item.hrv)) chips.push({ label: `HRV: ${item.hrv}`, bg: COLORS.chipHRV, time: item.hrvTime });
+const commonTime =
+  item.hasCommonTime
+    ? item.temperatureTime ||
+      item.pulseTime ||
+      item.bpTime ||
+      item.respiratoryRateTime ||
+      item.oxygenTime ||
+      item.hrvTime
+    : undefined;
 
     return (
       <View
@@ -149,12 +200,15 @@ export default function VitalsTabScreen() {
           <Text style={[styles.title, { color: COLORS.text }]}>Record #{rows.length - index}</Text>
           <Text style={[styles.date, { color: COLORS.sub }]}>{item.recordedDate}</Text>
         </View>
-
-        {/* Only render chips wrap when we have at least one chip */}
+        {item.hasCommonTime && commonTime && (
+          <Text style={[styles.commonTime, { color: COLORS.sub }]}>
+            Time: {commonTime}
+          </Text>
+        )}
         {chips.length > 0 && (
           <View style={styles.chipsWrap}>
             {chips.map((c, i) => (
-              <Chip key={`${item.id}-chip-${i}`} label={c.label} bg={c.bg} />
+              <Chip key={`${item.id}-chip-${i}`} label={c.label} bg={c.bg} time={item.hasCommonTime ? undefined : c.time} />
             ))}
           </View>
         )}
@@ -199,7 +253,6 @@ export default function VitalsTabScreen() {
         />
       )}
 
-      {/* FAB */}
       {!isOt && rows.length > 0 && user?.roleName !== "reception" && (
         currentPatinet.ptype != 21 && (
           <Pressable
@@ -218,7 +271,6 @@ export default function VitalsTabScreen() {
         )
       )}
 
-      {/* Footer pinned above system nav */}
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"patients"} brandColor="#14b8a6" />
       </View>
@@ -229,10 +281,15 @@ export default function VitalsTabScreen() {
   );
 }
 
-function Chip({ label, bg }: { label: string; bg: string }) {
+function Chip({ label, bg, time }: { label: string; bg: string; time?: string }) {
   return (
-    <View style={[styles.chip, { backgroundColor: bg, borderColor: COLORS.border }]}>
-      <Text style={{ color: COLORS.text, fontWeight: "700" }}>{label}</Text>
+    <View style={{ alignItems: "flex-start" }}>
+      <View style={[styles.chip, { backgroundColor: bg, borderColor: COLORS.border }]}>
+        <Text style={{ color: COLORS.text, fontWeight: "700" }}>{label}</Text>
+      </View>
+      {time && (
+        <Text style={[styles.chipTime, { color: COLORS.sub }]}>{time}</Text>
+      )}
     </View>
   );
 }
@@ -281,6 +338,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
+  chipTime: {
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 2,
+    marginLeft: 2,
+  },
   emptyWrap: {
     width: width - 32,
     alignSelf: "center",
@@ -326,4 +389,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "transparent",
   },
+  commonTime: {
+  fontSize: 11,
+  fontWeight: "600",
+  marginTop: 6,
+}
 });

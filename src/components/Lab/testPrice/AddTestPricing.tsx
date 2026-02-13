@@ -503,6 +503,11 @@ const AddTestPricing: React.FC = () => {
                       keyExtractor={(item) => item.id.toString()}
                       keyboardShouldPersistTaps="always"
                       style={{ maxHeight: 200 }}
+                        nestedScrollEnabled={true}
+                        showsVerticalScrollIndicator={false}
+                        initialNumToRender={10}
+                        maxToRenderPerBatch={20}
+                        windowSize={10}
                     />
                   </View>
                 )}
@@ -846,6 +851,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     marginTop: SPACING.xs / 2,
+    overflow: "hidden", 
   },
   suggestionItem: {
     flexDirection: "row",

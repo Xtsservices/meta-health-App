@@ -10,13 +10,14 @@ import {
   StyleSheet,
   Dimensions
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "../../store/store";
 import { AuthFetch, AuthPost } from "../../auth/auth";
 import { formatDateTime } from "../../utils/dateTime";
 import { Edit2Icon, Trash2Icon, PlusIcon, XIcon } from "../../utils/SvgIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { showError, showSuccess } from "../../store/toast.slice";
 
 interface Task {
   id: number;
@@ -28,6 +29,7 @@ interface Task {
 
 const MyTasks: React.FC = () => {
   const user = useSelector((state: RootState) => state.currentUser);
+  const dispatch = useDispatch();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -43,7 +45,7 @@ const MyTasks: React.FC = () => {
       try {
         const token = await AsyncStorage.getItem('token');
         if (!token) {
-          Alert.alert("Error", "Authentication token not found");
+          dispatch(showError("Authentication token not found"));
           setTasks([]);
           return;
         }
@@ -54,11 +56,11 @@ const MyTasks: React.FC = () => {
           const tasksData = response?.data?.alerts;
           setTasks(Array.isArray(tasksData) ? tasksData : []);
         } else {
-          Alert.alert("Error", response?.message || "Failed to fetch tasks");
+          dispatch(showError(response?.message || "Failed to fetch tasks"));
           setTasks([]);
         }
       } catch (error) {
-        Alert.alert("Error", "Failed to fetch tasks. Please try again.");
+        dispatch(showError("Failed to fetch tasks. Please try again."));
         setTasks([]);
       } finally {
         setLoading(false);
@@ -100,7 +102,7 @@ const MyTasks: React.FC = () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        Alert.alert("Error", "Authentication token not found");
+        dispatch(showError("Authentication token not found"));
         return;
       }
 
@@ -120,12 +122,12 @@ const MyTasks: React.FC = () => {
           createdAt: new Date().toISOString()
         };
         setTasks(prevTasks => [...prevTasks, newTask]);
-        Alert.alert("Success", "Note added successfully!");
+        dispatch(showSuccess("Note added successfully!"));
       } else {
-        Alert.alert("Error", response?.message || "Failed to add note");
+        dispatch(showError(response?.message || "Failed to add note"));
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to add note. Please try again.");
+      dispatch(showError("Failed to add note. Please try again."));
     }
   };
 
@@ -133,7 +135,7 @@ const MyTasks: React.FC = () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        Alert.alert("Error", "Authentication token not found");
+        dispatch(showError("Authentication token not found"));
         return;
       }
 
@@ -147,12 +149,12 @@ const MyTasks: React.FC = () => {
             task.id === taskId ? { ...task, task: content, status, updatedAt: new Date().toISOString() } : task
           ) || []
         );
-        Alert.alert("Success", "Note updated successfully!");
+        dispatch(showSuccess("Note updated successfully!"));
       } else {
-        Alert.alert("Error", response?.message || "Failed to update note");
+        dispatch(showError(response?.message || "Failed to update note"));
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to update note. Please try again.");
+      dispatch(showError("Failed to update note. Please try again."));
     }
   };
 
@@ -160,7 +162,7 @@ const MyTasks: React.FC = () => {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        Alert.alert("Error", "Authentication token not found");
+        dispatch(showError("Authentication token not found"));
         return;
       }
 
@@ -168,18 +170,18 @@ const MyTasks: React.FC = () => {
 
       if (response?.status === "success") {
         setTasks(prevTasks => prevTasks.filter((task) => task.id !== taskId));
-        Alert.alert("Success", "Note deleted successfully!");
+        dispatch(showSuccess("Note deleted successfully!"));
       } else {
-        Alert.alert("Error", response?.message || "Failed to delete note");
+        dispatch(showError(response?.message || "Failed to delete note"));
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to delete note. Please try again.");
+      dispatch(showError("Failed to delete note. Please try again."));
     }
   };
 
   const saveTask = async (): Promise<void> => {
     if (!newTaskContent?.trim?.()) {
-      Alert.alert("Error", "Please enter note content");
+      dispatch(showError("Please enter note content"));
       return;
     }
 
@@ -192,7 +194,7 @@ const MyTasks: React.FC = () => {
       closeEditModal();
       closeAddModal();
     } catch (error) {
-      Alert.alert("Error", "Failed to save note. Please try again.");
+      dispatch(showError("Failed to save note. Please try again."));
     }
   };
 

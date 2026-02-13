@@ -390,68 +390,21 @@ const dispatch = useDispatch();
     });
   }, [enteredAmountStr]);
 
-  // Helper: determine whether this transaction requires full payment (OPD)
-  const requiresFullPayment = useMemo(() => {
-    const normalize = (v: any) =>
-      v === undefined || v === null
-        ? ""
-        : String(v).toLowerCase();
-    const dept = normalize(department);
-    const fptype = normalize(
-      formData?.ptype || formData?.visitType || ""
-    );
-    const orderptype = normalize(
-      orderData?.ptype || orderData?.orderType || ""
-    );
-    const explicitPtype = route.params?.ptype;
-    const isExplicitOPD = explicitPtype === 21;
-   const isNewSaleFlow =
-      (type === "medicine" || type === "test") &&
-      !receptionData &&
-      !pharmacyData &&
-      !labData &&
-      !isBillingOrder;
-
-    if (isNewSaleFlow) return true;
-    // 🔹 Existing reception / OPD logic (kept same)
-    if (isExplicitOPD) return true;
-    if (
-      dept === "opd" ||
-      dept === "outpatient" ||
-      receptionData?.pType === "Outpatient"
-    )
-      return true;
-    if (fptype === "opd" || fptype === "outpatient") return true;
-    if (orderptype === "opd" || orderptype === "outpatient")
-      return true;
-    return false;
-  }, [type, department, formData, orderData, receptionData, route.params?.ptype]);
-  
+  const requiresFullPayment = true;
   const isSubmitEnabled = useCallback(() => {
     const totalEntered = Object.values(
       enteredAmountNum
     ).reduce((s, v) => s + v, 0);
     
-    if (requiresFullPayment ) {
       return (
         selectedMethods.size > 0 &&
         totalEntered > 0 &&
         Math.abs(totalEntered - amount) < 0.01
       );
-    } else {
-      return (
-        selectedMethods.size > 0 &&
-        totalEntered > 0 &&
-        totalEntered <= amount + 0.001
-      );
-    }
   }, [
     enteredAmountNum,
     selectedMethods,
     amount,
-    requiresFullPayment,
-    type,
-    totalDue, // Add totalDue to dependencies
   ]);
 
   // stabilize handlers
@@ -516,12 +469,6 @@ const dispatch = useDispatch();
   const setRemainingAmount = useCallback(
     (method: PaymentMethod) => {
       const remaining = totalDue;
-    
-    // Add validation for minimum amount
-    if (remaining > 0 && remaining < 1) {
-      dispatch(showError("Remaining amount should be at least ₹1.00"));
-      return;
-    }
     
       if (remaining > 0) {
         setEnteredAmountStr((prev) => ({
@@ -958,7 +905,7 @@ const handleSalesPayment = useCallback(
       // Endpoint: /reception/{hospitalID}/{patientId}/{timelineId}/payFromReception
       const url = `reception/${user.hospitalID}/${patientId}/${timelineId}/payFromReception`;
       const response = await AuthPost(url, payload, token);
-      console.log("33333",payload)
+      console.log("33333",response,payload)
       return response;
     },
     [
@@ -978,13 +925,6 @@ const handleSalesPayment = useCallback(
       enteredAmountNum
     ).reduce((s, v) => s + v, 0);
 
-      if (totalDue > 0 && totalDue < 1) {
-        dispatch(showError("Remaining due amount should be at least ₹1.00 or be fully paid."));
-        return;
-      }
-
-    // validate according to mode
-    if (requiresFullPayment ) {
       if (
         !(
           selectedMethods.size > 0 &&
@@ -998,22 +938,6 @@ const handleSalesPayment = useCallback(
           [{ text: "OK" }]
         );
         return;
-      }
-    } else {
-      // IPD (partial allowed) - only disallow overpay
-      if (totalEntered > amount + 0.001) {
-        dispatch(showError(`Entered amount (₹${totalEntered.toFixed(2)}) cannot exceed total amount (₹${amount.toFixed(2)}).`));
-        return;
-      }
-      if (
-        !(
-          selectedMethods.size > 0 &&
-          totalEntered > 0
-        )
-      ) {
-        dispatch(showError("Please enter an amount greater than 0."));
-        return;
-      }
     }
 
     setIsSubmitting(true);
@@ -1098,7 +1022,6 @@ const handleSalesPayment = useCallback(
       setIsSubmitting(false);
     }
   }, [
-    requiresFullPayment,
     amount,
     enteredAmountNum,
     selectedMethods,
@@ -1516,9 +1439,7 @@ const handleSalesPayment = useCallback(
                       fontSize: FONT_SIZE.xs,
                     }}
                   >
-                    {(requiresFullPayment )
-                      ? "Full payment required for this order."
-                      : "Partial payments allowed."}
+                    Full payment required for this order.
                   </Text>
                 </View>
               </View>

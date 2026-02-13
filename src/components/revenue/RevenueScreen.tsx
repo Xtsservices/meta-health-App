@@ -895,7 +895,7 @@ console.log("555",response)
     const minConsultationFee = summary?.minConsultationFee || 0
     return [
       { label: "Avg Consultation Fee", value: Math.round(avgConsultationFee), color: COLORS.chartBlue, prefix: "₹" },
-      { label: "Avg Commission %", value: commissionPercentage, color: COLORS.chartPurple, prefix: "" },
+      { label: "Avg Commission %", value: commissionPercentage, color: COLORS.chartPurple, prefix: "(%) " },
       { label: "Max Consultation Fee", value: maxConsultationFee, color: COLORS.primary, prefix: "" },
       { label: "Min Consultation Fee %", value: minConsultationFee, color: COLORS.chartPurple, prefix: "" },
     ]?.filter(item => (item?.value || 0) > 0);

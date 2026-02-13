@@ -569,7 +569,7 @@ const AddInventoryItemScreen: React.FC = ({ navigation }: any) => {
               </View>
               {type === 'medicine' && (
                 <Text style={[styles.suggestionPrice, { color: COLORS.text }]}>
-                  Stock: {item?.quantity}
+                  Stock: {item?.totalQuantity}
                 </Text>
               )}
             </Pressable>

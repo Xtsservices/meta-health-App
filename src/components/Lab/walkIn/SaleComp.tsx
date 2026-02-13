@@ -512,6 +512,7 @@ const SaleComp: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -530,8 +531,13 @@ const SaleComp: React.FC = () => {
   }, [navigation, dispatch]);
 
   useEffect(() => {
-    const onShow = (e: any) => setKeyboardHeight(e.endCoordinates?.height ?? 0);
-    const onHide = () => setKeyboardHeight(0);
+    const onShow = (e: any) => {
+      setKeyboardHeight(e.endCoordinates?.height ?? 0);
+      setShowSuggestions(false);
+    };
+    const onHide = () => {
+      setKeyboardHeight(0);
+    };
 
     const subShow = Keyboard.addListener("keyboardDidShow", onShow);
     const subHide = Keyboard.addListener("keyboardDidHide", onHide);
@@ -808,6 +814,8 @@ const SaleComp: React.FC = () => {
           setSearchQuery("");
           setNoteInput("");
           setSuggestions([]);
+          setShowSuggestions(false);
+          Keyboard.dismiss();
           // scroll to bottom to show newly added test
           setTimeout(() => {
             scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -1112,17 +1120,32 @@ const SaleComp: React.FC = () => {
                   // Clear suggestions if search query is empty
                   if (!text.trim()) {
                     setSuggestions([]);
+                    setShowSuggestions(false);
+                  } else {
+                    setShowSuggestions(true);
                   }
                 }}
               />
               
-              {/* Suggestions dropdown */}
-              {searchQuery.trim().length >= 1 && (
+              {/* Suggestions dropdown - shown above input when keyboard is visible */}
+              {showSuggestions && searchQuery.trim().length >= 1 && (
                 <View style={[
                   styles.suggBox, 
                   { 
                     borderColor: COLORS.border, 
-                    backgroundColor: COLORS.card
+                    backgroundColor: COLORS.card,
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: '100%',
+                    marginBottom: SPACING.xs,
+                    maxHeight: 200,
+                    zIndex: 100,
+                    elevation: 100,
+                    shadowColor: "#000",
+                    shadowOpacity: 0.2,
+                    shadowRadius: 4,
+                    shadowOffset: { width: 0, height: -2 },
                   }
                 ]}>
                   {isLoading ? (
@@ -1132,7 +1155,7 @@ const SaleComp: React.FC = () => {
                   ) : (
                     <FlatList
                       data={filteredMedicines}
-                      keyExtractor={(item) => item.id?.toString()}
+                      keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
                       keyboardShouldPersistTaps="handled"
                       renderItem={({ item }) => (
                         <Pressable
@@ -1145,6 +1168,8 @@ const SaleComp: React.FC = () => {
                           onPress={() => {
                             setSelectedMedicine(item);
                             setSearchQuery(item.name);
+                            setShowSuggestions(false);
+                            Keyboard.dismiss();
                           }}
                         >
                           <View style={{ flex: 1 }}>
@@ -1219,7 +1244,8 @@ const SaleComp: React.FC = () => {
         {/* Show no results message */}
         {searchQuery.trim().length > 0 && 
          filteredMedicines.length === 0 && 
-         !isLoading && (
+         !isLoading && 
+         showSuggestions && (
           <View style={[styles.emptyStateSimple, { marginTop: SPACING.sm }]}>
             <Text style={{ color: COLORS.sub }}>No medicines found</Text>
             <Text style={{ color: COLORS.sub, marginTop: SPACING.xs }}>Try a different keyword</Text>
@@ -1229,7 +1255,7 @@ const SaleComp: React.FC = () => {
     );
   };
 
-  // Test selection UI - IMPROVED VERSION
+  // Test selection UI - IMPROVED VERSION with dropdown above keyboard
   const renderTestSelection = () => (
     <>
       {/* Search Row - 75% input + 25% button */}
@@ -1250,23 +1276,43 @@ const SaleComp: React.FC = () => {
                 }
               ]}
               value={searchQuery}
+              onFocus={() => {
+                if (searchQuery.trim().length > 0 && suggestions.length > 0) {
+                  setShowSuggestions(true);
+                }
+              }}
               onChangeText={(t) => {
                 setSearchQuery(t);
                 setSelectedTest(null);
-                // Clear suggestions if search query is empty
-                if (!t.trim()) {
+
+                if (t.trim().length > 0) {
+                  setShowSuggestions(true);
+                } else {
+                  setShowSuggestions(false);
                   setSuggestions([]);
                 }
               }}
             />
             
-            {/* Suggestions dropdown */}
-            {(isLoading || suggestions.length > 0) && searchQuery && searchQuery.trim().length >= 1 && (
+            {/* Suggestions dropdown - positioned above the input when keyboard is visible */}
+            {showSuggestions && (isLoading || suggestions.length > 0) && (
               <View style={[
                 styles.suggBox, 
                 { 
                   borderColor: COLORS.border, 
-                  backgroundColor: COLORS.card 
+                  backgroundColor: COLORS.card,
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: '100%',
+                  marginBottom: SPACING.xs,
+                  maxHeight: 200,
+                  zIndex: 100,
+                  elevation: 100,
+                  shadowColor: "#000",
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  shadowOffset: { width: 0, height: -2 },
                 }
               ]}>
                 {isLoading ? (
@@ -1287,8 +1333,9 @@ const SaleComp: React.FC = () => {
                         onPress={() => {
                           setSelectedTest(item);
                           setSearchQuery(item.name);
-                          // Clear suggestions when item is selected
                           setSuggestions([]);
+                          setShowSuggestions(false);
+                          Keyboard.dismiss();
                         }}
                       >
                         <View style={{ flex: 1 }}>
@@ -1384,7 +1431,8 @@ const SaleComp: React.FC = () => {
       {/* Show no results message */}
       {searchQuery.trim().length > 0 && 
        suggestions.length === 0 && 
-       !isLoading && (
+       !isLoading && 
+       showSuggestions && (
         <View style={[styles.emptyStateSimple, { marginTop: SPACING.sm }]}>
           <Text style={{ color: COLORS.sub }}>No tests found</Text>
           <Text style={{ color: COLORS.sub, marginTop: SPACING.xs }}>Try a different keyword</Text>
@@ -1829,21 +1877,9 @@ const styles = StyleSheet.create({
     minHeight: 80,
   },
   suggBox: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: "100%",
-    marginBottom: SPACING.xs,
     borderWidth: 1,
     borderRadius: SPACING.sm,
-    maxHeight: 200,
     overflow: "hidden",
-    zIndex: 10,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: -2 },
   },
   suggRow: {
     paddingHorizontal: SPACING.sm,

@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 
 import { RootState } from "../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -67,7 +67,7 @@ import {
   Package2Icon,
   CommissionIcon
 } from "../../utils/SvgIcons";
-import { DollarSign } from "lucide-react-native";
+import { ActivityIcon, DollarSign } from "lucide-react-native";
 
 // Types
 interface DashboardCounts {
@@ -391,7 +391,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Pharmacy Management Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Pharmacy Management</Text>
-            {items?.filter(item => ["sale", "orders", "tax", "stock", "add", "orderplacement","commission","revenue"].includes(item.key)).map((item) => (
+            {items?.filter(item => ["sale", "orders", "tax", "stock", "add", "orderplacement","commission","revenue","expenses"].includes(item.key)).map((item) => (
               <SidebarButton
                 key={item.key}
                 item={item}
@@ -717,6 +717,28 @@ const DashboardPharma: React.FC = () => {
     fetchExpiredMedicines
   ]);
 
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.hospitalID) {
+        fetchDashboardCounts();
+        fetchWeeklySalesData();
+        fetchTopMedications();
+        fetchRecentPrescriptions();
+        fetchLowStockMedicines();
+        fetchExpiredMedicines();
+      }
+    }, [
+      user,
+      fetchDashboardCounts,
+      fetchWeeklySalesData,
+      fetchTopMedications,
+      fetchRecentPrescriptions,
+      fetchLowStockMedicines,
+      fetchExpiredMedicines
+    ])
+  );
+
   const onAddInventory = () => navigation.navigate("AddInventory");
 
   /* ----------- Sidebar actions ----------- */
@@ -815,6 +837,12 @@ const DashboardPharma: React.FC = () => {
 
      { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab      
    
+     { 
+             key: "expense", 
+             label: "Expenditure", 
+             icon: ActivityIcon,
+             onPress: () => go("ExpenseManagement") 
+           },
     // Support Section
               { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
     

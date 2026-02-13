@@ -116,7 +116,8 @@ const AddPatientForm: React.FC = () => {
   const [titleList, setTitleList] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [imagePickerModal, setImagePickerModal] = useState(false);
-
+  const [wardSearchVisible, setWardSearchVisible] = useState(false);
+  const [wardSearchText, setWardSearchText] = useState("");
   const scrollViewRef = useRef<ScrollView>(null);
   const FOOTER_HEIGHT = 70;
 
@@ -571,11 +572,16 @@ const FIELD_LABELS: Partial<Record<keyof patientOPDbasicDetailType, string>> = {
             <Picker.Item key={item.value} label={item.label} value={item.value} enabled={!item.disabled} />
           ))}
         </Picker>
-        <View style={styles.pickerOverlay}>
-          <Text style={[styles.pickerSelectedText, { color: selectedValue ? COLORS.text : COLORS.text }]}>
+        <View style={[styles.pickerOverlay, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+          <Text style={[styles.pickerSelectedText, { color: selectedValue ? COLORS.text : COLORS.placeholder },]}>
             {selectedLabel}
           </Text>
+          {/* Dropdown Arrow */}
+          <Text style={{ fontSize: 16, color: COLORS.sub }}>
+            ▼
+          </Text>
         </View>
+
       </View>
     );
   };
@@ -828,6 +834,13 @@ else if (name === "email") {
     };
   });
 }, [wardList]);
+const filteredWardPickerItems = useMemo(() => {
+  if (!wardSearchText.trim()) return wardPickerItems;
+
+  return wardPickerItems.filter(w =>
+    w.label.toLowerCase().includes(wardSearchText.toLowerCase())
+  );
+}, [wardSearchText, wardPickerItems]);
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: COLORS.bg }]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -1126,24 +1139,41 @@ else if (name === "email") {
                   <Text style={[styles.label, { color: COLORS.sub }]}>
                     Ward <Text style={{ color: COLORS.sub }}>*</Text>
                   </Text>
-                  <CustomPicker
-                    selectedValue={formData.wardID.value}
-                    onValueChange={(id) => {
-                      const ward = wardList.find(w => w.id === id);
-
-                      if (!ward || Number(ward.availableBeds) === 0) {
-                        dispatch(showError("Selected ward is full"));
-                        return;
-                      }
-
-                      setFormData((prev) => ({
-                        ...prev,
-                        wardID: { value: id, valid: true, showError: false, message: "" },
-                      }));
-                    }}
-                    items={wardPickerItems}
-                    placeholder="Select Ward"
-                  />
+<TouchableOpacity
+  onPress={() => setWardSearchVisible(true)}
+  activeOpacity={0.8}
+  style={{ flex: 1 }}
+>
+  <View
+    style={[
+      styles.pickerContainer,
+      {
+        borderColor: COLORS.border,
+        height: 50,        // ensure exact same height
+        justifyContent: "center",
+      },
+    ]}
+  >
+    <View style={styles.pickerOverlay}>
+      <Text
+        style={[
+          styles.pickerSelectedText,
+          {
+            color: formData.wardID.value
+              ? COLORS.text
+              : COLORS.placeholder,
+          },
+        ]}
+      >
+        {
+          wardPickerItems.find(
+            (w) => w.value === formData.wardID.value
+          )?.label || "Select Ward"
+        }
+      </Text>
+    </View>
+  </View>
+</TouchableOpacity>
                   {formData.wardID.showError && (
                     <Text style={[styles.errorText, { color: COLORS.danger }]}>
                       Please select a ward
@@ -1182,7 +1212,7 @@ else if (name === "email") {
           </View>
 
           {/* Insurance */}
-          <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+          {/* <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
             <Text style={[styles.cardTitle, { color: COLORS.text }]}>Insurance</Text>
             <View style={styles.inputBlock}>
               <Text style={[styles.label, { color: COLORS.sub }]}>Insurance *</Text>
@@ -1198,7 +1228,7 @@ else if (name === "email") {
                 placeholder="Select"
               />
             </View>
-          </View>
+          </View> */}
 
           {/* Submit */}
           <TouchableOpacity style={[styles.submitButton, { backgroundColor: COLORS.brand }]} onPress={debouncedSubmit} disabled={loading}>
@@ -1229,6 +1259,81 @@ else if (name === "email") {
             </View>
           </View>
         </Modal>
+        <Modal visible={wardSearchVisible} transparent animationType="slide">
+  <View style={styles.modalOverlay}>
+    <View style={[styles.modalContent, { backgroundColor: COLORS.card, maxHeight: "80%" }]}>
+      <Text style={[styles.modalTitle, { color: COLORS.text }]}>
+        Select Ward
+      </Text>
+
+      {/* 🔍 Search Input */}
+      <TextInput
+        value={wardSearchText}
+        onChangeText={setWardSearchText}
+        placeholder="Search ward..."
+        placeholderTextColor={COLORS.placeholder}
+        style={[
+          styles.input,
+          {
+            marginBottom: 12,
+            borderColor: COLORS.border,
+            color: COLORS.text,
+          },
+        ]}
+      />
+
+      <ScrollView>
+        {filteredWardPickerItems.length === 0 && (
+          <Text style={{ color: COLORS.sub, textAlign: "center", marginTop: 20 }}>
+            No wards found
+          </Text>
+        )}
+
+        {filteredWardPickerItems.map((ward) => (
+          <TouchableOpacity
+            key={ward.value}
+            disabled={ward.disabled}
+            style={{
+              padding: 14,
+              borderBottomWidth: 1,
+              borderBottomColor: COLORS.border,
+              opacity: ward.disabled ? 0.5 : 1,
+            }}
+            onPress={() => {
+              if (ward.disabled) {
+                dispatch(showError("Selected ward is full"));
+                return;
+              }
+
+              setFormData((prev) => ({
+                ...prev,
+                wardID: { value: ward.value, valid: true, showError: false, message: "" },
+              }));
+
+              setWardSearchText("");
+              setWardSearchVisible(false);
+            }}
+          >
+            <Text style={{ color: COLORS.text, fontWeight: "600" }}>
+              {ward.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={[styles.modalButton, { backgroundColor: "#6b7280", marginTop: 12 }]}
+        onPress={() => {
+          setWardSearchText("");
+          setWardSearchVisible(false);
+        }}
+      >
+        <Text style={styles.modalButtonText}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -1334,7 +1439,10 @@ const styles = StyleSheet.create({
   submitText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
-  modalContent: { borderRadius: 16, padding: 24, width: "88%", alignItems: "center" },
+  modalContent: { borderRadius: 16, padding: 20, width: "94%",          // 👈 wider modal
+  maxWidth: 420,         // 👈 prevents tablet over-stretch
+  alignItems: "stretch", // 👈 IMPORTANT (so input/list take full width)
+},
   modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 16 },
   modalButton: { padding: 14, borderRadius: 12, width: "100%", alignItems: "center", marginVertical: 6 },
   modalButtonText: { color: "#fff", fontWeight: "700", fontSize: 15 },

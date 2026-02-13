@@ -142,6 +142,9 @@ const AddInventory: React.FC = ({ navigation }: any) => {
     }
   }, [user]);
 
+  useEffect(() => {
+    fetchInventoryData();
+  }, [fetchInventoryData]);
   useFocusEffect(
     useCallback(() => {
       fetchInventoryData();

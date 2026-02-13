@@ -574,6 +574,11 @@ const EditPatientMobile = () => {
 
             {renderInput("Patient Name", pName, setPName, false, {
               required: true,
+              onChangeText: (text: string) => {
+                // Allow only letters and spaces
+                const cleaned = text.replace(/[^a-zA-Z\s]/g, "");
+                setPName(cleaned);
+              },
             })}
 
             {renderInput("Patient ID", pID, setPID, true)}
@@ -740,7 +745,7 @@ const EditPatientMobile = () => {
           </View>
 
           {/* INSURANCE */}
-          <View style={styles.card}>
+          {/* <View style={styles.card}>
             <Text style={styles.cardTitle}>Insurance</Text>
 
             <CustomPicker
@@ -785,7 +790,7 @@ const EditPatientMobile = () => {
                 ) : null}
               </>
             )}
-          </View>
+          </View> */}
 
           {/* SAVE BUTTON */}
           <TouchableOpacity

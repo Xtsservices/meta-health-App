@@ -111,18 +111,58 @@ const buildDateQuery = (year: string, month: string) => {
   return `?date=${year}-${mm}-15`;
 };
 
-const getAgeLabel = (p: Patient): string => {
-  const raw = p?.age;
-  if (raw !== undefined && raw !== null && String(raw).trim() !== "") {
-    return String(raw);
-  }
-  if (p?.dob) {
-    try {
-      return formatageFromDOB(p.dob);
-    } catch {
-      return "—";
+// Replace the existing getAgeLabel function with this improved version
+const getAgeLabel = (dob?: string, age?: string | number | null): string => {
+  // First priority: Calculate from DOB if available
+  if (dob) {
+    const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) return "—";
+    
+    const today = new Date();
+    const diffTime = today.getTime() - birthDate.getTime();
+    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // 🔹 Less than 1 month → show days
+    if (totalDays < 30) {
+      return `${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+    }
+
+    let years = today.getFullYear() - birthDate.getFullYear();
+    let months = today.getMonth() - birthDate.getMonth();
+
+    if (today.getDate() < birthDate.getDate()) {
+      months--;
+    }
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    // 🔹 If years exist → SHOW ONLY YEARS
+    if (years > 0) {
+      return `${years} year${years !== 1 ? "s" : ""}`;
+    }
+
+    // 🔹 Only months
+    if (months > 0) {
+      return `${months} month${months !== 1 ? "s" : ""}`;
     }
   }
+
+  // 🔹 DOB missing → fallback to age field
+  if (age !== undefined && age !== null) {
+    const ageStr = String(age).trim();
+    if (ageStr !== "") {
+      const ageNum = parseInt(ageStr, 10);
+      if (!isNaN(ageNum)) {
+        return `${ageNum} year${ageNum !== 1 ? "s" : ""}`;
+      }
+      // If age is not a number (e.g., "2 years"), return as is
+      return ageStr;
+    }
+  }
+
   return "—";
 };
 
@@ -217,6 +257,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
       const url = `patient/${user?.hospitalID}/receptionpatients/${patientType}${dateQuery}`;
 
       const res = await AuthFetch(url, token);
+      console.log("fetchPatients", res); 
 
       let list: Patient[] = [];
       if (res?.status === "success" && "data" in res && Array.isArray(res?.data?.patients)) {
@@ -708,7 +749,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
   };
 
   const renderCard = (p: Patient) => {
-    const age = getAgeLabel(p);
+    const age = getAgeLabel(p.dob, p.age);
     const phone = p.phoneNumber || "—";
     const ward = p.wardName || "—";
     const doctor = p.doctorName || "—";
@@ -735,7 +776,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
             borderColor: COLORS.border,
           },
         ]}
-        onPress={() => handleCardPress(p)}
+        onPress={() => handleViewPress(p)}
       >
         <View style={styles.cardRow}>
           {/* Avatar */}
@@ -862,6 +903,9 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
                   >
                     Dept: {dept}
                   </Text>
+
+                {/* Show dot only if Ward will also show */}
+                {filter === 2 && (
                   <Text
                     style={[
                       styles.dot,
@@ -870,8 +914,12 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
                   >
                     •
                   </Text>
-                </>
-              )}
+                )}
+              </>
+            )}
+
+            {/* ✅ Ward ONLY for IPD */}
+            {filter === 2 && (
               <Text
                 style={[
                   styles.subText,
@@ -880,6 +928,7 @@ const HospitalReceptionPatientListMobile: React.FC = () => {
               >
                 Ward: {ward}
               </Text>
+            )}
             </View>
           </View>
 

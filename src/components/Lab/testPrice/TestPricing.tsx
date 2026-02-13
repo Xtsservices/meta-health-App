@@ -236,8 +236,15 @@ const TestPricing: React.FC = () => {
       ) as any;
 
       if (response?.data?.testPricingList?.data?.length > 0) {
-        setData(response.data.testPricingList.data);
-        setFilteredData(response.data.testPricingList.data);
+        // 🔹 SORT THE DATA BY addedOn DATE - Most recent first 🔹
+        const sortedData = [...response.data.testPricingList.data].sort((a: any, b: any) => {
+          const dateA = new Date(a.addedOn || 0).getTime();
+          const dateB = new Date(b.addedOn || 0).getTime();
+          return dateB - dateA; // Descending order (newest first)
+        });
+        
+        setData(sortedData);
+        setFilteredData(sortedData);
       } else {
         setData([]);
         setFilteredData([]);
@@ -273,7 +280,15 @@ const TestPricing: React.FC = () => {
         item.lonicCode.toLowerCase().includes(query)
       );
     });
-    setFilteredData(filtered);
+  
+  // 🔹 Ensure filtered results are also sorted by date
+  const sortedFiltered = [...filtered].sort((a: any, b: any) => {
+    const dateA = new Date(a.addedOn || 0).getTime();
+    const dateB = new Date(b.addedOn || 0).getTime();
+    return dateB - dateA; // Most recent first
+  });
+  
+    setFilteredData(sortedFiltered);
   }, [searchQuery, data]);
 
   const handleDeleteTest = async () => {

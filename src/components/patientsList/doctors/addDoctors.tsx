@@ -58,6 +58,7 @@ export default function AddDoctorScreen() {
   const [doctorId, setDoctorId] = useState<number | null>(null);
   const [category, setCategory] = useState<"primary" | "secondary" | null>(null);
   const [purpose, setPurpose] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const dispatch = useDispatch()
 
   // dropdown locals
@@ -88,13 +89,14 @@ export default function AddDoctorScreen() {
   }, []);
 
   const canSubmit = useMemo(
-    () => !!doctorId && !!category && !!timelineId,
-    [doctorId, category, timelineId]
+    () => !!doctorId && !!category && !!timelineId && !submitting,
+    [doctorId, category, timelineId, submitting]
   );
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
 
+    setSubmitting(true);
     const token = user?.token ?? (await AsyncStorage.getItem("token"));
     const body = {
       patientTimeLineId: timelineId,
@@ -104,12 +106,18 @@ export default function AddDoctorScreen() {
       scope: "doctor",
     };
 
+    try {
     const res = await AuthPost(`doctor/${hospitalID}`, body, token);
     if (res?.status === "success") {
       dispatch(showSuccess("Doctor added successfully!"));
       navigation.goBack();
     } else if (res?.status === "error") {
       dispatch(showError(res?.message || "Failed to add doctor"));
+      }
+    } catch (error) {
+      dispatch(showError("An error occurred while adding doctor"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -234,7 +242,11 @@ export default function AddDoctorScreen() {
                       { backgroundColor: COLORS.brand, opacity: canSubmit ? 1 : 0.6 },
                     ]}
                   >
+                    {submitting ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
                     <Text style={{ color: "#fff", fontWeight: "800" }}>Submit</Text>
+                    )}
                   </Pressable>
                 </View>
               </>
