@@ -22,12 +22,10 @@ import {
   CheckCircle,
 } from 'lucide-react-native';
 
-// Local imports
 import { AuthPost } from '../../auth/auth';
 import { showSuccess, showError } from '../../store/toast.slice';
 import { formatDate, formatTime, formatDateTime } from '../../utils/dateTime';
 
-// Types
 interface RegistrationFormProps {
   category: string;
 }
@@ -40,11 +38,9 @@ interface FormField {
   required?: boolean;
 }
 
-// Get dynamic dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isSmallScreen = SCREEN_WIDTH < 600;
 
-// Responsive sizing
 const FONT_SIZE = {
   xs: SCREEN_WIDTH * 0.03,
   sm: SCREEN_WIDTH * 0.035,
@@ -83,7 +79,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
   
-  // State
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,16 +88,59 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // Refs
   const otpInputRefs = useRef<Array<TextInput | null>>([]);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Validation helpers
-  const isAlpha = (val: string) => /^[A-Za-z ]+$/.test(val);
-  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const validatePhone = (phone: string) => /^\d{10}$/.test(phone);
+  const validateEmail = (email: string): string | null => {
+    if (!email) return 'Email is required';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return 'Enter a valid email address';
+    return null;
+  };
 
-  // Form field definitions - UPDATED WITH CORRECT FIELDS
+  const validatePhone = (phone: string): string | null => {
+    if (!phone) return 'Phone number is required';
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(phone)) return 'Enter a valid 10-digit phone number starting with 6-9';
+    return null;
+  };
+
+  const validatePinCode = (pinCode: string): string | null => {
+    if (!pinCode) return 'Pin code is required';
+    const pinRegex = /^\d{6}$/;
+    if (!pinRegex.test(pinCode)) return 'Pin code must be 6 digits';
+    return null;
+  };
+
+  const validateWebsite = (website: string): string | null => {
+    if (!website) return 'Website URL is required';
+    const urlRegex = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
+    if (!urlRegex.test(website)) return 'Enter a valid website URL';
+    return null;
+  };
+
+  const validateName = (name: string, fieldLabel: string): string | null => {
+    if (!name) return `${fieldLabel} is required`;
+    if (name.length < 2) return `${fieldLabel} must be at least 2 characters`;
+    const nameRegex = /^[A-Za-z\s]+$/;
+    if (!nameRegex.test(name)) return 'Only letters and spaces allowed';
+    return null;
+  };
+
+  const validateOrgName = (name: string, fieldLabel: string): string | null => {
+    if (!name) return `${fieldLabel} is required`;
+    if (name.length < 2) return `${fieldLabel} must be at least 2 characters`;
+    const orgNameRegex = /^[A-Za-z0-9\s\-&.]+$/;
+    if (!orgNameRegex.test(name)) return 'Only letters, numbers, spaces, hyphens, dots and & allowed';
+    return null;
+  };
+
+  const validateAddress = (address: string): string | null => {
+    if (!address) return 'Address is required';
+    if (address.length < 10) return 'Address must be at least 10 characters';
+    return null;
+  };
+
   const getFields = (): FormField[] => {
     const commonFields = [
       { 
@@ -194,7 +232,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
     }
   };
 
-  // Effects
   useEffect(() => {
     const initializeData = async () => {
       try {
@@ -208,13 +245,33 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   }, [dispatch]);
 
   useEffect(() => {
-    // Scroll to top when form is loaded
     scrollViewRef.current?.scrollTo({ y: 0, animated: false });
   }, []);
 
-  // Handlers
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    let formattedValue = value;
+    
+    if (field === 'phoneNo' || field === 'adminPhone') {
+      formattedValue = value.replace(/\D/g, '').slice(0, 10);
+    }
+    
+    if (field === 'pinCode') {
+      formattedValue = value.replace(/\D/g, '').slice(0, 6);
+    }
+    
+    const nameFields = ['name', 'firstName', 'lastName', 'adminFirstName', 'adminLastName', 
+                       'userFirstName', 'userLastName', 'labFirstName', 'labLastName', 
+                       'bloodBankName', 'pointOfContact', 'city', 'state', 'country', 'district'];
+    
+    if (nameFields.includes(field)) {
+      formattedValue = value.replace(/[^A-Za-z\s]/g, '');
+    }
+
+    if (field.includes('email')) {
+      formattedValue = value.replace(/[^a-zA-Z0-9@._-]/g, '');
+    }
+
+    setFormData(prev => ({ ...prev, [field]: formattedValue }));
     
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: '' }));
@@ -222,39 +279,38 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
 
     const categoryLower = category?.toLowerCase();
     
-    // Auto-fill logic for different categories
     if (categoryLower === 'hospital') {
       if (field === 'email') {
-        setFormData(prev => ({ ...prev, adminEmail: value }));
+        setFormData(prev => ({ ...prev, adminEmail: formattedValue }));
       }
       if (field === 'phoneNo') {
         setFormData(prev => ({ 
           ...prev, 
-          adminPhone: value,
-          phoneNo: value 
+          adminPhone: formattedValue,
+          phoneNo: formattedValue 
         }));
       }
     } else if (categoryLower === 'pharmacy') {
       if (field === 'email') {
         setFormData(prev => ({ 
           ...prev, 
-          userEmail: value,
-          email: value 
+          userEmail: formattedValue,
+          email: formattedValue 
         }));
       }
     } else if (categoryLower === 'lab') {
       if (field === 'labEmail') {
         setFormData(prev => ({ 
           ...prev, 
-          email: value,
-          userEmail: value 
+          email: formattedValue,
+          userEmail: formattedValue 
         }));
       }
       if (field === 'labFirstName') {
-        setFormData(prev => ({ ...prev, userFirstName: value }));
+        setFormData(prev => ({ ...prev, userFirstName: formattedValue }));
       }
       if (field === 'labLastName') {
-        setFormData(prev => ({ ...prev, userLastName: value }));
+        setFormData(prev => ({ ...prev, userLastName: formattedValue }));
       }
     }
   };
@@ -266,44 +322,160 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
     }
 
     const errors: Record<string, string> = {};
-    const fields = getFields();
+    const categoryLower = category?.toLowerCase();
 
-    fields.forEach(field => {
-      const value = formData[field.name];
+    const email = formData.email;
+    const emailError = validateEmail(email);
+    if (emailError) errors.email = emailError;
+
+    const phoneNo = formData.phoneNo;
+    const phoneError = validatePhone(phoneNo);
+    if (phoneError) errors.phoneNo = phoneError;
+
+    if (categoryLower === 'hospital') {
+      const nameError = validateOrgName(formData.name, 'Hospital name');
+      if (nameError) errors.name = nameError;
+
+      const parentError = validateOrgName(formData.parent, 'Parent/Group name');
+      if (parentError) errors.parent = parentError;
+
+      const addressError = validateAddress(formData.address);
+      if (addressError) errors.address = addressError;
+
+      if (!formData.country) errors.country = 'Country is required';
       
-      if (field.required && !value) {
-        errors[field.name] = `${field.label} is required`;
-      } else if (value) {
-        if (field.name === 'email' || field.name === 'adminEmail' || field.name === 'labEmail' || field.name === 'userEmail') {
-          if (!validateEmail(value)) {
-            errors[field.name] = 'Enter a valid email address';
-          }
-        } else if (field.name === 'phoneNo' || field.name === 'adminPhone') {
-          if (!validatePhone(value)) {
-            errors[field.name] = 'Enter a valid 10-digit phone number';
-          } else if (!/^[6-9]/.test(value)) {
-            errors[field.name] = 'Phone number must start with 6-9';
-          }
-        } else if (field.name === 'pinCode') {
-          if (!/^\d{6}$/.test(value)) {
-            errors[field.name] = 'Pin code must be 6 digits';
-          }
-        } else if (['name', 'parent', 'firstName', 'lastName', 'adminFirstName', 'adminLastName', 
-                   'userFirstName', 'userLastName', 'labFirstName', 'labLastName', 
-                   'bloodBankName', 'pointOfContact'].includes(field.name)) {
-          if (!isAlpha(value.replace(/\s+/g, ' '))) {
-            errors[field.name] = 'Only alphabets and spaces allowed';
-          }
-        } else if (field.name === 'website' && value) {
-          if (!/^https?:\/\/.+\..+/.test(value)) {
-            errors[field.name] = 'Enter a valid website URL';
-          }
-        }
+      const stateError = validateName(formData.state, 'State');
+      if (stateError) errors.state = stateError;
+
+      const cityError = validateName(formData.city, 'City');
+      if (cityError) errors.city = cityError;
+
+      const districtError = validateName(formData.district, 'District');
+      if (districtError) errors.district = districtError;
+
+      const pinCodeError = validatePinCode(formData.pinCode);
+      if (pinCodeError) errors.pinCode = pinCodeError;
+
+      const websiteError = validateWebsite(formData.website);
+      if (websiteError) errors.website = websiteError;
+
+      const adminFirstNameError = validateName(formData.adminFirstName, 'Admin first name');
+      if (adminFirstNameError) errors.adminFirstName = adminFirstNameError;
+
+      const adminLastNameError = validateName(formData.adminLastName, 'Admin last name');
+      if (adminLastNameError) errors.adminLastName = adminLastNameError;
+
+      const adminEmailError = validateEmail(formData.adminEmail);
+      if (adminEmailError) errors.adminEmail = adminEmailError;
+
+      if (formData.adminPhone) {
+        const adminPhoneError = validatePhone(formData.adminPhone);
+        if (adminPhoneError) errors.adminPhone = adminPhoneError;
       }
-    });
+    }
+
+    if (categoryLower === 'doctor') {
+      const firstNameError = validateName(formData.firstName, 'First name');
+      if (firstNameError) errors.firstName = firstNameError;
+
+      const lastNameError = validateName(formData.lastName, 'Last name');
+      if (lastNameError) errors.lastName = lastNameError;
+    }
+
+    if (categoryLower === 'pharmacy') {
+      const nameError = validateOrgName(formData.name, 'Pharmacy name');
+      if (nameError) errors.name = nameError;
+
+      const parentError = validateOrgName(formData.parent, 'Parent/Group name');
+      if (parentError) errors.parent = parentError;
+
+      const addressError = validateAddress(formData.address);
+      if (addressError) errors.address = addressError;
+
+      if (!formData.country) errors.country = 'Country is required';
+      
+      const stateError = validateName(formData.state, 'State');
+      if (stateError) errors.state = stateError;
+
+      const cityError = validateName(formData.city, 'City');
+      if (cityError) errors.city = cityError;
+
+      const districtError = validateName(formData.district, 'District');
+      if (districtError) errors.district = districtError;
+
+      const pinCodeError = validatePinCode(formData.pinCode);
+      if (pinCodeError) errors.pinCode = pinCodeError;
+
+      const websiteError = validateWebsite(formData.website);
+      if (websiteError) errors.website = websiteError;
+
+      const userFirstNameError = validateName(formData.userFirstName, 'First name');
+      if (userFirstNameError) errors.userFirstName = userFirstNameError;
+
+      const userLastNameError = validateName(formData.userLastName, 'Last name');
+      if (userLastNameError) errors.userLastName = userLastNameError;
+    }
+
+    if (categoryLower === 'lab') {
+      const nameError = validateOrgName(formData.name, 'Lab name');
+      if (nameError) errors.name = nameError;
+
+      const parentError = validateOrgName(formData.parent, 'Parent/Group name');
+      if (parentError) errors.parent = parentError;
+
+      const addressError = validateAddress(formData.address);
+      if (addressError) errors.address = addressError;
+
+      if (!formData.country) errors.country = 'Country is required';
+      
+      const stateError = validateName(formData.state, 'State');
+      if (stateError) errors.state = stateError;
+
+      const districtError = validateName(formData.district, 'District');
+      if (districtError) errors.district = districtError;
+
+      const cityError = validateName(formData.city, 'City');
+      if (cityError) errors.city = cityError;
+
+      const pinCodeError = validatePinCode(formData.pinCode);
+      if (pinCodeError) errors.pinCode = pinCodeError;
+
+      const websiteError = validateWebsite(formData.website);
+      if (websiteError) errors.website = websiteError;
+
+      const labEmailError = validateEmail(formData.labEmail);
+      if (labEmailError) errors.labEmail = labEmailError;
+
+      const labFirstNameError = validateName(formData.labFirstName, 'First name');
+      if (labFirstNameError) errors.labFirstName = labFirstNameError;
+
+      const labLastNameError = validateName(formData.labLastName, 'Last name');
+      if (labLastNameError) errors.labLastName = labLastNameError;
+    }
+
+    if (categoryLower === 'blood bank') {
+      const bloodBankNameError = validateOrgName(formData.bloodBankName, 'Blood bank name');
+      if (bloodBankNameError) errors.bloodBankName = bloodBankNameError;
+
+      const pointOfContactError = validateName(formData.pointOfContact, 'Point of contact');
+      if (pointOfContactError) errors.pointOfContact = pointOfContactError;
+
+      const firstNameError = validateName(formData.firstName, 'First name');
+      if (firstNameError) errors.firstName = firstNameError;
+
+      const lastNameError = validateName(formData.lastName, 'Last name');
+      if (lastNameError) errors.lastName = lastNameError;
+    }
 
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+
+    if (Object.keys(errors).length > 0) {
+      const firstError = Object.values(errors)[0];
+      dispatch(showError(firstError));
+      return false;
+    }
+
+    return true;
   };
 
   const submitRegistration = async () => {
@@ -402,7 +574,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
             pointOfContact: formData.pointOfContact,
             firstName: formData.firstName,
             lastName: formData.lastName,
-            registrationDate: formatDate(new Date()),
           };
           break;
 
@@ -608,35 +779,34 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
     otpInputRefs.current[index] = ref;
   };
 
-  // Success Screen
-  if (showSuccessScreen) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.successContainer}>
-          <View style={styles.successContent}>
-            <View style={styles.successIconWrapper}>
-              <CheckCircle size={SPACING.xl} color={COLORS.success} />
-            </View>
-            <Text style={styles.successTitle}>Account Verified!</Text>
-            <Text style={styles.successMessage}>
-              Your account is verified and ready to login. Thank you for registering with MetaHealth!
-            </Text>
-            <TouchableOpacity
-              style={styles.loginButton}
-              onPress={handleLoginRedirect}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={COLORS.white} size="small" />
-              ) : (
-                <Text style={styles.loginButtonText}>Go to Login</Text>
-              )}
-            </TouchableOpacity>
+if (showSuccessScreen) {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.successContainer}>
+        <View style={styles.successContent}>
+          <View style={styles.successIconWrapper}>
+            <CheckCircle size={SPACING.xl} color={COLORS.success} />
           </View>
+          <Text style={styles.successTitle}>Account Verified!</Text>
+          <Text style={styles.successMessage}>
+            Please login to complete your profile setup to access the blood bank dashboard.
+          </Text>
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={handleLoginRedirect}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color={COLORS.white} size="small" />
+            ) : (
+              <Text style={styles.loginButtonText}>Continue to Profile Setup</Text>
+            )}
+          </TouchableOpacity>
         </View>
-      </SafeAreaView>
-    );
-  }
+      </View>
+    </SafeAreaView>
+  );
+}
 
   const fields = getFields();
 
@@ -692,7 +862,12 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
                       field.name === 'pinCode' ? 6 :
                       undefined
                     }
-                    editable={!isSubmitting}
+                    editable={
+  !isSubmitting &&
+  !(category?.toLowerCase() === 'hospital' &&
+    (field.name === 'adminEmail' || field.name === 'adminPhone'))
+}
+
                     returnKeyType="next"
                     blurOnSubmit={field.name === fields[fields.length - 1]?.name}
                   />
@@ -701,6 +876,13 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
                 {formErrors[field.name] ? (
                   <Text style={styles.errorText}>{formErrors[field.name]}</Text>
                 ) : null}
+                {category?.toLowerCase() === 'hospital' &&
+ (field.name === 'adminEmail' || field.name === 'adminPhone') && (
+   <Text style={styles.helperText}>
+     *Auto-filled from main Email and Phone number below.
+   </Text>
+ )}
+
               </View>
             ))}
 
@@ -734,7 +916,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           </View>
         </ScrollView>
 
-        {/* OTP Modal */}
         <Modal
           visible={showOtpModal}
           animationType="slide"
@@ -743,10 +924,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           statusBarTranslucent={true}
         >
           <SafeAreaView style={styles.modalSafeArea}>
-            <KeyboardAvoidingView
+           <KeyboardAvoidingView
               style={styles.modalKeyboardAvoidingView}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
               <View style={styles.modalContainer}>
                 <View style={styles.modalContent}>
@@ -1024,6 +1204,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.md,
   },
+  helperText: {
+  fontSize: FONT_SIZE.xs,
+  color: COLORS.sub,
+  marginTop: SPACING.xs * 0.5,
+  fontStyle: 'italic',
+},
+
   otpTitle: {
     fontSize: FONT_SIZE.lg,
     fontWeight: '700',

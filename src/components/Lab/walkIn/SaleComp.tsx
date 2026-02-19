@@ -599,7 +599,6 @@ const SaleComp: React.FC = () => {
         token
       ) as any;
 
-      console.log("med",response)
 
       if (response?.data?.status === 200) {
         const data = response?.data?.medicines;

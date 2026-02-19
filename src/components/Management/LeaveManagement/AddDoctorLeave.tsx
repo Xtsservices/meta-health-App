@@ -122,7 +122,6 @@ const AddDoctorLeave: React.FC = () => {
         `user/${user?.hospitalID}/list/${Role_NAME.doctor}`,
         token
       ) as any;
-      console.log("Doctors API response:", res);
       
       if (res?.data?.message === 'success') {
         // Process doctors: combine firstName and lastName
@@ -217,7 +216,6 @@ const AddDoctorLeave: React.FC = () => {
         leaveType,
       };
 
-      console.log("Submitting leave data:", data);
       
       // Use user/leaves endpoint (this should work for both doctors and nurses)
       const res = await AuthPost(
@@ -226,7 +224,6 @@ const AddDoctorLeave: React.FC = () => {
         token
       ) as any;
       
-      console.log("Leave submission response:", res);
       
       if (res?.data?.message === 'success') {
         dispatch(showSuccess('Leave added successfully!'));

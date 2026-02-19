@@ -91,32 +91,114 @@ const Login: React.FC = () => {
     };
   }, []);
 
-  const login = async () => {
-    if (!isFormValid) return;
+// Updated login function in your Login component
+const login = async () => {
+  if (!isFormValid) return;
 
-    setIsSubmitting(true);
-    try {
-      const body = {
-        email: formData.email.value,
-        password: formData.password.value,
-      };
-      // console.log('Login body:', body);
+  setIsSubmitting(true);
+  try {
+    const body = {
+      email: formData.email.value,
+      password: formData.password.value,
+    };
 
-      const response = await UsePost('user/emailLogin', body);
-      const data = 'data' in response && response?.data;
-      // console.log('Login response:', response);
-      if (response?.status === 'success') {
-        await AsyncStorage.setItem('token', data?.token);
-        if (data?.id != null) {
-          await AsyncStorage.setItem('userID', String(data.id));
-        }
+    const response = await UsePost('user/emailLogin', body);
+    const data = 'data' in response && response?.data;
+    
+    if (response?.status === 'success') {
+      await AsyncStorage.setItem('token', data?.token);
+      if (data?.id != null) {
+        await AsyncStorage.setItem('userID', String(data.id));
+      }
+      
       await AsyncStorage.setItem('user', JSON.stringify(data));
-        dispatch(showSuccess('Successfully Logged In'));
+      dispatch(showSuccess('Successfully Logged In'));
+
+      // Check for rejected status in bloodBankData
+      if (data.bloodBankData && data.bloodBankData.status === "rejected") {
+        dispatch(currentUser(data));
+        return navigation.navigate('RejectionScreen', {
+          orgType: 'bloodbank',
+          orgId: data.bloodBankData.id,
+          rejectReason: data.bloodBankData.rejectReason || 'Application was rejected',
+          organizationName: data.bloodBankData.bloodBankName || 'Blood Bank',
+          userData: data
+        });
+      }
+
+      // Check for rejected status in hospitalDetails
+      if (data.hospitalDetails && data.hospitalDetails.status === "rejected") {
+        dispatch(currentUser(data));
+        return navigation.navigate('RejectionScreen', {
+          orgType: 'hospital',
+          orgId: data.hospitalDetails.id,
+          rejectReason: data.hospitalDetails.rejectReason || 'Application was rejected',
+          organizationName: data.hospitalDetails.name || 'Hospital',
+          userData: data
+        });
+      }
+
+      // Check for rejected status in diagnosticDetails (if exists)
+      if (data.diagnosticDetails && data.diagnosticDetails.status === "rejected") {
+        dispatch(currentUser(data));
+        return navigation.navigate('RejectionScreen', {
+          orgType: 'diagnostic',
+          orgId: data.diagnosticDetails.id,
+          rejectReason: data.diagnosticDetails.rejectReason || 'Application was rejected',
+          organizationName: data.diagnosticDetails.name || 'Diagnostic Center',
+          userData: data
+        });
+      }
+
+      // Check for rejected status in pharmacyDetails (if exists)
+      if (data.pharmacyDetails && data.pharmacyDetails.status === "rejected") {
+        dispatch(currentUser(data));
+        return navigation.navigate('RejectionScreen', {
+          orgType: 'pharmacy',
+          orgId: data.pharmacyDetails.id,
+          rejectReason: data.pharmacyDetails.rejectReason || 'Application was rejected',
+          organizationName: data.pharmacyDetails.name || 'Pharmacy',
+          userData: data
+        });
+      }
+
+      // Check for rejected status in doctorProfile
+      if (data.doctorProfile && data.doctorProfile.verificationStatus === "rejected") {
+        dispatch(currentUser(data));
+        return navigation.navigate('RejectionScreen', {
+          orgType: 'doctor',
+          orgId: data.doctorProfile.id,
+          rejectReason: data.doctorProfile.rejectReason || 'Your doctor profile was rejected',
+          organizationName: `Dr. ${data.firstName} ${data.lastName}`,
+          userData: data
+        });
+      }
+
+      // Check organization associations for rejected status
       if (data.organizationAssociations && data.organizationAssociations.length > 0) {
         const primaryOrg = data.organizationAssociations[0];
         const orgType = primaryOrg.organizationType;
         const orgId = primaryOrg.organizationId;
         const orgStatus = primaryOrg.organizationDetails?.status;
+        const rejectReason = primaryOrg.organizationDetails?.rejectReason;
+
+        // Handle rejected status
+        if (orgStatus === 'rejected') {
+          dispatch(currentUser(data));
+          return navigation.navigate('RejectionScreen', {
+            orgType,
+            orgId,
+            rejectReason: rejectReason || 'Application was rejected',
+            organizationName: primaryOrg.organizationDetails?.name || 
+              (orgType === 'hospital' ? 'Hospital' : 
+               orgType === 'diagnostic' ? 'Diagnostic Center' : 
+               orgType === 'pharmacy' ? 'Pharmacy' : 
+               orgType === 'ambulance' ? 'Ambulance Service' : 
+               orgType === 'bloodbank' ? 'Blood Bank' : 
+               orgType === 'lab' ? 'Laboratory' : 'Organization'),
+            userData: data
+          });
+        }
 
         // Handle pending/approval_awaiting status - Redirect to profile forms
         if (orgStatus === 'approval_awaiting' || orgStatus === 'pending') {
@@ -157,7 +239,27 @@ const Login: React.FC = () => {
           return;
         }
       }
+
+      if (data.doctorProfile && (data.doctorProfile.verificationStatus === "submitted" || data.doctorProfile.verificationStatus === "draft")) {
+        dispatch(currentUser(data));
+        return navigation.navigate('DoctorProfileForm');
+      }
+
+      if (data.bloodBankData && data.bloodBankData.status === "pending") {
+        dispatch(currentUser(data));
+        return navigation.navigate('BloodBankProfileForm');
+      }
       
+      if (data.bloodBankData && data.bloodBankData.status === "approved") {
+        dispatch(currentUser(data));
+        return navigation.navigate('PendingApproval', {
+          orgType: 'bloodbank',
+          orgId: data.bloodBankData.id,
+          orgStatus: data.bloodBankData.status,
+          organizationName: data.bloodBankData.bloodBankName || 'Blood Bank'
+        });
+      }
+
       // Legacy: Check if hospital login and redirect based on status
       else if (data.hospitalID || data.hospitalId) {
         const hospitalId = data.hospitalID || data.hospitalId;
@@ -170,63 +272,62 @@ const Login: React.FC = () => {
       }
       
       // Ambulance roles
-        if (Role_NAME.ambulanceAdmin === data?.role) {
-            dispatch(currentUser(data));
-          navigation.navigate('AmbulanceAdminDashboard' as never);
-        } 
-        else if(Role_NAME.ambulanceDriver === data?.role) {
-            dispatch(currentUser(data));
-          navigation.navigate('AmbulanceDriverDashboard' as never);
-        }
-        else if(Role_NAME.ambulanceStaff === data?.role) {
-            dispatch(currentUser(data));
-          navigation.navigate('AmbulanceStaffDashboard' as never);
-        }
-        
-        else if (data?.role === 2002 || data?.role === 2003) {
-            dispatch(currentUser(data));
-          navigation.navigate('NurseDashboard' as never);
-        } else if (roleRoutes[data.role]) {
-            dispatch(currentUser(data));
-          navigation.navigate(roleRoutes[data.role] as never);
-        } else {
-          const userScopes = data?.scope?.split('#');
-          if (userScopes?.length === 1) {
-            const scope = parseInt(userScopes[0], 10);
-            const link = scopeLinks[scope];
-            if (link) {
-              if (data?.scope === '5008' || data?.scope === '5007') {
-                const newRoleName =
-                  data?.scope === '5007' ? 'surgeon' : 'anesthetist';
-                const updatedUser = {
-                  ...data,
-                  roleName: newRoleName,
-                };
-                dispatch(currentUser(updatedUser));
-                navigation.navigate(`OtDashboard` as never);
+      if (Role_NAME.ambulanceAdmin === data?.role) {
+        dispatch(currentUser(data));
+        navigation.navigate('AmbulanceAdminDashboard' as never);
+      } 
+      else if(Role_NAME.ambulanceDriver === data?.role) {
+        dispatch(currentUser(data));
+        navigation.navigate('AmbulanceDriverDashboard' as never);
+      }
+      else if(Role_NAME.ambulanceStaff === data?.role) {
+        dispatch(currentUser(data));
+        navigation.navigate('AmbulanceStaffDashboard' as never);
+      }
+      
+      else if (data?.role === 2002 || data?.role === 2003) {
+        dispatch(currentUser(data));
+        navigation.navigate('NurseDashboard' as never);
+      } else if (roleRoutes[data.role]) {
+        dispatch(currentUser(data));
+        navigation.navigate(roleRoutes[data.role] as never);
+      } else {
+        const userScopes = data?.scope?.split('#');
+        if (userScopes?.length === 1) {
+          const scope = parseInt(userScopes[0], 10);
+          const link = scopeLinks[scope];
+          if (link) {
+            if (data?.scope === '5008' || data?.scope === '5007') {
+              const newRoleName =
+                data?.scope === '5007' ? 'surgeon' : 'anesthetist';
+              const updatedUser = {
+                ...data,
+                roleName: newRoleName,
+              };
+              dispatch(currentUser(updatedUser));
+              navigation.navigate(`OtDashboard` as never);
             } else {
               dispatch(currentUser(data));
               navigation.navigate(link as never);
-              }
-          } else {
-            dispatch(currentUser(data));
-            navigation.navigate('Home' as never);
             }
           } else {
             dispatch(currentUser(data));
             navigation.navigate('Home' as never);
           }
+        } else {
+          dispatch(currentUser(data));
+          navigation.navigate('Home' as never);
         }
-      } else {
-        dispatch(showError('message' in response && response?.message));
       }
-    } catch (error: any) {
-      // console.log('Login error:', error);
-      dispatch(showError(error?.response?.data?.message || 'Login failed'));
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      dispatch(showError('message' in response && response?.message));
     }
-  };
+  } catch (error: any) {
+    dispatch(showError(error?.response?.data?.message || 'Login failed'));
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   //   if (isLoading) {
   //     return (
@@ -251,6 +352,13 @@ const Login: React.FC = () => {
       >
         <View style={styles.rightSection}>
           <View style={styles.loginContainer}>
+<TouchableOpacity  
+  onPress={() => navigation.navigate('LandingPage' as never)}
+  style={styles.backContainer}
+>
+  <Text style={styles.backText}>← Back</Text>
+</TouchableOpacity>
+
             {/* Logo Section */}
             <View style={styles.logoSection}>
               <Image
@@ -516,6 +624,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#a0e7e0',
     opacity: 0.6,
   },
+  backContainer: {
+  alignSelf: 'flex-start',
+  marginBottom: 10,
+},
+
+backText: {
+  fontSize: 16,
+  color: '#4fd1c7',
+  fontWeight: '600',
+},
   loginButtonText: {
     color: '#fff',
     fontSize: 16,

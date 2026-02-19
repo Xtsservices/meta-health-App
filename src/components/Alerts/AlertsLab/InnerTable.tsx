@@ -277,10 +277,10 @@ const nurseLabel = orderNurse
         </Text>
 
         <View style={styles.testDetails}>
-          <View style={styles.detailRow}>
+          {/* <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>HSN Code:</Text>
             <Text style={styles.detailValue}>{test?.hsn || "1236"}</Text>
-          </View>
+          </View> */}
 
           {test?.loinc_num_ && (
             <View style={styles.detailRow}>

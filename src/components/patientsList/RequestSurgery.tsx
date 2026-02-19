@@ -55,6 +55,8 @@ const surgeryTypesData = [
 
 type RequestSurgeryRouteParams = {
   timelineID?: string | number;
+  zone?: number; // 👈 ADD THIS
+
 };
 
 export default function RequestSurgeryScreen() {
@@ -67,6 +69,7 @@ export default function RequestSurgeryScreen() {
   const user = useSelector((s: RootState) => s.currentUser);
 
   const timelineID = params.timelineID;
+  const patientZone = params.zone; // 👈 ADD THIS
 
   const [loading, setLoading] = useState(false);
   const [patientType, setPatientType] = useState<string>("");
@@ -108,6 +111,7 @@ export default function RequestSurgeryScreen() {
       const data = {
         patientType: patientType,
         surgeryType: selectedSurgeryType,
+        zone: patientZone || user?.zone,
       };      
       const res = await AuthPost(
         `ot/${user.hospitalID}/${timelineID}`,
@@ -115,16 +119,25 @@ export default function RequestSurgeryScreen() {
         token
       );
       // FIXED: Check response structure properly
-      if ("data" in res && res?.data?.status === 201) {
-        dispatch(showSuccess("Surgery request submitted successfully"));
-        // Navigate back to patient profile
-        setTimeout(() => {
-          navigation.reset({
-          index: 0,
-          routes: [{ name: 'PatientList' }],
-        });
-        }, 1500);
-      }
+if ("data" in res && res?.data?.status === 201) {
+  dispatch(showSuccess("Surgery request submitted successfully"));
+
+  setTimeout(() => {
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name:
+            user?.role === 2003 || user?.role === 2002
+              ? "nursePatientList"
+              : "PatientList",
+          params: { zone: patientZone || user?.zone },
+        },
+      ],
+    });
+  }, 1500);
+}
+
       else {
         let errorMessage = "Failed to submit surgery request";
         if ("message" in res && res.message) {

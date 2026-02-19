@@ -271,7 +271,6 @@ const BillingTaxInvoiceMobile: React.FC = () => {
 
     const url = `reception/${user?.hospitalID}/approved/${deptNum}/getReceptionBillingList`;
     const response = await AuthFetch(url, token);
-    console.log("Reception Billing Response12345:", response);
     if (response?.status === "success" && "data" in response) {
       const rawData = Array.isArray(response?.data?.data)
         ? response.data?.data
@@ -770,7 +769,6 @@ const fetchLabRadiologyBilling = async (token: string) => {
   const url = `test/${deptName}/${user.hospitalID}/approved/getBillingData`;
   
   const response = await AuthFetch(url, token) as any;
-  console.log("1234",response)
   
   if ((response?.status === "success") && Array.isArray(response?.data?.billingData)) {
     const billingData = response?.data?.billingData || response?.billingData || response?.data?.data || response?.data;
@@ -871,7 +869,6 @@ const fetchReceptionTaxInvoices = async (token: string) => {
   for (const ep of endpoints) {
     try {
       const res: any = await AuthFetch(ep.url, token);
-      console.log("tax222222", ep.url, res);
       const arr = Array.isArray(res?.data?.data) ? res.data.data : [];
       arr.forEach((item: any) =>
         allRawItems.push({ ...item, deptType: ep.deptType })
@@ -1093,7 +1090,6 @@ const fetchLabRadiologyTaxInvoices = async (token: string) => {
   const url = `test/getOpdIpdTaxInvoiceData/${user.hospitalID}/${deptName}?startDate=&endDate=`;
   
   const response = await AuthFetch(url, token);
-  console.log("Lab/Radiology Tax Invoice response:", response);
   
   if (response?.status === "success" && "data" in response) {
     const rawData = Array.isArray(response?.data?.data) ? response.data?.data : [];

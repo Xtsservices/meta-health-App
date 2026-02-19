@@ -206,4 +206,6 @@ DischargeSummaryDownload: undefined;
   RevenueTabNavigator:undefined;
   DoctorProfileForm:undefined;
   PendingApproval:undefined;
+  BloodBankProfileForm:undefined;
+  RejectionScreen:undefined;
 };

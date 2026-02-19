@@ -612,17 +612,6 @@ const DischargeSummarySheet: React.FC<Props> = ({
               }
             },
           },
-          {
-            text: "Share",
-            onPress: () => {
-              // You could implement sharing functionality here
-              Alert.alert(
-                "Share PDF",
-                "Sharing functionality would be implemented here.",
-                [{ text: "OK" }]
-              );
-            },
-          },
           { text: "Done", style: "cancel" },
         ]
       );

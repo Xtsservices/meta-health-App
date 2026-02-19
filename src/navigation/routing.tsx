@@ -187,6 +187,9 @@ import HospitalBreakdownScreen from '../components/revenue/HospitalBreakdownScre
 import RevenueTabNavigator from '../components/revenue/RevenueTabNavigator';
 import DoctorProfileForm from '../components/registation/DoctorProfileForm';
 import PendingApproval from '../components/PendingApproval';
+import BloodBankProfileForm from '../components/registation/BloodBankProfileForm';
+import RejectionScreen from '../components/registation/RejectionScreen';
+import NursePatientListScreen from '../components/cardList/NursePatientListScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -283,17 +286,27 @@ const Routing = () => {
   name="PendingApproval" 
   component={PendingApproval}
   options={{ 
-    title: 'Pending Approval',
+    title: 'Approval',
     headerTitleAlign: 'center',
     headerShown: true,
   }} 
 />
+<Stack.Screen name="RejectionScreen" component={RejectionScreen} />
 
 <Stack.Screen 
   name="DoctorProfileForm" 
   component={DoctorProfileForm}
   options={{ 
     title: 'Doctor Profile',
+    headerTitleAlign: 'center',
+    headerShown: true,
+  }} 
+/>
+<Stack.Screen 
+  name="BloodBankProfileForm" 
+  component={BloodBankProfileForm}
+   options={{ 
+    title: 'Blood Bank Profile',
     headerTitleAlign: 'center',
     headerShown: true,
   }} 
@@ -1558,6 +1571,13 @@ const Routing = () => {
         headerTitleAlign: 'center',
         headerShown: true,
         }}/>
+        {/* NursePatientListScreen */}
+         <Stack.Screen name="NursePatientListScreen" component={NursePatientListScreen}
+        options={{
+        title: 'Patient List',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}/>
         <Stack.Screen 
           name="NurseAlerts" 
           component={NurseAlerts}
@@ -1609,30 +1629,56 @@ const Routing = () => {
       <Stack.Screen 
         name="PatientListScreen" 
         component={PatientListScreen} 
-        options={{ headerShown: false }}
+             options={{
+        title: 'Patient List',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}
       />
       <Stack.Screen 
         name="IPDPatientListScreen" 
         component={IPDPatientListScreen} 
-        options={{ headerShown: false }}
+        options={{
+        title: 'Patient List',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}
       />
       <Stack.Screen 
         name="PharmacyPatientListScreen" 
         component={PharmacyPatientListScreen} 
-        options={{ headerShown: false }}
+        options={{
+        title: 'Patient List',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}
       />
       <Stack.Screen 
         name="OtPatientList" 
         component={OtPatientList} 
-        options={{ headerShown: false }}
+        options={{
+        title: 'Patient List',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}
       />
       <Stack.Screen 
         name="ApprovedRejectedList" 
         component={ApprovedRejectedList} 
+        options={{
+        title: 'Patient List',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}
       />
       <Stack.Screen 
         name="OPDTriagePatientList" 
         component={OPDTriagePatientListScreen} 
+        options={{
+        title: 'Patient List',
+        headerTitleAlign: 'center',
+        headerShown: true,
+        }}
       />     
 <Stack.Screen 
   name="AddDoctorLeave" 

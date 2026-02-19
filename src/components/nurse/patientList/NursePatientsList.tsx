@@ -159,7 +159,7 @@ const NursePatientsList: React.FC = () => {
         setApiMessage(response?.message || 'No schedule assigned');
         setPatients([]);
       } else if (response?.data?.message === 'success' && response?.data?.data) {
-        const data = response?.data?.data;
+        const data = response?.data?.data.reverse() ?? [];
         setPatients(data);
         setApiMessage("");
       } else if (response?.message === 'No schedule assigned') {

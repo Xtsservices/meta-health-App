@@ -172,6 +172,7 @@ const calculateAgeFromDOB = (dob?: string, age?: string): string => {
 
   // Render Patient Card
   const renderPatientCard = ({ item }: { item: PatientType }) => (
+    console.log('Rendering patient card for:', item),
     <View style={styles.card}>
       <View style={styles.cardContent}>
         <View style={styles.patientInfo}>

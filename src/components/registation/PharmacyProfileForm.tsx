@@ -25,6 +25,7 @@ import {
   Award,
   Clock,
   AlertCircle,
+  Edit,
 } from 'lucide-react-native';
 import { Picker } from '@react-native-picker/picker';
 import { AuthPost, AuthFetch } from '../../auth/auth';
@@ -80,6 +81,12 @@ const COLORS = {
   chipInactive: '#e5e7eb',
 };
 
+// Validation regex
+const MOBILE_REGEX = /^[6-9][0-9]{9}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ALPHANUMERIC_REGEX = /^[a-zA-Z0-9\s\-/]+$/;
+const TIME_REGEX = /^[0-9\s:AMPamp\-]+$/;
+
 // Pharmacy fields configuration matching web version
 const PHARMACY_FIELDS: ProfileField[] = [
   { name: 'registrationNumber', label: 'Registration Number', type: 'text', required: true, placeholder: 'e.g., ABCD' },
@@ -108,9 +115,9 @@ const PHARMACY_FIELDS: ProfileField[] = [
   { name: 'nabpAccredited', label: 'NABP Accredited', type: 'toggle', required: false },
   { name: 'fireSafetyClearance', label: 'Fire Safety Clearance', type: 'toggle', required: false },
   { name: 'operatingHours', label: 'Operating Hours', type: 'text', required: true, placeholder: 'e.g., 9:00 AM - 10:00 PM' },
-  { name: 'emergencyHours', label: 'Emergency Hours', type: 'text', required: true, placeholder: 'e.g., 24/7 or 10:00 PM - 6:00 AM' },
-  { name: 'deliveryRadius', label: 'Delivery Radius (km)', type: 'number', required: true, placeholder: 'e.g., 5' },
-  { name: 'averageDeliveryTime', label: 'Average Delivery Time', type: 'text', required: true, placeholder: 'e.g., 30-45 minutes' },
+  { name: 'emergencyHours', label: 'Emergency Hours', type: 'text', required: false, placeholder: 'e.g., 24/7 or 10:00 PM - 6:00 AM' },
+  { name: 'deliveryRadius', label: 'Delivery Radius (km)', type: 'number', required: false, placeholder: 'e.g., 5' },
+  { name: 'averageDeliveryTime', label: 'Average Delivery Time', type: 'text', required: false, placeholder: 'e.g., 30-45 minutes' },
   { name: 'insuranceAccepted', label: 'Insurance Accepted', type: 'toggle', required: false },
   { name: 'cashPayment', label: 'Cash Payment', type: 'toggle', required: false },
   { name: 'cardPayment', label: 'Card Payment', type: 'toggle', required: false },
@@ -194,6 +201,7 @@ const PharmacyProfileForm = () => {
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
 
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
@@ -232,7 +240,7 @@ const PharmacyProfileForm = () => {
         const response = await AuthFetch(`pharmacy/${id}/profile`, token) as any;
         if (response?.status === 'success' && response?.data) {
           const profileData = response?.data?.pharmacyProfile || response?.data;
-          if (profileData && profileData?.registrationNumber) {
+          if (profileData && Object.keys(profileData).length > 0) {
             setFormData(profileData);
             setHasExistingProfile(true);
           }
@@ -263,6 +271,22 @@ const PharmacyProfileForm = () => {
     }
   };
 
+  const validateMobileNumber = (mobile: string): boolean => {
+    return MOBILE_REGEX.test(mobile);
+  };
+
+  const validateEmail = (email: string): boolean => {
+    return EMAIL_REGEX.test(email);
+  };
+
+  const validateAlphanumeric = (text: string): boolean => {
+    return ALPHANUMERIC_REGEX.test(text);
+  };
+
+  const validateTimeFormat = (text: string): boolean => {
+    return TIME_REGEX.test(text);
+  };
+
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     
@@ -270,13 +294,20 @@ const PharmacyProfileForm = () => {
       setFormErrors(prev => ({ ...prev, [field]: '' }));
     }
 
-    if (field === 'registrationNumber' && value?.length > 0 && value?.length <= 3) {
-      setFormErrors(prev => ({ 
-        ...prev, 
-        registrationNumber: 'Registration number must be more than three characters' 
-      }));
-    } else if (field === 'registrationNumber') {
-      setFormErrors(prev => ({ ...prev, registrationNumber: '' }));
+    if (field === 'registrationNumber' && value?.length > 0) {
+      if (value?.length <= 3) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          registrationNumber: 'Registration number must be more than three characters' 
+        }));
+      } else if (!validateAlphanumeric(value)) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          registrationNumber: 'Registration number can only contain letters, numbers, spaces, hyphens and slashes' 
+        }));
+      } else {
+        setFormErrors(prev => ({ ...prev, registrationNumber: '' }));
+      }
     }
 
     if (field === 'yearOfEstablishment') {
@@ -286,14 +317,26 @@ const PharmacyProfileForm = () => {
           ...prev, 
           yearOfEstablishment: `Year must be between 1800 and ${new Date().getFullYear()}` 
         }));
-      } else if (field === 'yearOfEstablishment') {
+      } else if (year === 0) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          yearOfEstablishment: 'Year cannot be 0' 
+        }));
+      } else {
         setFormErrors(prev => ({ ...prev, yearOfEstablishment: '' }));
       }
     }
-  };
 
-  const toggleYesNo = (field: string, currentValue: string) => {
-    handleInputChange(field, currentValue === 'Yes' ? 'No' : 'Yes');
+    if (field === 'operatingHours' || field === 'emergencyHours' || field === 'averageDeliveryTime') {
+      if (value && !validateAlphanumeric(value) && !validateTimeFormat(value)) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          [field]: `${field === 'operatingHours' ? 'Operating hours' : field === 'emergencyHours' ? 'Emergency hours' : 'Average delivery time'} can only contain letters, numbers, spaces, hyphens, colons and slashes` 
+        }));
+      } else {
+        setFormErrors(prev => ({ ...prev, [field]: '' }));
+      }
+    }
   };
 
   const validateForm = (): boolean => {
@@ -307,14 +350,26 @@ const PharmacyProfileForm = () => {
         errors[field.name] = `${field.label} is required`;
       }
       
-      if (field.name === 'registrationNumber' && value && value.length <= 3) {
-        errors[field.name] = 'Registration number must be more than three characters';
+      if (field.name === 'registrationNumber' && value) {
+        if (value.length <= 3) {
+          errors[field.name] = 'Registration number must be more than three characters';
+        } else if (!validateAlphanumeric(value)) {
+          errors[field.name] = 'Registration number can only contain letters, numbers, spaces, hyphens and slashes';
+        }
       }
       
       if (field.name === 'yearOfEstablishment' && value) {
         const year = parseInt(value);
         if (year < 1800 || year > currentYear) {
           errors[field.name] = `Year must be between 1800 and ${currentYear}`;
+        } else if (year === 0) {
+          errors[field.name] = 'Year cannot be 0';
+        }
+      }
+
+      if ((field.name === 'operatingHours' || field.name === 'emergencyHours' || field.name === 'averageDeliveryTime') && value) {
+        if (!validateAlphanumeric(value) && !validateTimeFormat(value)) {
+          errors[field.name] = `${field.label} can only contain letters, numbers, spaces, hyphens, colons and slashes`;
         }
       }
     });
@@ -325,7 +380,7 @@ const PharmacyProfileForm = () => {
 
   const saveProfile = async () => {
     if (!validateForm()) {
-      dispatch(showError('Please fill all required fields'));
+      dispatch(showError('Please fill all required fields correctly'));
       return;
     }
 
@@ -356,6 +411,7 @@ const PharmacyProfileForm = () => {
       if (response?.status === 'success' || response?.data?.message?.toLowerCase()?.includes('success')) {
         dispatch(showSuccess(response?.data?.message || 'Profile saved successfully'));
         setHasExistingProfile(true);
+        setEditMode(false);
         if (response?.data?.pharmacyId) {
           setProfileId(response.data.pharmacyId);
         }
@@ -393,6 +449,8 @@ const PharmacyProfileForm = () => {
         dispatch(showError('Profile is already pending approval'));
       } else if (response?.status === 'success' || response?.data?.message?.toLowerCase()?.includes('success')) {
         dispatch(showSuccess('Profile submitted for verification'));
+        setHasExistingProfile(true);
+        setEditMode(false);
         setTimeout(() => {
           navigation?.navigate?.('Login');
         }, 1500);
@@ -406,6 +464,12 @@ const PharmacyProfileForm = () => {
     }
   };
 
+  const handleEdit = () => {
+    setEditMode(true);
+  };
+
+  const isReadOnly = (hasExistingProfile && !editMode);
+
   const renderPickerField = (field: ProfileField) => {
     const value = formData?.[field?.name];
     let options: string[] = [];
@@ -418,7 +482,7 @@ const PharmacyProfileForm = () => {
       options = inventoryManagementOptions;
     }
 
-    if (hasExistingProfile) {
+    if (isReadOnly) {
       return (
         <View style={styles.fieldContainer} key={field.name}>
           <Text style={styles.label}>{field.label}</Text>
@@ -461,7 +525,7 @@ const PharmacyProfileForm = () => {
   const renderToggleField = (field: ProfileField) => {
     const value = formData?.[field?.name];
 
-    if (hasExistingProfile) {
+    if (isReadOnly) {
       return (
         <View style={styles.fieldContainer} key={field.name}>
           <Text style={styles.label}>{field.label}</Text>
@@ -475,26 +539,31 @@ const PharmacyProfileForm = () => {
         <Text style={styles.label}>
           {field.label} {field.required && <Text style={styles.required}>*</Text>}
         </Text>
-        <View style={styles.toggleContainer}>
+        <View style={styles.radioContainer}>
           <TouchableOpacity
-            style={[styles.toggleButton, value === 'Yes' && styles.toggleButtonActive]}
-            onPress={() => toggleYesNo(field.name, value)}
+            style={styles.radioOption}
+            onPress={() => handleInputChange(field.name, 'Yes')}
             disabled={isSubmitting}
           >
-            <Text style={[styles.toggleButtonText, value === 'Yes' && styles.toggleButtonTextActive]}>
-              Yes
-            </Text>
+            <View style={[styles.radioCircle, value === 'Yes' && styles.radioCircleSelected]}>
+              {value === 'Yes' && <View style={styles.radioSelected} />}
+            </View>
+            <Text style={[styles.radioText, value === 'Yes' && styles.radioTextSelected]}>Yes</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.toggleButton, value === 'No' && styles.toggleButtonActive]}
-            onPress={() => toggleYesNo(field.name, value)}
+            style={styles.radioOption}
+            onPress={() => handleInputChange(field.name, 'No')}
             disabled={isSubmitting}
           >
-            <Text style={[styles.toggleButtonText, value === 'No' && styles.toggleButtonTextActive]}>
-              No
-            </Text>
+            <View style={[styles.radioCircle, value === 'No' && styles.radioCircleSelected]}>
+              {value === 'No' && <View style={styles.radioSelected} />}
+            </View>
+            <Text style={[styles.radioText, value === 'No' && styles.radioTextSelected]}>No</Text>
           </TouchableOpacity>
         </View>
+        {formErrors?.[field.name] ? (
+          <Text style={styles.errorText}>{formErrors[field.name]}</Text>
+        ) : null}
       </View>
     );
   };
@@ -502,7 +571,7 @@ const PharmacyProfileForm = () => {
   const renderNumberField = (field: ProfileField) => {
     const value = formData?.[field?.name];
 
-    if (hasExistingProfile) {
+    if (isReadOnly) {
       return (
         <View style={styles.fieldContainer} key={field.name}>
           <Text style={styles.label}>{field.label}</Text>
@@ -530,7 +599,14 @@ const PharmacyProfileForm = () => {
             } else {
               num = num?.replace?.(/\./g, '');
               if (num === '' || !isNaN(parseInt(num))) {
-                handleInputChange(field.name, num === '' ? '' : parseInt(num));
+                const intValue = num === '' ? '' : parseInt(num);
+                handleInputChange(field.name, intValue);
+                if (intValue === 0 && field.required) {
+                  setFormErrors(prev => ({ 
+                    ...prev, 
+                    [field.name]: `${field.label} cannot be 0` 
+                  }));
+                }
               }
             }
           }}
@@ -547,7 +623,7 @@ const PharmacyProfileForm = () => {
   const renderTextField = (field: ProfileField) => {
     const value = formData?.[field?.name];
 
-    if (hasExistingProfile) {
+    if (isReadOnly) {
       return (
         <View style={styles.fieldContainer} key={field.name}>
           <Text style={styles.label}>{field.label}</Text>
@@ -579,7 +655,7 @@ const PharmacyProfileForm = () => {
   const renderYearField = (field: ProfileField) => {
     const value = formData?.[field?.name];
 
-    if (hasExistingProfile) {
+    if (isReadOnly) {
       return (
         <View style={styles.fieldContainer} key={field.name}>
           <Text style={styles.label}>{field.label}</Text>
@@ -691,19 +767,21 @@ const PharmacyProfileForm = () => {
                 onPress={() => navigation?.goBack?.()}
                 disabled={isSubmitting}
               >
-                <ArrowLeft size={FONT_SIZE.lg} color={COLORS.text} />
               </TouchableOpacity>
-              <Text style={styles.title}>Pharmacy Profile</Text>
-              {hasExistingProfile && (
-                <View style={styles.statusContainer}>
-                  <CheckCircle size={FONT_SIZE.sm} color={COLORS.success} />
-                  <Text style={styles.statusText}>Saved</Text>
-                </View>
+              {hasExistingProfile && !editMode && (
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={handleEdit}
+                  disabled={isSubmitting}
+                >
+                  <Edit size={FONT_SIZE.md} color={COLORS.brand} />
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
               )}
             </View>
 
             <View style={styles.content}>
-              {hasExistingProfile && (
+              {hasExistingProfile && !editMode && (
                 <View style={styles.approvalWaitingCard}>
                   <View style={styles.approvalWaitingIconWrapper}>
                     <Clock size={SPACING.md} color={COLORS.warning} />
@@ -722,7 +800,7 @@ const PharmacyProfileForm = () => {
                 </View>
               )}
 
-              {hasExistingProfile ? (
+              {hasExistingProfile && !editMode ? (
                 <Text style={styles.subtitle}>
                   View your pharmacy profile information
                 </Text>
@@ -736,7 +814,7 @@ const PharmacyProfileForm = () => {
               {FIELD_SECTIONS.map(section => renderSection(section))}
 
               <View style={styles.buttonContainer}>
-                {!hasExistingProfile && (
+                {(!hasExistingProfile || editMode) && (
                   <TouchableOpacity
                     style={[styles.saveButton, isSubmitting && styles.buttonDisabled]}
                     onPress={saveProfile}
@@ -753,7 +831,7 @@ const PharmacyProfileForm = () => {
                   </TouchableOpacity>
                 )}
                 
-                {hasExistingProfile && (
+                {hasExistingProfile && !editMode && (
                   <TouchableOpacity
                     style={[styles.verifyButton, isSubmitting && styles.buttonDisabled]}
                     onPress={submitForVerification}
@@ -824,6 +902,20 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    backgroundColor: '#E0F2FE',
+    borderRadius: SPACING.sm,
+  },
+  editButtonText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.brand,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -983,31 +1075,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     textAlignVertical: 'center',
   },
-  toggleContainer: {
+  radioContainer: {
     flexDirection: 'row',
-    gap: SPACING.sm,
+    gap: SPACING.lg,
   },
-  toggleButton: {
-    flex: 1,
-    height: responsiveHeight(6),
-    backgroundColor: COLORS.chipInactive,
-    borderRadius: SPACING.sm,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+  radioOption: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  radioCircle: {
+    width: FONT_SIZE.lg,
+    height: FONT_SIZE.lg,
+    borderRadius: FONT_SIZE.lg / 2,
+    borderWidth: 2,
+    borderColor: COLORS.border,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  toggleButtonActive: {
-    backgroundColor: COLORS.chipActive,
-    borderColor: COLORS.chipActive,
+  radioCircleSelected: {
+    borderColor: COLORS.brand,
   },
-  toggleButtonText: {
+  radioSelected: {
+    width: FONT_SIZE.sm,
+    height: FONT_SIZE.sm,
+    borderRadius: FONT_SIZE.sm / 2,
+    backgroundColor: COLORS.brand,
+  },
+  radioText: {
     fontSize: FONT_SIZE.md,
-    color: COLORS.text,
-    fontWeight: '600',
+    color: COLORS.sub,
   },
-  toggleButtonTextActive: {
-    color: COLORS.white,
+  radioTextSelected: {
+    color: COLORS.brand,
+    fontWeight: '500',
   },
   buttonContainer: {
     marginTop: SPACING.lg,

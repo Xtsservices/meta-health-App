@@ -820,7 +820,7 @@ const exportToCSV = async () => {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" />
-        {renderHeader()}
+        {/* {renderHeader()} */}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#14b8a6" />
           <Text style={styles.loadingText}>Loading pharmacy data...</Text>
@@ -832,7 +832,7 @@ const exportToCSV = async () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-      {renderHeader()}
+      {/* {renderHeader()} */}
       
       <View style={styles.container}>
         {patients?.length === 0 ? (

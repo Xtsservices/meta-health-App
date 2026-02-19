@@ -60,10 +60,12 @@ import {
   CalendarIcon,
   ClockIcon,
   UsersIcon,
+  CommissionIcon,
 } from "../../utils/SvgIcons";
 
 // import Sidebar types
 import type { SidebarItem } from "../Sidebar/sidebarIpd";
+import { DollarSign } from "lucide-react-native";
 
 // ---- Types ----
 type XY = { x: number | string; y: number };
@@ -218,7 +220,7 @@ const Sidebar: React.FC<{
   const overviewItems = items?.filter((item) => item.key === "dash") ?? [];
   const patientManagementItems =
     items?.filter((item) => ["plist", "addp", "app"].includes(item.key)) ?? [];
-  const operationsItems = items?.filter((item) => ["expense","mgmt"].includes(item.key))  ?? [];
+  const operationsItems = items?.filter((item) => ["commission","expense","mgmt","revenue"].includes(item.key))  ?? [];
   const supportItems = items?.filter((item) => item.key === "help") ?? [];
 
   return (
@@ -655,6 +657,8 @@ const DashboardTriage: React.FC = () => {
           icon: ActivityIcon,
           onPress: () => go("ExpenseManagement") 
         },
+    { key: 'commission',label: 'Commission & Fee',icon: CommissionIcon,onPress: () => navigation.navigate('CommissionAndFee')},
+    { key: "revenue", label: "Revenue", icon: DollarSign, onPress: () => go("RevenueTabNavigator") }, // Added Revenue tab
     { key: "mgmt", label: "Management", icon: SettingsIcon, onPress: () => go("Management") },
     { key: "help", label: "Help", icon: HelpCircleIcon, onPress: () => go("HelpScreen") },
   ];

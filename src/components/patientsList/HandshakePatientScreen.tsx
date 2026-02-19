@@ -58,6 +58,7 @@ const ACTION_BAR_H = Math.max(60, SCREEN_HEIGHT * 0.08);
 type HandshakeRouteParams = {
   patientID?: string | number;
   timelineID?: string | number;
+  zone?: number; // 👈 ADD THIS
 };
 
 type Doctor = {
@@ -74,6 +75,8 @@ export default function HandshakePatientScreen() {
   const dispatch = useDispatch();
 
   const params: HandshakeRouteParams = route.params || {};
+  const patientZone = params.zone; 
+
   const user = useSelector((s: RootState) => s.currentUser);
 
   const patientID = params.patientID;
@@ -157,7 +160,20 @@ export default function HandshakePatientScreen() {
       if (("data" in response && response?.data?.status === "success") || 
           response?.status === "success") {
         dispatch(showSuccess("Patient successfully handshaked"));
-        navigation.navigate("PatientList" as never);
+        setTimeout(() => {
+  navigation.reset({
+    index: 0,
+    routes: [
+      {
+        name:
+          user?.role === 2003 || user?.role === 2002
+            ? "nursePatientList"
+            : "PatientList",
+        params: { zone: patientZone || user?.zone }, // 👈 PASS ZONE
+      },
+    ],
+  });
+}, 1500);
       } else {
       let errorMessage = "Failed to handshake patient";
       

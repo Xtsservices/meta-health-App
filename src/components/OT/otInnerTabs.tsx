@@ -115,7 +115,6 @@ const PatientTabsGrid: React.FC<Props> = ({
   const activeTab = route.params?.tabName;
   const user = useSelector((s: RootState) => s.currentUser);
   const currentPatient = useSelector((s: RootState) => s.currentPatient);
-  console.log("currentPatient12345",currentPatient)
  
   /** Build tiles depending on tabName coming from route */
   const tiles: GridItem[] = useMemo(() => {
