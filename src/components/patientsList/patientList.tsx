@@ -196,7 +196,6 @@ if (user?.patientStatus === 1) {
       }
 
       const response = await AuthFetch(url, token);
-      
       if (response?.status === "success" && "data" in response) {
         const patients: PatientType[] = Array.isArray(response?.data?.patients)
           ? response?.data?.patients

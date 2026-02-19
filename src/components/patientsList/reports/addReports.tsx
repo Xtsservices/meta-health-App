@@ -275,23 +275,47 @@ const requestCameraPermission = async () => {
 
     try {
       setLoading(true);
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       const form = new FormData();
+for (const file of files) {
+  const exists = await RNFS.exists(file.uri.replace("file://", ""));
+  
+  if (!exists) {
+    dispatch(showError(`File not ready: ${file.name}`));
+    setLoading(false);
+    return;
+  }
 
-      files.forEach((file) => {
-        form.append("files", {
-          uri: file.uri,
-          name: file.name,
-          type: file.type,
-        } as any);
-      });
+  form.append("files", {
+    uri: file.uri,
+    name: file.name,
+    type: file.type,
+  } as any);
+}
 
-      form.append("category", String(category));
-      const token = user?.token ?? (await AsyncStorage.getItem("token"));      
-      const res = await UploadFiles(
-        `attachment/${user?.hospitalID}/${currentPatient?.patientTimeLineID}/${currentPatient?.id}/${user?.id}`,
-        form,
-        token
-      );
+form.append("category", String(category));
+
+const token = user?.token ?? (await AsyncStorage.getItem("token"));      
+
+// ✅ Build URL separately
+const url = `attachment/${user?.hospitalID}/${currentPatient?.patientTimeLineID}/${currentPatient?.id}/${user?.id}`;
+
+// ✅ Log URL
+console.log("Upload URL:", url);
+
+// ✅ Log Payload (FormData)
+console.log("Upload Payload:");
+for (let pair of form._parts) {
+  console.log(pair[0], pair[1]);
+}
+
+// ✅ Call API
+const res = await UploadFiles(url, form, token);
+
+// ✅ Log Full Response
+console.log("Upload Response:", JSON.stringify(res, null, 2));
+
           
       if (res?.status === "success" && "data" in res) {
         dispatch(showSuccess("Report successfully uploaded"));

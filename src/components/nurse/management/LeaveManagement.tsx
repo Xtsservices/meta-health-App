@@ -98,14 +98,14 @@ const LeaveManagementScreen: React.FC = () => {
 
   const handleDeleteLeave = async (id: number, addedOn?: string) => {
     // Check if deletion is allowed
-    if (!canDeleteWithinOneHour(addedOn)) {
-      Alert.alert(
-        'Cannot Delete',
-        'Record is older than 1 hour. Deletion is not allowed.',
-        [{ text: 'OK', style: 'default' }]
-      );
-      return;
-    }
+    // if (!canDeleteWithinOneHour(addedOn)) {
+    //   Alert.alert(
+    //     'Cannot Delete',
+    //     'Record is older than 1 hour. Deletion is not allowed.',
+    //     [{ text: 'OK', style: 'default' }]
+    //   );
+    //   return;
+    // }
 
     Alert.alert('Delete Leave', 'Are you sure you want to delete this leave?', [
       { text: 'Cancel', style: 'cancel' },
@@ -258,16 +258,16 @@ const LeaveManagementScreen: React.FC = () => {
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       onPress={() => handleDeleteLeave(item.id, item.addedOn)}
-                      disabled={!canDelete}
+                      // disabled={!canDelete}
                       style={[
                         styles.deleteButton,
                         !canDelete && styles.disabledDeleteButton
                       ]}
                     >
-                      <TrashIcon size={18} color={canDelete ? COLORS.error : COLORS.sub} />
+                      <TrashIcon size={18} color={'#FF0000'} />
                       <Text style={[
                         styles.deleteText,
-                        { color: canDelete ? COLORS.error : COLORS.sub }
+                        // { color: canDelete ? COLORS.error : COLORS.sub }
                       ]}>
                         Delete Leave
                       </Text>
@@ -464,6 +464,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   deleteText: {
+    color: '#FF0000',
     fontSize: FONT_SIZE.xs,
     fontWeight: '600',
   },

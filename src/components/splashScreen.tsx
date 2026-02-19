@@ -15,12 +15,10 @@ const SplashScreen = () => {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
 
-  // 🔹 AUTH FLOW
   useEffect(() => {
     const checkLogin = async () => {
       try {
         const token = await AsyncStorage.getItem('token');
-        console.log('Token retrieved:', token);
         const userId = await AsyncStorage.getItem('userID');
 
         if (!token || !userId) {
@@ -29,13 +27,75 @@ const SplashScreen = () => {
         }
 
         const res = await AuthFetch(`user/${Number(userId)}`, token);
-        console.log('User data fetched:', res);
         const user = res?.data?.user;
 
         if (!user) {
           navigation.replace('Login');
           return;
         }
+
+        /* =======================================================
+           🔴 IF ANY STATUS IS PENDING → FORCE LOGIN
+        ======================================================== */
+
+        // Doctor hospital association check
+        if (user.doctorHospitalAssociations?.length > 0) {
+          const assoc = user.doctorHospitalAssociations[0];
+          const hospitalStatus = assoc?.hospitalDetails?.status;
+
+          if (
+            hospitalStatus === 'pending' ||
+            hospitalStatus === 'approval_awaiting' ||
+            hospitalStatus === 'submitted'
+          ) {
+            await AsyncStorage.clear();
+            return navigation.replace('Login');
+          }
+        }
+
+        // Hospital direct check
+        if (
+          user.hospitalDetails?.status === 'pending' ||
+          user.hospitalDetails?.status === 'approval_awaiting' ||
+          user.hospitalDetails?.status === 'submitted'
+        ) {
+          await AsyncStorage.clear();
+          return navigation.replace('Login');
+        }
+
+        // Pharmacy check
+        if (
+          user.pharmacyDetails?.status === 'pending' ||
+          user.pharmacyDetails?.status === 'approval_awaiting' ||
+          user.pharmacyDetails?.status === 'submitted'
+        ) {
+          await AsyncStorage.clear();
+          return navigation.replace('Login');
+        }
+
+        // Blood bank check
+        if (
+          user.bloodBankData?.status === 'pending' ||
+          user.bloodBankData?.status === 'approval_awaiting' ||
+          user.bloodBankData?.status === 'submitted'
+        ) {
+          await AsyncStorage.clear();
+          return navigation.replace('Login');
+        }
+
+        // Doctor profile verification check
+        if (
+          user.doctorProfile?.verificationStatus === 'pending' ||
+          user.doctorProfile?.verificationStatus === 'approval_awaiting' ||
+          user.doctorProfile?.verificationStatus === 'submitted'
+        ) {
+          await AsyncStorage.clear();
+          return navigation.replace('Login');
+        }
+
+        /* =======================================================
+           ✅ NORMAL LOGIN FLOW (UNCHANGED)
+        ======================================================== */
 
         dispatch(currentUser(user));
 
@@ -44,15 +104,15 @@ const SplashScreen = () => {
         } else if (user.role === Role_NAME.ambulanceDriver) {
           navigation.replace('AmbulanceDriverDashboard');
         } else if (Role_NAME.ambulanceStaff === user?.role) {
-          dispatch(currentUser(user));
-          navigation.navigate('AmbulanceStaffDashboard' as never);
+          navigation.replace('AmbulanceStaffDashboard');
         } else if (user.scope === '5007' || user.scope === '5008') {
           navigation.replace('OtDashboard');
         } else if (user.role === 2002 || user.role === 2003) {
           navigation.replace('NurseDashboard');
-        }else {
+        } else {
           navigation.replace('Home');
         }
+
       } catch (e) {
         dispatch(showError('Auto login failed'));
         navigation.replace('Login');

@@ -40,6 +40,7 @@ type TransferRouteParams = {
   hospitalID?: number;
   patientID?: number;
   timeline?: Timeline;
+  zone?: number;
 };
 
 // ---------- Helpers ----------
@@ -78,6 +79,7 @@ export default function TransferPatientSheet() {
   const route = useRoute<any>();
 
   const params: TransferRouteParams = route.params || {};
+  const patientZone = params.zone;
 
   // store
   const user = useSelector((s: RootState) => s.currentUser);
@@ -341,6 +343,13 @@ export default function TransferPatientSheet() {
     }
     if (!validate()) return;
 
+    // Check if selected ward is full before submitting
+    const selectedWard = wards.find(w => w.id === form.wardID);
+    if (selectedWard && selectedWard.availableBeds === 0) {
+      dispatch(showError("Cannot transfer to a full ward"));
+      return;
+    }
+
     const token = await ensureToken();
     setSubmitting(true);
 
@@ -368,11 +377,21 @@ export default function TransferPatientSheet() {
 
 if (("data" in res && res?.status === "success") || ("message" in res && res?.message === "success")) {
   dispatch(showSuccess("Patient successfully transferred"));
-  if (user?.role === 2002 || user?.role === 2003) {
-    navigation.navigate("NursePatientList" as never);
-  } else {
-  navigation.navigate("PatientList" as never);
-  }
+setTimeout(() => {
+  navigation.reset({
+    index: 0,
+    routes: [
+      {
+        name:
+          user?.role === 2002 || user?.role === 2003
+            ? "nursePatientList"
+            : "PatientList",
+        params: { zone: patientZone || user?.zone }, // 👈 PASS ZONE
+      },
+    ],
+  });
+}, 1500);
+
 } else {
   // Safely extract error message
   let errorMessage = "Failed to transfer patient";
@@ -390,7 +409,7 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
     } finally {
       setSubmitting(false);
     }
-  }, [hospitalID, patientID, form, ensureToken, validate, dispatch, navigation, user?.id]);
+  }, [hospitalID, patientID, form, ensureToken, validate, dispatch, navigation, user?.id, wards]);
 
   const debouncedSubmit = useCallback(
     debounce(handleSubmit, DEBOUNCE_DELAY),
@@ -508,7 +527,10 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
                 >
                   <Text style={styles.inputText}>
                     {form.wardID
-                      ? capitalize(wards.find((w) => w.id === form.wardID)?.name)
+                      ? (() => {
+                          const ward = wards.find((w) => w.id === form.wardID);
+                          return ward ? `${capitalize(ward.name)}${ward.availableBeds === 0 ? " (Full)" : ""}` : "Select Ward";
+                        })()
                       : "Select Ward"}
                   </Text>
                 </Pressable>
@@ -583,7 +605,10 @@ if (("data" in res && res?.status === "success") || ("message" in res && res?.me
                       >
                         <Text style={styles.inputText}>
                           {form.wardID
-                            ? capitalize(wards.find((w) => w.id === form.wardID)?.name)
+                            ? (() => {
+                                const ward = wards.find((w) => w.id === form.wardID);
+                                return ward ? `${capitalize(ward.name)}${ward.availableBeds === 0 ? " (Full)" : ""}` : "Select Ward";
+                              })()
                             : "Select Ward"}
                         </Text>
                       </Pressable>
@@ -907,12 +932,19 @@ const PickerSheet: React.FC<{
               key={it.key}
               disabled={!!it.disabled}
               onPress={() => {
+                if (it.disabled) {
+                  // Show error message when trying to select a disabled/full ward
+                  // This is handled by the onPick not being called
+                  return;
+                }
                 onPick(it.value);
                 onClose();
               }}
               style={[styles.pickerItem, { opacity: it.disabled ? 0.5 : 1 }]}
             >
-              <Text style={styles.pickerText}>{it.label}</Text>
+              <Text style={[styles.pickerText, it.disabled && { color: COLORS.danger }]}>
+                {it.label}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>

@@ -29,13 +29,15 @@ const { width: W } = Dimensions.get("window");
 type Ward = {
   id: number | string;
   name: string;
+  availableBeds?: number; // Add availableBeds property
 };
 
 type Props = {
   visible: boolean;
   conditionLabel: string | null;
-  onClose: () => void;
-  onSubmit: (wardId: string) => void;
+  onClose: () => {
+    onSubmit: (wardId: string) => void;
+  };
 };
 
 const TriageDialogMobile: React.FC<Props> = ({
@@ -55,6 +57,11 @@ const TriageDialogMobile: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [wardSearch, setWardSearch] = useState("");
+
+  // Function to capitalize first letter (like in reference code)
+  const capitalizeFirstLetter = (str: string) => {
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  };
 
   // Filter wards
   const filteredWards = useMemo(() => {
@@ -194,26 +201,38 @@ const TriageDialogMobile: React.FC<Props> = ({
               >
                 {filteredWards.map((w, idx) => {
                   const active = String(w.id) === selectedWard;
+                  const isFull = Number(w.availableBeds) === 0;
+                  console.log(`Ward ${w.name} - Available Beds: ${w.availableBeds} - isFull: ${isFull}`);
                   return (
                     <TouchableOpacity
                       key={w.id}
                       style={[
                         styles.wardRow,
                         active && styles.wardRowActive,
+                        isFull && styles.wardRowDisabled,
                         idx === filteredWards.length - 1 && {
                           borderBottomWidth: 0,
                         },
                       ]}
-                      onPress={() => setSelectedWard(String(w.id))}
+                      onPress={() => {
+                        if (isFull) {
+                          dispatch(showError("Selected ward is full"));
+                          return;
+                        }
+                        setSelectedWard(String(w.id));
+                      }}
+                      disabled={isFull}
                     >
                       <Text
                         style={[
                           styles.wardLabel,
                           active && styles.wardLabelActive,
+                          isFull && styles.wardLabelDisabled,
                         ]}
                         numberOfLines={1}
                       >
-                        {w.name}
+                        {capitalizeFirstLetter(w.name)}
+                        {isFull && <Text style={styles.fullText}> (Full)</Text>}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -324,6 +343,9 @@ const styles = StyleSheet.create({
   wardRowActive: {
     backgroundColor: "#e0f7f5",
   },
+  wardRowDisabled: {
+    opacity: 0.5,
+  },
   wardLabel: {
     fontSize: 14,
     color: "#0f172a",
@@ -331,6 +353,13 @@ const styles = StyleSheet.create({
   wardLabelActive: {
     color: "#0f172a",
     fontWeight: "600",
+  },
+  wardLabelDisabled: {
+    color: "#94a3b8",
+  },
+  fullText: {
+    color: "#ef4444",
+    fontStyle: "italic",
   },
   emptyText: {
     marginTop: 10,

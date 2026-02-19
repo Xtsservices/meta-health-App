@@ -542,54 +542,54 @@ const exportToCSV = async () => {
     navigation.goBack();
   };
 
-  const renderHeader = () => (
-    <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? Math.max(40, insets.top) : 20 }]}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={handleBack}
-        >
-          <ArrowLeftIcon size={24} color="#0b1220" />
-        </TouchableOpacity>
-        
-        <View style={styles.headerTitleContainer}>
-          <View style={styles.titleRow}>
-            {getIcon()}
-            <Text style={styles.headerTitle}>{getTitle()}</Text>
-          </View>
-          <Text style={styles.subtitle}>
-            Total {pagination.total} records
-          </Text>
-        </View>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, (loading || patients.length === 0) && styles.actionButtonDisabled]}
-          onPress={exportToCSV}
-          disabled={loading || patients.length === 0}
-        >
-          <DownloadIcon size={20} color={loading || patients.length === 0 ? "#94a3b8" : "#0b1220"} />
-        </TouchableOpacity>
+const renderHeader = () => (
+  <View
+    style={[
+      styles.header,
+      { paddingTop: Platform.OS === "ios" ? Math.max(40, insets.top) : 20 },
+    ]}
+  >
+    <View style={styles.searchRow}>
+
+      {/* 🔍 SEARCH */}
+      <View style={styles.searchWrap}>
+        <SearchIcon size={18} color="#94a3b8" />
+
+        <TextInput
+          placeholder="Search patients..."
+          placeholderTextColor="#94a3b8"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchInput}
+        />
+
+        {searchQuery !== "" && (
+          <TouchableOpacity onPress={() => setSearchQuery("")}>
+            <Text style={styles.clearSearchText}>✕</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      <View style={styles.searchContainer}>
-        <View style={styles.searchWrap}>
-          <SearchIcon size={18} color="#94a3b8" />
-          <TextInput
-            placeholder="Search patients..."
-            placeholderTextColor="#94a3b8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={styles.searchInput}
-          />
-          {searchQuery !== "" && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <Text style={styles.clearSearchText}>✕</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      {/* ⬇ EXPORT BUTTON */}
+      <TouchableOpacity
+        style={[
+          styles.exportButton,
+          (loading || patients.length === 0) && styles.actionButtonDisabled,
+        ]}
+        onPress={exportToCSV}
+        disabled={loading || patients.length === 0}
+      >
+        <DownloadIcon
+          size={20}
+          color={loading || patients.length === 0 ? "#94a3b8" : "#0b1220"}
+        />
+      </TouchableOpacity>
+
     </View>
-  );
+  </View>
+);
+
+
 
   const renderPatientTypeBadge = (ptype: number) => {
     const typeText = getPatientType(ptype);
@@ -961,17 +961,6 @@ const styles = StyleSheet.create({
   searchContainer: {
     marginTop: moderateVerticalScale(SPACING.xs),
   },
-  searchWrap: {
-    height: moderateScale(48),
-    backgroundColor: "#f8fafc",
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
-    borderRadius: moderateScale(12),
-    paddingHorizontal: moderateScale(SPACING.sm),
-    flexDirection: "row",
-    alignItems: "center",
-    gap: moderateScale(10),
-  },
   searchInput: {
     flex: 1,
     fontSize: FONT_SIZE.sm,
@@ -1059,6 +1048,7 @@ const styles = StyleSheet.create({
     padding: moderateScale(SPACING.md),
     paddingBottom: moderateVerticalScale(SPACING.xl + 80),
   },
+  
   patientCard: {
     flexDirection: "row",
     backgroundColor: "#fff",
@@ -1100,6 +1090,35 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: moderateScale(SPACING.xs),
   },
+  searchRow: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: moderateScale(10),
+},
+
+searchWrap: {
+  flex: 1,   // 🔥 important
+  height: moderateScale(48),
+  backgroundColor: "#f8fafc",
+  borderWidth: 1.5,
+  borderColor: "#e2e8f0",
+  borderRadius: moderateScale(12),
+  paddingHorizontal: moderateScale(SPACING.sm),
+  flexDirection: "row",
+  alignItems: "center",
+},
+
+exportButton: {
+  width: moderateScale(48),
+  height: moderateScale(48),
+  borderRadius: moderateScale(12),
+  alignItems: "center",
+  justifyContent: "center",
+  backgroundColor: "#f1f5f9",
+  borderWidth: 1.5,
+  borderColor: "#e2e8f0",
+},
+
   patientId: {
     fontSize: FONT_SIZE.xs,
     color: "#64748b",

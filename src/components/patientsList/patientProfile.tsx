@@ -1,3 +1,5 @@
+// src/screens/patient/PatientProfileOPD.tsx
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -189,7 +191,9 @@ const PatientProfileOPD: React.FC = () => {
 
   const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.currentUser);
+  console.log("Current user from store:", user);
   const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
+  console.log("werewestore:", patientFromStore);
   const timelineFromStore: TimelineType | undefined = undefined; // no timeline in store; initialize locally
   const [currentPatient, setCurrentPatient] = useState<PatientType | undefined>(patientFromStore);
   const [timeline, setTimeline] = useState<TimelineType | undefined>(timelineFromStore);
@@ -248,9 +252,10 @@ if (startStatus === 1) {
 
   // Check if patient is discharged
   const isDischargedPatient = fromDischargeList || endStatus === 21 || patientFromStore?.ptype ===21;
+  console.log("1111", isDischargedPatient);
   const isSurgeonOrAnesthetist = user?.roleName === "surgeon" || user?.roleName === "anesthetist";
   const shouldShowPatientRevisit = isDischargedPatient || isFromPreviousPatients;
-
+  const isTriage = user?.roleName === "triage";
   // Helper function to get ward name
   const getWardName = (wardId: number | string | undefined): string => {
     if (!wardId) return "—";
@@ -509,14 +514,16 @@ const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolea
     setOpenRevisit(true);
   };
 
-  useFocusEffect(
-    useCallback(() => {
-    fetchPatientAndTimeline();
-      if (user?.patientStatus === 2 || user?.patientStatus === 3) {
+useFocusEffect(
+  useCallback(() => {
+    fetchPatientAndTimeline().then(() => {
+      if (currentPatient?.wardID) {
         fetchWards();
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]))
+    });
+  }, [id])
+);
+
 
   useEffect(() => {
     if (printSelectOptions.length > 0) handlePrintClick();
@@ -623,11 +630,21 @@ const getMenuItems = () => {
     ];
   }
 
-  const baseItems = [
-    { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
-    { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
-  
-  ];
+const baseItems = [
+  ...(user?.role === 2003 || user?.role === 2002 && !isDischargedPatient
+    ? []   // hide discharge summary for nurse if not discharged
+    : [
+        {
+          label: "Discharge Summary",
+          onPress: () => openReportFromMenu("generalInfo"),
+        },
+      ]),
+  { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
+];
+
+
+  // Check if patient has a status (Request Surgery (Sent))
+  const hasStatus = currentPatient?.status != null;
 
   // For start status 1: Transfer Patient + Discharge Summary + Test Reports
   if (startStatus === 1) {
@@ -651,7 +668,7 @@ const getMenuItems = () => {
   }
 
   if (startStatus !== 1) {
-    return [
+    const menuItems = [
       {
         label: "Transfer Patient",
         onPress: () => {
@@ -661,34 +678,44 @@ const getMenuItems = () => {
               hospitalID: user?.hospitalID,
               patientID: currentPatient?.id,
               timeline,
+              zone: currentPatient?.zone || user?.zone,
             });
           }
         },
         disabled: staffRole === "nurse",
       },
       {
-        label: "Request Surgery",
+        label: hasStatus ? "Request Surgery (Sent)" : "Request Surgery",
         onPress: () => {
+          if (!hasStatus) {
           setMenuOpen(false);
           navigation.navigate("RequestSurgeryScreen", {
             timelineID: timeline?.id,
-          });
+              zone: currentPatient?.zone || user?.zone,
+            });
+            }
         },
-        disabled: false,
+        disabled: hasStatus,
       },
-      {
+    ];
+
+    // Only add Handshake Patient for roles other than 2002 and 2003
+    if (user?.role !== 2002 && user?.role !== 2003) {
+      menuItems.push({
         label: "Handshake Patient",
         onPress: () => {
           setMenuOpen(false);
           navigation.navigate("HandshakePatientScreen", {
             patientID: currentPatient?.id,
             timelineID: timeline?.id,
+            zone: currentPatient?.zone || user?.zone,
           });
         },
         disabled: false,
-      },
-      ...baseItems,
-    ];
+      });
+    }
+
+    return [...menuItems, ...baseItems];
   }
 
   return [
@@ -885,7 +912,7 @@ const getMenuItems = () => {
             )}
 
             {/* Discharge Button - Only for startStatus 2 (active patients) */}
-            {!isDischargedPatient && !timeline?.patientEndStatus && (startStatus === 2 || startStatus === 3) && !isSurgeonOrAnesthetist && (
+            {!isDischargedPatient && !timeline?.patientEndStatus && (startStatus === 2 || startStatus === 3) && !isSurgeonOrAnesthetist && !isTriage && (
               <View style={styles.dischargeButtonContainer}>
                 <TouchableOpacity
                   onPress={() => navigation.navigate("DischargeScreen", { 
@@ -1183,7 +1210,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 18, fontWeight: "800" },
   sub: { fontSize: 13, marginTop: 2 },
 
-  badgesRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  badgesRow: { flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" },
   badge: {
     flexDirection: "row",
     alignItems: "center",

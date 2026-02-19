@@ -327,12 +327,13 @@ export default function TimelineRow({
             tagColor: colorObj[timeline?.patientStartStatus || 1],
             when: formatDateTimeTL(timeline?.endTime),
             infoBlocks: [
-              <Pressable
-                key="diag-press"
-                onPress={() => setDiagHintVisible((v) => !v)}
-              >
-                <Text style={styles.link}>Diagnosis data is available</Text>
-              </Pressable>,
+             <Pressable
+  key="diag-press"
+  onPress={() => setDiagHintVisible(true)}
+>
+  <Text style={styles.link}>Diagnosis data is available</Text>
+</Pressable>,
+
               diagHintVisible ? (
                 <Text key="diag-hint" style={styles.diagHint}>
                   (Hook this to navigate to your Diagnosis screen)
@@ -424,6 +425,25 @@ export default function TimelineRow({
   return (
     <View style={[styles.card, { borderColor: COLORS.border }]}>
       <Text style={styles.visitTitle}>Visit #{index + 1}</Text>
+{/* Diagnosis Modal */}
+{diagHintVisible && (
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalBox}>
+      <Text style={styles.modalTitle}>Diagnosis</Text>
+
+      <Text style={styles.modalContent}>
+        {timeline?.diagnosis?.trim() || "No diagnosis available"}
+      </Text>
+
+      <Pressable
+        onPress={() => setDiagHintVisible(false)}
+        style={styles.modalButton}
+      >
+        <Text style={styles.modalButtonText}>Close</Text>
+      </Pressable>
+    </View>
+  </View>
+)}
 
       {rows.map((row, i) => (
         <View key={i} style={styles.eventCard}>
@@ -470,6 +490,7 @@ export default function TimelineRow({
         </View>
       ))}
     </View>
+    
   );
 }
 
@@ -581,6 +602,51 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.text,
   },
+modalOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.4)",
+  justifyContent: "center",
+  alignItems: "center",
+  padding: 20,
+  zIndex: 1000,
+},
+
+modalBox: {
+  backgroundColor: "#fff",
+  width: "100%",
+  borderRadius: 16,
+  padding: 20,
+},
+
+modalTitle: {
+  fontSize: 16,
+  fontWeight: "900",
+  marginBottom: 10,
+  color: COLORS.text,
+},
+
+modalContent: {
+  fontSize: 14,
+  fontWeight: "600",
+  color: COLORS.text,
+  marginBottom: 20,
+},
+
+modalButton: {
+  backgroundColor: COLORS.brand,
+  paddingVertical: 10,
+  borderRadius: 10,
+  alignItems: "center",
+},
+
+modalButtonText: {
+  color: "#fff",
+  fontWeight: "900",
+},
 
   link: {
     color: COLORS.brand,

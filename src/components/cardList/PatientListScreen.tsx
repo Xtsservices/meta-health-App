@@ -676,23 +676,11 @@ const exportToCSV = async () => {
     );
   }) || [];
 
-  if (loading && !refreshing) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" />
-        {renderHeader()}
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#14b8a6" />
-          <Text style={styles.loadingText}>Loading patients...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-      {renderHeader()}
+      {/* {renderHeader()} */}
       
       <View style={styles.container}>
         {error && !loading ? (

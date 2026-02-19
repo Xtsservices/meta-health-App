@@ -690,7 +690,6 @@ const RevenueScreen = () => {
       if (filters.status) url += `&status=${filters.status}`;
 
       const response = await AuthFetch(url, token) as any;
-      console.log("6^^^6",response)
       if (response?.data?.success || response?.status === 'success') {
         const data = response?.data?.data || response?.data || {};
         setSummary(data);
@@ -712,7 +711,6 @@ const RevenueScreen = () => {
       if (filters.status) url += `&status=${filters.status}`;
 
       const response = await AuthFetch(url, token) as any;
-console.log("555",response)
       if (response?.data?.success || response?.status === 'success') {
         const data = response?.data?.data || response?.data || {};
         setHistory(data);

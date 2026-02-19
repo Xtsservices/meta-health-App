@@ -756,12 +756,6 @@ const waitForFileReady = async (uri: string) => {
         endpoint,
         formData,
         token,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          timeout: 60000, // 60 second timeout for large files
-        }
       ) as any;
     } else {
       // Regular patient upload

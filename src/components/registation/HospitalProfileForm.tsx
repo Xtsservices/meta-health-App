@@ -24,6 +24,7 @@ import {
   Thermometer,
   Clock,
   AlertCircle,
+  Edit,
 } from 'lucide-react-native';
 import { AuthFetch, AuthPost } from '../../auth/auth';
 import { useDispatch } from 'react-redux';
@@ -83,7 +84,7 @@ const HOSPITAL_FIELDS: ProfileField[] = [
   { name: 'ownership', label: 'Ownership', type: 'text', required: true, placeholder: 'Private' },
   { name: 'totalBeds', label: 'Total Beds', type: 'number', required: true, placeholder: '0' },
   { name: 'icuBeds', label: 'ICU Beds', type: 'number', required: true, placeholder: '0' },
-  { name: 'emergencyFacility', label: 'Emergency Facility', type: 'text', required: true },
+  { name: 'emergencyFacility', label: 'Emergency Facility', type: 'text', required: false },
   { name: 'operationTheatres', label: 'Operation Theatres', type: 'number', required: true, placeholder: '0' },
   { name: 'generalWard', label: 'General Ward', type: 'number', required: true, placeholder: '0' },
   { name: 'semiPrivate', label: 'Semi Private', type: 'number', required: true, placeholder: '0' },
@@ -91,20 +92,20 @@ const HOSPITAL_FIELDS: ProfileField[] = [
   { name: 'deluxeSuite', label: 'Deluxe Suite', type: 'number', required: true, placeholder: '0' },
   { name: 'totalDoctors', label: 'Total Doctors', type: 'number', required: true, placeholder: '0' },
   { name: 'nursesAndSupport', label: 'Nurses and Support', type: 'number', required: true, placeholder: '0' },
-  { name: 'visitingConsultants', label: 'Visiting Consultants', type: 'number', required: true, placeholder: '0' },
-  { name: 'laboratory24x7', label: 'Laboratory 24x7', type: 'text', required: true },
-  { name: 'pharmacy24x7', label: 'Pharmacy 24x7', type: 'text', required: true },
-  { name: 'radiologyXRay', label: 'Radiology X-Ray', type: 'text', required: true },
-  { name: 'radiologyCT', label: 'Radiology CT', type: 'text', required: true },
-  { name: 'radiologyMRI', label: 'Radiology MRI', type: 'text', required: true },
-  { name: 'radiologyUltrasound', label: 'Radiology Ultrasound', type: 'text', required: true },
-  { name: 'ambulanceService', label: 'Ambulance Service', type: 'text', required: true },
-  { name: 'bloodBank', label: 'Blood Bank', type: 'text', required: true },
-  { name: 'physiotherapyUnit', label: 'Physiotherapy Unit', type: 'text', required: true },
-  { name: 'nabhAccredited', label: 'NABH Accredited', type: 'text', required: true },
-  { name: 'isoCertification', label: 'ISO Certification', type: 'text', required: true },
-  { name: 'fireSafetyClearance', label: 'Fire Safety Clearance', type: 'text', required: true },
-  { name: 'pollutionControlCompliance', label: 'Pollution Control Compliance', type: 'text', required: true },
+  { name: 'visitingConsultants', label: 'Visiting Consultants', type: 'number', required: false, placeholder: '0' },
+  { name: 'laboratory24x7', label: 'Laboratory 24x7', type: 'text', required: false },
+  { name: 'pharmacy24x7', label: 'Pharmacy 24x7', type: 'text', required: false },
+  { name: 'radiologyXRay', label: 'Radiology X-Ray', type: 'text', required: false },
+  { name: 'radiologyCT', label: 'Radiology CT', type: 'text', required: false },
+  { name: 'radiologyMRI', label: 'Radiology MRI', type: 'text', required: false },
+  { name: 'radiologyUltrasound', label: 'Radiology Ultrasound', type: 'text', required: false },
+  { name: 'ambulanceService', label: 'Ambulance Service', type: 'text', required: false },
+  { name: 'bloodBank', label: 'Blood Bank', type: 'text', required: false },
+  { name: 'physiotherapyUnit', label: 'Physiotherapy Unit', type: 'text', required: false },
+  { name: 'nabhAccredited', label: 'NABH Accredited', type: 'text', required: false },
+  { name: 'isoCertification', label: 'ISO Certification', type: 'text', required: false },
+  { name: 'fireSafetyClearance', label: 'Fire Safety Clearance', type: 'text', required: false },
+  { name: 'pollutionControlCompliance', label: 'Pollution Control Compliance', type: 'text', required: false },
 ];
 
 const HOSPITAL_SECTIONS = [
@@ -152,6 +153,7 @@ const HospitalProfileForm = () => {
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
   
   const getToken = async () => {
     try {
@@ -185,7 +187,7 @@ const HospitalProfileForm = () => {
         const response = await AuthFetch(`hospital/${id}/profile`, token) as any;
         if (response?.status === 'success' && response.data) {
           const profileData = response.data.hospitalProfile || response.data;
-          if (profileData && profileData.registrationNumber) {
+          if (profileData && Object.keys(profileData).length > 0) {
             setFormData(profileData);
             setHasExistingProfile(true);
           }
@@ -212,8 +214,14 @@ const HospitalProfileForm = () => {
   };
 
   const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
+    let formattedValue = value;
+
+    if (field === 'registrationNumber') {
+      formattedValue = value.replace(/[^A-Za-z0-9]/g, '');
+    }
+
+    setFormData(prev => ({ ...prev, [field]: formattedValue }));
+
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -226,8 +234,18 @@ const HospitalProfileForm = () => {
     HOSPITAL_FIELDS.forEach(field => {
       const value = formData?.[field?.name];
       
-      if (field.required && !value && value !== 0) {
-        errors[field.name] = `${field.label} is required`;
+      if (field.required) {
+        if (value === undefined || value === null || value === '') {
+          errors[field.name] = `${field.label} is required`;
+        }
+        else if (field.type === 'number') {
+          const num = Number(value);
+          if (isNaN(num)) {
+            errors[field.name] = `${field.label} must be a valid number`;
+          } else if (num < 1) {
+            errors[field.name] = `${field.label} must be at least 1`;
+          }
+        }
       }
       
       if (field.name === 'yearOfEstablishment' && value) {
@@ -235,10 +253,6 @@ const HospitalProfileForm = () => {
         if (year < 1800 || year > currentYear) {
           errors[field.name] = `Year must be between 1800 and ${currentYear}`;
         }
-      }
-      
-      if (field.type === 'number' && value && value < 0) {
-        errors[field.name] = `${field.label} cannot be negative`;
       }
     });
 
@@ -268,6 +282,7 @@ const HospitalProfileForm = () => {
       if (response?.status === 'success' || response?.data?.message?.toLowerCase().includes('success')) {
         dispatch(showSuccess(response?.data?.message || 'Profile saved successfully'));
         setHasExistingProfile(true);
+        setEditMode(false);
         if (response?.data?.hospitalId) {
           setProfileId(response.data.hospitalId);
         }
@@ -299,9 +314,9 @@ const HospitalProfileForm = () => {
         dispatch(showError('Profile is already pending approval'));
       } else if (response?.status === 'success' || response?.data?.message?.toLowerCase().includes('success')) {
         dispatch(showSuccess('Profile submitted for verification'));
-        setTimeout(() => {
-          navigation?.navigate?.('Login');
-        }, 1500);
+        setHasExistingProfile(true);
+        setEditMode(false);
+        navigation.replace('Login'); 
       } else {
         dispatch(showError(response?.message || 'Failed to submit for verification'));
       }
@@ -312,10 +327,16 @@ const HospitalProfileForm = () => {
     }
   };
 
+  const handleEdit = () => {
+    setEditMode(true);
+  };
+
+  const isReadOnly = (hasExistingProfile && !editMode);
+
   const renderField = (field: ProfileField) => {
     const value = formData[field.name];
     
-    if (hasExistingProfile) {
+    if (isReadOnly) {
       return (
         <View style={styles.fieldContainer} key={field.name}>
           <Text style={styles.label}>{field.label}</Text>
@@ -362,11 +383,37 @@ const HospitalProfileForm = () => {
             style={[styles.input, formErrors[field.name] && styles.inputError]}
             placeholder="0"
             placeholderTextColor={COLORS.placeholder}
-            value={value ? String(value) : ''}
+            value={value !== undefined && value !== null ? String(value) : ''}
             onChangeText={(text) => {
               const num = text.replace(/[^0-9]/g, '');
-              if (num === '' || !isNaN(parseInt(num))) {
-                handleInputChange(field.name, num === '' ? '' : parseInt(num));
+              if (num === '') {
+                handleInputChange(field.name, '');
+              } else if (!isNaN(parseInt(num))) {
+                const parsedNum = parseInt(num);
+                handleInputChange(field.name, parsedNum);
+              }
+            }}
+            onBlur={() => {
+              const value = formData[field.name];
+              if (value === '' || value === undefined || value === null) {
+                setFormErrors(prev => ({
+                  ...prev,
+                  [field.name]: `${field.label} is required`
+                }));
+              } else {
+                const num = Number(value);
+                if (isNaN(num) || num < 1) {
+                  setFormErrors(prev => ({
+                    ...prev,
+                    [field.name]: `${field.label} must be at least 1`
+                  }));
+                } else {
+                  setFormErrors(prev => {
+                    const newErrors = { ...prev };
+                    delete newErrors[field.name];
+                    return newErrors;
+                  });
+                }
               }
             }}
             keyboardType="numeric"
@@ -378,7 +425,7 @@ const HospitalProfileForm = () => {
         </View>
       );
     }
-
+    
     if (['emergencyFacility', 'laboratory24x7', 'pharmacy24x7', 'ambulanceService', 'bloodBank', 
          'physiotherapyUnit', 'nabhAccredited', 'isoCertification', 'fireSafetyClearance', 
          'pollutionControlCompliance', 'radiologyXRay', 'radiologyCT', 'radiologyMRI', 'radiologyUltrasound'].includes(field.name)) {
@@ -449,9 +496,8 @@ const HospitalProfileForm = () => {
         <TextInput
           style={[styles.input, formErrors[field.name] && styles.inputError]}
           placeholder={field.placeholder}
-          placeholderTextColor={COLORS.placeholder}
-          value={value || ''}
-          onChangeText={(text) => handleInputChange(field.name, text)}
+          value={formData[field.name] || ''}
+          onChangeText={(value) => handleInputChange(field.name, value)}
           editable={!isSubmitting}
         />
         {formErrors[field.name] && (
@@ -502,26 +548,27 @@ const HospitalProfileForm = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => navigation?.goBack?.()}
               disabled={isSubmitting}
             >
-              <ArrowLeft size={FONT_SIZE.lg} color={COLORS.text} />
-            </TouchableOpacity>
-            <Text style={styles.title}>Hospital Profile</Text>
-            {hasExistingProfile && (
-              <View style={styles.statusContainer}>
-                <CheckCircle size={FONT_SIZE.sm} color={COLORS.success} />
-                <Text style={styles.statusText}>Saved</Text>
-              </View>
+\            </TouchableOpacity>
+            {hasExistingProfile && !editMode && (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={handleEdit}
+                disabled={isSubmitting}
+              >
+                <Edit size={FONT_SIZE.md} color={COLORS.brand} />
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
             )}
           </View>
 
           <View style={styles.content}>
-            {hasExistingProfile && (
+            {hasExistingProfile && !editMode && (
               <View style={styles.approvalWaitingCard}>
                 <View style={styles.approvalWaitingIconWrapper}>
                   <Clock size={SPACING.md} color={COLORS.warning} />
@@ -540,7 +587,7 @@ const HospitalProfileForm = () => {
               </View>
             )}
 
-            {hasExistingProfile ? (
+            {hasExistingProfile && !editMode ? (
               <Text style={styles.subtitle}>
                 View your hospital profile information
               </Text>
@@ -553,7 +600,7 @@ const HospitalProfileForm = () => {
             {HOSPITAL_SECTIONS.map(section => renderSection(section))}
 
             <View style={styles.buttonContainer}>
-              {!hasExistingProfile && (
+              {(!hasExistingProfile || editMode) && (
                 <TouchableOpacity
                   style={[styles.saveButton, isSubmitting && styles.buttonDisabled]}
                   onPress={saveProfile}
@@ -570,7 +617,7 @@ const HospitalProfileForm = () => {
                 </TouchableOpacity>
               )}
               
-              {hasExistingProfile && (
+              {hasExistingProfile && !editMode && (
                 <TouchableOpacity
                   style={[styles.verifyButton, isSubmitting && styles.buttonDisabled]}
                   onPress={submitForVerification}
@@ -637,6 +684,20 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.lg,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    backgroundColor: '#E0F2FE',
+    borderRadius: SPACING.sm,
+  },
+  editButtonText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+    color: COLORS.brand,
   },
   statusContainer: {
     flexDirection: 'row',

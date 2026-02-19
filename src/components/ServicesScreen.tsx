@@ -5,20 +5,30 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   ScrollView, 
-  Dimensions,
   Platform,
   StatusBar,
   SafeAreaView 
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-
-// Get responsive dimensions
-const { width, height } = Dimensions.get('window');
-
-// Responsive scaling functions
-const scale = (size: number) => (width / 375) * size;
-const verticalScale = (size: number) => (height / 812) * size;
-const moderateScale = (size: number, factor = 0.5) => size + (scale(size) - size) * factor;
+import {
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
+  isTablet,
+  isSmallDevice,
+  isExtraSmallDevice,
+  SPACING,
+  FONT_SIZE,
+  BORDER_RADIUS,
+  moderateScale,
+  moderateVerticalScale,
+  fontWithLineHeight,
+  wp,
+  hp,
+  getResponsiveFontSize,
+  responsivePadding,
+  responsiveMargin,
+  getSafeAreaInsets
+} from '../utils/responsive'; // Adjust the import path as needed
 
 const services = [
   { 
@@ -55,6 +65,7 @@ const services = [
 
 const ServicesScreen = () => {
   const navigation = useNavigation<any>();
+  const safeAreaInsets = getSafeAreaInsets();
 
   const handleServicePress = (item: typeof services[0]) => {
     // Add any validation or loading logic here
@@ -76,12 +87,20 @@ const ServicesScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor="#f8fafc" />
       <ScrollView 
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          responsivePadding(SPACING.md, SPACING.lg, SPACING.xl, SPACING.lg)
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        <View style={[
+          styles.header,
+          responsiveMargin(SPACING.sm, 0, SPACING.xl, 0)
+        ]}>
           <Text style={styles.heading}>Choose a Service</Text>
-          <Text style={styles.subHeading}>Select the service you want to register</Text>
+          <Text style={styles.subHeading}>
+            Select the service you want to register
+          </Text>
         </View>
         
         <View style={styles.servicesGrid}>
@@ -90,7 +109,7 @@ const ServicesScreen = () => {
               key={item.id}
               style={styles.card}
               onPress={() => handleServicePress(item)}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
               <View style={styles.cardContent}>
                 <Text style={styles.cardText}>{item.label}</Text>
@@ -116,38 +135,58 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
-    paddingHorizontal: moderateScale(20),
-    paddingBottom: verticalScale(40),
-    paddingTop: verticalScale(20),
   },
   header: {
     alignItems: 'center',
-    marginBottom: verticalScale(30),
-    marginTop: verticalScale(10),
   },
   heading: {
-    fontSize: moderateScale(28),
     fontWeight: '700',
     color: '#03989e',
     textAlign: 'center',
-    marginBottom: verticalScale(8),
+    marginBottom: moderateVerticalScale(8),
+    fontSize: getResponsiveFontSize(28, { min: 24, max: 32 }),
     lineHeight: moderateScale(34),
+    ...(isSmallDevice && {
+      fontSize: moderateScale(24),
+      lineHeight: moderateScale(30),
+    }),
+    ...(isTablet && {
+      fontSize: moderateScale(32),
+      lineHeight: moderateScale(40),
+    }),
   },
   subHeading: {
-    fontSize: moderateScale(14),
     color: '#64748b',
     textAlign: 'center',
-    maxWidth: scale(280),
+    maxWidth: isTablet ? wp(60) : wp(80),
+    fontSize: getResponsiveFontSize(14, { min: 12, max: 16 }),
     lineHeight: moderateScale(20),
+    ...(isSmallDevice && {
+      fontSize: moderateScale(12),
+      lineHeight: moderateScale(18),
+    }),
+    ...(isTablet && {
+      fontSize: moderateScale(16),
+      lineHeight: moderateScale(24),
+    }),
   },
   servicesGrid: {
     flexDirection: 'column',
-    gap: verticalScale(16),
+    gap: moderateVerticalScale(16),
+    ...(isSmallDevice && {
+      gap: moderateVerticalScale(12),
+    }),
+    ...(isTablet && {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      gap: moderateScale(20),
+    }),
   },
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: moderateScale(14),
-    padding: moderateScale(20),
+    borderRadius: BORDER_RADIUS.md,
+    padding: moderateScale(isTablet ? 24 : 20),
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -161,25 +200,42 @@ const styles = StyleSheet.create({
     }),
     borderWidth: 1,
     borderColor: '#f1f5f9',
+    ...(isTablet && {
+      width: wp(isExtraSmallDevice ? 90 : 45),
+      marginHorizontal: moderateScale(5),
+    }),
+    ...(isExtraSmallDevice && {
+      padding: moderateScale(16),
+    }),
   },
   cardContent: {
     alignItems: 'center',
   },
   cardText: {
-    fontSize: moderateScale(18),
     color: '#334155',
     fontWeight: '600',
     textAlign: 'center',
+    fontSize: getResponsiveFontSize(18, { min: 16, max: 20 }),
+    lineHeight: moderateScale(24),
+    ...(isSmallDevice && {
+      fontSize: moderateScale(16),
+      lineHeight: moderateScale(22),
+    }),
+    ...(isTablet && {
+      fontSize: moderateScale(20),
+      lineHeight: moderateScale(28),
+    }),
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: moderateScale(20),
+    paddingHorizontal: SPACING.lg,
   },
   emptyText: {
-    fontSize: moderateScale(16),
     color: '#64748b',
     textAlign: 'center',
+    fontSize: getResponsiveFontSize(16, { min: 14, max: 18 }),
+    lineHeight: moderateScale(24),
   },
 });
