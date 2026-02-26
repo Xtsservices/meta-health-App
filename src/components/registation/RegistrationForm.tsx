@@ -20,11 +20,12 @@ import {
   Check,
   Mail,
   CheckCircle,
+  ChevronDown,
 } from 'lucide-react-native';
 
 import { AuthPost } from '../../auth/auth';
 import { showSuccess, showError } from '../../store/toast.slice';
-import { formatDate, formatTime, formatDateTime } from '../../utils/dateTime';
+import { formatDate, formatDateTime } from '../../utils/dateTime';
 
 interface RegistrationFormProps {
   category: string;
@@ -36,6 +37,7 @@ interface FormField {
   type: string;
   placeholder?: string;
   required?: boolean;
+  options?: string[];
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -87,9 +89,87 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  
+  // Dropdown states
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [showStatePicker, setShowStatePicker] = useState(false);
+  const [showCityPicker, setShowCityPicker] = useState(false);
+  
+  // Data states
+  const [countries, setCountries] = useState<string[]>([]);
+  const [stateOptions, setStateOptions] = useState<string[]>([]);
+  const [cityOptions, setCityOptions] = useState<string[]>([]);
 
   const otpInputRefs = useRef<Array<TextInput | null>>([]);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Fetch countries on mount
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const res = await fetch(
+          "https://countriesnow.space/api/v0.1/countries/positions"
+        );
+        const data = await res.json();
+        const countryNames = data.data.map((item: any) => item.name);
+        setCountries(countryNames);
+      } catch (error) {
+        console.log("Failed to fetch countries");
+      }
+    };
+    fetchCountries();
+  }, []);
+
+  // Fetch states when country changes
+  useEffect(() => {
+    if (!formData.country) return;
+
+    const fetchStates = async () => {
+      try {
+        const res = await fetch(
+          "https://countriesnow.space/api/v0.1/countries/states",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ country: formData.country }),
+          }
+        );
+        const data = await res.json();
+        const states = data.data.states.map((s: any) => s.name);
+        setStateOptions(states);
+        setCityOptions([]);
+      } catch (error) {
+        console.log("Failed to fetch states");
+      }
+    };
+    fetchStates();
+  }, [formData.country]);
+
+  // Fetch cities when state changes
+  useEffect(() => {
+    if (!formData.country || !formData.state) return;
+
+    const fetchCities = async () => {
+      try {
+        const res = await fetch(
+          "https://countriesnow.space/api/v0.1/countries/state/cities",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              country: formData.country,
+              state: formData.state,
+            }),
+          }
+        );
+        const data = await res.json();
+        setCityOptions(data.data);
+      } catch (error) {
+        console.log("Failed to fetch cities");
+      }
+    };
+    fetchCities();
+  }, [formData.state]);
 
   const validateEmail = (email: string): string | null => {
     if (!email) return 'Email is required';
@@ -165,9 +245,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           { name: 'name', label: 'Hospital Name', type: 'text', placeholder: 'Enter hospital name', required: true },
           { name: 'parent', label: 'Parent/Group', type: 'text', placeholder: 'Enter parent/group name', required: true },
           { name: 'address', label: 'Address', type: 'textarea', placeholder: 'Enter complete address', required: true },
-          { name: 'country', label: 'Country', type: 'text', placeholder: 'Enter country', required: true },
-          { name: 'state', label: 'State', type: 'text', placeholder: 'Enter state', required: true },
-          { name: 'city', label: 'City', type: 'text', placeholder: 'Enter city', required: true },
+          { name: 'country', label: 'Country', type: 'dropdown', placeholder: 'Select country', required: true },
+          { name: 'state', label: 'State', type: 'dropdown', placeholder: 'Select state', required: true },
+          { name: 'city', label: 'City', type: 'dropdown', placeholder: 'Select city', required: true },
           { name: 'district', label: 'District', type: 'text', placeholder: 'Enter district', required: true },
           { name: 'pinCode', label: 'Pin Code', type: 'text', placeholder: 'Enter pin code', required: true },
           { name: 'website', label: 'Website', type: 'text', placeholder: 'Enter website URL', required: true },
@@ -190,9 +270,9 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           { name: 'name', label: 'Pharmacy Name', type: 'text', placeholder: 'Enter pharmacy name', required: true },
           { name: 'parent', label: 'Parent/Group', type: 'text', placeholder: 'Enter parent/group name', required: true },
           { name: 'address', label: 'Address', type: 'textarea', placeholder: 'Enter complete address', required: true },
-          { name: 'country', label: 'Country', type: 'text', placeholder: 'Enter country', required: true },
-          { name: 'state', label: 'State', type: 'text', placeholder: 'Enter state', required: true },
-          { name: 'city', label: 'City', type: 'text', placeholder: 'Enter city', required: true },
+          { name: 'country', label: 'Country', type: 'dropdown', placeholder: 'Select country', required: true },
+          { name: 'state', label: 'State', type: 'dropdown', placeholder: 'Select state', required: true },
+          { name: 'city', label: 'City', type: 'dropdown', placeholder: 'Select city', required: true },
           { name: 'district', label: 'District', type: 'text', placeholder: 'Enter district', required: true },
           { name: 'pinCode', label: 'Pin Code', type: 'text', placeholder: 'Enter pin code', required: true },
           { name: 'website', label: 'Website', type: 'text', placeholder: 'Enter website URL', required: true },
@@ -206,10 +286,10 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
           { name: 'name', label: 'Lab Name', type: 'text', placeholder: 'Enter lab name', required: true },
           { name: 'parent', label: 'Parent/Group', type: 'text', placeholder: 'Enter parent/group name', required: true },
           { name: 'address', label: 'Address', type: 'textarea', placeholder: 'Enter complete address', required: true },
-          { name: 'country', label: 'Country', type: 'text', placeholder: 'Enter country', required: true },
-          { name: 'state', label: 'State', type: 'text', placeholder: 'Enter state', required: true },
+          { name: 'country', label: 'Country', type: 'dropdown', placeholder: 'Select country', required: true },
+          { name: 'state', label: 'State', type: 'dropdown', placeholder: 'Select state', required: true },
+          { name: 'city', label: 'City', type: 'dropdown', placeholder: 'Select city', required: true },
           { name: 'district', label: 'District', type: 'text', placeholder: 'Enter district', required: true },
-          { name: 'city', label: 'City', type: 'text', placeholder: 'Enter city', required: true },
           { name: 'pinCode', label: 'Pin Code', type: 'text', placeholder: 'Enter pin code', required: true },
           { name: 'website', label: 'Website', type: 'text', placeholder: 'Enter website URL', required: true },
           { name: 'labEmail', label: 'Email', type: 'email', placeholder: 'Enter lab email', required: true },
@@ -261,11 +341,25 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
     
     const nameFields = ['name', 'firstName', 'lastName', 'adminFirstName', 'adminLastName', 
                        'userFirstName', 'userLastName', 'labFirstName', 'labLastName', 
-                       'bloodBankName', 'pointOfContact', 'city', 'state', 'country', 'district'];
+                       'bloodBankName', 'pointOfContact', 'district'];
     
-    if (nameFields.includes(field)) {
-      formattedValue = value.replace(/[^A-Za-z\s]/g, '');
-    }
+if (nameFields.includes(field)) {
+  const categoryLower = category?.toLowerCase();
+
+  let maxLength = 30;
+
+  if (
+    categoryLower === 'hospital' &&
+    (field === 'adminFirstName' || field === 'adminLastName')
+  ) {
+    maxLength = 20;
+  }
+
+  formattedValue = value
+    .replace(/[^A-Za-z\s]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .slice(0, maxLength);
+}
 
     if (field.includes('email')) {
       formattedValue = value.replace(/[^a-zA-Z0-9@._-]/g, '');
@@ -315,6 +409,100 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
     }
   };
 
+  const renderDropdownField = (field: FormField) => {
+    let options: string[] = [];
+    let modalVisible = false;
+    let setModalVisible: (visible: boolean) => void = () => {};
+    let placeholder = field.placeholder || `Select ${field.label}`;
+
+    if (field.name === 'country') {
+      options = countries;
+      modalVisible = showCountryPicker;
+      setModalVisible = setShowCountryPicker;
+    } else if (field.name === 'state') {
+      options = stateOptions;
+      modalVisible = showStatePicker;
+      setModalVisible = setShowStatePicker;
+      if (!formData.country) {
+        placeholder = 'Select country first';
+      }
+    } else if (field.name === 'city') {
+      options = cityOptions;
+      modalVisible = showCityPicker;
+      setModalVisible = setShowCityPicker;
+      if (!formData.state) {
+        placeholder = 'Select state first';
+      }
+    }
+
+    return (
+      <View key={field.name} style={styles.fieldContainer}>
+        <Text style={styles.label}>
+          {field.label} {field.required && <Text style={styles.required}>*</Text>}
+        </Text>
+        
+        <TouchableOpacity
+          style={[styles.Select, formErrors[field.name] && styles.SelectError]}
+          onPress={() => {
+            if (field.name === 'state' && !formData.country) {
+              dispatch(showError('Please select country first'));
+              return;
+            }
+            if (field.name === 'city' && !formData.state) {
+              dispatch(showError('Please select state first'));
+              return;
+            }
+            setModalVisible(true);
+          }}
+          disabled={isSubmitting || 
+            (field.name === 'state' && !formData.country) ||
+            (field.name === 'city' && !formData.state)}
+        >
+          <Text style={[styles.SelectText, !formData[field.name] && { color: COLORS.placeholder }]}>
+            {formData[field.name] || placeholder}
+          </Text>
+          <ChevronDown size={FONT_SIZE.md} color={COLORS.sub} />
+        </TouchableOpacity>
+
+        <Modal
+          visible={modalVisible}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerModalHeader}>
+                <Text style={styles.pickerModalTitle}>Select {field.label}</Text>
+                <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <Text style={styles.pickerModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView>
+                {options.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.pickerOption}
+                    onPress={() => {
+                      handleInputChange(field.name, option);
+                      setModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.pickerOptionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {formErrors[field.name] ? (
+          <Text style={styles.errorText}>{formErrors[field.name]}</Text>
+        ) : null}
+      </View>
+    );
+  };
+
   const validateForm = (): boolean => {
     if (!termsAccepted) {
       dispatch(showError('Please accept the Terms of Service and Privacy Policy'));
@@ -344,11 +532,17 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
 
       if (!formData.country) errors.country = 'Country is required';
       
-      const stateError = validateName(formData.state, 'State');
-      if (stateError) errors.state = stateError;
+      if (!formData.state) errors.state = 'State is required';
+      else {
+        const stateError = validateName(formData.state, 'State');
+        if (stateError) errors.state = stateError;
+      }
 
-      const cityError = validateName(formData.city, 'City');
-      if (cityError) errors.city = cityError;
+      if (!formData.city) errors.city = 'City is required';
+      else {
+        const cityError = validateName(formData.city, 'City');
+        if (cityError) errors.city = cityError;
+      }
 
       const districtError = validateName(formData.district, 'District');
       if (districtError) errors.district = districtError;
@@ -394,11 +588,17 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
 
       if (!formData.country) errors.country = 'Country is required';
       
-      const stateError = validateName(formData.state, 'State');
-      if (stateError) errors.state = stateError;
+      if (!formData.state) errors.state = 'State is required';
+      else {
+        const stateError = validateName(formData.state, 'State');
+        if (stateError) errors.state = stateError;
+      }
 
-      const cityError = validateName(formData.city, 'City');
-      if (cityError) errors.city = cityError;
+      if (!formData.city) errors.city = 'City is required';
+      else {
+        const cityError = validateName(formData.city, 'City');
+        if (cityError) errors.city = cityError;
+      }
 
       const districtError = validateName(formData.district, 'District');
       if (districtError) errors.district = districtError;
@@ -428,14 +628,20 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
 
       if (!formData.country) errors.country = 'Country is required';
       
-      const stateError = validateName(formData.state, 'State');
-      if (stateError) errors.state = stateError;
+      if (!formData.state) errors.state = 'State is required';
+      else {
+        const stateError = validateName(formData.state, 'State');
+        if (stateError) errors.state = stateError;
+      }
+
+      if (!formData.city) errors.city = 'City is required';
+      else {
+        const cityError = validateName(formData.city, 'City');
+        if (cityError) errors.city = cityError;
+      }
 
       const districtError = validateName(formData.district, 'District');
       if (districtError) errors.district = districtError;
-
-      const cityError = validateName(formData.city, 'City');
-      if (cityError) errors.city = cityError;
 
       const pinCodeError = validatePinCode(formData.pinCode);
       if (pinCodeError) errors.pinCode = pinCodeError;
@@ -583,7 +789,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
       }
 
       const response = await AuthPost(endpoint, payload, null) as any;
-
+      console.log('Registration response:', response);
       if (response?.status === 'error') {
         dispatch(showError(response.message || 'Registration failed'));
         return;
@@ -779,34 +985,34 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
     otpInputRefs.current[index] = ref;
   };
 
-if (showSuccessScreen) {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.successContainer}>
-        <View style={styles.successContent}>
-          <View style={styles.successIconWrapper}>
-            <CheckCircle size={SPACING.xl} color={COLORS.success} />
+  if (showSuccessScreen) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.successContainer}>
+          <View style={styles.successContent}>
+            <View style={styles.successIconWrapper}>
+              <CheckCircle size={SPACING.xl} color={COLORS.success} />
+            </View>
+            <Text style={styles.successTitle}>Account Verified!</Text>
+            <Text style={styles.successMessage}>
+              Please login to complete your profile setup to access the blood bank dashboard.
+            </Text>
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={handleLoginRedirect}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color={COLORS.white} size="small" />
+              ) : (
+                <Text style={styles.loginButtonText}>Continue to Profile Setup</Text>
+              )}
+            </TouchableOpacity>
           </View>
-          <Text style={styles.successTitle}>Account Verified!</Text>
-          <Text style={styles.successMessage}>
-            Please login to complete your profile setup to access the blood bank dashboard.
-          </Text>
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleLoginRedirect}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={COLORS.white} size="small" />
-            ) : (
-              <Text style={styles.loginButtonText}>Continue to Profile Setup</Text>
-            )}
-          </TouchableOpacity>
         </View>
-      </View>
-    </SafeAreaView>
-  );
-}
+      </SafeAreaView>
+    );
+  }
 
   const fields = getFields();
 
@@ -825,66 +1031,87 @@ if (showSuccessScreen) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.formContainer}>
-            {fields.map((field) => (
-              <View key={field.name} style={styles.fieldContainer}>
-                <Text style={styles.label}>
-                  {field.label} {field.required && <Text style={styles.required}>*</Text>}
-                </Text>
+            {fields.map((field) => {
+              if (field.type === 'dropdown') {
+                return renderDropdownField(field);
+              }
 
-                {field.type === 'textarea' ? (
-                  <TextInput
-                    style={[styles.textArea, formErrors[field.name] && styles.inputError]}
-                    placeholder={field.placeholder}
-                    placeholderTextColor={COLORS.placeholder}
-                    value={formData[field.name] || ''}
-                    onChangeText={(value) => handleInputChange(field.name, value)}
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                    editable={!isSubmitting}
-                    returnKeyType="done"
-                    blurOnSubmit={true}
-                  />
-                ) : (
-                  <TextInput
-                    style={[styles.input, formErrors[field.name] && styles.inputError]}
-                    placeholder={field.placeholder}
-                    placeholderTextColor={COLORS.placeholder}
-                    value={formData[field.name] || ''}
-                    onChangeText={(value) => handleInputChange(field.name, value)}
-                    keyboardType={
-                      field.type === 'email' ? 'email-address' :
-                      field.type === 'tel' ? 'phone-pad' :
-                      'default'
-                    }
-                    maxLength={
-                      field.name === 'phoneNo' || field.name === 'adminPhone' ? 10 :
-                      field.name === 'pinCode' ? 6 :
-                      undefined
-                    }
-                    editable={
-  !isSubmitting &&
-  !(category?.toLowerCase() === 'hospital' &&
-    (field.name === 'adminEmail' || field.name === 'adminPhone'))
-}
+              return (
+                <View key={field.name} style={styles.fieldContainer}>
+                  <Text style={styles.label}>
+                    {field.label} {field.required && <Text style={styles.required}>*</Text>}
+                  </Text>
 
-                    returnKeyType="next"
-                    blurOnSubmit={field.name === fields[fields.length - 1]?.name}
-                  />
-                )}
+                  {field.type === 'textarea' ? (
+                    <TextInput
+                      style={[styles.textArea, formErrors[field.name] && styles.inputError]}
+                      placeholder={field.placeholder}
+                      placeholderTextColor={COLORS.placeholder}
+                      value={formData[field.name] || ''}
+                      onChangeText={(value) => handleInputChange(field.name, value)}
+                      multiline
+                      maxLength={field.name === 'address' ? 150 : undefined}
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                      editable={!isSubmitting}
+                      returnKeyType="done"
+                      blurOnSubmit={true}
+                    />
+                  ) : (
+                    <TextInput
+                      style={[styles.input, formErrors[field.name] && styles.inputError]}
+                      placeholder={field.placeholder}
+                      placeholderTextColor={COLORS.placeholder}
+                      value={formData[field.name] || ''}
+                      onChangeText={(value) => handleInputChange(field.name, value)}
+                      keyboardType={
+                        field.type === 'email' ? 'email-address' :
+                        field.type === 'tel' ? 'phone-pad' :
+                        'default'
+                      }
+                      maxLength={
+                        field.name === 'phoneNo' || field.name === 'adminPhone' ? 10 :
+                        field.name === 'pinCode' ? 6 :
+                        [
+                          'name',
+                          'parent',
+                          'district',
+                          'firstName',
+                          'lastName',
+                          'adminFirstName',
+                          'adminLastName',
+                          'userFirstName',
+                          'userLastName',
+                          'labFirstName',
+                          'labLastName',
+                          'bloodBankName',
+                          'pointOfContact'
+                        ].includes(field.name)
+                          ? 30
+                          : undefined
+                      }
+                      editable={
+                        !isSubmitting &&
+                        !(category?.toLowerCase() === 'hospital' &&
+                          (field.name === 'adminEmail' || field.name === 'adminPhone'))
+                      }
+                      returnKeyType="next"
+                      blurOnSubmit={field.name === fields[fields.length - 1]?.name}
+                    />
+                  )}
 
-                {formErrors[field.name] ? (
-                  <Text style={styles.errorText}>{formErrors[field.name]}</Text>
-                ) : null}
-                {category?.toLowerCase() === 'hospital' &&
- (field.name === 'adminEmail' || field.name === 'adminPhone') && (
-   <Text style={styles.helperText}>
-     *Auto-filled from main Email and Phone number below.
-   </Text>
- )}
-
-              </View>
-            ))}
+                  {formErrors[field.name] ? (
+                    <Text style={styles.errorText}>{formErrors[field.name]}</Text>
+                  ) : null}
+                  {category?.toLowerCase() === 'hospital' &&
+                    (field.name === 'adminEmail' || field.name === 'adminPhone') && (
+                      <Text style={styles.helperText}>
+                        *Auto-filled from main Email and Phone number below.
+                      </Text>
+                    )}
+                </View>
+              );
+            })}
 
             <View style={styles.checkboxContainer}>
               <TouchableOpacity 
@@ -924,7 +1151,7 @@ if (showSuccessScreen) {
           statusBarTranslucent={true}
         >
           <SafeAreaView style={styles.modalSafeArea}>
-           <KeyboardAvoidingView
+            <KeyboardAvoidingView
               style={styles.modalKeyboardAvoidingView}
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
@@ -1205,12 +1432,11 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   helperText: {
-  fontSize: FONT_SIZE.xs,
-  color: COLORS.sub,
-  marginTop: SPACING.xs * 0.5,
-  fontStyle: 'italic',
-},
-
+    fontSize: FONT_SIZE.xs,
+    color: COLORS.sub,
+    marginTop: SPACING.xs * 0.5,
+    fontStyle: 'italic',
+  },
   otpTitle: {
     fontSize: FONT_SIZE.lg,
     fontWeight: '700',
@@ -1270,6 +1496,66 @@ const styles = StyleSheet.create({
   },
   resendLinkDisabled: {
     color: COLORS.sub,
+  },
+  Select: {
+    height: responsiveHeight(6),
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: SPACING.sm,
+    backgroundColor: '#f9fafb',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.sm,
+    flexDirection: 'row',
+  },
+  SelectError: {
+    borderColor: COLORS.error,
+  },
+  SelectText: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
+    fontWeight: '500',
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pickerModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: SPACING.lg,
+    width: SCREEN_WIDTH * 0.8,
+    maxHeight: SCREEN_HEIGHT * 0.6,
+    overflow: 'hidden',
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  pickerModalTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  pickerModalClose: {
+    fontSize: FONT_SIZE.lg,
+    color: COLORS.sub,
+    padding: SPACING.xs,
+  },
+  pickerOption: {
+    padding: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  pickerOptionText: {
+    fontSize: FONT_SIZE.md,
+    color: COLORS.text,
   },
 });
 

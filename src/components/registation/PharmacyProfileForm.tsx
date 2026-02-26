@@ -295,46 +295,105 @@ const PharmacyProfileForm = () => {
     }
 
     if (field === 'registrationNumber' && value?.length > 0) {
-      if (value?.length <= 3) {
+      if (value?.length > 100) {
         setFormErrors(prev => ({ 
           ...prev, 
-          registrationNumber: 'Registration number must be more than three characters' 
+          registrationNumber: 'Registration number must not exceed 100 characters' 
+        }));
+      } else if (value?.length <= 3) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          registrationNumber: 'Registration number must be at least 3 characters long' 
         }));
       } else if (!validateAlphanumeric(value)) {
         setFormErrors(prev => ({ 
           ...prev, 
           registrationNumber: 'Registration number can only contain letters, numbers, spaces, hyphens and slashes' 
         }));
-      } else {
-        setFormErrors(prev => ({ ...prev, registrationNumber: '' }));
       }
     }
 
     if (field === 'yearOfEstablishment') {
       const year = parseInt(value);
-      if (value && (year < 1800 || year > new Date().getFullYear())) {
+      const currentYear = new Date().getFullYear();
+      if (value && (year < 1800)) {
         setFormErrors(prev => ({ 
           ...prev, 
-          yearOfEstablishment: `Year must be between 1800 and ${new Date().getFullYear()}` 
+          yearOfEstablishment: 'Year of establishment must be after 1800' 
+        }));
+      } else if (year > currentYear) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          yearOfEstablishment: `Year of establishment cannot be in the future` 
         }));
       } else if (year === 0) {
         setFormErrors(prev => ({ 
           ...prev, 
           yearOfEstablishment: 'Year cannot be 0' 
         }));
-      } else {
-        setFormErrors(prev => ({ ...prev, yearOfEstablishment: '' }));
       }
     }
 
-    if (field === 'operatingHours' || field === 'emergencyHours' || field === 'averageDeliveryTime') {
-      if (value && !validateAlphanumeric(value) && !validateTimeFormat(value)) {
+    if (field === 'pharmacyType' && value && !pharmacyTypes.includes(value)) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        pharmacyType: 'Pharmacy type must be one of: Retail Pharmacy, Hospital Pharmacy, Clinical Pharmacy, Compounding Pharmacy, Online Pharmacy' 
+      }));
+    }
+
+    if (field === 'ownership' && value && !ownershipOptions.includes(value)) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        ownership: 'Ownership must be one of: Private, Trust, Government, Corporate' 
+      }));
+    }
+
+    if (field === 'inventoryManagement' && value && !inventoryManagementOptions.includes(value)) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        inventoryManagement: 'Inventory management must be one of: Manual, Automated, Semi-Automated' 
+      }));
+    }
+
+    if (field === 'totalStaff' && value && parseInt(value) > 100) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        totalStaff: 'Total staff must not exceed 100' 
+      }));
+    }
+
+    if (field === 'totalPharmacists' && value && parseInt(value) > 500) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        totalPharmacists: 'Total pharmacists must not exceed 500' 
+      }));
+    }
+
+    if (field === 'totalTechnicians' && value && parseInt(value) > 500) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        totalTechnicians: 'Total technicians must not exceed 500' 
+      }));
+    }
+
+    if (field === 'deliveryRadius' && value && parseFloat(value) > 50) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        deliveryRadius: 'Delivery radius must not exceed 50 km' 
+      }));
+    }
+
+    if ((field === 'operatingHours' || field === 'emergencyHours' || field === 'averageDeliveryTime') && value) {
+      if (value.length > 100) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          [field]: `${field === 'operatingHours' ? 'Operating hours' : field === 'emergencyHours' ? 'Emergency hours' : 'Average delivery time'} must not exceed 100 characters` 
+        }));
+      } else if (!validateAlphanumeric(value) && !validateTimeFormat(value)) {
         setFormErrors(prev => ({ 
           ...prev, 
           [field]: `${field === 'operatingHours' ? 'Operating hours' : field === 'emergencyHours' ? 'Emergency hours' : 'Average delivery time'} can only contain letters, numbers, spaces, hyphens, colons and slashes` 
         }));
-      } else {
-        setFormErrors(prev => ({ ...prev, [field]: '' }));
       }
     }
   };
@@ -352,7 +411,9 @@ const PharmacyProfileForm = () => {
       
       if (field.name === 'registrationNumber' && value) {
         if (value.length <= 3) {
-          errors[field.name] = 'Registration number must be more than three characters';
+          errors[field.name] = 'Registration number must be at least 3 characters long';
+        } else if (value.length > 100) {
+          errors[field.name] = 'Registration number must not exceed 100 characters';
         } else if (!validateAlphanumeric(value)) {
           errors[field.name] = 'Registration number can only contain letters, numbers, spaces, hyphens and slashes';
         }
@@ -360,15 +421,47 @@ const PharmacyProfileForm = () => {
       
       if (field.name === 'yearOfEstablishment' && value) {
         const year = parseInt(value);
-        if (year < 1800 || year > currentYear) {
-          errors[field.name] = `Year must be between 1800 and ${currentYear}`;
+        if (year < 1800) {
+          errors[field.name] = 'Year of establishment must be after 1800';
+        } else if (year > currentYear) {
+          errors[field.name] = `Year of establishment cannot be in the future`;
         } else if (year === 0) {
           errors[field.name] = 'Year cannot be 0';
         }
       }
 
+      if (field.name === 'pharmacyType' && value && !pharmacyTypes.includes(value)) {
+        errors[field.name] = 'Pharmacy type must be one of: Retail Pharmacy, Hospital Pharmacy, Clinical Pharmacy, Compounding Pharmacy, Online Pharmacy';
+      }
+
+      if (field.name === 'ownership' && value && !ownershipOptions.includes(value)) {
+        errors[field.name] = 'Ownership must be one of: Private, Trust, Government, Corporate';
+      }
+
+      if (field.name === 'inventoryManagement' && value && !inventoryManagementOptions.includes(value)) {
+        errors[field.name] = 'Inventory management must be one of: Manual, Automated, Semi-Automated';
+      }
+
+      if (field.name === 'totalStaff' && value && parseInt(value) > 100) {
+        errors[field.name] = 'Total staff must not exceed 100';
+      }
+
+      if (field.name === 'totalPharmacists' && value && parseInt(value) > 500) {
+        errors[field.name] = 'Total pharmacists must not exceed 500';
+      }
+
+      if (field.name === 'totalTechnicians' && value && parseInt(value) > 50) {
+        errors[field.name] = 'Total technicians must not exceed 50';
+      }
+
+      if (field.name === 'deliveryRadius' && value && parseFloat(value) > 50) {
+        errors[field.name] = 'Delivery radius must not exceed 50 km';
+      }
+
       if ((field.name === 'operatingHours' || field.name === 'emergencyHours' || field.name === 'averageDeliveryTime') && value) {
-        if (!validateAlphanumeric(value) && !validateTimeFormat(value)) {
+        if (value.length > 100) {
+          errors[field.name] = `${field.label} must not exceed 100 characters`;
+        } else if (!validateAlphanumeric(value) && !validateTimeFormat(value)) {
           errors[field.name] = `${field.label} can only contain letters, numbers, spaces, hyphens, colons and slashes`;
         }
       }
@@ -601,12 +694,6 @@ const PharmacyProfileForm = () => {
               if (num === '' || !isNaN(parseInt(num))) {
                 const intValue = num === '' ? '' : parseInt(num);
                 handleInputChange(field.name, intValue);
-                if (intValue === 0 && field.required) {
-                  setFormErrors(prev => ({ 
-                    ...prev, 
-                    [field.name]: `${field.label} cannot be 0` 
-                  }));
-                }
               }
             }
           }}

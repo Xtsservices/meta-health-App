@@ -398,119 +398,122 @@ const BloodBankProfileForm = () => {
     return EMAIL_REGEX.test(email);
   };
 
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-    
-    if (!formData.registrationNumber) {
-      errors.registrationNumber = 'Registration number is required';
-    } else if (formData.registrationNumber.trim().length === 0) {
-      errors.registrationNumber = 'Registration number cannot be empty';
+const validateForm = () => {
+  const errors: Record<string, string> = {};
+  
+  if (!formData.registrationNumber) {
+    errors.registrationNumber = 'Registration number is required';
+  } else if (formData.registrationNumber.trim().length === 0) {
+    errors.registrationNumber = 'Registration number cannot be empty';
+  }
+  
+  if (!formData.licenseNumber) {
+    errors.licenseNumber = 'License number is required';
+  } else if (formData.licenseNumber.trim().length === 0) {
+    errors.licenseNumber = 'License number cannot be empty';
+  }
+  
+  // ✅ Fixed: Make Year of Establishment mandatory
+  if (!formData.yearOfEstablishment) {
+    errors.yearOfEstablishment = 'Year of establishment is required';
+  } else {
+    const year = parseInt(formData.yearOfEstablishment);
+    const currentYear = new Date().getFullYear();
+    if (isNaN(year) || year < 1900 || year > currentYear) {
+      errors.yearOfEstablishment = `Year must be between 1900 and ${currentYear}`;
     }
-    
-    if (!formData.licenseNumber) {
-      errors.licenseNumber = 'License number is required';
-    } else if (formData.licenseNumber.trim().length === 0) {
-      errors.licenseNumber = 'License number cannot be empty';
+  }
+  
+  // ✅ Fixed: Make Blood Bank Type mandatory
+  if (!formData.bloodBankType) {
+    errors.bloodBankType = 'Blood bank type is required';
+  }
+  
+  if (!formData.address) {
+    errors.address = 'Address is required';
+  } else if (formData.address.trim().length === 0) {
+    errors.address = 'Address cannot be empty';
+  }
+  
+  if (!formData.city) {
+    errors.city = 'City is required';
+  } else if (formData.city.trim().length === 0) {
+    errors.city = 'City cannot be empty';
+  }
+  
+  if (!formData.state) {
+    errors.state = 'State is required';
+  } else if (formData.state.trim().length === 0) {
+    errors.state = 'State cannot be empty';
+  }
+  
+  if (!formData.pinCode) {
+    errors.pinCode = 'Pin code is required';
+  } else if (!validatePinCode(formData.pinCode)) {
+    errors.pinCode = 'Pin code must be 6 digits and start with 1-9';
+  }
+  
+  if (!formData.is24x7) {
+    errors.is24x7 = 'Please select 24x7 service availability';
+  }
+  
+  if (!formData.componentSeparationUnit) {
+    errors.componentSeparationUnit = 'Please select component separation unit availability';
+  }
+  
+  if (!formData.apheresisFacility) {
+    errors.apheresisFacility = 'Please select apheresis facility availability';
+  }
+  
+  if (!formData.hivTesting) {
+    errors.hivTesting = 'Please select HIV testing availability';
+  }
+  
+  if (!formData.hbvTesting) {
+    errors.hbvTesting = 'Please select HBV testing availability';
+  }
+  
+  if (!formData.hcvTesting) {
+    errors.hcvTesting = 'Please select HCV testing availability';
+  }
+  
+  if (!formData.malariaTesting) {
+    errors.malariaTesting = 'Please select malaria testing availability';
+  }
+  
+  if (!formData.syphilisTesting) {
+    errors.syphilisTesting = 'Please select syphilis testing availability';
+  }
+  
+  // ✅ Fixed: Make Cold Storage Capacity mandatory
+  if (!formData.coldStorageCapacityML) {
+    errors.coldStorageCapacityML = 'Cold storage capacity is required';
+  } else {
+    const capacity = parseInt(formData.coldStorageCapacityML);
+    if (isNaN(capacity) || capacity <= 0) {
+      errors.coldStorageCapacityML = 'Cold storage capacity must be greater than 0';
     }
-    
-    if (formData.yearOfEstablishment) {
-      const year = parseInt(formData.yearOfEstablishment);
-      const currentYear = new Date().getFullYear();
-      if (year < 1900 || year > currentYear) {
-        errors.yearOfEstablishment = `Year must be between 1900 and ${currentYear}`;
-      } else if (year === 0) {
-        errors.yearOfEstablishment = 'Year cannot be 0';
-      }
-    }
-    
-    if (!formData.bloodBankType) {
-      errors.bloodBankType = 'Blood bank type is required';
-    }
-    
-    if (!formData.address) {
-      errors.address = 'Address is required';
-    } else if (formData.address.trim().length === 0) {
-      errors.address = 'Address cannot be empty';
-    }
-    
-    if (!formData.city) {
-      errors.city = 'City is required';
-    } else if (formData.city.trim().length === 0) {
-      errors.city = 'City cannot be empty';
-    }
-    
-    if (!formData.state) {
-      errors.state = 'State is required';
-    } else if (formData.state.trim().length === 0) {
-      errors.state = 'State cannot be empty';
-    }
-    
-    if (!formData.pinCode) {
-      errors.pinCode = 'Pin code is required';
-    } else if (!validatePinCode(formData.pinCode)) {
-      errors.pinCode = 'Pin code must be 6 digits and start with 1-9';
-    }
-    
-    if (!formData.is24x7) {
-      errors.is24x7 = 'Please select 24x7 service availability';
-    }
-    
-    if (!formData.componentSeparationUnit) {
-      errors.componentSeparationUnit = 'Please select component separation unit availability';
-    }
-    
-    if (!formData.apheresisFacility) {
-      errors.apheresisFacility = 'Please select apheresis facility availability';
-    }
-    
-    if (!formData.hivTesting) {
-      errors.hivTesting = 'Please select HIV testing availability';
-    }
-    
-    if (!formData.hbvTesting) {
-      errors.hbvTesting = 'Please select HBV testing availability';
-    }
-    
-    if (!formData.hcvTesting) {
-      errors.hcvTesting = 'Please select HCV testing availability';
-    }
-    
-    if (!formData.malariaTesting) {
-      errors.malariaTesting = 'Please select malaria testing availability';
-    }
-    
-    if (!formData.syphilisTesting) {
-      errors.syphilisTesting = 'Please select syphilis testing availability';
-    }
-    
-    if (formData.coldStorageCapacityML) {
-      const capacity = parseInt(formData.coldStorageCapacityML);
-      if (capacity < 0) {
-        errors.coldStorageCapacityML = 'Cold storage capacity cannot be negative';
-      } else if (capacity === 0) {
-        errors.coldStorageCapacityML = 'Cold storage capacity cannot be 0';
-      }
-    }
-    
-    if (!formData.supportsWholeBlood) {
-      errors.supportsWholeBlood = 'Please select whole blood support';
-    }
-    
-    if (!formData.supportsPlasma) {
-      errors.supportsPlasma = 'Please select plasma support';
-    }
-    
-    if (!formData.supportsPlatelets) {
-      errors.supportsPlatelets = 'Please select platelets support';
-    }
-    
-    if (!formData.supportsRBC) {
-      errors.supportsRBC = 'Please select RBC support';
-    }
+  }
+  
+  if (!formData.supportsWholeBlood) {
+    errors.supportsWholeBlood = 'Please select whole blood support';
+  }
+  
+  if (!formData.supportsPlasma) {
+    errors.supportsPlasma = 'Please select plasma support';
+  }
+  
+  if (!formData.supportsPlatelets) {
+    errors.supportsPlatelets = 'Please select platelets support';
+  }
+  
+  if (!formData.supportsRBC) {
+    errors.supportsRBC = 'Please select RBC support';
+  }
 
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
+  setFormErrors(errors);
+  return Object.keys(errors).length === 0;
+};
 
   const saveProfile = async () => {
     if (isApproved) {
@@ -742,7 +745,7 @@ const BloodBankProfileForm = () => {
                   </View>
 
                   <View style={styles.fieldContainer}>
-                    <Text style={styles.label}>Year of Establishment</Text>
+                    <Text style={styles.label}>Year of Establishment<Text style={styles.required}>*</Text></Text>
                     <View style={styles.inputWrapper}>
                       <TextInput
                         style={[styles.input, formErrors.yearOfEstablishment && styles.inputError]}
@@ -765,7 +768,7 @@ const BloodBankProfileForm = () => {
 
                   <View style={styles.fieldContainer}>
                     <Text style={styles.label}>
-                      Blood Bank Type <Text style={styles.required}></Text>
+                      Blood Bank Type <Text style={styles.required}>*</Text>
                     </Text>
                     <TouchableOpacity
                       style={[styles.selectButton, formErrors.bloodBankType && styles.inputError]}

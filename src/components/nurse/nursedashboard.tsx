@@ -72,7 +72,7 @@ import Sidebar from './nurseSidebar';
 
 // Types
 import { RootState } from '../../store/store';
-import { AuthFetch } from '../../auth/auth';
+import { AuthFetch, AuthPost } from '../../auth/auth';
 import { showError, showSuccess } from '../../store/toast.slice';
 import Footer from '../dashboard/footer';
 
@@ -348,19 +348,43 @@ const NurseDashboard: React.FC = () => {
     navigation.navigate('Attendance', { type: attendanceType });
   };
 
-  const handleLogout = async () => {
-    setConfirmVisible(false);
+  // Show logout confirmation dialog
+  const showLogoutDialog = () => {
     setSidebarOpen(false);
-    try {
-      await AsyncStorage.multiRemove(['token', 'userID']);
-    } catch (e) {
-      // Silent error handling
-    } finally {
-      navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
-    }
+    setConfirmVisible(true);
   };
 
-  const confirmLogout = () => setConfirmVisible(true);
+  // Handle logout after confirmation
+  const confirmLogout = async () => {
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token")); 
+      const response = await AuthPost("user/logout", {}, token);
+      console.log("33333",response)
+      
+      if (response?.message === "Logged out successfully") {
+        dispatch(showSuccess("Logged out successfully"));
+      }
+    } catch (error: any) {
+      dispatch(
+        showError(
+          error?.message || String(error) || "Logout error"
+        )
+      );
+    } finally {
+      try {
+        await AsyncStorage.multiRemove(["token", "userID", "user"]);
+      } catch (e: any) {
+        dispatch(
+          showError(
+            e?.message || String(e) || "Logout storage cleanup error"
+          )
+        );
+      } finally {
+        setConfirmVisible(false);
+        navigation.reset({ index: 0, routes: [{ name: "Login" as never }] });
+      }
+    }
+  };
 
   // Sidebar items
   const sidebarItems = [
@@ -397,27 +421,27 @@ const NurseDashboard: React.FC = () => {
   ];
 
   const bottomItems = [
-
     { 
       key: 'logout', 
       label: 'Logout', 
       icon: LogOutIcon, 
-      onPress: confirmLogout, 
+      onPress: showLogoutDialog, // This shows the dialog, doesn't logout directly
       variant: 'danger' as const 
     },
   ];
-const dashboardTitle =
-  user?.role === 2002 ? 'Head Nurse Dashboard' : 'Nurse Dashboard';
+  
+  const dashboardTitle =
+    user?.role === 2002 ? 'Head Nurse Dashboard' : 'Nurse Dashboard';
 
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle="dark-content" backgroundColor="#14b8a6" />
-<HeaderBar 
-  title={dashboardTitle}
-  onMenu={() => setSidebarOpen(true)} 
-  onRefresh={onRefresh}
-/>
+        <HeaderBar 
+          title={dashboardTitle}
+          onMenu={() => setSidebarOpen(true)} 
+          onRefresh={onRefresh}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#14b8a6" />
           <Text style={styles.loadingText}>Loading Dashboard...</Text>
@@ -431,11 +455,11 @@ const dashboardTitle =
       <StatusBar barStyle="dark-content" backgroundColor="#14b8a6" />
       
       {/* Header */}
-<HeaderBar 
-  title={dashboardTitle}
-  onMenu={() => setSidebarOpen(true)} 
-  onRefresh={onRefresh}
-/>
+      <HeaderBar 
+        title={dashboardTitle}
+        onMenu={() => setSidebarOpen(true)} 
+        onRefresh={onRefresh}
+      />
 
       <ScrollView
         style={styles.container}
@@ -603,6 +627,7 @@ const dashboardTitle =
         {/* Bottom padding for safe area */}
         <View style={styles.bottomPadding} />
       </ScrollView>
+      
       <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
         <Footer active={"dashboard"} brandColor="#14b8a6" />
       </View>
@@ -632,7 +657,7 @@ const dashboardTitle =
         title="Confirm Logout"
         message="Are you sure you want to logout? This will clear your saved session."
         onCancel={() => setConfirmVisible(false)}
-        onConfirm={handleLogout}
+        onConfirm={confirmLogout} 
         confirmText="Logout"
       />
     </SafeAreaView>

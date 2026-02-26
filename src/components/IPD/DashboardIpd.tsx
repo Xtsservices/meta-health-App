@@ -10,18 +10,19 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 
 import { patientStatus } from "../../utils/role";
 import { RootState } from "../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AuthFetch } from "../../auth/auth";
+import { AuthFetch, AuthPost } from "../../auth/auth";
 import LineChartActualScheduled from "../dashboard/lineGraph";
 import PieChart from "../dashboard/pieChart";
 import PatientsList from "../dashboard/patientsList";
 import Footer from "../dashboard/footer";
+import { showError } from "../../store/toast.slice";
 
 // Import responsive utilities
 import { 
@@ -152,6 +153,7 @@ const DashboardIpd: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
   const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;
   const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
@@ -298,13 +300,34 @@ const DashboardIpd: React.FC = () => {
   const onLogoutPress = () => setConfirmVisible(true);
   const confirmLogout = async () => {
     try {
-      await AsyncStorage.multiRemove(["token", "userID"]);
-    } catch (e) {
-      // console.warn("Logout storage cleanup error");
+      const token = user?.token ?? (await AsyncStorage.getItem("token")); 
+      const response = await AuthPost("user/logout", {}, token);
+      console.log("33333",response)
+      
+      if (response?.message === "Logged out successfully") {
+        // Show success message if needed
+        console.log("Logged out successfully");
+      }
+    } catch (error: any) {
+      dispatch(
+        showError(
+          error?.message || String(error) || "Logout error"
+        )
+      );
+    } finally {
+      try {
+        await AsyncStorage.multiRemove(["token", "userID", "user"]);
+    } catch (e: any) {
+      dispatch(
+        showError(
+          e?.message || String(e) || "Logout storage cleanup error"
+        )
+      );
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);
       navigation.reset({ index: 0, routes: [{ name: "Login" as never }] });
+    }
     }
   };
 

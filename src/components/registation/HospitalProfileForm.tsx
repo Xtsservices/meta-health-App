@@ -154,6 +154,9 @@ const HospitalProfileForm = () => {
   const [loading, setLoading] = useState(true);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
+
+  // Validation regex
+  const ALPHANUMERIC_REGEX = /^[a-zA-Z0-9\s\-/]+$/;
   
   const getToken = async () => {
     try {
@@ -213,17 +216,171 @@ const HospitalProfileForm = () => {
     }
   };
 
+  const validateAlphanumeric = (text: string): boolean => {
+    return ALPHANUMERIC_REGEX.test(text);
+  };
+
   const handleInputChange = (field: string, value: any) => {
     let formattedValue = value;
 
     if (field === 'registrationNumber') {
-      formattedValue = value.replace(/[^A-Za-z0-9]/g, '');
+      formattedValue = value.replace(/[^A-Za-z0-9-]/g, '');
     }
 
     setFormData(prev => ({ ...prev, [field]: formattedValue }));
 
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+
+    // Real-time validation
+    if (field === 'registrationNumber' && value?.length > 0) {
+      if (value?.length > 20) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          registrationNumber: 'Registration number must not exceed 20 characters' 
+        }));
+      } else if (value?.length < 3) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          registrationNumber: 'Registration number must be at least 3 characters long' 
+        }));
+      } else if (!validateAlphanumeric(value)) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          registrationNumber: 'Registration number can only contain letters, numbers, spaces, hyphens and slashes' 
+        }));
+      }
+    }
+
+    if (field === 'yearOfEstablishment') {
+      const year = parseInt(value);
+      const currentYear = new Date().getFullYear();
+      if (value && (year < 1800)) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          yearOfEstablishment: 'Year of establishment must be after 1800' 
+        }));
+      } else if (year > currentYear) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          yearOfEstablishment: `Year of establishment cannot be in the future` 
+        }));
+      }
+    }
+
+    if (field === 'hospitalType' && value && !['Multi-Speciality', 'Super-Speciality', 'Clinic', 'Nursing Home'].includes(value)) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        hospitalType: 'Hospital type must be one of: Multi-Speciality, Super-Speciality, Clinic, Nursing Home' 
+      }));
+    }
+
+    if (field === 'ownership' && value && !['Private', 'Trust', 'Government'].includes(value)) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        ownership: 'Ownership must be one of: Private, Trust, Government' 
+      }));
+    }
+
+    if (field === 'totalBeds') {
+      const num = parseInt(value);
+      if (num > 10000) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          totalBeds: 'Total beds must not exceed 10000' 
+        }));
+      }
+    }
+
+    if (field === 'icuBeds') {
+      const num = parseInt(value);
+      if (num > 1000) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          icuBeds: 'ICU beds must not exceed 1000' 
+        }));
+      }
+    }
+
+    if (field === 'operationTheatres') {
+      const num = parseInt(value);
+      if (num > 100) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          operationTheatres: 'Operation theatres must not exceed 100' 
+        }));
+      }
+    }
+
+    if (field === 'generalWard') {
+      const num = parseInt(value);
+      if (num > 1000) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          generalWard: 'General ward beds must not exceed 1000' 
+        }));
+      }
+    }
+
+    if (field === 'semiPrivate') {
+      const num = parseInt(value);
+      if (num > 500) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          semiPrivate: 'Semi private rooms must not exceed 500' 
+        }));
+      }
+    }
+
+    if (field === 'privateRoom') {
+      const num = parseInt(value);
+      if (num > 500) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          privateRoom: 'Private rooms must not exceed 500' 
+        }));
+      }
+    }
+
+    if (field === 'deluxeSuite') {
+      const num = parseInt(value);
+      if (num > 100) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          deluxeSuite: 'Deluxe suites must not exceed 100' 
+        }));
+      }
+    }
+
+    if (field === 'totalDoctors') {
+      const num = parseInt(value);
+      if (num > 1000) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          totalDoctors: 'Total doctors must not exceed 100' 
+        }));
+      }
+    }
+
+    if (field === 'nursesAndSupport') {
+      const num = parseInt(value);
+      if (num > 5000) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          nursesAndSupport: 'Nurses and support staff must not exceed 5000' 
+        }));
+      }
+    }
+
+    if (field === 'visitingConsultants') {
+      const num = parseInt(value);
+      if (num > 100) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          visitingConsultants: 'Visiting consultants must not exceed 100' 
+        }));
+      }
     }
   };
 
@@ -248,11 +405,71 @@ const HospitalProfileForm = () => {
         }
       }
       
+      if (field.name === 'registrationNumber' && value) {
+        if (value.length < 3) {
+          errors[field.name] = 'Registration number must be at least 3 characters long';
+        } else if (value.length > 100) {
+          errors[field.name] = 'Registration number must not exceed 100 characters';
+        } else if (!validateAlphanumeric(value)) {
+          errors[field.name] = 'Registration number can only contain letters, numbers, spaces, hyphens and slashes';
+        }
+      }
+
       if (field.name === 'yearOfEstablishment' && value) {
         const year = parseInt(value);
-        if (year < 1800 || year > currentYear) {
-          errors[field.name] = `Year must be between 1800 and ${currentYear}`;
+        if (year < 1800) {
+          errors[field.name] = 'Year of establishment must be after 1800';
+        } else if (year > currentYear) {
+          errors[field.name] = `Year of establishment cannot be in the future`;
         }
+      }
+
+      if (field.name === 'hospitalType' && value && !['Multi-Speciality', 'Super-Speciality', 'Clinic', 'Nursing Home'].includes(value)) {
+        errors[field.name] = 'Hospital type must be one of: Multi-Speciality, Super-Speciality, Clinic, Nursing Home';
+      }
+
+      if (field.name === 'ownership' && value && !['Private', 'Trust', 'Government'].includes(value)) {
+        errors[field.name] = 'Ownership must be one of: Private, Trust, Government';
+      }
+
+      if (field.name === 'totalBeds' && value && parseInt(value) > 10000) {
+        errors[field.name] = 'Total beds must not exceed 10000';
+      }
+
+      if (field.name === 'icuBeds' && value && parseInt(value) > 1000) {
+        errors[field.name] = 'ICU beds must not exceed 1000';
+      }
+
+      if (field.name === 'operationTheatres' && value && parseInt(value) > 100) {
+        errors[field.name] = 'Operation theatres must not exceed 100';
+      }
+
+      if (field.name === 'generalWard' && value && parseInt(value) > 1000) {
+        errors[field.name] = 'General ward beds must not exceed 1000';
+      }
+
+      if (field.name === 'semiPrivate' && value && parseInt(value) > 500) {
+        errors[field.name] = 'Semi private rooms must not exceed 500';
+      }
+
+      if (field.name === 'privateRoom' && value && parseInt(value) > 500) {
+        errors[field.name] = 'Private rooms must not exceed 500';
+      }
+
+      if (field.name === 'deluxeSuite' && value && parseInt(value) > 100) {
+        errors[field.name] = 'Deluxe suites must not exceed 100';
+      }
+
+      if (field.name === 'totalDoctors' && value && parseInt(value) > 100) {
+        errors[field.name] = 'Total doctors must not exceed 100';
+      }
+
+      if (field.name === 'nursesAndSupport' && value && parseInt(value) > 5000) {
+        errors[field.name] = 'Nurses and support staff must not exceed 5000';
+      }
+
+      if (field.name === 'visitingConsultants' && value && parseInt(value) > 100) {
+        errors[field.name] = 'Visiting consultants must not exceed 100';
       }
     });
 
@@ -262,7 +479,7 @@ const HospitalProfileForm = () => {
 
   const saveProfile = async () => {
     if (!validateForm()) {
-      dispatch(showError('Please fill all required fields'));
+      dispatch(showError('Please fill all required fields correctly'));
       return;
     }
 
@@ -278,6 +495,7 @@ const HospitalProfileForm = () => {
       } else {
         response = await AuthPost('hospital/profile', formData, token) as any;
       }
+      console.log("1234565555Sav:", response);
 
       if (response?.status === 'success' || response?.data?.message?.toLowerCase().includes('success')) {
         dispatch(showSuccess(response?.data?.message || 'Profile saved successfully'));
@@ -408,11 +626,38 @@ const HospitalProfileForm = () => {
                     [field.name]: `${field.label} must be at least 1`
                   }));
                 } else {
-                  setFormErrors(prev => {
-                    const newErrors = { ...prev };
-                    delete newErrors[field.name];
-                    return newErrors;
-                  });
+                  const maxErrors: Record<string, string> = {};
+                  if (field.name === 'totalBeds' && num > 10000) {
+                    maxErrors[field.name] = 'Total beds must not exceed 10000';
+                  } else if (field.name === 'icuBeds' && num > 1000) {
+                    maxErrors[field.name] = 'ICU beds must not exceed 1000';
+                  } else if (field.name === 'operationTheatres' && num > 100) {
+                    maxErrors[field.name] = 'Operation theatres must not exceed 100';
+                  } else if (field.name === 'generalWard' && num > 1000) {
+                    maxErrors[field.name] = 'General ward beds must not exceed 1000';
+                  } else if (field.name === 'semiPrivate' && num > 500) {
+                    maxErrors[field.name] = 'Semi private rooms must not exceed 500';
+                  } else if (field.name === 'privateRoom' && num > 500) {
+                    maxErrors[field.name] = 'Private rooms must not exceed 500';
+                  } else if (field.name === 'deluxeSuite' && num > 100) {
+                    maxErrors[field.name] = 'Deluxe suites must not exceed 100';
+                  } else if (field.name === 'totalDoctors' && num > 1000) {
+                    maxErrors[field.name] = 'Total doctors must not exceed 1000';
+                  } else if (field.name === 'nursesAndSupport' && num > 5000) {
+                    maxErrors[field.name] = 'Nurses and support staff must not exceed 5000';
+                  } else if (field.name === 'visitingConsultants' && num > 100) {
+                    maxErrors[field.name] = 'Visiting consultants must not exceed 100';
+                  }
+                  
+                  if (Object.keys(maxErrors).length > 0) {
+                    setFormErrors(prev => ({ ...prev, ...maxErrors }));
+                  } else {
+                    setFormErrors(prev => {
+                      const newErrors = { ...prev };
+                      delete newErrors[field.name];
+                      return newErrors;
+                    });
+                  }
                 }
               }
             }}
@@ -484,6 +729,9 @@ const HospitalProfileForm = () => {
               </TouchableOpacity>
             ))}
           </View>
+          {formErrors[field.name] && (
+            <Text style={styles.errorText}>{formErrors[field.name]}</Text>
+          )}
         </View>
       );
     }
@@ -554,7 +802,7 @@ const HospitalProfileForm = () => {
               onPress={() => navigation?.goBack?.()}
               disabled={isSubmitting}
             >
-\            </TouchableOpacity>
+            </TouchableOpacity>
             {hasExistingProfile && !editMode && (
               <TouchableOpacity
                 style={styles.editButton}

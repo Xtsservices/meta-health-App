@@ -610,6 +610,10 @@ useEffect(() => {
         setHasExistingProfile(true);
         setEditMode(false);
         setExistingProfileData({ ...existingProfileData, verificationStatus: 'submitted' });
+          navigation.reset({
+    index: 0,
+    routes: [{ name: 'Login' }],
+  });
       } else {
         dispatch(showError(response?.message || 'Failed to submit for verification'));
       }
