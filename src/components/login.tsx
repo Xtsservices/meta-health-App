@@ -259,10 +259,16 @@ const login = async () => {
         }
       }
 
-      if (data.doctorProfile && (data.doctorProfile.verificationStatus === "submitted" || data.doctorProfile.verificationStatus === "draft")) {
+      if (data.doctorProfile && (data.doctorProfile.verificationStatus === "submitted" || data.doctorProfile.verificationStatus === "draft") ) {
+        console.log("111")
         dispatch(currentUser(updatedUserData));
+        console.log("222")
         return navigation.navigate('DoctorProfileForm');
       }
+      if (data.updateProfile) {
+        console.log("4444")
+        return navigation.navigate('DoctorProfileForm');
+      } 
 
       if (data.bloodBankData && data.bloodBankData.status === "pending") {
         dispatch(currentUser(updatedUserData));

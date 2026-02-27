@@ -18,7 +18,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDispatch } from 'react-redux';
 import {
   Check,
-  Mail,
   CheckCircle,
   ChevronDown,
 } from 'lucide-react-native';
@@ -84,10 +83,7 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
-  const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   
   // Dropdown states
@@ -100,7 +96,6 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   const [stateOptions, setStateOptions] = useState<string[]>([]);
   const [cityOptions, setCityOptions] = useState<string[]>([]);
 
-  const otpInputRefs = useRef<Array<TextInput | null>>([]);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Fetch countries on mount
@@ -789,7 +784,7 @@ if (nameFields.includes(field)) {
       }
 
       const response = await AuthPost(endpoint, payload, null) as any;
-      console.log('Registration response:', response);
+      
       if (response?.status === 'error') {
         dispatch(showError(response.message || 'Registration failed'));
         return;
@@ -800,18 +795,8 @@ if (nameFields.includes(field)) {
         return;
       }
 
-      if (response?.data?.otpRequired || response?.data?.message?.toLowerCase().includes('otp')) {
-        dispatch(showSuccess(response.data.message || 'Registration successful! Please verify your OTP'));
-        setShowOtpModal(true);
-      } else if (categoryLower === 'blood bank') {
-        dispatch(showSuccess(
-          response?.data?.message || 'Blood Bank registered successfully! Login password sent to email.'
-        ));
-        setShowSuccessScreen(true);
-      } else {
-        dispatch(showSuccess(response?.data?.message || 'Registration successful!'));
-        setShowOtpModal(true);
-      }
+      dispatch(showSuccess(response?.data?.message || 'Registration successful!'));
+      setShowSuccessScreen(true);
     } catch (error: any) {
       dispatch(showError(error.message || 'An error occurred during registration'));
     } finally {
@@ -819,158 +804,158 @@ if (nameFields.includes(field)) {
     }
   };
 
-  const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) return;
-    if (value && !/^\d$/.test(value)) return;
+  // const handleOtpChange = (index: number, value: string) => {
+  //   if (value.length > 1) return;
+  //   if (value && !/^\d$/.test(value)) return;
 
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
+  //   const newOtp = [...otp];
+  //   newOtp[index] = value;
+  //   setOtp(newOtp);
 
-    if (value && index < 5 && otpInputRefs.current?.[index + 1]) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-  };
+  //   if (value && index < 5 && otpInputRefs.current?.[index + 1]) {
+  //     otpInputRefs.current[index + 1]?.focus();
+  //   }
+  // };
 
-  const handleOtpKeyPress = (index: number, key: string) => {
-    if (key === 'Backspace' && !otp[index] && index > 0 && otpInputRefs.current?.[index - 1]) {
-      otpInputRefs.current[index - 1]?.focus();
-    }
-  };
+  // const handleOtpKeyPress = (index: number, key: string) => {
+  //   if (key === 'Backspace' && !otp[index] && index > 0 && otpInputRefs.current?.[index - 1]) {
+  //     otpInputRefs.current[index - 1]?.focus();
+  //   }
+  // };
 
-  const handleOtpSubmit = async () => {
-    const otpValue = otp.join('');
+  // const handleOtpSubmit = async () => {
+  //   const otpValue = otp.join('');
     
-    if (otpValue.length !== 6) {
-      dispatch(showError('Please enter all 6 digits'));
-      return;
-    }
+  //   if (otpValue.length !== 6) {
+  //     dispatch(showError('Please enter all 6 digits'));
+  //     return;
+  //   }
 
-    setIsSubmitting(true);
+  //   setIsSubmitting(true);
 
-    try {
-      let verifyEndpoint = 'user/verify-otp';
-      const categoryLower = category?.toLowerCase();
+  //   try {
+  //     let verifyEndpoint = 'user/verify-otp';
+  //     const categoryLower = category?.toLowerCase();
 
-      if (categoryLower === 'hospital') {
-        verifyEndpoint = 'hospital/verify-otp';
-      } else if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
-        verifyEndpoint = 'diagnostic/verify-otp';
-      } else if (categoryLower === 'pharmacy') {
-        verifyEndpoint = 'pharmacy/verify-otp';
-      } else if (categoryLower === 'doctor') {
-        verifyEndpoint = 'doctor-registration/verify-otp';
-      }
+  //     if (categoryLower === 'hospital') {
+  //       verifyEndpoint = 'hospital/verify-otp';
+  //     } else if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
+  //       verifyEndpoint = 'diagnostic/verify-otp';
+  //     } else if (categoryLower === 'pharmacy') {
+  //       verifyEndpoint = 'pharmacy/verify-otp';
+  //     } else if (categoryLower === 'doctor') {
+  //       verifyEndpoint = 'doctor-registration/verify-otp';
+  //     }
 
-      const email = formData.email || formData.adminEmail || formData.userEmail || formData.labEmail;
+  //     const email = formData.email || formData.adminEmail || formData.userEmail || formData.labEmail;
       
-      const response = await AuthPost(verifyEndpoint, {
-        email: email,
-        otp: otpValue
-      }, null) as any;
+  //     const response = await AuthPost(verifyEndpoint, {
+  //       email: email,
+  //       otp: otpValue
+  //     }, null) as any;
 
-      if (response?.status === 'error') {
-        dispatch(showError(response.message || 'OTP verification failed'));
-        return;
-      }
+  //     if (response?.status === 'error') {
+  //       dispatch(showError(response.message || 'OTP verification failed'));
+  //       return;
+  //     }
 
-      if (response?.data?.autoLogin && response?.data?.loginData) {
-        const loginData = response.data.loginData;
+  //     if (response?.data?.autoLogin && response?.data?.loginData) {
+  //       const loginData = response.data.loginData;
         
-        await AsyncStorage.setItem('user', JSON.stringify({
-          ...loginData,
-          isLoggedIn: true
-        }));
+  //       await AsyncStorage.setItem('user', JSON.stringify({
+  //         ...loginData,
+  //         isLoggedIn: true
+  //       }));
 
-        dispatch(showSuccess(response.data.message || 'Account verified successfully!'));
+  //       dispatch(showSuccess(response.data.message || 'Account verified successfully!'));
 
-        if (categoryLower === 'hospital') {
-          const hospitalId = loginData.hospitalID || loginData.hospitalId;
-          const hospitalStatus = response.data.hospital?.status || loginData.hospitalDetails?.status;
+  //       if (categoryLower === 'hospital') {
+  //         const hospitalId = loginData.hospitalID || loginData.hospitalId;
+  //         const hospitalStatus = response.data.hospital?.status || loginData.hospitalDetails?.status;
           
-          if (hospitalStatus === 'pending') {
-            navigation.navigate('HospitalProfileForm', { hospitalId });
-          }
-          setShowOtpModal(false);
-          return;
-        } 
+  //         if (hospitalStatus === 'pending') {
+  //           navigation.navigate('HospitalProfileForm', { hospitalId });
+  //         }
+  //         setShowOtpModal(false);
+  //         return;
+  //       } 
         
-        if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
-          const diagnosticId = loginData.organizationAssociations?.[0]?.organizationId || loginData.diagnosticID;
-          const diagnosticStatus = response.data.diagnostic?.status || loginData.organizationAssociations?.[0]?.organizationDetails?.status;
+  //       if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
+  //         const diagnosticId = loginData.organizationAssociations?.[0]?.organizationId || loginData.diagnosticID;
+  //         const diagnosticStatus = response.data.diagnostic?.status || loginData.organizationAssociations?.[0]?.organizationDetails?.status;
           
-          if (diagnosticStatus === 'pending') {
-            navigation.navigate('DiagnosticProfileForm', { diagnosticId });
-          }
-          setShowOtpModal(false);
-          return;
-        }
+  //         if (diagnosticStatus === 'pending') {
+  //           navigation.navigate('DiagnosticProfileForm', { diagnosticId });
+  //         }
+  //         setShowOtpModal(false);
+  //         return;
+  //       }
         
-        if (categoryLower === 'pharmacy') {
-          const pharmacyId = loginData.organizationAssociations?.[0]?.organizationId || loginData.pharmacyID;
-          const pharmacyStatus = response.data.pharmacy?.status || loginData.organizationAssociations?.[0]?.organizationDetails?.status;
+  //       if (categoryLower === 'pharmacy') {
+  //         const pharmacyId = loginData.organizationAssociations?.[0]?.organizationId || loginData.pharmacyID;
+  //         const pharmacyStatus = response.data.pharmacy?.status || loginData.organizationAssociations?.[0]?.organizationDetails?.status;
           
-          if (pharmacyStatus === 'pending') {
-            navigation.navigate('PharmacyProfileForm', { pharmacyId });
-          } else {
-            navigation.navigate('PharmacyDashboard');
-          }
-          setShowOtpModal(false);
-          return;
-        }
+  //         if (pharmacyStatus === 'pending') {
+  //           navigation.navigate('PharmacyProfileForm', { pharmacyId });
+  //         } else {
+  //           navigation.navigate('PharmacyDashboard');
+  //         }
+  //         setShowOtpModal(false);
+  //         return;
+  //       }
 
-        if (categoryLower === 'doctor') {
-          const doctorId = response?.data?.id || formData.email;
-          setShowOtpModal(false);
-          navigation.navigate('DoctorProfileForm', { doctorId });
-          return;
-        }
+  //       if (categoryLower === 'doctor') {
+  //         const doctorId = response?.data?.id || formData.email;
+  //         setShowOtpModal(false);
+  //         navigation.navigate('DoctorProfileForm', { doctorId });
+  //         return;
+  //       }
         
-        setShowSuccessScreen(true);
-      } else {
-        setShowSuccessScreen(true);
-      }
-    } catch (error: any) {
-      dispatch(showError(error.message || 'Failed to verify OTP'));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  //       setShowSuccessScreen(true);
+  //     } else {
+  //       setShowSuccessScreen(true);
+  //     }
+  //   } catch (error: any) {
+  //     dispatch(showError(error.message || 'Failed to verify OTP'));
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
 
-  const handleResendOtp = async () => {
-    setIsResendingOtp(true);
+  // const handleResendOtp = async () => {
+  //   setIsResendingOtp(true);
 
-    try {
-      let resendEndpoint = 'user/resend-otp';
-      const categoryLower = category?.toLowerCase();
+  //   try {
+  //     let resendEndpoint = 'user/resend-otp';
+  //     const categoryLower = category?.toLowerCase();
 
-      if (categoryLower === 'hospital') {
-        resendEndpoint = 'hospital/resend-otp';
-      } else if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
-        resendEndpoint = 'diagnostic/resend-otp';
-      } else if (categoryLower === 'pharmacy') {
-        resendEndpoint = 'pharmacy/resend-otp';
-      } else if (categoryLower === 'doctor') {
-        resendEndpoint = 'doctor-registration/resend-otp';
-      }
+  //     if (categoryLower === 'hospital') {
+  //       resendEndpoint = 'hospital/resend-otp';
+  //     } else if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
+  //       resendEndpoint = 'diagnostic/resend-otp';
+  //     } else if (categoryLower === 'pharmacy') {
+  //       resendEndpoint = 'pharmacy/resend-otp';
+  //     } else if (categoryLower === 'doctor') {
+  //       resendEndpoint = 'doctor-registration/resend-otp';
+  //     }
 
-      const email = formData.email || formData.adminEmail || formData.userEmail || formData.labEmail;
+  //     const email = formData.email || formData.adminEmail || formData.userEmail || formData.labEmail;
       
-      const response = await AuthPost(resendEndpoint, { email }, null) as any;
+  //     const response = await AuthPost(resendEndpoint, { email }, null) as any;
 
-      if (response?.status === 'error') {
-        dispatch(showError(response.message || 'Failed to resend OTP'));
-        return;
-      }
+  //     if (response?.status === 'error') {
+  //       dispatch(showError(response.message || 'Failed to resend OTP'));
+  //       return;
+  //     }
 
-      dispatch(showSuccess('OTP resent successfully! Check your email'));
-      setOtp(['', '', '', '', '', '']);
-    } catch (error: any) {
-      dispatch(showError(error.message || 'Failed to resend OTP'));
-    } finally {
-      setIsResendingOtp(false);
-    }
-  };
+  //     dispatch(showSuccess('OTP resent successfully! Check your email'));
+  //     setOtp(['', '', '', '', '', '']);
+  //   } catch (error: any) {
+  //     dispatch(showError(error.message || 'Failed to resend OTP'));
+  //   } finally {
+  //     setIsResendingOtp(false);
+  //   }
+  // };
 
   const handleLoginRedirect = async () => {
     try {
@@ -981,10 +966,6 @@ if (nameFields.includes(field)) {
     }
   };
 
-  const setOtpRef = (index: number) => (ref: TextInput | null) => {
-    otpInputRefs.current[index] = ref;
-  };
-
   if (showSuccessScreen) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -993,9 +974,9 @@ if (nameFields.includes(field)) {
             <View style={styles.successIconWrapper}>
               <CheckCircle size={SPACING.xl} color={COLORS.success} />
             </View>
-            <Text style={styles.successTitle}>Account Verified!</Text>
+            <Text style={styles.successTitle}>Registration Successful!</Text>
             <Text style={styles.successMessage}>
-              Please login to complete your profile setup to access the blood bank dashboard.
+              Please login to complete your profile setup to access the {category} dashboard.
             </Text>
             <TouchableOpacity
               style={styles.loginButton}
@@ -1005,7 +986,7 @@ if (nameFields.includes(field)) {
               {isSubmitting ? (
                 <ActivityIndicator color={COLORS.white} size="small" />
               ) : (
-                <Text style={styles.loginButtonText}>Continue to Profile Setup</Text>
+                <Text style={styles.loginButtonText}>Go to Login</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -1143,7 +1124,7 @@ if (nameFields.includes(field)) {
           </View>
         </ScrollView>
 
-        <Modal
+        {/* <Modal
           visible={showOtpModal}
           animationType="slide"
           transparent={true}
@@ -1220,7 +1201,7 @@ if (nameFields.includes(field)) {
               </View>
             </KeyboardAvoidingView>
           </SafeAreaView>
-        </Modal>
+        </Modal> */}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -1390,113 +1371,115 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: '700',
   },
-  modalSafeArea: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalKeyboardAvoidingView: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderRadius: SPACING.lg,
-    padding: SPACING.lg,
-    width: '100%',
-    maxWidth: 500,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  otpHeader: {
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
-  },
-  otpIconWrapper: {
-    width: SPACING.xl * 1.2,
-    height: SPACING.xl * 1.2,
-    borderRadius: SPACING.xl,
-    backgroundColor: '#E0F2FE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
+
+
+  //   modalSafeArea: {
+  //   flex: 1,
+  //   backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  // },
+  // modalKeyboardAvoidingView: {
+  //   flex: 1,
+  //   justifyContent: 'center',
+  // },
+  // modalContainer: {
+  //   flex: 1,
+  //   justifyContent: 'center',
+  //   alignItems: 'center',
+  //   paddingHorizontal: SPACING.md,
+  // },
+  // modalContent: {
+  //   backgroundColor: COLORS.white,
+  //   borderRadius: SPACING.lg,
+  //   padding: SPACING.lg,
+  //   width: '100%',
+  //   maxWidth: 500,
+  //   borderWidth: 1.5,
+  //   borderColor: COLORS.border,
+  //   shadowColor: '#000',
+  //   shadowOffset: { width: 0, height: 4 },
+  //   shadowOpacity: 0.1,
+  //   shadowRadius: 8,
+  //   elevation: 4,
+  // },
+  // otpHeader: {
+  //   alignItems: 'center',
+  //   marginBottom: SPACING.lg,
+  // },
+  // otpIconWrapper: {
+  //   width: SPACING.xl * 1.2,
+  //   height: SPACING.xl * 1.2,
+  //   borderRadius: SPACING.xl,
+  //   backgroundColor: '#E0F2FE',
+  //   justifyContent: 'center',
+  //   alignItems: 'center',
+    // ma
   helperText: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
     marginTop: SPACING.xs * 0.5,
     fontStyle: 'italic',
   },
-  otpTitle: {
-    fontSize: FONT_SIZE.lg,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  otpSubtitle: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.sub,
-    textAlign: 'center',
-    lineHeight: FONT_SIZE.md * 1.2,
-  },
-  otpInputsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.lg,
-  },
-  otpInput: {
-    width: responsiveWidth(12),
-    height: responsiveWidth(12),
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    borderRadius: SPACING.sm,
-    fontSize: FONT_SIZE.lg,
-    color: COLORS.text,
-    backgroundColor: COLORS.white,
-  },
-  verifyButton: {
-    backgroundColor: COLORS.brand,
-    borderRadius: SPACING.lg,
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.sm,
-  },
-  backButton: {
-    backgroundColor: COLORS.chipInactive,
-    borderRadius: SPACING.lg,
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.md,
-  },
-  backButtonText: {
-    color: COLORS.text,
-    fontSize: FONT_SIZE.md,
-    fontWeight: '600',
-  },
-  resendText: {
-    fontSize: FONT_SIZE.sm,
-    color: COLORS.sub,
-    textAlign: 'center',
-  },
-  resendLink: {
-    color: COLORS.brand,
-    fontWeight: '600',
-  },
-  resendLinkDisabled: {
-    color: COLORS.sub,
-  },
+
+  //   otpTitle: {
+  //   fontSize: FONT_SIZE.lg,
+  //   fontWeight: '700',
+  //   color: COLORS.text,
+  //   marginBottom: SPACING.xs,
+  // },
+  // otpSubtitle: {
+  //   fontSize: FONT_SIZE.sm,
+  //   color: COLORS.sub,
+  //   textAlign: 'center',
+  //   lineHeight: FONT_SIZE.md * 1.2,
+  // },
+  // otpInputsContainer: {
+  //   flexDirection: 'row',
+  //   justifyContent: 'space-between',
+  //   marginBottom: SPACING.lg,
+  // },
+  // otpInput: {
+  //   width: responsiveWidth(12),
+  //   height: responsiveWidth(12),
+  //   borderWidth: 2,
+  //   borderColor: COLORS.border,
+  //   borderRadius: SPACING.sm,
+  //   fontSize: FONT_SIZE.lg,
+  //   color: COLORS.text,
+  //   backgroundColor: COLORS.white,
+  // },
+  // verifyButton: {
+  //   backgroundColor: COLORS.brand,
+  //   borderRadius: SPACING.lg,
+  //   paddingVertical: SPACING.md,
+  //   alignItems: 'center',
+  //   justifyContent: 'center',
+  //   marginBottom: SPACING.sm,
+  // },
+  // backButton: {
+  //   backgroundColor: COLORS.chipInactive,
+  //   borderRadius: SPACING.lg,
+  //   paddingVertical: SPACING.md,
+  //   alignItems: 'center',
+  //   justifyContent: 'center',
+  //   marginBottom: SPACING.md,
+  // },
+  // backButtonText: {
+  //   color: COLORS.text,
+  //   fontSize: FONT_SIZE.md,
+  //   fontWeight: '600',
+  // },
+  // resendText: {
+  //   fontSize: FONT_SIZE.sm,
+  //   color: COLORS.sub,
+  //   textAlign: 'center',
+  // },
+  // resendLink: {
+  //   color: COLORS.brand,
+  //   fontWeight: '600',
+  // },
+  // resendLinkDisabled: {
+  //   color: COLORS.sub,
+  // },
   Select: {
     height: responsiveHeight(6),
     borderWidth: 1.5,
