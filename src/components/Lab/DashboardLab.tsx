@@ -16,7 +16,7 @@ import {
   Pressable,
   RefreshControl,
 } from "react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -45,7 +45,7 @@ import {
 } from "../../utils/SvgIcons";
 
 import { RootState } from "../../store/store";
-import { AuthFetch } from "../../auth/auth";
+import { AuthFetch, AuthPost } from "../../auth/auth";
 import BarChartActualScheduled from "../dashboard/lineGraph";
 import Footer from "../dashboard/footer";
 import { formatDateTime } from "../../utils/dateTime";
@@ -63,6 +63,7 @@ import {
 } from "../../utils/responsive";
 import { COLORS } from "../../utils/colour";
 import { DollarSign } from "lucide-react-native";
+import { showError, showSuccess } from "../../store/toast.slice";
 
 // Types
 type XY = { x: number | string; y: number };
@@ -435,6 +436,7 @@ const DashboardLab: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
 
   const departmentType = user?.roleName === 'radiology' ? 'radiology' : 'pathology';
 
@@ -801,13 +803,33 @@ const DashboardLab: React.FC = () => {
   const onLogoutPress = () => setConfirmVisible(true);
   const confirmLogout = async () => {
     try {
-      await AsyncStorage.multiRemove(["token", "userID"]);
-    } catch {
-      // Silent catch for storage cleanup
+      const token = await AsyncStorage.getItem("token"); 
+      const response = await AuthPost("user/logout", {}, token);
+      console.log("33333",response)
+      
+      if (response?.message === "Logged out successfully") {
+        dispatch(showSuccess("Logged out successfully"));
+      }
+    } catch (error: any) {
+      dispatch(
+        showError(
+          error?.message || String(error) || "Logout error"
+        )
+      );
+    } finally {
+      try {
+        await AsyncStorage.multiRemove(["token", "userID", "user"]);
+    } catch (e: any) {
+      dispatch(
+        showError(
+          e?.message || String(e) || "Logout storage cleanup error"
+        )
+      );
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);
       navigation.reset({ index: 0, routes: [{ name: "Login" as never }] });
+    }
     }
   };
 

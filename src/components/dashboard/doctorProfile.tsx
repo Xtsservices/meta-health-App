@@ -1936,6 +1936,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     minHeight: 44,
   },
+  
   inputDisabled: {
     opacity: 0.6,
   },

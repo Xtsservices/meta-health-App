@@ -277,47 +277,131 @@ const DiagnosticProfileForm = () => {
     }
 
     if (field === 'registrationNumber' && value?.length > 0) {
-      if (value?.length <= 3) {
+      if (value?.length > 20) {
         setFormErrors(prev => ({ 
           ...prev, 
-          registrationNumber: 'Registration number must be more than three characters' 
+          registrationNumber: 'Registration number must not exceed 20 characters' 
+        }));
+      } else if (value?.length <= 3) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          registrationNumber: 'Registration number must be at least 3 characters long' 
         }));
       } else if (!validateAlphanumeric(value)) {
         setFormErrors(prev => ({ 
           ...prev, 
           registrationNumber: 'Registration number can only contain letters, numbers, spaces, hyphens and slashes' 
         }));
-      } else {
-        setFormErrors(prev => ({ ...prev, registrationNumber: '' }));
       }
     }
 
     if (field === 'yearOfEstablishment') {
       const year = parseInt(value);
-      if (value && (year < 1800 || year > new Date().getFullYear())) {
+      const currentYear = new Date().getFullYear();
+      if (value && (year < 1800)) {
         setFormErrors(prev => ({ 
           ...prev, 
-          yearOfEstablishment: `Year must be between 1800 and ${new Date().getFullYear()}` 
+          yearOfEstablishment: 'Year of establishment must be after 1800' 
+        }));
+      } else if (year > currentYear) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          yearOfEstablishment: `Year of establishment cannot be in the future` 
         }));
       } else if (year === 0) {
         setFormErrors(prev => ({ 
           ...prev, 
           yearOfEstablishment: 'Year cannot be 0' 
         }));
-      } else {
-        setFormErrors(prev => ({ ...prev, yearOfEstablishment: '' }));
+      }
+    }
+
+    if (field === 'totalStaff') {
+      const num = parseInt(value);
+      if (num > 1000) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          totalStaff: 'Total staff must not exceed 1000' 
+        }));
+      }
+    }
+
+    if (field === 'totalTechnicians') {
+      const num = parseInt(value);
+      if (num > 500) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          totalTechnicians: 'Total technicians must not exceed 500' 
+        }));
+      }
+    }
+
+    if (field === 'totalDoctors') {
+      const num = parseInt(value);
+      if (num > 100) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          totalDoctors: 'Total doctors must not exceed 100' 
+        }));
+      }
+    }
+
+    if (field === 'pathologists') {
+      const num = parseInt(value);
+      if (num > 50) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          pathologists: 'Pathologists must not exceed 50' 
+        }));
+      }
+    }
+
+    if (field === 'radiologists') {
+      const num = parseInt(value);
+      if (num > 20) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          radiologists: 'Radiologists must not exceed 20' 
+        }));
+      }
+    }
+
+    if (field === 'supportStaff') {
+      const num = parseInt(value);
+      if (num > 500) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          supportStaff: 'Support staff must not exceed 500' 
+        }));
       }
     }
 
     if (field === 'operatingHours' || field === 'reportDeliveryTime') {
-      if (value && !validateAlphanumeric(value)) {
+      if (value && value.length > 100) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          [field]: `${field === 'operatingHours' ? 'Operating hours' : 'Report delivery time'} must not exceed 100 characters` 
+        }));
+      } else if (value && !validateAlphanumeric(value)) {
         setFormErrors(prev => ({ 
           ...prev, 
           [field]: `${field === 'operatingHours' ? 'Operating hours' : 'Report delivery time'} can only contain letters, numbers, spaces, hyphens and slashes` 
         }));
-      } else {
-        setFormErrors(prev => ({ ...prev, [field]: '' }));
       }
+    }
+
+    if (field === 'diagnosticType' && value && !diagnosticTypes.includes(value)) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        diagnosticType: 'Diagnostic type must be one of: Pathology Lab, Radiology Center, Multi-Diagnostic, Imaging Center, Clinical Lab' 
+      }));
+    }
+
+    if (field === 'ownership' && value && !ownershipOptions.includes(value)) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        ownership: 'Ownership must be one of: Private, Trust, Government' 
+      }));
     }
   };
 
@@ -332,20 +416,13 @@ const DiagnosticProfileForm = () => {
         if (value === undefined || value === null || value === '') {
           errors[field.name] = `${field.label} is required`;
         }
-
-        if (field.type === 'number') {
-          const num = parseInt(value);
-
-          if (isNaN(num) || num <= 0) {
-            errors[field.name] = `${field.label} must be greater than 0`;
-          }
-        }
       }
 
-      
       if (field.name === 'registrationNumber' && value) {
         if (value.length <= 3) {
-          errors[field.name] = 'Registration number must be more than three characters';
+          errors[field.name] = 'Registration number must be at least 3 characters long';
+        } else if (value.length > 20) {
+          errors[field.name] = 'Registration number must not exceed 20 characters';
         } else if (!validateAlphanumeric(value)) {
           errors[field.name] = 'Registration number can only contain letters, numbers, spaces, hyphens and slashes';
         }
@@ -353,15 +430,51 @@ const DiagnosticProfileForm = () => {
       
       if (field.name === 'yearOfEstablishment' && value) {
         const year = parseInt(value);
-        if (year < 1800 || year > currentYear) {
-          errors[field.name] = `Year must be between 1800 and ${currentYear}`;
+        if (year < 1800) {
+          errors[field.name] = 'Year of establishment must be after 1800';
+        } else if (year > currentYear) {
+          errors[field.name] = `Year of establishment cannot be in the future`;
         } else if (year === 0) {
           errors[field.name] = 'Year cannot be 0';
         }
       }
 
+      if (field.name === 'diagnosticType' && value && !diagnosticTypes.includes(value)) {
+        errors[field.name] = 'Diagnostic type must be one of: Pathology Lab, Radiology Center, Multi-Diagnostic, Imaging Center, Clinical Lab';
+      }
+
+      if (field.name === 'ownership' && value && !ownershipOptions.includes(value)) {
+        errors[field.name] = 'Ownership must be one of: Private, Trust, Government';
+      }
+
+      if (field.name === 'totalStaff' && value && parseInt(value) > 1000) {
+        errors[field.name] = 'Total staff must not exceed 1000';
+      }
+
+      if (field.name === 'totalTechnicians' && value && parseInt(value) > 500) {
+        errors[field.name] = 'Total technicians must not exceed 500';
+      }
+
+      if (field.name === 'totalDoctors' && value && parseInt(value) > 100) {
+        errors[field.name] = 'Total doctors must not exceed 100';
+      }
+
+      if (field.name === 'pathologists' && value && parseInt(value) > 50) {
+        errors[field.name] = 'Pathologists must not exceed 50';
+      }
+
+      if (field.name === 'radiologists' && value && parseInt(value) > 20) {
+        errors[field.name] = 'Radiologists must not exceed 20';
+      }
+
+      if (field.name === 'supportStaff' && value && parseInt(value) > 500) {
+        errors[field.name] = 'Support staff must not exceed 500';
+      }
+
       if ((field.name === 'operatingHours' || field.name === 'reportDeliveryTime') && value) {
-        if (!validateAlphanumeric(value)) {
+        if (value.length > 100) {
+          errors[field.name] = `${field.label} must not exceed 100 characters`;
+        } else if (!validateAlphanumeric(value)) {
           errors[field.name] = `${field.label} can only contain letters, numbers, spaces, hyphens and slashes`;
         }
       }

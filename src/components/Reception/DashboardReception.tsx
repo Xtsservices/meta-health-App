@@ -15,7 +15,7 @@ import {
   StatusBar,
   Platform,
 } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Activity,
@@ -41,11 +41,12 @@ import {
 import { PieChart } from 'react-native-chart-kit';
 
 import { RootState } from '../../store/store';
-import { AuthFetch } from '../../auth/auth';
+import { AuthFetch, AuthPost } from '../../auth/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Footer from '../dashboard/footer';
 import { useNavigation } from '@react-navigation/native';
 import Notes from '../dashboard/Notes';
+import { showError, showSuccess } from '../../store/toast.slice';
 
 // Import responsive utils and colors
 import { 
@@ -1009,6 +1010,7 @@ const DashboardReception: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((state: RootState) => state.currentUser);
   const insets = useSafeAreaInsets();
+  const dispatch = useDispatch();
   const userName = `${user?.firstName} ${user?.lastName}` || "User";
   const userImg = user?.avatarUrl || user?.profileImage ||user?.imageURL;
 
@@ -1183,12 +1185,33 @@ const DashboardReception: React.FC = () => {
   const onLogoutPress = () => setConfirmVisible(true);
   const confirmLogout = async () => {
     try {
-      await AsyncStorage.multiRemove(["token", "userID"]);
-    } catch {
+      const token = user?.token ?? (await AsyncStorage.getItem("token")); 
+      const response = await AuthPost("user/logout", {}, token);
+      console.log("33333",response)
+      
+      if (response?.message === "Logged out successfully") {
+        dispatch(showSuccess("Logged out successfully"));
+      }
+    } catch (error: any) {
+      dispatch(
+        showError(
+          error?.message || String(error) || "Logout error"
+        )
+      );
+    } finally {
+      try {
+        await AsyncStorage.multiRemove(["token", "userID", "user"]);
+    } catch (e: any) {
+      dispatch(
+        showError(
+          e?.message || String(e) || "Logout storage cleanup error"
+        )
+      );
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);
       navigation.reset({ index: 0, routes: [{ name: "Login" as never }] });
+    }
     }
   };
 

@@ -18,7 +18,7 @@ import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/nativ
 import { patientStatus, zoneType } from "../../utils/role";
 import { RootState } from "../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AuthFetch } from "../../auth/auth";
+import { AuthFetch, AuthPost } from "../../auth/auth";
 import LineChartActualScheduled from "../dashboard/lineGraph";
 import PieChart from "../dashboard/pieChart";
 import PatientTable from "../dashboard/patientsList";
@@ -53,7 +53,7 @@ import {
   CommissionIcon,
   ActivityIcon,
 } from "../../utils/SvgIcons";
-import { showError } from "../../store/toast.slice";
+import { showError, showSuccess } from "../../store/toast.slice";
 import { DollarSign } from "lucide-react-native";
 
 // ---- Types ----
@@ -310,13 +310,33 @@ const EmergencyDashboard: React.FC = () => {
   const onLogoutPress = () => setConfirmVisible(true);
   const confirmLogout = async () => {
     try {
-      await AsyncStorage.multiRemove(["token", "userID"]);
-    } catch (e) {
-      dispatch(showError('Failed to clear session data'));
+      const token = user?.token ?? (await AsyncStorage.getItem("token")); 
+      const response = await AuthPost("user/logout", {}, token);
+      console.log("33333",response)
+      
+      if (response?.message === "Logged out successfully") {
+        dispatch(showSuccess("Logged out successfully"));
+      }
+    } catch (error: any) {
+      dispatch(
+        showError(
+          error?.message || String(error) || "Logout error"
+        )
+      );
+    } finally {
+      try {
+        await AsyncStorage.multiRemove(["token", "userID", "user"]);
+    } catch (e: any) {
+      dispatch(
+        showError(
+          e?.message || String(e) || "Logout storage cleanup error"
+        )
+      );
     } finally {
       setConfirmVisible(false);
       setMenuOpen(false);
       navigation.reset({ index: 0, routes: [{ name: "Login" as never }] });
+    }
     }
   };
 

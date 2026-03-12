@@ -31,7 +31,7 @@ import {
 import { patientStatus } from "../../utils/role";
 import { RootState } from "../../store/store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AuthFetch } from "../../auth/auth";
+import { AuthFetch, AuthPost } from "../../auth/auth";
 import LineChartActualScheduled from "../dashboard/lineGraph";
 import WeeklyBarChart from "../dashboard/barGraph";
 import PatientsList from "../dashboard/patientsList";
@@ -589,7 +589,23 @@ const Dashboard_Outpatient: React.FC = () => {
   const onLogoutPress = () => setConfirmVisible(true);
   const confirmLogout = async () => {
     try {
-      await AsyncStorage.multiRemove(["token", "userID"]);
+      const token = user?.token ?? (await AsyncStorage.getItem("token")); 
+      const response = await AuthPost("user/logout", {}, token);
+      console.log("33333",response)
+      
+      if (response?.message === "Logged out successfully") {
+        // Show success message if needed
+        console.log("Logged out successfully");
+      }
+    } catch (error: any) {
+      dispatch(
+        showError(
+          error?.message || String(error) || "Logout error"
+        )
+      );
+    } finally {
+      try {
+        await AsyncStorage.multiRemove(["token", "userID", "user"]);
     } catch (e: any) {
       dispatch(
         showError(
@@ -600,6 +616,7 @@ const Dashboard_Outpatient: React.FC = () => {
       setConfirmVisible(false);
       setMenuOpen(false);
       navigation.reset({ index: 0, routes: [{ name: "Login" as never }] });
+    }
     }
   };
 

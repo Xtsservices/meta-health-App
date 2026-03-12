@@ -197,6 +197,7 @@ const WidgetCard = memo(
 const Home: React.FC = () => {
   const navigation = useNavigation<any>();
   const user = useSelector((s: RootState) => s.currentUser);
+  console.log(1, "User in Home:", user);
   const [query, setQuery] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const dispatch = useDispatch();
@@ -214,32 +215,62 @@ const Home: React.FC = () => {
     hasReception: false,
   });
 
-  useEffect(() => {
-    try {
-      const userScopes =
-        user?.scope?.split("#")?.map((n: string) => Number(n)) ?? [];
+useEffect(() => {
+  try {
+    // Priority:
+    // 1. doctorHospitalAssociations
+    // 2. doctorProfile
+    // 3. root user scope
+
+    const rawScope =
+      user?.doctorHospitalAssociations?.[0]?.scope ||
+      user?.doctorProfile?.scope ||
+      user?.scope;
+
+    // If FULL access
+    if (!rawScope || rawScope.toLowerCase() === "full") {
       setFlags({
-        hasEmergencyRedZone: userScopes?.includes(
-          SCOPE_LIST.emergency_red_zone
-        ),
-        hasEmergencyYellowZone: userScopes?.includes(
-          SCOPE_LIST.emergency_yellow_zone
-        ),
-        hasEmergencyGreenZone: userScopes?.includes(
-          SCOPE_LIST.emergency_green_zone
-        ),
-        hasInpatient: userScopes?.includes(SCOPE_LIST.inpatient),
-        hasOutpatient: userScopes?.includes(SCOPE_LIST.outpatient),
-        hasTriage: userScopes?.includes(SCOPE_LIST.triage),
-        hasPathology: userScopes?.includes(SCOPE_LIST.pathology),
-        hasRadiology: userScopes?.includes(SCOPE_LIST.radiology),
-        hasPharmacy: userScopes?.includes(SCOPE_LIST.pharmacy),
-        hasReception: userScopes?.includes(SCOPE_LIST.reception),
+        hasEmergencyRedZone: true,
+        hasEmergencyYellowZone: true,
+        hasEmergencyGreenZone: true,
+        hasInpatient: true,
+        
+        hasOutpatient: true,
+        hasTriage: true,
+        hasPathology: true,
+        hasRadiology: true,
+        hasPharmacy: true,
+        hasReception: true,
       });
-    } catch {
-      // no-op
+      return;
     }
-  }, [user?.scope]);
+
+    const userScopes = rawScope
+      .split("#")
+      .map((n: string) => Number(n));
+
+    setFlags({
+      hasEmergencyRedZone: userScopes.includes(
+        SCOPE_LIST.emergency_red_zone
+      ),
+      hasEmergencyYellowZone: userScopes.includes(
+        SCOPE_LIST.emergency_yellow_zone
+      ),
+      hasEmergencyGreenZone: userScopes.includes(
+        SCOPE_LIST.emergency_green_zone
+      ),
+      hasInpatient: userScopes.includes(SCOPE_LIST.inpatient),
+      hasOutpatient: userScopes.includes(SCOPE_LIST.outpatient),
+      hasTriage: userScopes.includes(SCOPE_LIST.triage),
+      hasPathology: userScopes.includes(SCOPE_LIST.pathology),
+      hasRadiology: userScopes.includes(SCOPE_LIST.radiology),
+      hasPharmacy: userScopes.includes(SCOPE_LIST.pharmacy),
+      hasReception: userScopes.includes(SCOPE_LIST.reception),
+    });
+  } catch (e) {
+    console.log("Scope parsing error", e);
+  }
+}, [user]);
 
   // Fallback: show everything if no scopes set so screen is not blank
   const buildAllCards = useCallback((): SectionSpec[] => {

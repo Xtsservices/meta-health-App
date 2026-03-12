@@ -103,7 +103,27 @@ const login = async () => {
     };
 
     const response = await UsePost('user/emailLogin', body);
+    console.log('Login response:', response);
     const data = 'data' in response && response?.data;
+    console.log('Login data:', data);
+    // 🔥 FIX: Extract correct scope from API response
+  let finalScope = data?.scope;
+
+  // If scope not directly available, get from doctorHospitalAssociations
+  if (!finalScope && data?.doctorHospitalAssociations?.length > 0) {
+    finalScope = data.doctorHospitalAssociations[0]?.scope;
+  }
+
+  // Fallback to doctorProfile scope
+  if (!finalScope && data?.doctorProfile?.scope) {
+    finalScope = data.doctorProfile.scope;
+  }
+
+  // Create updated user with correct scope
+  const updatedUserData = {
+    ...data,
+    scope: finalScope,
+  };
     
     if (response?.status === 'success') {
       await AsyncStorage.setItem('token', data?.token);
@@ -111,13 +131,13 @@ const login = async () => {
         await AsyncStorage.setItem('userID', String(data.id));
       }
       
-      await AsyncStorage.setItem('user', JSON.stringify(data));
+     await AsyncStorage.setItem('user', JSON.stringify(updatedUserData));
       dispatch(showSuccess('Successfully Logged In'));
 
       // Check for rejected status in bloodBankData
       if (data.bloodBankData && data.bloodBankData.status === "rejected") {
-        dispatch(currentUser(data));
-        return navigation.navigate('RejectionScreen', {
+        dispatch(currentUser(updatedUserData));
+return (navigation as any).navigate('RejectionScreen', {
           orgType: 'bloodbank',
           orgId: data.bloodBankData.id,
           rejectReason: data.bloodBankData.rejectReason || 'Application was rejected',
@@ -128,47 +148,60 @@ const login = async () => {
 
       // Check for rejected status in hospitalDetails
       if (data.hospitalDetails && data.hospitalDetails.status === "rejected") {
-        dispatch(currentUser(data));
-        return navigation.navigate('RejectionScreen', {
+        dispatch(currentUser(updatedUserData));
+return (navigation as any).navigate('RejectionScreen', {
           orgType: 'hospital',
           orgId: data.hospitalDetails.id,
-          rejectReason: data.hospitalDetails.rejectReason || 'Application was rejected',
+          rejectReason: data.hospitalDetails.rejectionReason || 'Application was rejected',
           organizationName: data.hospitalDetails.name || 'Hospital',
           userData: data
         });
       }
 
       // Check for rejected status in diagnosticDetails (if exists)
-      if (data.diagnosticDetails && data.diagnosticDetails.status === "rejected") {
-        dispatch(currentUser(data));
-        return navigation.navigate('RejectionScreen', {
+if (data.organizationAssociations && data.organizationAssociations.length > 0) {
+  const diagnosticAssociation = data.organizationAssociations.find(
+    assoc => assoc.organizationType === 'diagnostic' && assoc.organizationDetails?.status === 'rejected'
+  );
+  
+  if (diagnosticAssociation) {
+        dispatch(currentUser(updatedUserData));
+        return (navigation as any).navigate('RejectionScreen', {
           orgType: 'diagnostic',
-          orgId: data.diagnosticDetails.id,
-          rejectReason: data.diagnosticDetails.rejectReason || 'Application was rejected',
-          organizationName: data.diagnosticDetails.name || 'Diagnostic Center',
+          orgId: diagnosticAssociation.organizationId,
+          rejectReason: diagnosticAssociation.organizationDetails?.rejectionReason || 'Application was rejected',
+          organizationName: diagnosticAssociation.organizationDetails?.name || 'Diagnostic Center',
           userData: data
         });
+      }
       }
 
       // Check for rejected status in pharmacyDetails (if exists)
-      if (data.pharmacyDetails && data.pharmacyDetails.status === "rejected") {
-        dispatch(currentUser(data));
-        return navigation.navigate('RejectionScreen', {
+if (data.organizationAssociations && data.organizationAssociations.length > 0) {
+  const pharmacyAssociation = data.organizationAssociations.find(
+    assoc => assoc.organizationType === 'pharmacy' && assoc.organizationDetails?.status === 'rejected'
+  );
+  
+  if (pharmacyAssociation) {
+        dispatch(currentUser(updatedUserData));
+        return (navigation as any).navigate('RejectionScreen', {
           orgType: 'pharmacy',
-          orgId: data.pharmacyDetails.id,
-          rejectReason: data.pharmacyDetails.rejectReason || 'Application was rejected',
-          organizationName: data.pharmacyDetails.name || 'Pharmacy',
+          orgId: pharmacyAssociation.organizationId,
+          rejectReason: pharmacyAssociation.organizationDetails?.rejectionReason || 'Application was rejected',
+          organizationName: pharmacyAssociation.organizationDetails?.name || 'Pharmacy',
           userData: data
         });
       }
+}
+
 
       // Check for rejected status in doctorProfile
       if (data.doctorProfile && data.doctorProfile.verificationStatus === "rejected") {
-        dispatch(currentUser(data));
-        return navigation.navigate('RejectionScreen', {
+        dispatch(currentUser(updatedUserData));
+return (navigation as any).navigate('RejectionScreen', {
           orgType: 'doctor',
           orgId: data.doctorProfile.id,
-          rejectReason: data.doctorProfile.rejectReason || 'Your doctor profile was rejected',
+          rejectReason: data.doctorProfile.rejectionReason || 'Your doctor profile was rejected',
           organizationName: `Dr. ${data.firstName} ${data.lastName}`,
           userData: data
         });
@@ -184,8 +217,8 @@ const login = async () => {
 
         // Handle rejected status
         if (orgStatus === 'rejected') {
-          dispatch(currentUser(data));
-          return navigation.navigate('RejectionScreen', {
+          dispatch(currentUser(updatedUserData));
+return (navigation as any).navigate('RejectionScreen', {
             orgType,
             orgId,
             rejectReason: rejectReason || 'Application was rejected',
@@ -202,7 +235,7 @@ const login = async () => {
 
         // Handle pending/approval_awaiting status - Redirect to profile forms
         if (orgStatus === 'approval_awaiting' || orgStatus === 'pending') {
-          dispatch(currentUser(data));
+          dispatch(currentUser(updatedUserData));
           
           if (orgType === 'hospital') {
             return navigation.navigate('HospitalProfileForm', { orgId });
@@ -216,9 +249,8 @@ const login = async () => {
         }
         
         if (orgStatus === 'active' && orgType !== 'doctor') {
-          dispatch(currentUser(data));
-          dispatch(showError('Please complete your profile on the website. Mobile profile completion is not available.'));
-          return navigation.navigate('PendingApproval', { 
+          dispatch(currentUser(updatedUserData));
+            return (navigation as any).navigate('PendingApproval', {
             orgType, 
             orgId, 
             orgStatus,
@@ -240,19 +272,25 @@ const login = async () => {
         }
       }
 
-      if (data.doctorProfile && (data.doctorProfile.verificationStatus === "submitted" || data.doctorProfile.verificationStatus === "draft")) {
-        dispatch(currentUser(data));
+      if (data.doctorProfile && (data.doctorProfile.verificationStatus === "submitted" || data.doctorProfile.verificationStatus === "draft") ) {
+        console.log("111")
+        dispatch(currentUser(updatedUserData));
+        console.log("222")
         return navigation.navigate('DoctorProfileForm');
       }
+      if (data.updateProfile) {
+        console.log("4444")
+        return navigation.navigate('DoctorProfileForm');
+      } 
 
       if (data.bloodBankData && data.bloodBankData.status === "pending") {
-        dispatch(currentUser(data));
+        dispatch(currentUser(updatedUserData));
         return navigation.navigate('BloodBankProfileForm');
       }
       
       if (data.bloodBankData && data.bloodBankData.status === "approved") {
-        dispatch(currentUser(data));
-        return navigation.navigate('PendingApproval', {
+        dispatch(currentUser(updatedUserData));
+          return (navigation as any).navigate('PendingApproval', {
           orgType: 'bloodbank',
           orgId: data.bloodBankData.id,
           orgStatus: data.bloodBankData.status,
@@ -266,40 +304,45 @@ const login = async () => {
         const hospitalStatus = data.hospitalDetails?.status;
 
         if (hospitalStatus === 'pending') {
-          dispatch(currentUser(data));
+          dispatch(currentUser(updatedUserData));
           return navigation.navigate('HospitalProfileForm', { orgId: hospitalId });
         }
       }
       
       // Ambulance roles
       if (Role_NAME.ambulanceAdmin === data?.role) {
-        dispatch(currentUser(data));
+        dispatch(currentUser(updatedUserData));
         navigation.navigate('AmbulanceAdminDashboard' as never);
       } 
       else if(Role_NAME.ambulanceDriver === data?.role) {
-        dispatch(currentUser(data));
+        dispatch(currentUser(updatedUserData));
         navigation.navigate('AmbulanceDriverDashboard' as never);
       }
       else if(Role_NAME.ambulanceStaff === data?.role) {
-        dispatch(currentUser(data));
+        dispatch(currentUser(updatedUserData));
         navigation.navigate('AmbulanceStaffDashboard' as never);
       }
       
       else if (data?.role === 2002 || data?.role === 2003) {
-        dispatch(currentUser(data));
+        dispatch(currentUser(updatedUserData));
         navigation.navigate('NurseDashboard' as never);
       } else if (roleRoutes[data.role]) {
-        dispatch(currentUser(data));
+        dispatch(currentUser(updatedUserData));
         navigation.navigate(roleRoutes[data.role] as never);
       } else {
-        const userScopes = data?.scope?.split('#');
+       const userScopes = updatedUserData?.scope?.split('#');
         if (userScopes?.length === 1) {
           const scope = parseInt(userScopes[0], 10);
           const link = scopeLinks[scope];
           if (link) {
-            if (data?.scope === '5008' || data?.scope === '5007') {
-              const newRoleName =
-                data?.scope === '5007' ? 'surgeon' : 'anesthetist';
+            if (
+  updatedUserData?.scope === '5008' ||
+  updatedUserData?.scope === '5007'
+) {
+const newRoleName =
+  updatedUserData?.scope === '5007'
+    ? 'surgeon'
+    : 'anesthetist';
               const updatedUser = {
                 ...data,
                 roleName: newRoleName,
@@ -307,15 +350,15 @@ const login = async () => {
               dispatch(currentUser(updatedUser));
               navigation.navigate(`OtDashboard` as never);
             } else {
-              dispatch(currentUser(data));
+              dispatch(currentUser(updatedUserData));
               navigation.navigate(link as never);
             }
           } else {
-            dispatch(currentUser(data));
+            dispatch(currentUser(updatedUserData));
             navigation.navigate('Home' as never);
           }
         } else {
-          dispatch(currentUser(data));
+          dispatch(currentUser(updatedUserData));
           navigation.navigate('Home' as never);
         }
       }

@@ -70,7 +70,7 @@ const RejectionScreen = () => {
           </View>
 
           <Text style={styles.title}>
-            Oops! Something went{'\n'}wrong here
+            Oops! Your{'\n'}{orgType || 'application'} was rejected
           </Text>
         </View>
       </LinearGradient>
@@ -80,10 +80,6 @@ const RejectionScreen = () => {
         styles.bottomSection,
         responsivePadding(SPACING.md, SPACING.lg, 0, SPACING.lg)
       ]}>
-        <Text style={styles.description}>
-          Your {orgType || 'application'} was Rejected.
-        </Text>
-
         <View style={styles.reasonBox}>
           <Text style={styles.reasonTitle}>Reason:</Text>
           <Text style={styles.reasonText}>
