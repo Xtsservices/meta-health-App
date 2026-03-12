@@ -179,7 +179,7 @@
 // auth.ts
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
-const BASE_URL = 'http://192.168.0.21:3000/api/v1/';
+const BASE_URL = 'http://43.205.232.252:3000/api/v1/';
 const BASE_URL_SOCKET = 'http://43.205.232.252:3000';
 
 

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 
 import { AuthPost } from '../../auth/auth';
+import { AuthPut } from '../../auth/auth';
 import { showSuccess, showError } from '../../store/toast.slice';
 import { formatDate, formatDateTime } from '../../utils/dateTime';
 
@@ -79,18 +80,24 @@ const COLORS = {
 const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch();
-  
+
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  
+
+  // Edit mode states
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [submittedData, setSubmittedData] = useState<Record<string, string>>({});
+  const [isUpdating, setIsUpdating] = useState(false);
+
   // Dropdown states
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
-  
+
   // Data states
   const [countries, setCountries] = useState<string[]>([]);
   const [stateOptions, setStateOptions] = useState<string[]>([]);
@@ -218,19 +225,19 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
 
   const getFields = (): FormField[] => {
     const commonFields = [
-      { 
-        name: 'email', 
-        label: 'Email', 
-        type: 'email', 
-        placeholder: 'Enter email address', 
-        required: true 
+      {
+        name: 'email',
+        label: 'Email',
+        type: 'email',
+        placeholder: 'Enter email address',
+        required: true
       },
-      { 
-        name: 'phoneNo', 
-        label: 'Phone Number', 
-        type: 'tel', 
-        placeholder: 'Enter 10-digit phone number', 
-        required: true 
+      {
+        name: 'phoneNo',
+        label: 'Phone Number',
+        type: 'tel',
+        placeholder: 'Enter 10-digit phone number',
+        required: true
       },
     ];
 
@@ -325,49 +332,49 @@ const RegistrationForm: React.FC<RegistrationFormProps> = ({ category }) => {
 
   const handleInputChange = (field: string, value: string) => {
     let formattedValue = value;
-    
+
     if (field === 'phoneNo' || field === 'adminPhone') {
       formattedValue = value.replace(/\D/g, '').slice(0, 10);
     }
-    
+
     if (field === 'pinCode') {
       formattedValue = value.replace(/\D/g, '').slice(0, 6);
     }
-    
-    const nameFields = ['name', 'firstName', 'lastName', 'adminFirstName', 'adminLastName', 
-                       'userFirstName', 'userLastName', 'labFirstName', 'labLastName', 
-                       'bloodBankName', 'pointOfContact', 'district'];
-    
-if (nameFields.includes(field)) {
-  const categoryLower = category?.toLowerCase();
 
-  let maxLength = 30;
+    const nameFields = ['name', 'firstName', 'lastName', 'adminFirstName', 'adminLastName',
+      'userFirstName', 'userLastName', 'labFirstName', 'labLastName',
+      'bloodBankName', 'pointOfContact', 'district'];
 
-  if (
-    categoryLower === 'hospital' &&
-    (field === 'adminFirstName' || field === 'adminLastName')
-  ) {
-    maxLength = 20;
-  }
+    if (nameFields.includes(field)) {
+      const categoryLower = category?.toLowerCase();
 
-  formattedValue = value
-    .replace(/[^A-Za-z\s]/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .slice(0, maxLength);
-}
+      let maxLength = 30;
+
+      if (
+        categoryLower === 'hospital' &&
+        (field === 'adminFirstName' || field === 'adminLastName')
+      ) {
+        maxLength = 20;
+      }
+
+      formattedValue = value
+        .replace(/[^A-Za-z\s]/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .slice(0, maxLength);
+    }
 
     if (field.includes('email')) {
       formattedValue = value.replace(/[^a-zA-Z0-9@._-]/g, '');
     }
 
     setFormData(prev => ({ ...prev, [field]: formattedValue }));
-    
+
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: '' }));
     }
 
     const categoryLower = category?.toLowerCase();
-    
+
     if (categoryLower === 'hospital') {
       if (field === 'email') {
         setFormData(prev => ({ ...prev, adminEmail: formattedValue }));
@@ -449,7 +456,7 @@ if (nameFields.includes(field)) {
             }
             setModalVisible(true);
           }}
-          disabled={isSubmitting || 
+          disabled={isSubmitting || isUpdating ||
             (field.name === 'state' && !formData.country) ||
             (field.name === 'city' && !formData.state)}
         >
@@ -499,7 +506,7 @@ if (nameFields.includes(field)) {
   };
 
   const validateForm = (): boolean => {
-    if (!termsAccepted) {
+    if (!isEditMode && !termsAccepted) {
       dispatch(showError('Please accept the Terms of Service and Privacy Policy'));
       return false;
     }
@@ -582,7 +589,7 @@ if (nameFields.includes(field)) {
       if (addressError) errors.address = addressError;
 
       if (!formData.country) errors.country = 'Country is required';
-      
+
       if (!formData.state) errors.state = 'State is required';
       else {
         const stateError = validateName(formData.state, 'State');
@@ -784,6 +791,7 @@ if (nameFields.includes(field)) {
       }
 
       const response = await AuthPost(endpoint, payload, null) as any;
+      console.log('54545',response)
       
       if (response?.status === 'error') {
         dispatch(showError(response.message || 'Registration failed'));
@@ -795,7 +803,18 @@ if (nameFields.includes(field)) {
         return;
       }
 
+      const registeredId =
+        response?.data?.hospital?.id ||
+        response?.data?.data?.id ||
+        response?.data?.id ||
+        response?.data?.diagnostic?.id ||
+        response?.data?.pharmacy?.id ||
+        response?.data?.bloodBankID ||
+        '';
+
       dispatch(showSuccess(response?.data?.message || 'Registration successful!'));
+      setSubmittedData({ ...formData, registeredId });
+      setHasSubmitted(true);
       setShowSuccessScreen(true);
     } catch (error: any) {
       dispatch(showError(error.message || 'An error occurred during registration'));
@@ -804,158 +823,118 @@ if (nameFields.includes(field)) {
     }
   };
 
-  // const handleOtpChange = (index: number, value: string) => {
-  //   if (value.length > 1) return;
-  //   if (value && !/^\d$/.test(value)) return;
+  const handleUpdate = async () => {
+    if (!validateForm()) {
+      return;
+    }
 
-  //   const newOtp = [...otp];
-  //   newOtp[index] = value;
-  //   setOtp(newOtp);
+    const id =
+      submittedData?.registeredId ||
+      submittedData?.doctorId ||
+      submittedData?.id ||
+      '';
 
-  //   if (value && index < 5 && otpInputRefs.current?.[index + 1]) {
-  //     otpInputRefs.current[index + 1]?.focus();
-  //   }
-  // };
+    if (!id) {
+      dispatch(showError('Unable to update. ID is missing.'));
+      return;
+    }
 
-  // const handleOtpKeyPress = (index: number, key: string) => {
-  //   if (key === 'Backspace' && !otp[index] && index > 0 && otpInputRefs.current?.[index - 1]) {
-  //     otpInputRefs.current[index - 1]?.focus();
-  //   }
-  // };
+    setIsUpdating(true);
 
-  // const handleOtpSubmit = async () => {
-  //   const otpValue = otp.join('');
-    
-  //   if (otpValue.length !== 6) {
-  //     dispatch(showError('Please enter all 6 digits'));
-  //     return;
-  //   }
+    try {
+      let endpoint = '';
+      let payload: Record<string, string> = {};
+      const categoryLower = category?.toLowerCase();
 
-  //   setIsSubmitting(true);
+      if (categoryLower === 'hospital') {
+        endpoint = `hospital/${id}`;
+        payload = {
+          name: formData['name'] || '',
+          parent: formData['parent'] || '',
+          address: formData['address'] || '',
+          country: formData['country'] || '',
+          state: formData['state'] || '',
+          district: formData['district'] || '',
+          city: formData['city'] || '',
+          pinCode: formData['pinCode'] || '',
+          email: formData['email'] || '',
+          phoneNo: formData['phoneNo'] || '',
+          website: formData['website'] || '',
+          adminName: `${formData['adminFirstName'] || ''} ${formData['adminLastName'] || ''}`.trim(),
+          adminEmail: formData['adminEmail'] || '',
+          adminPhone: formData['adminPhone'] || '',
+        };
+      } else if (categoryLower === 'blood bank') {
+        endpoint = `bloodbank/signupBloodBank/${id}`;
+        payload = {
+          bloodBankName: formData['bloodBankName'] || formData['name'] || '',
+          email: formData['email'] || '',
+          phoneNo: formData['phoneNo'] || '',
+          pointOfContact: formData['pointOfContact'] || '',
+          firstName: formData['firstName'] || '',
+          lastName: formData['lastName'] || '',
+        };
+      } else if (categoryLower === 'diagnostic' || categoryLower === 'diagnostics' || categoryLower === 'lab') {
+        endpoint = `diagnostic/edit/${id}`;
+        payload = {
+          name: formData['name'] || '',
+          address: formData['address'] || '',
+          country: formData['country'] || '',
+          state: formData['state'] || '',
+          city: formData['city'] || '',
+          district: formData['district'] || '',
+          pinCode: formData['pinCode'] || '',
+          email: formData['email'] || '',
+          phoneNo: formData['phoneNo'] || '',
+          userEmail: formData['email'] || '',
+          userFirstName: formData['labFullName'] ? formData['labFullName'].split(' ')[0] : (formData['labFirstName'] || ''),
+          userLastName: formData['labFullName'] ? formData['labFullName'].split(' ').slice(1).join(' ') : (formData['labLastName'] || ''),
+        };
+      } else if (categoryLower === 'pharmacy') {
+        endpoint = `pharmacy/edit/${id}`;
+        payload = {
+          name: formData['name'] || '',
+          parent: formData['parent'] || '',
+          address: formData['address'] || '',
+          country: formData['country'] || '',
+          state: formData['state'] || '',
+          district: formData['district'] || '',
+          city: formData['city'] || '',
+          pinCode: formData['pinCode'] || '',
+          email: formData['email'] || '',
+          phoneNo: formData['phoneNo'] || '',
+          website: formData['website'] || '',
+          userEmail: formData['adminEmail'] || formData['userEmail'] || '',
+          userFirstName: formData['userFirstName'] || '',
+          userLastName: formData['userLastName'] || '',
+        };
+      } else if (categoryLower === 'doctor') {
+        endpoint = `doctor-registration/edit/${id}`;
+        payload = {
+          firstName: formData['firstName'] || '',
+          lastName: formData['lastName'] || '',
+          email: formData['email'] || '',
+          phoneNo: formData['phoneNo'] || '',
+        };
+      }
 
-  //   try {
-  //     let verifyEndpoint = 'user/verify-otp';
-  //     const categoryLower = category?.toLowerCase();
+      const response = await AuthPut(endpoint, payload, null) as any;
 
-  //     if (categoryLower === 'hospital') {
-  //       verifyEndpoint = 'hospital/verify-otp';
-  //     } else if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
-  //       verifyEndpoint = 'diagnostic/verify-otp';
-  //     } else if (categoryLower === 'pharmacy') {
-  //       verifyEndpoint = 'pharmacy/verify-otp';
-  //     } else if (categoryLower === 'doctor') {
-  //       verifyEndpoint = 'doctor-registration/verify-otp';
-  //     }
+      if (response?.status === 'error') {
+        dispatch(showError(response.message || 'Update failed'));
+        return;
+      }
 
-  //     const email = formData.email || formData.adminEmail || formData.userEmail || formData.labEmail;
-      
-  //     const response = await AuthPost(verifyEndpoint, {
-  //       email: email,
-  //       otp: otpValue
-  //     }, null) as any;
-
-  //     if (response?.status === 'error') {
-  //       dispatch(showError(response.message || 'OTP verification failed'));
-  //       return;
-  //     }
-
-  //     if (response?.data?.autoLogin && response?.data?.loginData) {
-  //       const loginData = response.data.loginData;
-        
-  //       await AsyncStorage.setItem('user', JSON.stringify({
-  //         ...loginData,
-  //         isLoggedIn: true
-  //       }));
-
-  //       dispatch(showSuccess(response.data.message || 'Account verified successfully!'));
-
-  //       if (categoryLower === 'hospital') {
-  //         const hospitalId = loginData.hospitalID || loginData.hospitalId;
-  //         const hospitalStatus = response.data.hospital?.status || loginData.hospitalDetails?.status;
-          
-  //         if (hospitalStatus === 'pending') {
-  //           navigation.navigate('HospitalProfileForm', { hospitalId });
-  //         }
-  //         setShowOtpModal(false);
-  //         return;
-  //       } 
-        
-  //       if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
-  //         const diagnosticId = loginData.organizationAssociations?.[0]?.organizationId || loginData.diagnosticID;
-  //         const diagnosticStatus = response.data.diagnostic?.status || loginData.organizationAssociations?.[0]?.organizationDetails?.status;
-          
-  //         if (diagnosticStatus === 'pending') {
-  //           navigation.navigate('DiagnosticProfileForm', { diagnosticId });
-  //         }
-  //         setShowOtpModal(false);
-  //         return;
-  //       }
-        
-  //       if (categoryLower === 'pharmacy') {
-  //         const pharmacyId = loginData.organizationAssociations?.[0]?.organizationId || loginData.pharmacyID;
-  //         const pharmacyStatus = response.data.pharmacy?.status || loginData.organizationAssociations?.[0]?.organizationDetails?.status;
-          
-  //         if (pharmacyStatus === 'pending') {
-  //           navigation.navigate('PharmacyProfileForm', { pharmacyId });
-  //         } else {
-  //           navigation.navigate('PharmacyDashboard');
-  //         }
-  //         setShowOtpModal(false);
-  //         return;
-  //       }
-
-  //       if (categoryLower === 'doctor') {
-  //         const doctorId = response?.data?.id || formData.email;
-  //         setShowOtpModal(false);
-  //         navigation.navigate('DoctorProfileForm', { doctorId });
-  //         return;
-  //       }
-        
-  //       setShowSuccessScreen(true);
-  //     } else {
-  //       setShowSuccessScreen(true);
-  //     }
-  //   } catch (error: any) {
-  //     dispatch(showError(error.message || 'Failed to verify OTP'));
-  //   } finally {
-  //     setIsSubmitting(false);
-  //   }
-  // };
-
-  // const handleResendOtp = async () => {
-  //   setIsResendingOtp(true);
-
-  //   try {
-  //     let resendEndpoint = 'user/resend-otp';
-  //     const categoryLower = category?.toLowerCase();
-
-  //     if (categoryLower === 'hospital') {
-  //       resendEndpoint = 'hospital/resend-otp';
-  //     } else if (categoryLower === 'diagnostic' || categoryLower === 'lab') {
-  //       resendEndpoint = 'diagnostic/resend-otp';
-  //     } else if (categoryLower === 'pharmacy') {
-  //       resendEndpoint = 'pharmacy/resend-otp';
-  //     } else if (categoryLower === 'doctor') {
-  //       resendEndpoint = 'doctor-registration/resend-otp';
-  //     }
-
-  //     const email = formData.email || formData.adminEmail || formData.userEmail || formData.labEmail;
-      
-  //     const response = await AuthPost(resendEndpoint, { email }, null) as any;
-
-  //     if (response?.status === 'error') {
-  //       dispatch(showError(response.message || 'Failed to resend OTP'));
-  //       return;
-  //     }
-
-  //     dispatch(showSuccess('OTP resent successfully! Check your email'));
-  //     setOtp(['', '', '', '', '', '']);
-  //   } catch (error: any) {
-  //     dispatch(showError(error.message || 'Failed to resend OTP'));
-  //   } finally {
-  //     setIsResendingOtp(false);
-  //   }
-  // };
+      dispatch(showSuccess(response?.data?.message || response?.message || 'Updated successfully!'));
+      setSubmittedData({ ...formData, registeredId: id });
+      setIsEditMode(false);
+      setShowSuccessScreen(true);
+    } catch (error: any) {
+      dispatch(showError(error.message || 'An error occurred during update'));
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleLoginRedirect = async () => {
     try {
@@ -966,7 +945,7 @@ if (nameFields.includes(field)) {
     }
   };
 
-  if (showSuccessScreen) {
+  if (showSuccessScreen && !isEditMode) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.successContainer}>
@@ -979,7 +958,19 @@ if (nameFields.includes(field)) {
               Please login to complete your profile setup to access the {category} dashboard.
             </Text>
             <TouchableOpacity
-              style={styles.loginButton}
+              style={styles.editButton}
+              onPress={() => {
+                setShowSuccessScreen(false);
+                setIsEditMode(true);
+                setFormData({ ...submittedData });
+                setFormErrors({});
+                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+              }}
+            >
+              <Text style={styles.editButtonText}>Edit Registration</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.loginButton, { marginTop: SPACING.sm }]}
               onPress={handleLoginRedirect}
               disabled={isSubmitting}
             >
@@ -1012,6 +1003,25 @@ if (nameFields.includes(field)) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.formContainer}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>
+                {isEditMode ? `Edit Your ${category}` : `Register Your ${category}`}
+              </Text>
+              {isEditMode && (
+                <TouchableOpacity
+                  style={styles.cancelHeaderButton}
+                  onPress={() => {
+                    setIsEditMode(false);
+                    setFormData({ ...submittedData });
+                    setFormErrors({});
+                    setShowSuccessScreen(true);
+                  }}
+                >
+                  <Text style={styles.cancelHeaderButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             {fields.map((field) => {
               if (field.type === 'dropdown') {
                 return renderDropdownField(field);
@@ -1034,7 +1044,7 @@ if (nameFields.includes(field)) {
                       maxLength={field.name === 'address' ? 150 : undefined}
                       numberOfLines={4}
                       textAlignVertical="top"
-                      editable={!isSubmitting}
+                      editable={!isSubmitting && !isUpdating}
                       returnKeyType="done"
                       blurOnSubmit={true}
                     />
@@ -1047,32 +1057,32 @@ if (nameFields.includes(field)) {
                       onChangeText={(value) => handleInputChange(field.name, value)}
                       keyboardType={
                         field.type === 'email' ? 'email-address' :
-                        field.type === 'tel' ? 'phone-pad' :
-                        'default'
+                          field.type === 'tel' ? 'phone-pad' :
+                            'default'
                       }
                       maxLength={
                         field.name === 'phoneNo' || field.name === 'adminPhone' ? 10 :
-                        field.name === 'pinCode' ? 6 :
-                        [
-                          'name',
-                          'parent',
-                          'district',
-                          'firstName',
-                          'lastName',
-                          'adminFirstName',
-                          'adminLastName',
-                          'userFirstName',
-                          'userLastName',
-                          'labFirstName',
-                          'labLastName',
-                          'bloodBankName',
-                          'pointOfContact'
-                        ].includes(field.name)
-                          ? 30
-                          : undefined
+                          field.name === 'pinCode' ? 6 :
+                            [
+                              'name',
+                              'parent',
+                              'district',
+                              'firstName',
+                              'lastName',
+                              'adminFirstName',
+                              'adminLastName',
+                              'userFirstName',
+                              'userLastName',
+                              'labFirstName',
+                              'labLastName',
+                              'bloodBankName',
+                              'pointOfContact'
+                            ].includes(field.name)
+                              ? 30
+                              : undefined
                       }
                       editable={
-                        !isSubmitting &&
+                        !isSubmitting && !isUpdating &&
                         !(category?.toLowerCase() === 'hospital' &&
                           (field.name === 'adminEmail' || field.name === 'adminPhone'))
                       }
@@ -1094,114 +1104,65 @@ if (nameFields.includes(field)) {
               );
             })}
 
-            <View style={styles.checkboxContainer}>
-              <TouchableOpacity 
-                style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}
-                onPress={() => setTermsAccepted(!termsAccepted)}
-                disabled={isSubmitting}
-              >
-                {termsAccepted ? (
-                  <Check size={FONT_SIZE.sm} color={COLORS.white} />
-                ) : null}
-              </TouchableOpacity>
-              <Text style={styles.checkboxText}>
-                I agree to MetaHealth's Terms of Service and Privacy Policy. 
-                I confirm that all information provided is accurate.
-              </Text>
-            </View>
+            {!isEditMode && (
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}
+                  onPress={() => setTermsAccepted(!termsAccepted)}
+                  disabled={isSubmitting}
+                >
+                  {termsAccepted ? (
+                    <Check size={FONT_SIZE.sm} color={COLORS.white} />
+                  ) : null}
+                </TouchableOpacity>
+                <Text style={styles.checkboxText}>
+                  I agree to MetaHealth's Terms of Service and Privacy Policy.
+                  I confirm that all information provided is accurate.
+                </Text>
+              </View>
+            )}
 
-            <TouchableOpacity
-              style={[styles.submitButton, (isSubmitting || !termsAccepted) && styles.buttonDisabled]}
-              onPress={submitRegistration}
-              disabled={isSubmitting || !termsAccepted}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={COLORS.white} size="small" />
-              ) : (
-                <Text style={styles.buttonText}>Validate & Continue</Text>
-              )}
-            </TouchableOpacity>
+            {isEditMode ? (
+              <View style={styles.editButtonsRow}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setIsEditMode(false);
+                    setFormData({ ...submittedData });
+                    setFormErrors({});
+                    setShowSuccessScreen(true);
+                  }}
+                  disabled={isUpdating}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.updateButton, isUpdating && styles.buttonDisabled]}
+                  onPress={handleUpdate}
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? (
+                    <ActivityIndicator color={COLORS.white} size="small" />
+                  ) : (
+                    <Text style={styles.buttonText}>Update</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.submitButton, (isSubmitting || !termsAccepted) && styles.buttonDisabled]}
+                onPress={submitRegistration}
+                disabled={isSubmitting || !termsAccepted}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color={COLORS.white} size="small" />
+                ) : (
+                  <Text style={styles.buttonText}>Validate & Continue</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
-
-        {/* <Modal
-          visible={showOtpModal}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowOtpModal(false)}
-          statusBarTranslucent={true}
-        >
-          <SafeAreaView style={styles.modalSafeArea}>
-            <KeyboardAvoidingView
-              style={styles.modalKeyboardAvoidingView}
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-              <View style={styles.modalContainer}>
-                <View style={styles.modalContent}>
-                  <View style={styles.otpHeader}>
-                    <View style={styles.otpIconWrapper}>
-                      <Mail size={SPACING.lg} color={COLORS.brand} />
-                    </View>
-                    <Text style={styles.otpTitle}>Enter OTP</Text>
-                    <Text style={styles.otpSubtitle}>
-                      We've sent a 6-digit verification code to your email
-                    </Text>
-                  </View>
-
-                  <View style={styles.otpInputsContainer}>
-                    {otp.map((digit, index) => (
-                      <TextInput
-                        key={index}
-                        ref={setOtpRef(index)}
-                        style={styles.otpInput}
-                        placeholder="0"
-                        placeholderTextColor={COLORS.placeholder}
-                        value={digit}
-                        onChangeText={(value) => handleOtpChange(index, value)}
-                        onKeyPress={({ nativeEvent: { key } }) => handleOtpKeyPress(index, key)}
-                        keyboardType="numeric"
-                        maxLength={1}
-                        textAlign="center"
-                        editable={!isSubmitting}
-                        autoFocus={index === 0}
-                      />
-                    ))}
-                  </View>
-
-                  <TouchableOpacity
-                    style={[styles.verifyButton, isSubmitting && styles.buttonDisabled]}
-                    onPress={handleOtpSubmit}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <ActivityIndicator color={COLORS.white} size="small" />
-                    ) : (
-                      <Text style={styles.buttonText}>Verify & Submit</Text>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => setShowOtpModal(false)}
-                    disabled={isSubmitting}
-                  >
-                    <Text style={styles.backButtonText}>Back to Form</Text>
-                  </TouchableOpacity>
-
-                  <Text style={styles.resendText}>
-                    Didn't receive code?{' '}
-                    <Text
-                      style={[styles.resendLink, isResendingOtp && styles.resendLinkDisabled]}
-                      onPress={isResendingOtp ? undefined : handleResendOtp}
-                    >
-                      {isResendingOtp ? 'Resending...' : 'Resend OTP'}
-                    </Text>
-                  </Text>
-                </View>
-              </View>
-            </KeyboardAvoidingView>
-          </SafeAreaView>
-        </Modal> */}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -1225,6 +1186,29 @@ const styles = StyleSheet.create({
   formContainer: {
     padding: SPACING.md,
     paddingTop: SPACING.lg,
+  },
+  formHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
+  formTitle: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '700',
+    color: COLORS.text,
+    flex: 1,
+  },
+  cancelHeaderButton: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.chipInactive,
+    borderRadius: SPACING.xs,
+  },
+  cancelHeaderButtonText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '500',
+    color: COLORS.text,
   },
   fieldContainer: {
     marginBottom: SPACING.sm,
@@ -1313,6 +1297,32 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: '700',
   },
+  editButtonsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: COLORS.chipInactive,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    color: COLORS.text,
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+  },
+  updateButton: {
+    flex: 2,
+    backgroundColor: COLORS.brand,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   successContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1358,12 +1368,27 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
     lineHeight: FONT_SIZE.md * 1.5,
   },
+  editButton: {
+    width: '100%',
+    backgroundColor: COLORS.white,
+    borderRadius: SPACING.lg,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.brand,
+  },
+  editButtonText: {
+    color: COLORS.brand,
+    fontSize: FONT_SIZE.md,
+    fontWeight: '700',
+  },
   loginButton: {
+    width: '100%',
     backgroundColor: COLORS.brand,
     borderRadius: SPACING.lg,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    width: '100%',
     alignItems: 'center',
   },
   loginButtonText: {
@@ -1371,115 +1396,12 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     fontWeight: '700',
   },
-
-
-  //   modalSafeArea: {
-  //   flex: 1,
-  //   backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  // },
-  // modalKeyboardAvoidingView: {
-  //   flex: 1,
-  //   justifyContent: 'center',
-  // },
-  // modalContainer: {
-  //   flex: 1,
-  //   justifyContent: 'center',
-  //   alignItems: 'center',
-  //   paddingHorizontal: SPACING.md,
-  // },
-  // modalContent: {
-  //   backgroundColor: COLORS.white,
-  //   borderRadius: SPACING.lg,
-  //   padding: SPACING.lg,
-  //   width: '100%',
-  //   maxWidth: 500,
-  //   borderWidth: 1.5,
-  //   borderColor: COLORS.border,
-  //   shadowColor: '#000',
-  //   shadowOffset: { width: 0, height: 4 },
-  //   shadowOpacity: 0.1,
-  //   shadowRadius: 8,
-  //   elevation: 4,
-  // },
-  // otpHeader: {
-  //   alignItems: 'center',
-  //   marginBottom: SPACING.lg,
-  // },
-  // otpIconWrapper: {
-  //   width: SPACING.xl * 1.2,
-  //   height: SPACING.xl * 1.2,
-  //   borderRadius: SPACING.xl,
-  //   backgroundColor: '#E0F2FE',
-  //   justifyContent: 'center',
-  //   alignItems: 'center',
-    // ma
   helperText: {
     fontSize: FONT_SIZE.xs,
     color: COLORS.sub,
     marginTop: SPACING.xs * 0.5,
     fontStyle: 'italic',
   },
-
-  //   otpTitle: {
-  //   fontSize: FONT_SIZE.lg,
-  //   fontWeight: '700',
-  //   color: COLORS.text,
-  //   marginBottom: SPACING.xs,
-  // },
-  // otpSubtitle: {
-  //   fontSize: FONT_SIZE.sm,
-  //   color: COLORS.sub,
-  //   textAlign: 'center',
-  //   lineHeight: FONT_SIZE.md * 1.2,
-  // },
-  // otpInputsContainer: {
-  //   flexDirection: 'row',
-  //   justifyContent: 'space-between',
-  //   marginBottom: SPACING.lg,
-  // },
-  // otpInput: {
-  //   width: responsiveWidth(12),
-  //   height: responsiveWidth(12),
-  //   borderWidth: 2,
-  //   borderColor: COLORS.border,
-  //   borderRadius: SPACING.sm,
-  //   fontSize: FONT_SIZE.lg,
-  //   color: COLORS.text,
-  //   backgroundColor: COLORS.white,
-  // },
-  // verifyButton: {
-  //   backgroundColor: COLORS.brand,
-  //   borderRadius: SPACING.lg,
-  //   paddingVertical: SPACING.md,
-  //   alignItems: 'center',
-  //   justifyContent: 'center',
-  //   marginBottom: SPACING.sm,
-  // },
-  // backButton: {
-  //   backgroundColor: COLORS.chipInactive,
-  //   borderRadius: SPACING.lg,
-  //   paddingVertical: SPACING.md,
-  //   alignItems: 'center',
-  //   justifyContent: 'center',
-  //   marginBottom: SPACING.md,
-  // },
-  // backButtonText: {
-  //   color: COLORS.text,
-  //   fontSize: FONT_SIZE.md,
-  //   fontWeight: '600',
-  // },
-  // resendText: {
-  //   fontSize: FONT_SIZE.sm,
-  //   color: COLORS.sub,
-  //   textAlign: 'center',
-  // },
-  // resendLink: {
-  //   color: COLORS.brand,
-  //   fontWeight: '600',
-  // },
-  // resendLinkDisabled: {
-  //   color: COLORS.sub,
-  // },
   Select: {
     height: responsiveHeight(6),
     borderWidth: 1.5,
