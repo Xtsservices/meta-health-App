@@ -1,0 +1,1352 @@
+// src/screens/patient/PatientProfileOPD.tsx
+
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  TextInput,
+  Alert,
+  Linking,
+  PermissionsAndroid,
+} from "react-native";
+import ReactNativeBlobUtil from "react-native-blob-util"; // ⬅️ add this
+
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
+import { useSelector } from "react-redux";
+import { useColorScheme } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  MoreVertical,
+  Edit3,
+  User as UserIcon,
+  Download,
+  X,
+  CalendarDays,
+  UserPlus2,
+  FlipHorizontal2,
+} from "lucide-react-native";
+import { AuthFetch } from "../../auth/auth";
+import Footer from "../dashboard/footer";
+import Tabs from "./tabs";
+import { useDispatch } from "react-redux";
+import { currentPatient as setCurrentPatientAction } from "../../store/store";
+import TransferPatient from "./transferPatient";
+import OtTabs from "../OT/otTabs";
+import DischargeSummaryDownload from "./dischargeSummaryDownload";
+import AddTriageIssue from "../Triage/addTriageIssue";
+import { Edit2Icon } from "../../utils/SvgIcons";
+import { COLORS } from "../../utils/colour";
+import { PatientType, wardType } from "../../utils/types";
+import { formatAgeDisplay } from "../../utils/age";
+import { formatDate } from "../../utils/dateTime";
+import { showError, showSuccess } from "../../store/toast.slice";
+// ---- types ----
+type RootState = any;
+type testType = {
+  id?: number | string;
+  name?: string;
+  category?: "radiology" | "pathology" | "1" | "2" | string;
+  fileURL?: string;
+  fileName?: string;
+  mimeType?: string;
+};
+type Reminder = { dosageTime: string };
+
+type TimelineType = { id: number; patientID: number; patientEndStatus?: number };
+type RouteParams = { 
+  id: string; 
+  staffRole?: string; 
+  reception?: boolean;
+  fromDischargeList?: boolean;
+   isFromPreviousPatients?: boolean; 
+   wardName?: string;
+};
+
+const followUpStatus = { active: 1 };
+
+// ---- zustand shims (replace with your real store if available) ----
+function usePrintInPatientStore() {
+  const [symptoms, setSymptoms] = useState<any[]>([]);
+  const [reminder, setReminder] = useState<Reminder[]>([]);
+  const [vitalAlert, setVitalAlert] = useState<any[]>([]);
+  const [medicalHistory, setMedicineHistory] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [vitalFunction, setVitalFunction] = useState<any>({});
+  return {
+    symptoms,
+    setSymptoms,
+    reminder,
+    setReminder,
+    vitalAlert,
+    setVitalAlert,
+    medicalHistory,
+    setMedicineHistory,
+    reports,
+    setReports,
+    vitalFunction,
+    setVitalFunction,
+  };
+}
+
+// ---- helpers ----
+
+
+function compareDates(a: Reminder, b: Reminder) {
+  return new Date(a.dosageTime).valueOf() - new Date(b.dosageTime).valueOf();
+}
+
+// Ask for storage permission on older Android devices
+const ensureStoragePermission = async (): Promise<boolean> => {
+  if (Platform.OS !== "android") return true;
+
+  // For Android 13+ (API 33+), using DownloadManager usually doesn't need WRITE permission
+  if (typeof Platform.Version === "number" && Platform.Version >= 33) {
+    return true;
+  }
+
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+      {
+        title: "Storage Permission",
+        message: "Storage access is required to download and save test reports.",
+        buttonPositive: "OK",
+      }
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch (e) {
+    return false;
+  }
+};
+
+type DownloadItem = {
+  fileURL: string;
+  fileName?: string;
+  mimeType?: string;
+};
+
+const downloadReportFile = async (item: DownloadItem) => {
+  const { fileURL, fileName, mimeType } = item;
+  if (!fileURL) return;
+
+  const isImage = mimeType?.startsWith("image/");
+  const extFromMime =
+    mimeType?.split("/")[1] ||
+    fileURL.split("?")[0].split(".").pop() ||
+    (isImage ? "jpg" : "pdf");
+
+  const name =
+    fileName ||
+    `report_${Date.now()}_${Math.floor(Math.random() * 1000)}.${extFromMime}`;
+
+  const dirs = ReactNativeBlobUtil.fs.dirs;
+  // Images → Pictures folder, otherwise Downloads
+  const baseDir = isImage ? dirs.PictureDir : dirs.DownloadDir;
+  const path = `${baseDir}/${name}`;
+
+  // Use Android DownloadManager (shows notification, appears in Downloads app)
+  return ReactNativeBlobUtil.config({
+    fileCache: true,
+    addAndroidDownloads: {
+      useDownloadManager: true,
+      notification: true,
+      path,
+      mime: mimeType || (isImage ? "image/*" : "application/pdf"),
+      title: name,
+      description: "Downloading test report",
+      mediaScannable: true,
+    },
+    path,
+  })
+    .fetch("GET", fileURL)
+    .then((res) => {
+      return res.path();
+    })
+    .catch((err) => {
+      throw err;
+    });
+};
+
+
+const FOOTER_HEIGHT = 64; // visual height of Footer area
+
+const PatientProfileOPD: React.FC = () => {
+  const route = useRoute<RouteProp<Record<string, RouteParams>, string>>();
+  const { wardName: wardNameFromRoute } = route.params || {};
+  const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const scheme = useColorScheme();
+
+ 
+
+  const dispatch = useDispatch();
+  const user = useSelector((s: RootState) => s.currentUser);
+  console.log("Current user from store:", user);
+  const patientFromStore = useSelector((s: RootState) => s.currentPatient) as PatientType | undefined;
+  console.log("werewestore:", patientFromStore);
+  const timelineFromStore: TimelineType | undefined = undefined; // no timeline in store; initialize locally
+  const [currentPatient, setCurrentPatient] = useState<PatientType | undefined>(patientFromStore);
+  const [timeline, setTimeline] = useState<TimelineType | undefined>(timelineFromStore);
+  const [loading, setLoading] = useState(false);
+  const [wardList, setWardList] = useState<wardType[]>([]);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openTransfer, setOpenTransfer] = useState(false);
+  const [openRevisit, setOpenRevisit] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printSelectOptions, setPrintSelectOptions] = useState<string[]>([]);
+  const [openDischargeSheet, setOpenDischargeSheet] = useState(false);
+
+
+  const [previousMedHistoryList, setPreviousMedHistoryList] = useState<any[]>([]);
+  const [selectedTestList, setSelectedTestList] = useState<testType[]>([]);
+  const [isPrintingReports, setIsPrintingReports] = useState(false);
+
+  const {
+    setSymptoms,
+    setReminder,
+    setVitalAlert,
+    setMedicineHistory,
+    setVitalFunction,
+    vitalAlert,
+    reminder,
+    medicalHistory,
+    symptoms,
+    reports,
+    setReports,
+    vitalFunction,
+  } = usePrintInPatientStore();
+
+  const id = route.params?.id;
+  const staffRole = route.params?.staffRole ?? "";
+  const isReceptionView = !!route.params?.reception;
+  const fromDischargeList = !!route.params?.fromDischargeList;
+  const isFromPreviousPatients = !!route.params?.isFromPreviousPatients; 
+
+  // Get patient start status
+  const startStatus = currentPatient?.patientStartStatus ?? 0;
+let startStatusText = "";
+
+if (startStatus === 1) {
+  startStatusText = "Outpatient";
+} else if (startStatus === 2) {
+  startStatusText = "Inpatient";
+} else if (startStatus === 3) {
+  startStatusText = "Emergency";
+} else {
+  startStatusText = "Unknown";
+}
+
+
+  const endStatus = currentPatient?.patientEndStatus ?? 0;
+
+  // Check if patient is discharged
+  const isDischargedPatient = fromDischargeList || endStatus === 21 || patientFromStore?.ptype ===21;
+  console.log("1111", isDischargedPatient);
+  const isSurgeonOrAnesthetist = user?.roleName === "surgeon" || user?.roleName === "anesthetist";
+  const shouldShowPatientRevisit = isDischargedPatient || isFromPreviousPatients;
+  const isTriage = user?.roleName === "triage";
+  // Helper function to get ward name
+  const getWardName = (wardId: number | string | undefined): string => {
+    if (!wardId) return "—";
+    const ward = wardList.find((w) => w.id === Number(wardId));
+    return ward?.name || "—";
+  };
+
+  // Helper to capitalize ward name
+  const capitalizeFirstLetter = (str: string): string => {
+    if (!str) return "—";
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  };
+
+  const fetchPatientAndTimeline = async (): Promise<boolean> => {
+    if (!id) {
+      return false;
+    }
+    setLoading(true);
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const resp = await AuthFetch(`patient/${user?.hospitalID}/patients/single/${id}`, token);
+      if (resp?.status === "success" && "data" in resp && resp?.data?.patient) {
+        const patient = resp.data.patient;
+        dispatch(setCurrentPatientAction(patient));
+        setCurrentPatient(patient);
+        const timeLine = await AuthFetch(`patientTimeLine/${patient.id}`, token);
+        if (timeLine?.status === "success" && "data" in timeLine && timeLine?.data?.patientTimeLine) {
+          setTimeline(timeLine?.data?.patientTimeLine);
+        } else {
+          setTimeline(undefined);
+        }
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const fetchWards = async () => {
+    if (!user?.hospitalID) return;
+
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const response = await AuthFetch(`ward/${user.hospitalID}`, token);
+
+      if (response?.status === "success" && "data" in response) {
+        setWardList(response?.data?.wards || []);
+      }
+    } catch (e) {}
+  };
+
+  const loadReportData = async (patientIDOverride?: number): Promise<any[]> => {
+    const patientID = patientIDOverride ?? timeline?.patientID;
+    if (!patientID) {
+      return [];
+    }
+
+    setLoading(true);
+    try {
+      const token = user?.token ?? (await AsyncStorage.getItem("token"));
+      const url = `attachment/${user?.hospitalID}/all/${patientID}`;
+      const res = await AuthFetch(url, token);
+      const attachments = "data" in res ? res?.data?.attachments || [] : [];
+      if (res?.status === "success") {
+        setReports(attachments);
+      } else {
+        setReports([]);
+      }
+      return attachments;
+    } catch (err) {
+      setReports([]);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPrintData = async () => {
+  if (!timeline?.id || !currentPatient?.id) return;
+  setLoading(true);
+  try {
+    const token = user?.token ?? (await AsyncStorage.getItem("token"));
+
+    const remindersRes = await AuthFetch(
+      `medicine/${timeline.id}/reminders/all`,
+      token
+    );
+    if (remindersRes?.status === "success" && "data" in remindersRes) {
+      setReminder((remindersRes?.data?.reminders || []).sort(compareDates));
+    }
+
+    const alertsRes = await AuthFetch(
+      `alerts/hospital/${user?.hospitalID}/vitalAlerts/${currentPatient?.id}`,
+      token
+    );
+    if (alertsRes?.status === "success" && "data" in alertsRes) {
+      setVitalAlert(alertsRes?.data?.alerts || []);
+    }
+
+    const symptomsRes = await AuthFetch(
+      `symptom/${currentPatient.id}`,
+      token
+    );
+    if (symptomsRes?.status === "success" && "data" in symptomsRes) {
+      setSymptoms(symptomsRes?.data?.symptoms || []);
+    }
+
+    const prevMedRes = await AuthFetch(
+      `medicine/${timeline.id}/previous/allmedlist`,
+      token
+    );
+    if (prevMedRes?.status === "success" && "data" in prevMedRes) {
+      setPreviousMedHistoryList(prevMedRes?.data?.previousMedList || []);
+    }
+
+    const testsRes = await AuthFetch(
+      `test/${currentPatient.id}`,
+      token
+    );
+    if (testsRes?.status === "success" && "data" in testsRes) {
+      setSelectedTestList(testsRes.data?.tests || []);
+    }
+
+    const medHistRes = await AuthFetch(
+      `history/${user?.hospitalID}/patient/${currentPatient.id}`,
+      token
+    );
+    if (medHistRes?.status === "success" && "data" in medHistRes) {
+      setMedicineHistory(medHistRes.data?.medicalHistory || []);
+    }
+
+    const vitFuncRes = await AuthFetch(
+      `vitals/${user?.hospitalID}/functions/${currentPatient.id}`,
+      token
+    );
+    if (vitFuncRes?.status === "success" && "data" in vitFuncRes) {
+      setVitalFunction(vitFuncRes?.data || {});
+    }
+
+    // ✅ now open the Discharge Summary options sheet
+    setOpenDischargeSheet(true);
+    setPrintSelectOptions([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  const handlePrintClick = async () => {
+  if (printSelectOptions.includes("tests")) {
+    setIsPrintingReports(true);
+    await loadReportData();
+    setIsPrintingReports(false);
+    setPrintOpen(true);
+  } else if (printSelectOptions.includes("generalInfo")) {
+    await loadPrintData(); // now opens DischargeSummarySheet
+  }
+};
+
+
+const updateTheSelectedPrintOptions = async (opts: string[], shouldPrint: boolean) => {
+  setPrintSelectOptions(opts);
+
+  if (!shouldPrint) return;
+
+  const filtered = (reports || []).filter((r: any) => {
+    if (opts.includes("Radiology") && (r.category === "radiology" || r.category === "1"))
+      return true;
+    if (opts.includes("Pathology") && (r.category === "pathology" || r.category === "2"))
+      return true;
+    return false;
+  });
+
+  if (filtered.length === 0) {
+    dispatch(showError("No matching reports found."));
+    setPrintOpen(false);
+    setPrintSelectOptions([]);
+    return;
+  }
+
+  // ✅ Ask for permission on Android (older versions)
+  const hasPermission = await ensureStoragePermission();
+  if (!hasPermission) {
+    dispatch(showError("Storage permission is needed to download reports."));
+    return;
+  }
+
+  try {
+    setIsPrintingReports(true);
+
+    await Promise.all(
+      filtered.map((item: any, index: number) =>
+        downloadReportFile({
+          fileURL: item.fileURL,
+          fileName: item.fileName || `report_${index + 1}`,
+          mimeType: item.mimeType,
+        })
+      )
+    );
+
+    dispatch(showSuccess(`${filtered.length} report(s) saved to your device.`));
+  } catch (err) {
+    dispatch(showError("Some reports could not be downloaded. Please try again."));
+  } finally {
+    setIsPrintingReports(false);
+    setPrintOpen(false);
+    setPrintSelectOptions([]);
+  }
+};
+
+  const openReportFromMenu = async (type: "generalInfo" | "tests") => {
+    setMenuOpen(false);
+    if (!timeline?.id) {
+      const ok = await fetchPatientAndTimeline();
+      if (!ok) {
+        let waited = 0;
+        const maxWait = 1200;
+        const step = 300;
+        while (!timeline?.id && waited < maxWait) {
+          await new Promise<void>((resolve) => setTimeout(resolve, step));
+          waited += step;
+        }
+      }
+    }
+
+    // now branch
+    if (type === "tests") {
+      const attachments = await loadReportData(timeline?.patientID);
+
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        setPrintOpen(true);
+      } else {
+        if (!timeline?.patientID) {
+          await fetchPatientAndTimeline();
+          const attachmentsRetry = await loadReportData(timeline?.patientID);
+          if (attachmentsRetry.length > 0) {
+            setPrintOpen(true);
+            return;
+          }
+        }
+        dispatch(showError("No reports found."));
+      }
+    } else if (type === "generalInfo") {
+      await loadPrintData();
+    }
+  };
+
+
+  // Handle patient revisit
+  const handlePatientRevisit = () => {
+    setOpenRevisit(true);
+  };
+
+useFocusEffect(
+  useCallback(() => {
+    fetchPatientAndTimeline().then(() => {
+      if (currentPatient?.wardID) {
+        fetchWards();
+      }
+    });
+  }, [id])
+);
+
+
+  useEffect(() => {
+    if (printSelectOptions.length > 0) handlePrintClick();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printSelectOptions.join(",")]);
+
+  const followUpChip =
+    Number(currentPatient?.followUpStatus || 0) === followUpStatus.active
+      ? new Date(currentPatient?.followUpDate || "").toLocaleDateString("en-GB")
+      : "";
+
+  const genderText = currentPatient?.gender === 1 ? "Male" : "Female";
+const ageText = useMemo(() => {
+  if (currentPatient?.dob) {
+    const dob = new Date(currentPatient.dob);
+    const today = new Date();
+
+    // Total difference in days
+    const diffTime = today.getTime() - dob.getTime();
+    const totalDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Less than 1 month → show days
+    if (totalDays < 30) {
+      return `${totalDays} day${totalDays !== 1 ? "s" : ""}`;
+    }
+
+    let years = today.getFullYear() - dob.getFullYear();
+    let months = today.getMonth() - dob.getMonth();
+
+    if (today.getDate() < dob.getDate()) {
+      months--;
+    }
+
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    // Years only
+    if (years > 0 && months === 0) {
+      return `${years} year${years !== 1 ? "s" : ""}`;
+    }
+
+    // Months only
+    if (years === 0 && months > 0) {
+      return `${months} month${months !== 1 ? "s" : ""}`;
+    }
+  }
+
+  // DOB not present → fallback to age field
+  if (currentPatient?.age) {
+    return `${currentPatient.age} year${Number(currentPatient.age) !== 1 ? "s" : ""}`;
+  }
+
+  return "";
+}, [currentPatient?.dob, currentPatient?.age]);
+
+  
+  const doctorText = (() => {
+    if (currentPatient?.doctorName) {
+      const d = currentPatient.doctorName;
+      return `Dr. ${d.slice(0, 1).toUpperCase()}${d.slice(1).toLowerCase()}`;
+    }
+    if (currentPatient?.firstName) {
+      const f = currentPatient.firstName;
+      const l = currentPatient?.lastName || "";
+      return `Dr. ${f.slice(0, 1).toUpperCase()}${f.slice(1).toLowerCase()} ${l}`;
+    }
+    return "—";
+  })();
+
+const getMenuItems = () => {
+  // Hide Request Surgery and Transfer Patient for surgeon and anesthetist
+  
+  // For surgeon and anesthetist, only show reports regardless of patient status
+  if (isSurgeonOrAnesthetist) {
+    const menuItems = [];
+     
+    if (user?.roleName === "surgeon") {
+     menuItems.push({
+        label: "Handshake Patient",
+        onPress: () => {
+          setMenuOpen(false);
+          navigation.navigate("HandshakePatientScreen", {
+            patientID: currentPatient?.id,
+            timelineID: timeline?.id,
+          });
+        },
+        disabled: false,
+      });
+    }
+    menuItems.push(
+       { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
+      { label: "Test Reports", onPress: () => openReportFromMenu("tests") }
+    );
+    return menuItems;
+  }
+
+  if (shouldShowPatientRevisit) {
+    // For discharged patients - only show reports
+    return [
+      { label: "Discharge Summary", onPress: () => openReportFromMenu("generalInfo") },
+      { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
+    ];
+  }
+
+const baseItems = [
+  ...(user?.role === 2003 || user?.role === 2002 && !isDischargedPatient
+    ? []   // hide discharge summary for nurse if not discharged
+    : [
+        {
+          label: "Discharge Summary",
+          onPress: () => openReportFromMenu("generalInfo"),
+        },
+      ]),
+  { label: "Test Reports", onPress: () => openReportFromMenu("tests") },
+];
+
+
+  // Check if patient has a status (Request Surgery (Sent))
+  const hasStatus = currentPatient?.status != null;
+
+  // For start status 1: Transfer Patient + Discharge Summary + Test Reports
+  if (startStatus === 1) {
+    return [
+      {
+        label: "Transfer Patient",
+        onPress: () => {
+          if (staffRole !== "nurse") {
+            setMenuOpen(false);
+            navigation.navigate("TransferPatient", {
+              hospitalID: user?.hospitalID,
+              patientID: currentPatient?.id,
+              timeline,
+            });
+          }
+        },
+        disabled: staffRole === "nurse",
+      },
+      ...baseItems,
+    ];
+  }
+
+  if (startStatus !== 1) {
+    const menuItems = [
+      {
+        label: "Transfer Patient",
+        onPress: () => {
+          if (staffRole !== "nurse") {
+            setMenuOpen(false);
+            navigation.navigate("TransferPatient", {
+              hospitalID: user?.hospitalID,
+              patientID: currentPatient?.id,
+              timeline,
+              zone: currentPatient?.zone || user?.zone,
+            });
+          }
+        },
+        disabled: staffRole === "nurse",
+      },
+      {
+        label: hasStatus ? "Request Surgery (Sent)" : "Request Surgery",
+        onPress: () => {
+          if (!hasStatus) {
+          setMenuOpen(false);
+          navigation.navigate("RequestSurgeryScreen", {
+            timelineID: timeline?.id,
+              zone: currentPatient?.zone || user?.zone,
+            });
+            }
+        },
+        disabled: hasStatus,
+      },
+    ];
+
+    // Only add Handshake Patient for roles other than 2002 and 2003
+    if (user?.role !== 2002 && user?.role !== 2003) {
+      menuItems.push({
+        label: "Handshake Patient",
+        onPress: () => {
+          setMenuOpen(false);
+          navigation.navigate("HandshakePatientScreen", {
+            patientID: currentPatient?.id,
+            timelineID: timeline?.id,
+            zone: currentPatient?.zone || user?.zone,
+          });
+        },
+        disabled: false,
+      });
+    }
+
+    return [...menuItems, ...baseItems];
+  }
+
+  return [
+    currentPatient?.ptype !== 21
+      ? {
+          label: "Transfer Patient",
+          onPress: () => {
+            if (staffRole !== "nurse") {
+              setMenuOpen(false);
+              navigation.navigate("TransferPatient", {
+                hospitalID: user?.hospitalID,
+                patientID: currentPatient?.id,
+                timeline,
+              });
+            }
+          },
+          disabled: staffRole === "nurse",
+        }
+      : {
+          label: "Patient Revisit",
+          onPress: () => {
+            setOpenRevisit(true);
+            setMenuOpen(false);
+          },
+        },
+    ...baseItems,
+  ];
+};
+
+  return (
+    <View style={[styles.safe, { backgroundColor: COLORS.bg }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="always"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          // add space so nothing is covered by the fixed footer
+          contentContainerStyle={{ paddingBottom: FOOTER_HEIGHT + insets.bottom + 24 }}
+        >
+          {/* Profile Card (icons moved to top-right inside card) */}
+          <View style={[styles.card, { backgroundColor: COLORS.card, borderColor: COLORS.border }]}>
+            {/* top-right actions */}
+            {user?.roleName !== "triage" && (
+            <View style={styles.cardActions}>
+              {!shouldShowPatientRevisit  && (
+                <TouchableOpacity
+                  onPress={() => !isReceptionView && navigation.navigate("EditPatientProfile" as never, { id } as never)}
+                  disabled={isReceptionView}
+                  style={[
+                    styles.iconBtnSmall,
+                    { borderColor: COLORS.border, backgroundColor: COLORS.card2, opacity: isReceptionView ? 0.5 : 1 },
+                  ]}
+                >
+                  <Edit2Icon size={16} color={COLORS.text} />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={() => setMenuOpen(true)}
+                disabled={isReceptionView}
+                style={[
+                  styles.iconBtnSmall,
+                  { borderColor: COLORS.border, backgroundColor: COLORS.card2, opacity: isReceptionView ? 0.5 : 1 },
+                ]}
+              >
+                <MoreVertical size={16} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>)}
+
+            {/* left side avatar + name */}
+            <View style={styles.row}>
+              <View style={[styles.avatar, { borderColor: COLORS.border }]}>
+                {currentPatient?.imageURL ? (
+                  <Image source={{ uri: currentPatient.imageURL }} style={{ width: "100%", height: "100%", borderRadius: 40 }} />
+                ) : (
+                  <UserIcon size={28} color={COLORS.sub} />
+                )}
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.name, { color: COLORS.text }]}>
+                  {(currentPatient?.pName || "").toUpperCase()}
+                </Text>
+                <Text style={[styles.sub, { color: COLORS.sub }]}>UHID: {currentPatient?.pUHID || "-"}</Text>
+
+                <View style={styles.badgesRow}>
+                  {!!followUpChip && (
+                    <View style={[styles.badge, { backgroundColor: COLORS.warn + "22", borderColor: COLORS.warn }]}>
+                      <CalendarDays size={14} color={COLORS.warn} />
+                      <Text style={[styles.badgeText, { color: COLORS.warn }]}>Follow Up Due</Text>
+                    </View>
+                  )}
+                  
+                  {/* Discharged Status Badge */}
+                  {isDischargedPatient &&  (
+                    <View style={[styles.badge, { backgroundColor: "#ef444422", borderColor: "#ef4444" }]}>
+                      <Text style={[styles.badgeText, { color: "#ef4444" }]}>
+                        Discharged
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Start Status Badge */}
+                  {!isDischargedPatient && startStatus > 0 && (
+                    <View style={[styles.badge, { backgroundColor: COLORS.brand + "22", borderColor: COLORS.brand }]}>
+                      <Text style={[styles.badgeText, { color: COLORS.brand }]}>
+                        Status: {startStatusText}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* middle demographics */}
+            {isDischargedPatient ? (
+              <View style={styles.infoGrid2x2}>
+                <View style={styles.infoItemHalf}>
+                  <Text style={[styles.fieldValue, { color: COLORS.text }]}>
+                    {genderText}
+                    {ageText ? `, ${ageText}` : ""}
+                  </Text>
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>Gender</Text>
+                </View>
+                <View style={styles.infoItemHalf}>
+                  <Text style={[styles.fieldValue, { color: COLORS.text }]}>
+                    {currentPatient?.endTime ? formatDate(currentPatient.endTime) : "—"}
+                  </Text>
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>Discharge Date</Text>
+                </View>
+                <View style={styles.infoItemHalf}>
+                  <Text style={[styles.fieldValue, { color: COLORS.text }]}>{doctorText}</Text>
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>Treating Doctor</Text>
+                </View>
+                <View style={styles.infoItemHalf}>
+                  <Text
+                    style={[
+                      styles.fieldValue,
+                      { color: currentPatient?.followUp === 1 ? COLORS.warn : COLORS.sub },
+                    ]}
+                  >
+                    {currentPatient?.followUp === 1 && currentPatient?.followUpDate
+                      ? formatDate(currentPatient.followUpDate)
+                      : "No Follow up"}
+                  </Text>
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>Follow Up</Text>
+                </View>
+              </View>
+            ) : (
+            <View style={[styles.infoGrid]}>
+              <View style={styles.infoItem}>
+                <Text style={[styles.fieldValue, { color: COLORS.text }]}>
+                  {genderText}{ageText ? `, ${ageText}` : ""}
+                </Text>
+<Text style={[styles.fieldHint, { color: COLORS.sub }]}>DOB: {currentPatient?.dob ? formatDate(currentPatient?.dob) : "—"}</Text>
+              </View>
+              <View style={styles.infoItem}>
+                <Text style={[styles.fieldValue, { color: COLORS.text }]}>{doctorText}</Text>
+                {/* <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
+                    • Secondary Doctor: {currentPatient?.department || "—"}
+                  </Text> */}
+                <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
+                    • Department: {currentPatient?.department || "—"}
+                  </Text>
+                  {/* Updated Ward display */}
+                  {startStatus !== 1 && !isSurgeonOrAnesthetist && (
+                  <Text style={[styles.fieldHint, { color: COLORS.sub }]}>
+                    • Ward: {
+      isReceptionView && wardNameFromRoute 
+        ? capitalizeFirstLetter(wardNameFromRoute)
+        : capitalizeFirstLetter(getWardName(currentPatient?.wardID))
+    }
+                  </Text>
+                  )}
+              </View>
+            </View>
+            )}
+
+            {/* Action Buttons for Discharged OR Previous Patients */}
+            {(shouldShowPatientRevisit) && user.role === "reception" && (
+              <View style={styles.dischargedActionsContainer}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: COLORS.warn }]}
+                  onPress={() => navigation.navigate("PatientRevisitScreen", { 
+                    patientId: currentPatient?.id,
+                    patientData: currentPatient
+                  })}
+                >
+                  <Text style={[styles.actionButtonText, { color: COLORS.buttonText }]}>
+                    Patient Revisit
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Discharge Button - Only for startStatus 2 (active patients) */}
+            {!isDischargedPatient && !timeline?.patientEndStatus && (startStatus === 2 || startStatus === 3) && !isSurgeonOrAnesthetist && !isTriage && (
+              <View style={styles.dischargeButtonContainer}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("DischargeScreen", { 
+                    patientId: currentPatient?.id,
+                    patientData: currentPatient,
+                    timelineData: timeline,
+                    hospitalID: user?.hospitalID
+                  })}
+                  disabled={isReceptionView}
+                  style={[
+                    styles.dischargeButton,
+                    { 
+                      backgroundColor: isReceptionView ? COLORS.sub : COLORS.dischargeButton,
+                      opacity: isReceptionView ? 0.5 : 1
+                    }
+                  ]}
+                >
+                  <Text style={[styles.dischargeButtonText, { color: COLORS.dischargeButtonText }]}>
+                    Discharge
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+         {user?.roleName === "triage" ? (
+  <AddTriageIssue />
+) : (
+  <>
+    {(user?.roleName === "surgeon" || user?.roleName === "anesthetist") ? <OtTabs /> : <Tabs />}
+  </>
+)}
+          
+        </ScrollView>
+
+        {/* Loading overlay */}
+        {loading && (
+          <View style={[styles.loadingOverlay, { backgroundColor: COLORS.overlay }]}>
+            <ActivityIndicator size="large" color={COLORS.brand} />
+          </View>
+        )}
+      </KeyboardAvoidingView>
+
+      {/* Footer (fixed) */}
+      <View style={[styles.footerWrap, { bottom: insets.bottom }]}>
+        <Footer active={"patients"} brandColor="#14b8a6" />
+      </View>
+      {insets.bottom > 0 && (
+        <View pointerEvents="none" style={[styles.navShield, { height: insets.bottom }]} />
+      )}
+
+      {/* 3-dots Menu (bottom sheet style) */}
+      <BottomSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        colors={COLORS}
+        items={getMenuItems()}
+      />
+
+ <DischargeSummaryDownload
+  visible={openDischargeSheet}
+  onClose={() => setOpenDischargeSheet(false)}
+  colors={COLORS}
+  patient={currentPatient}
+  vitalAlert={vitalAlert}
+  reminder={reminder}
+  medicalHistory={medicalHistory}
+  previousMedHistoryList={previousMedHistoryList}
+  symptoms={symptoms}
+  vitalFunction={vitalFunction}
+  tests={selectedTestList}
+/>
+
+      {/* Revisit Sheet */}
+      <ActionSheet title="Patient Revisit" visible={openRevisit} onClose={() => setOpenRevisit(false)} colors={COLORS}>
+        <Text style={{ color: COLORS.sub, marginBottom: 8 }}>
+          (Form placeholder) Provide revisit date/time and remarks.
+        </Text>
+        <TextInput
+          placeholder="Revisit Date (YYYY-MM-DD)"
+          placeholderTextColor={COLORS.sub}
+          style={[styles.input, { backgroundColor: COLORS.field, color: COLORS.fieldText, borderColor: COLORS.border }]}
+        />
+        <TextInput
+          placeholder="Remarks"
+          placeholderTextColor={COLORS.sub}
+          style={[styles.input, { backgroundColor: COLORS.field, color: COLORS.fieldText, borderColor: COLORS.border, height: 90 }]}
+          multiline
+        />
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+          <Pressable onPress={() => setOpenRevisit(false)} style={[styles.sheetBtn, { backgroundColor: COLORS.pill }]}>
+            <Text style={{ color: COLORS.text, fontWeight: "700" }}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              Alert.alert("Revisit", "Revisit scheduled (mock).");
+              setOpenRevisit(false);
+            }}
+            style={[styles.sheetBtn, { backgroundColor: COLORS.button }]}
+          >
+            <Text style={{ color: COLORS.buttonText, fontWeight: "700" }}>Save</Text>
+          </Pressable>
+        </View>
+      </ActionSheet>
+
+      {/* Print chooser (Radiology/Pathology) */}
+      <ActionSheet title="Test Reports" visible={printOpen} onClose={() => setPrintOpen(false)} colors={COLORS}>
+        <Text style={{ color: COLORS.sub, marginBottom: 12 }}>Pick report categories to download/print.</Text>
+        <TogglePill
+          label="Radiology"
+          active={printSelectOptions.includes("Radiology")}
+          onToggle={() =>
+            setPrintSelectOptions((prev) =>
+              prev.includes("Radiology") ? prev.filter((x) => x !== "Radiology") : [...prev, "Radiology"]
+            )
+          }
+          colors={COLORS}
+        />
+        <TogglePill
+          label="Pathology"
+          active={printSelectOptions.includes("Pathology")}
+          onToggle={() =>
+            setPrintSelectOptions((prev) =>
+              prev.includes("Pathology") ? prev.filter((x) => x !== "Pathology") : [...prev, "Pathology"]
+            )
+          }
+          colors={COLORS}
+        />
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+          <Pressable onPress={() => setPrintOpen(false)} style={[styles.sheetBtn, { backgroundColor: COLORS.pill }]}>
+            <Text style={{ color: COLORS.text, fontWeight: "700" }}>Close</Text>
+          </Pressable>
+         <Pressable
+  onPress={() => updateTheSelectedPrintOptions(printSelectOptions, true)}
+  style={[
+    styles.sheetBtn,
+    {
+      backgroundColor: COLORS.button,
+      opacity:
+        !printSelectOptions.length || isPrintingReports ? 0.5 : 1,
+    },
+  ]}
+  disabled={!printSelectOptions.length || isPrintingReports}
+>
+  {isPrintingReports ? (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <ActivityIndicator size="small" color={COLORS.buttonText} />
+      <Text style={{ color: COLORS.buttonText, fontWeight: "700" }}>
+        Downloading...
+      </Text>
+    </View>
+  ) : (
+    <Text style={{ color: COLORS.buttonText, fontWeight: "700" }}>
+      Download
+    </Text>
+  )}
+</Pressable>
+        </View>
+      </ActionSheet>
+    </View>
+  );
+};
+
+// ---------- small presentational components ----------
+const BottomSheet: React.FC<{
+  visible: boolean;
+  onClose: () => void;
+  items: ({ label?: string; onPress?: () => void; disabled?: boolean })[];
+  colors: any;
+}> = ({ visible, onClose, items, colors }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={sheetStyles.overlay} onPress={onClose} />
+      <View style={[sheetStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {items.map((it, idx) => (
+          <Pressable
+            key={idx}
+            onPress={() => {
+              if (!it.disabled && it.onPress) it.onPress();
+            }}
+            style={({ pressed }) => [sheetStyles.item, { opacity: it.disabled ? 0.45 : pressed ? 0.8 : 1 }]}
+          >
+            <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600" }}>{it.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </Modal>
+  );
+};
+
+const ActionSheet: React.FC<{
+  title: string;
+  visible: boolean;
+  onClose: () => void;
+  colors: any;
+  children: React.ReactNode;
+}> = ({ title, visible, onClose, colors, children }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={sheetStyles.overlay} onPress={onClose} />
+      <View style={[sheetStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[sheetStyles.sheetHeader, { borderBottomColor: colors.border }]}>
+          <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>{title}</Text>
+          <Pressable onPress={onClose} hitSlop={6}>
+            <X size={18} color={colors.sub} />
+          </Pressable>
+        </View>
+        <View style={{ padding: 12 }}>{children}</View>
+      </View>
+    </Modal>
+  );
+};
+
+const TogglePill: React.FC<{ label: string; active: boolean; onToggle: () => void; colors: any }> = ({
+  label,
+  active,
+  onToggle,
+  colors,
+}) => {
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={[
+        styles.pillBtn,
+        {
+          backgroundColor: active ? colors.button : colors.pill,
+          borderColor: colors.border,
+          marginBottom: 8,
+          justifyContent: "center",
+        },
+      ]}
+    >
+      <Text style={{ color: active ? colors.buttonText : colors.text, fontWeight: "700" }}>{label}</Text>
+    </Pressable>
+  );
+};
+
+// ---------- styles ----------
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+
+  card: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    position: "relative",
+  },
+
+  // absolute action area inside card (top-right)
+  cardActions: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    flexDirection: "row",
+    gap: 8,
+    zIndex: 2,
+  },
+  iconBtnSmall: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 1.2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  row: { flexDirection: "row", alignItems: "center" },
+
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 40,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    overflow: "hidden",
+  },
+  // Add to your StyleSheet:
+  infoGrid2x2: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
+  infoItemHalf: {
+    width: "48%",
+    marginBottom: 12,
+  },
+  name: { fontSize: 18, fontWeight: "800" },
+  sub: { fontSize: 13, marginTop: 2 },
+
+  badgesRow: { flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignSelf: "flex-start",
+  },
+  badgeText: { fontSize: 12, fontWeight: "800" },
+
+  infoGrid: {
+    flexDirection: "row",
+    gap: 16,
+    marginTop: 16,
+  },
+  infoItem: { flex: 1 },
+  fieldValue: { fontSize: 16, fontWeight: "800" },
+  fieldHint: { fontSize: 12, marginTop: 4 },
+
+  tabHeader: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  tabTitle: { fontSize: 15, fontWeight: "800" },
+
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pillBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1.5,
+  },
+
+  input: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    fontSize: 15,
+  },
+
+  sheetBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+
+  // footer
+  footerWrap: {
+    left: 0,
+    right: 0,
+    height: FOOTER_HEIGHT,
+  },
+  navShield: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
+  },
+  // Discharge button styles
+  dischargeButtonContainer: {
+    marginTop: 16,
+    alignItems: "flex-end",
+  },
+  dischargeButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dischargeButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  // Discharged patient action buttons
+  dischargedActionsContainer: {
+    marginTop: 16,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  actionButton: {
+    flex: 1,
+    minWidth: "30%",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+});
+
+const sheetStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  sheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    paddingBottom: 8,
+  },
+  sheetHeader: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  item: { paddingHorizontal: 16, paddingVertical: 14 },
+});
+
+export default PatientProfileOPD;
